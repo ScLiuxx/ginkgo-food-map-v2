@@ -1,4 +1,58 @@
-# 评价模块已执行结构与迁移
+# 评价模块结构与迁移
+
+## 当前增量：V10 窗口评价归属（2026-11-01）
+
+当前代码新增 V9/V10，业务运行库仍为 V8，本轮在隔离 MySQL 8.4 验证，不自动执行到业务库。下文 V4–V8 为历史演进；本节覆盖其中只支持 restaurant_id 的旧描述。窗口实体见[餐厅结构](restaurant-schema.md)。不创建菜品表。
+
+### 评价只归属一个对象
+
+`reviews.restaurant_id` 改为可空，新增可空 `window_id BIGINT UNSIGNED`。CHECK 强制二者恰有一个非空且为正数（不超过 Java Long 上界）。普通餐厅填 restaurant_id；窗口填 window_id，不能填父食堂 ID，也不能同时填两者。新增 `(window_id, created_at, id)` 与 `(window_id, author_user_id, created_at, id)` 索引，原餐厅索引保留。
+
+**产品规则：新食堂评价只针对具体窗口，不再发布食堂整体评价。** 旧食堂评价、照片、回复、请求号与统计原样保留，不猜测窗口、不迁移为某个窗口评价、不重复计入窗口或食堂新汇总。后续查询可单独提供只读历史入口。
+
+reviews 属于 review 模块，窗口与餐厅属于 restaurant 模块，因此不建立跨模块外键或读取对方表的触发器。数据库保证归属互斥，但无法仅凭本表 CHECK 验证目标存在或拒绝直接填食堂 ID。后续发布服务必须通过 restaurant 公开服务验证：restaurant_id 只能是可评价的普通餐厅；window_id 必须是有效营业窗口且父食堂可见。前端必选窗口不能替代服务端校验。
+
+### 发布回执兼容
+
+`review_request_receipts` 同步将 restaurant_id 改为可空、增加 window_id，并采用相同互斥正数约束。原 `(author_user_id, client_request_id)` 主键与 review_id 唯一键不变；同一次请求不能跨对象重用。回执不依赖评价外键，删除评价后仍保留，防止旧请求复活。旧记录、hash 和 UUID 原样保留。
+
+后续接口接入需将“对象类型＋对象 ID”纳入版本化 hash 规范，保持旧请求可重试，不能直接覆盖旧 hash。V10 没有修改现有发布、删除、图片绑定或幂等服务协议。
+
+### 窗口统计表 `window_review_statistics`
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `window_id` | BIGINT UNSIGNED，主键 | 同 restaurant 模块外键到 canteen_windows，RESTRICT |
+| `review_count` | INT UNSIGNED，默认 0 | 全部点评条数 |
+| `participant_count` | INT UNSIGNED，默认 0 | 每账号取该窗口最新有效点评后的计分人数 |
+| `recommend_count` | INT UNSIGNED，默认 0 | 最新代表点评中的推荐人数 |
+| `taste_sum` / `value_sum` / `service_sum` / `ambience_sum` | DECIMAL(16,2)，默认 0 | 最新代表点评四维累计分 |
+| `overall_score_sum` | DECIMAL(16,2)，默认 0 | 最新代表点评正式总分累计值 |
+| `updated_at` | TIMESTAMP(6) | 更新时间 |
+
+约束 `recommend_count <= participant_count <= review_count`，各累计分介于 0 与 participant_count×10。复用现有四维十分制及生成总分规则；五星仅为前端除 2 展示，不改存储精度或计分算法。无统计行或计分人数为 0 时均分为 NULL，真实 0 分有效。
+
+食堂汇总仅访问 restaurant 模块自己的表，拟采用以下口径（尚未接入 API）：
+
+```sql
+SELECT AVG(s.overall_score_sum / NULLIF(s.participant_count, 0)) AS canteen_score
+FROM canteen_windows w
+JOIN window_review_statistics s ON s.window_id = w.id
+WHERE w.canteen_id = :canteenId
+  AND w.deleted_at IS NULL AND w.business_status = 'OPERATING'
+  AND s.participant_count > 0;
+```
+
+调用前应验证父食堂可见。各窗口等权，不能将所有窗口点评混为总样本求均分；关闭、删除、未评级窗口不计入，无有效窗口返回 NULL。旧食堂统计不参与，窗口评价也不更新父食堂原统计。
+
+### 实施与部署边界
+
+- 本轮完成表、约束、索引和迁移兼容性；没有窗口 CRUD、窗口点评 API 或自动统计更新。现有 Java 实体、Mapper 与 DTO 仍按原餐厅接口工作，发布服务尚未拒绝直接向食堂发评，不能把结构就绪当成业务完成。
+- 后续发布和删除须按目标查询每账号最新代表点评，在同一事务调用 restaurant 公开服务更新对应统计；窗口与父食堂并发校验需要统一锁顺序（父食堂 → 窗口），避免停业和发布竞争。相关服务测试需在接入阶段补齐。
+- 保持 V1–V8 不变；V8 历史数据升级不改 ID、分数、正文、照片、回复与回执。重复 migrate 应执行 0 条。
+- MySQL DDL 隐式提交，不能承诺失败时全事务回滚；正式部署前备份并确认服务适配，失败按实际落地状态前向修复，不删除历史或修改已执行脚本。本轮未执行到业务库。
+
+## 历史结构与演进
 
 核对日期：2026-10-30。V4建立5张表，V5新增计分人数、作者历史索引并重建统计，V6调整上传状态，V7支持五图；本地开发库已升级至V7。发布及事务计分、OSS上传/绑定/访问/清理、B1点评分组读取接口已实现；列表页面与C1历史分页已接通；餐厅统计读取与C2预测仍待完成。本文记录已执行结构，以及依赖它的设计边界。当前产品规则见[需求](../requirements.md)，发布实现及后续查询方案见[后端计划](../plans/review-backend.md)。不修改已执行迁移。
 
@@ -36,6 +90,9 @@ V4新增5张表；不再为匿名展示给餐厅新增昵称字段：
 flowchart LR
   U["user：users"] -. "逻辑账号ID" .-> R["review：reviews"]
   T["restaurant：restaurants"] -. "逻辑餐厅ID" .-> R
+  T -->|同模块外键，仅食堂| W["restaurant：canteen_windows"]
+  W -. "逻辑窗口ID，与餐厅ID互斥" .-> R
+  W -->|同模块外键，一对零或一| WS["restaurant：window_review_statistics"]
   R -->|同模块外键，一对零至二| P["review：review_photos"]
   R -->|同模块外键，一对多| C["review：review_replies"]
   P -. "逻辑文件ID" .-> F["file：media_files"]
@@ -49,7 +106,8 @@ flowchart LR
 | 字段 | 类型/可空 | 说明 |
 | --- | --- | --- |
 | `id` | BIGINT UNSIGNED | 主键 |
-| `restaurant_id` | BIGINT UNSIGNED | 所属餐厅，逻辑引用 |
+| `restaurant_id` | BIGINT UNSIGNED，可空（V10） | 普通餐厅或历史食堂逻辑引用，与 window_id 二选一 |
+| `window_id` | BIGINT UNSIGNED，可空（V10 新增） | 具体窗口逻辑引用，与 restaurant_id 二选一 |
 | `author_user_id` | BIGINT UNSIGNED | 当前登录账号，非空，不能由客户端指定 |
 | `taste_score` | DECIMAL(3,1) | 味道，0–10且为0.5的倍数 |
 | `value_score` | DECIMAL(3,1) | 性价比，同上 |

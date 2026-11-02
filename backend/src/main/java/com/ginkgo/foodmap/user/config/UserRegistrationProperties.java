@@ -24,17 +24,22 @@ public class UserRegistrationProperties {
     @NotEmpty
     private List<String> allowedEmailDomains;
 
-    @Min(3)
+    @Min(2)
     @Max(64)
     private int usernameMinLength;
 
-    @Min(3)
+    @Min(2)
     @Max(64)
     private int usernameMaxLength;
 
-    @Min(8)
+    @Min(4)
     @Max(64)
     private int passwordMinLength;
+
+    /** 新注册/重置密码最长32个ASCII字符；历史登录密码不受新规则追溯限制。 */
+    @Min(4)
+    @Max(32)
+    private int passwordMaxLength = 32;
 
     @Min(16)
     @Max(72)

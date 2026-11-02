@@ -218,7 +218,7 @@ class RegistrationApiIntegrationTest {
     @Test
     void shouldRejectWeakPassword() throws Exception {
         String email = "weakpassword@std.uestc.edu.cn";
-        postRegistration(email, "weakpassword_user", "123456", "onlyletters")
+        postRegistration(email, "weakpassword_user", "123456", "123")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("USER_PASSWORD_WEAK"));
         assertUserAbsent(email);

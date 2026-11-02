@@ -65,8 +65,9 @@ describe('restaurant catalog API integration', () => {
     }
   })
 
-  it('shows server records and total with demo provenance and numeric links', () => {
-    expect(host.querySelector('[role="note"]')?.textContent).toContain('联调模拟')
+  it('shows server records and total without internal labels and preserves numeric links', () => {
+    expect(host.querySelector('[role="note"]')?.textContent).toContain('请出发前核实')
+    expect(host.textContent).not.toContain('联调模拟')
     expect(host.querySelectorAll('.restaurant-card')).toHaveLength(8)
     expect(host.querySelector('.results-toolbar')?.textContent).toContain('25')
     expect(host.querySelector('.restaurant-card')?.getAttribute('href')).toBe('/restaurants/1')
@@ -183,6 +184,50 @@ describe('restaurant catalog API integration', () => {
     expect(host.querySelector('.directory-empty .primary-action')).toBeNull()
   })
 
+  it('stages type and dining choices, cancels drafts, applies together and removes one condition independently', async () => {
+    const store = useRestaurantCatalog(pinia)
+    store.filters.category = 'HOT_POT'
+    await settle()
+    const trigger = host.querySelector<HTMLButtonElement>('.more-filters')!
+    trigger.click()
+    await settle()
+    const dialog = document.querySelector<HTMLDialogElement>('.advanced-filter-dialog')!
+    const choose = (group: string, label: string) =>
+      [...dialog.querySelectorAll<HTMLButtonElement>(`[data-group="${group}"] button`)]
+        .find((button) => button.textContent?.trim() === label)!
+        .click()
+    choose('venue', '食堂')
+    choose('dining', '支持外卖')
+    dialog.dispatchEvent(new Event('cancel', { cancelable: true }))
+    await settle()
+    expect(store.filters.restaurantType).toBeUndefined()
+    expect(store.filters.diningMode).toBeUndefined()
+    trigger.click()
+    await settle()
+    choose('venue', '餐厅')
+    choose('dining', '支持堂食')
+    dialog.querySelector<HTMLButtonElement>('.apply-advanced')!.click()
+    await settle()
+    expect(store.filters).toMatchObject({
+      category: 'HOT_POT',
+      restaurantType: 'REGULAR',
+      diningMode: 'dineIn',
+    })
+    expect(trigger.querySelector('.filter-count')?.textContent).toBe('2')
+    host.querySelector<HTMLButtonElement>('[aria-label="移除餐厅类型筛选"]')!.click()
+    await settle()
+    expect(store.filters).toMatchObject({
+      category: 'HOT_POT',
+      restaurantType: '',
+      diningMode: 'dineIn',
+    })
+    expect(trigger.querySelector('.filter-count')?.textContent).toBe('1')
+    store.resetFilters()
+    await settle()
+    expect(store.filters).toMatchObject({ category: '', restaurantType: '', diningMode: '' })
+    expect(host.querySelector('.advanced-tags')).toBeNull()
+  })
+
   /** 模拟dialog只为验证状态，真实模态焦点、Escape和小屏滚动另由浏览器验收。 */
   it('applies an isolated advanced draft once and preserves all main filters', async () => {
     const store = useRestaurantCatalog(pinia)
@@ -226,7 +271,7 @@ describe('restaurant catalog API integration', () => {
     await settle()
     expect(
       [...dialog.querySelectorAll('[aria-pressed="true"]')].map((b) => b.textContent?.trim()),
-    ).toEqual(['30 元以下', '1 公里以内'])
+    ).toEqual(['30 元以下', '1 公里以内', '全部', '不限'])
     dialog.querySelector<HTMLButtonElement>('.reset-advanced')!.click()
     dialog.dispatchEvent(new Event('cancel', { cancelable: true }))
     await settle()

@@ -6,7 +6,6 @@ import com.ginkgo.foodmap.user.exception.UserErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -21,7 +20,8 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class UserRegistrationPolicy {
 
-    private static final Pattern USERNAME_PATTERN = Pattern.compile("[\\p{L}\\p{N}_]+");
+    private static final Pattern USERNAME_PATTERN = Pattern.compile("[\\p{IsHan}a-zA-Z0-9_]+");
+    private static final Pattern PASSWORD_PATTERN = Pattern.compile("[\\x21-\\x7e]+");
 
     private final UserRegistrationProperties properties;
 
@@ -65,34 +65,30 @@ public class UserRegistrationPolicy {
         if (length < properties.getUsernameMinLength()
                 || length > properties.getUsernameMaxLength()
                 || !USERNAME_PATTERN.matcher(normalized).matches()) {
-            throw new BusinessException(UserErrorCode.USERNAME_INVALID);
+            throw new BusinessException(UserErrorCode.USERNAME_INVALID,
+                    "用户名需为" + properties.getUsernameMinLength() + "–" + properties.getUsernameMaxLength()
+                            + "位，仅支持中文、英文字母、数字和下划线，区分大小写");
         }
         return normalized;
     }
 
     /**
-     * 校验明文密码强度和 BCrypt 的 72 字节安全边界。
+     * 校验4–32位英文可打印字符，不强制字符组合。
      *
-     * <p>密码不做 trim，用户输入的空格也是密码的一部分。密码至少包含一个文字和一个数字，
-     * 同时拒绝控制字符。方法只验证，不保存也不记录明文密码。</p>
+     * <p>不做 trim，含空格、中文或控制字符的输入直接拒绝。ASCII最长32字节，小于BCrypt
+     * 的72字节上限。新规则只用于注册与重置，不追溯限制历史密码登录。</p>
      *
      * @param password 用户提交的明文密码，仅在当前请求内短暂存在
      */
     public void validatePassword(String password) {
         Objects.requireNonNull(password, "password must not be null");
         int characterCount = password.codePointCount(0, password.length());
-        int byteCount = password.getBytes(StandardCharsets.UTF_8).length;
-        boolean containsLetter = password.codePoints().anyMatch(Character::isLetter);
-        boolean containsDigit = password.codePoints().anyMatch(Character::isDigit);
-        boolean containsControlCharacter = password.codePoints().anyMatch(Character::isISOControl);
-
-        if (password.isBlank()
-                || characterCount < properties.getPasswordMinLength()
-                || byteCount > properties.getPasswordMaxBytes()
-                || !containsLetter
-                || !containsDigit
-                || containsControlCharacter) {
-            throw new BusinessException(UserErrorCode.PASSWORD_WEAK);
+        if (characterCount < properties.getPasswordMinLength()
+                || characterCount > properties.getPasswordMaxLength()
+                || !PASSWORD_PATTERN.matcher(password).matches()) {
+            throw new BusinessException(UserErrorCode.PASSWORD_WEAK,
+                    "密码需为" + properties.getPasswordMinLength() + "–" + properties.getPasswordMaxLength()
+                            + "位，仅支持英文字母、数字和英文符号，不允许中文或空格");
         }
     }
 }

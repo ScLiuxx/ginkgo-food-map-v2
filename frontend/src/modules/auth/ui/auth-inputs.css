@@ -1,0 +1,59 @@
+/* 账号页统一使用浅灰白底，覆盖浏览器自动填充的蓝色，同时保留密码管理器能力。 */
+:is(form.login-form, form.registration-form, form.password-reset-form) .field-error {
+  margin: 8px 0 0;
+  color: #a43b32;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+:is(form.registration-form, form.password-reset-form) .code-button {
+  min-height: 50px;
+  min-width: 112px;
+  border: 1px solid #e1e1dc;
+  color: #4d4d46;
+  background: #f7f7f5;
+  font-size: 14px;
+}
+
+:is(form.registration-form, form.password-reset-form) .code-button:hover:not(:disabled) {
+  border-color: #b8b8b0;
+  background: #eeeee9;
+}
+
+:is(form.login-form, form.registration-form, form.password-reset-form) .form-field input,
+form.registration-form .form-field .email-input {
+  background-color: #f7f7f5;
+  border-color: #e1e1dc;
+}
+
+/* 聚焦只加深原有边框，不在输入框外绘制黄色描边或光晕。 */
+:is(form.login-form, form.registration-form, form.password-reset-form) .form-field input:focus,
+form.registration-form .form-field .email-input:focus-within {
+  outline: none;
+  box-shadow: none;
+  border-color: #b8b8b0;
+}
+
+form.registration-form .email-input input:focus {
+  border: 0;
+}
+
+:is(form.login-form, form.registration-form, form.password-reset-form) .form-field input:autofill {
+  box-shadow: inset 0 0 0 1000px #f7f7f5;
+  -webkit-text-fill-color: #2b2a26;
+  caret-color: #2b2a26;
+}
+
+:is(form.login-form, form.registration-form, form.password-reset-form)
+  .form-field
+  input:-webkit-autofill,
+:is(form.login-form, form.registration-form, form.password-reset-form)
+  .form-field
+  input:-webkit-autofill:hover,
+:is(form.login-form, form.registration-form, form.password-reset-form)
+  .form-field
+  input:-webkit-autofill:focus {
+  -webkit-box-shadow: inset 0 0 0 1000px #f7f7f5;
+  -webkit-text-fill-color: #2b2a26;
+  caret-color: #2b2a26;
+}

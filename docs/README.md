@@ -2,6 +2,8 @@
 
 从这里选择文档。根层是经常查阅的当前说明；设计、计划、运维和历史各有固定目录。
 
+地图基础导航已按当前约定收尾：只把餐厅目的地交给高德，不开发站内起点选择；线上及真机验收暂跳过。搜索已区分本站餐厅与高德地点，学生提交收录仍仅占位，详见[功能说明](features.md)。
+
 ```text
 docs/
 ├── README.md             文档入口与维护约定
@@ -24,15 +26,18 @@ docs/
 | 哪些接口已实现、如何调用 | [接口文档](api.md) |
 | 下一步写点评后端如何做 | [后端实施计划](plans/review-backend.md) |
 | 整个评价阶段还缺哪些能力 | [评价范围与进度](plans/review-roadmap.md) |
+| 地图浏览、本站/高德统一搜索及提交占位如何工作 | [地图实施计划](plans/map-foundation.md)、[功能说明](features.md) |
 | 最近改了什么、验证了什么 | [当前开发记录](development.md) |
 
 ## 设计与计划
 
 - 架构：[模块化单体](architecture/modular-monolith.md)、[前端分层](architecture/frontend.md)。
-- 数据结构：[餐厅结构](architecture/restaurant-schema.md)、[评价V4/V5已执行结构](architecture/review-schema.md)。
+- 数据结构：[餐厅/食堂/窗口结构与 V9 增量](architecture/restaurant-schema.md)、[评价结构与 V10 窗口归属](architecture/review-schema.md)；区分迁移脚本就绪与运行库部署状态。
 - 页面：[找店界面方案](plans/discovery-ui.md)。
+- 地图：[高德地图基础闭环](plans/map-foundation.md)，包含导航、点位接口、页面联动及分步验收。
 - 迁移：[旧系统迁移计划](plans/legacy-migration.md)。
 - 运维：[自动部署与排障](operations/deployment.md)。
+- 高德：[环境配置与真实底图验收](operations/amap-setup.md)。
 
 ## 历史追溯
 

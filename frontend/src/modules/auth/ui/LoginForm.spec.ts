@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearAccessToken } from '@/shared/api/authSession'
 import { login } from '../api/authApi'
 import LoginForm from './LoginForm.vue'
+import { prepareResetLogin } from '../model/loginPrefill'
 
 vi.mock('../api/authApi', () => ({ login: vi.fn(), fetchCurrentUser: vi.fn(), logout: vi.fn() }))
 
@@ -58,13 +59,25 @@ describe('login form', () => {
 
   it('rejects empty input without sending a request', async () => {
     await fillAndSubmit('', '')
-    expect(host.querySelector('[role="alert"]')?.textContent).toContain('请输入用户名和密码')
+    expect(host.querySelector('#login-username-error')?.textContent).toContain('请输入用户名')
+    expect(host.querySelector('#login-password-error')?.textContent).toContain('请输入密码')
     expect(login).not.toHaveBeenCalled()
   })
 
   it('provides a password reset entry without a remember-me checkbox', () => {
     expect(host.querySelector('.recovery-link a')?.getAttribute('href')).toBe('/password-reset')
     expect(host.querySelector('input[type="checkbox"]')).toBeNull()
+  })
+
+  it('prefills only the verified username after resetting the password', async () => {
+    app.unmount()
+    prepareResetLogin('Ka')
+    app = createApp(LoginForm).use(pinia).use(router)
+    app.mount(host)
+    expect(host.querySelector<HTMLInputElement>('#login-username')?.value).toBe('Ka')
+    expect(host.querySelector<HTMLInputElement>('#login-password')?.value).toBe('')
+    expect(host.querySelector('[role="status"]')?.textContent).toContain('密码已重置')
+    expect(login).not.toHaveBeenCalled()
   })
 
   it('shows a server error and clears the password after failure', async () => {

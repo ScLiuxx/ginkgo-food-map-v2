@@ -1,23 +1,38 @@
 <script setup lang="ts">
-import { onBeforeUnmount, reactive, ref } from 'vue'
+import { onBeforeUnmount, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import PasswordInput from './PasswordInput.vue'
+import './auth-inputs.css'
 import { useLoginStore } from '../model/login.store'
+import { consumeResetLogin } from '../model/loginPrefill'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useLoginStore()
-const form = reactive({ username: '', password: '' })
-const validation = ref<string | null>(null)
+const resetUsername = consumeResetLogin()
+const form = reactive({ username: resetUsername ?? '', password: '' })
+const errors = reactive({ username: '', password: '' })
+
+function checkField(field: 'username' | 'password') {
+  errors[field] = (field === 'username' ? form.username.trim() : form.password)
+    ? ''
+    : field === 'username'
+      ? '请输入用户名'
+      : '请输入密码'
+}
+
+function clearField(field: 'username' | 'password') {
+  errors[field] = ''
+  auth.clearError()
+}
 auth.clearError()
 
 /** 密码只留在表单内，完成提交或离开页面后清除，绝不规范化密码中的空格。 */
 async function handleSubmit() {
-  validation.value = null
   auth.clearError()
-  if (!form.username.trim() || !form.password) {
-    validation.value = '请输入用户名和密码。'
-    return
-  }
+  checkField('username')
+  checkField('password')
+  if (errors.username || errors.password) return
   const success = await auth.submit({ username: form.username.trim(), password: form.password })
   form.password = ''
   if (success) {
@@ -40,8 +55,8 @@ onBeforeUnmount(() => {
 <template>
   <form class="login-form" aria-labelledby="login-title" @submit.prevent="handleSubmit">
     <p class="eyebrow">WELCOME BACK</p>
-    <h1 id="login-title">欢迎回来。</h1>
-    <p class="form-intro">使用注册时设置的用户名和密码登录。</p>
+    <h1 id="login-title">欢迎回来</h1>
+    <p v-if="resetUsername" class="form-intro" role="status">密码已重置，请输入新密码登录。</p>
     <div class="form-field">
       <label for="login-username">用户名</label>
       <input
@@ -49,25 +64,38 @@ onBeforeUnmount(() => {
         v-model="form.username"
         autocomplete="username"
         maxlength="32"
-        placeholder="请输入用户名"
+        :aria-invalid="!!errors.username"
+        :aria-describedby="errors.username ? 'login-username-error' : undefined"
         :disabled="auth.loggingIn"
+        @blur="checkField('username')"
+        @input="clearField('username')"
       />
+      <p v-if="errors.username" id="login-username-error" class="field-error" role="alert">
+        {{ errors.username }}
+      </p>
     </div>
     <div class="form-field">
       <label for="login-password">密码</label>
-      <input
+      <PasswordInput
         id="login-password"
         v-model="form.password"
-        type="password"
         autocomplete="current-password"
-        placeholder="请输入密码"
+        :aria-invalid="!!(errors.password || auth.error)"
+        :aria-describedby="errors.password || auth.error ? 'login-password-error' : undefined"
         :disabled="auth.loggingIn"
+        @blur="checkField('password')"
+        @input="clearField('password')"
       />
+      <p
+        v-if="errors.password || auth.error"
+        id="login-password-error"
+        class="field-error"
+        role="alert"
+      >
+        {{ errors.password || auth.error }}
+      </p>
     </div>
     <p class="recovery-link"><RouterLink to="/password-reset">忘记密码？</RouterLink></p>
-    <p v-if="validation || auth.error" class="form-error" role="alert">
-      {{ validation || auth.error }}
-    </p>
     <button class="primary-action" type="submit" :disabled="auth.loggingIn || auth.restoring">
       {{ auth.loggingIn ? '正在登录…' : '登录' }}
     </button>
@@ -80,10 +108,9 @@ onBeforeUnmount(() => {
 <style scoped>
 .login-form {
   padding: clamp(28px, 5vw, 46px);
-  border: 1px solid #ded7c9;
+  border: 0;
   border-radius: 34px;
-  background: #fffdf8;
-  box-shadow: 0 24px 70px rgb(76 54 8 / 10%);
+  background: #fff;
 }
 h1 {
   margin: 8px 0 12px;
@@ -140,5 +167,13 @@ button {
   margin: 20px 0 0;
   font-size: 14px;
   text-align: center;
+}
+a {
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+a:hover,
+a:focus-visible {
+  color: #b67c00;
 }
 </style>

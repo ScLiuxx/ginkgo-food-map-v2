@@ -1,0 +1,172 @@
+/* 名称与两组指标建立比较关系，只留一条指标分隔，不新增卡片容器。 */
+.map-restaurant {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  min-width: 0;
+  gap: 14px;
+  padding: 18px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--map-text, #252b31);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 150ms;
+}
+.map-restaurant:hover {
+  background: #f7f8f8;
+}
+.map-restaurant.selected {
+  background: #f2f4f3;
+}
+.map-restaurant:focus-visible {
+  outline: 2px solid #a55d12;
+  outline-offset: -2px;
+}
+.dish-placeholder {
+  display: flex;
+  flex: 0 0 88px;
+  width: 88px;
+  height: 96px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  border-radius: 7px;
+  background: #f2f4f4;
+  color: #657179;
+}
+.dish-placeholder svg {
+  width: 34px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.dish-placeholder small {
+  margin-top: 4px;
+  font-size: 10px;
+}
+.map-card-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 10px;
+}
+.map-card-copy > strong {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.map-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 9px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #637269;
+}
+.map-category {
+  color: #415c50;
+  font-size: 12px;
+  font-weight: 600;
+}
+.closed-state {
+  color: #974c3c;
+}
+.map-comparison {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-width: 0;
+  padding: 1px 0;
+}
+.map-rating,
+.map-price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  min-width: 0;
+  gap: 5px;
+}
+.map-price {
+  padding-left: 13px;
+  border-left: 1px solid #e0e5e4;
+}
+.map-metric-label {
+  font-size: 10px;
+  line-height: 1.5;
+  color: #687681;
+  font-weight: 400;
+}
+.map-score {
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 750;
+  color: #b35c14;
+  font-variant-numeric: tabular-nums;
+}
+.map-price-value {
+  font-size: 18px;
+  line-height: 1.45;
+  font-weight: 650;
+  color: #293d48;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.metric-empty {
+  font-size: 12px;
+  line-height: 1.7;
+  font-weight: 400;
+  color: #61707a;
+}
+.map-review-count,
+.map-price-kind {
+  color: #65747b;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.map-location {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  padding-top: 1px;
+  color: #66757e;
+}
+.map-location > svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  margin-top: 2px;
+}
+.map-location > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 4px;
+}
+.map-distance {
+  color: #536772;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.map-distance > span {
+  color: #69777f;
+  font-size: 10px;
+}
+.map-address {
+  font-size: 11px;
+  line-height: 1.6;
+  color: #65757f;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 900px) {
+  .dish-placeholder {
+    flex-basis: 76px;
+    width: 76px;
+    height: 84px;
+  }
+}

@@ -49,7 +49,7 @@ class PasswordResetServiceTest {
         user.setRowVersion(7L);
         user.setCredentialVersion(3L);
         when(users.selectByEmail(EMAIL)).thenReturn(Optional.of(user));
-        when(passwords.encode(" NewPassword2026 ")).thenReturn("new-hash");
+        when(passwords.encode("NewPassword2026")).thenReturn("new-hash");
         when(users.resetPasswordIfCurrent(42L, EMAIL, 7L, 3L, "new-hash")).thenReturn(1);
     }
 
@@ -60,7 +60,7 @@ class PasswordResetServiceTest {
         var order = inOrder(codes, users, passwords);
         order.verify(codes).consume(VerificationCodePurpose.PASSWORD_RESET, EMAIL, "012345");
         order.verify(users).selectByEmail(EMAIL);
-        order.verify(passwords).encode(" NewPassword2026 ");
+        order.verify(passwords).encode("NewPassword2026");
         order.verify(users).resetPasswordIfCurrent(42L, EMAIL, 7L, 3L, "new-hash");
         assertThat(request().toString()).doesNotContain("012345", "NewPassword2026");
     }
@@ -69,7 +69,7 @@ class PasswordResetServiceTest {
     @Test
     void shouldRejectInvalidInputBeforeConsumingCode() {
         PasswordResetRequest weak = request();
-        weak.setNewPassword("onlyletters");
+        weak.setNewPassword("123");
         assertThatThrownBy(() -> service.resetPassword(weak))
                 .isInstanceOfSatisfying(BusinessException.class,
                         failure -> assertThat(failure.getErrorCode()).isEqualTo(UserErrorCode.PASSWORD_WEAK));
@@ -158,7 +158,7 @@ class PasswordResetServiceTest {
         PasswordResetRequest request = new PasswordResetRequest();
         request.setEmail(" Student@STD.UESTC.EDU.CN ");
         request.setVerificationCode("012345");
-        request.setNewPassword(" NewPassword2026 ");
+        request.setNewPassword("NewPassword2026");
         return request;
     }
 }

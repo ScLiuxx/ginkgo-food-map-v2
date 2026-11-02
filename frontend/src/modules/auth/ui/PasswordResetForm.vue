@@ -1,16 +1,44 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { clearAccessToken, getAccessToken } from '@/shared/api/authSession'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 import { resetPassword, sendPasswordResetCode } from '../api/authApi'
+import { passwordError, emailError, codeError, accountErrorField } from '../model/accountValidation'
+import PasswordInput from './PasswordInput.vue'
+import './auth-inputs.css'
+import { prepareResetLogin } from '../model/loginPrefill'
 
-const CAMPUS_EMAIL_PATTERN = /^[^\s@]+@std\.uestc\.edu\.cn$/i
 const form = reactive({ email: '', verificationCode: '', newPassword: '', confirmPassword: '' })
+const router = useRouter()
 const sendingCode = ref(false)
 const submitting = ref(false)
 const completed = ref(false)
 const codeAccepted = ref(false)
 const error = ref<string | null>(null)
+const errors = reactive<Record<string, string | null>>({})
+const remoteField = computed(() => accountErrorField(error.value))
+function fieldError(field: string) {
+  return errors[field] || (remoteField.value === field ? error.value : null)
+}
+function checkField(field: string) {
+  if (field === 'email') errors.email = emailError(form.email)
+  if (field === 'code') errors.code = codeError(form.verificationCode)
+  if (field === 'password') errors.password = passwordError(form.newPassword)
+  if (field === 'confirm')
+    errors.confirm =
+      form.confirmPassword === form.newPassword && form.confirmPassword
+        ? null
+        : '两次输入的新密码不一致'
+}
+function clearField(field: string) {
+  errors[field] = null
+  error.value = null
+  if (field === 'email') codeAccepted.value = false
+  if (field === 'password' && form.confirmPassword) {
+    errors.confirm = form.confirmPassword === form.newPassword ? null : '两次输入的新密码不一致'
+  }
+}
 const cooldown = ref(0)
 const busy = computed(() => sendingCode.value || submitting.value)
 let active = true
@@ -32,10 +60,8 @@ async function handleSendCode() {
   error.value = null
   codeAccepted.value = false
   const email = form.email.trim().toLowerCase()
-  if (!CAMPUS_EMAIL_PATTERN.test(email)) {
-    error.value = '请先填写正确的电子科技大学学生邮箱'
-    return
-  }
+  checkField('email')
+  if (errors.email) return
   sendingCode.value = true
   try {
     await sendPasswordResetCode(email)
@@ -50,40 +76,29 @@ async function handleSendCode() {
   }
 }
 
-/** 校验只用于即时反馈，后端会再次验证校园邮箱、专用验证码、密码强度和账号状态。 */
-function validateForm(): string | null {
-  if (!CAMPUS_EMAIL_PATTERN.test(form.email.trim())) return '请使用 @std.uestc.edu.cn 学生邮箱'
-  if (!/^[0-9]{6}$/.test(form.verificationCode)) return '请输入邮件中的6位数字验证码'
-  const password = form.newPassword
-  if (
-    Array.from(password).length < 8 ||
-    new globalThis.TextEncoder().encode(password).length > 72 ||
-    !/\p{L}/u.test(password) ||
-    !/\p{Nd}/u.test(password) ||
-    /\p{Cc}/u.test(password)
-  ) {
-    return '新密码至少8位，包含文字和数字，不含控制字符，且不能超过72字节'
-  }
-  if (password !== form.confirmPassword) return '两次输入的新密码不一致'
-  return null
-}
-
 /** 密码仅留在表单内；重置成功清理请求开始时的旧凭证，不能误删期间产生的新登录。 */
 async function handleSubmit() {
   if (busy.value || completed.value) return
-  error.value = validateForm()
-  if (error.value) return
+  error.value = null
+  for (const field of ['email', 'code', 'password', 'confirm']) checkField(field)
+  if (Object.values(errors).some(Boolean)) return
   submitting.value = true
   const previousToken = getAccessToken()
   try {
-    await resetPassword({
+    const result = await resetPassword({
       email: form.email.trim().toLowerCase(),
       verificationCode: form.verificationCode,
       newPassword: form.newPassword,
     })
     if (previousToken) clearAccessToken(previousToken)
     form.verificationCode = ''
-    if (active) completed.value = true
+    form.newPassword = ''
+    form.confirmPassword = ''
+    if (active) {
+      completed.value = true
+      prepareResetLogin(result.username)
+      await router.replace('/login')
+    }
   } catch (reason) {
     if (active) error.value = toErrorMessage(reason)
   } finally {
@@ -108,7 +123,6 @@ onBeforeUnmount(() => {
     class="password-reset-form"
     aria-labelledby="password-reset-title"
     novalidate
-    @input="error = null"
     @submit.prevent="handleSubmit"
   >
     <p class="eyebrow">RESET PASSWORD</p>
@@ -126,8 +140,10 @@ onBeforeUnmount(() => {
             name="email"
             type="email"
             autocomplete="email"
-            placeholder="学号@std.uestc.edu.cn"
-            @input="codeAccepted = false"
+            :aria-invalid="!!fieldError('email')"
+            :aria-describedby="fieldError('email') ? 'reset-email-error' : undefined"
+            @blur="checkField('email')"
+            @input="clearField('email')"
           />
           <button
             class="code-button"
@@ -138,6 +154,10 @@ onBeforeUnmount(() => {
             {{ sendingCode ? '正在发送…' : cooldown > 0 ? `${cooldown} 秒后重试` : '发送验证码' }}
           </button>
         </div>
+
+        <p v-if="fieldError('email')" id="reset-email-error" class="field-error" role="alert">
+          {{ fieldError('email') }}
+        </p>
         <small>验证码5分钟内有效，与注册验证码不能混用。</small>
       </div>
       <div class="form-field">
@@ -149,30 +169,53 @@ onBeforeUnmount(() => {
           inputmode="numeric"
           autocomplete="one-time-code"
           maxlength="6"
-          placeholder="6位数字验证码"
+          :aria-invalid="!!fieldError('code')"
+          :aria-describedby="fieldError('code') ? 'reset-code-error' : undefined"
+          @blur="checkField('code')"
+          @input="clearField('code')"
         />
+        <p v-if="fieldError('code')" id="reset-code-error" class="field-error" role="alert">
+          {{ fieldError('code') }}
+        </p>
       </div>
       <div class="form-field">
         <label for="reset-password">新密码</label>
-        <input
+        <PasswordInput
           id="reset-password"
           v-model="form.newPassword"
           name="newPassword"
-          type="password"
           autocomplete="new-password"
-          placeholder="至少8位，包含文字和数字"
+          :disabled="busy || completed"
+          :aria-invalid="!!fieldError('password')"
+          :aria-describedby="fieldError('password') ? 'reset-password-error' : undefined"
+          @blur="checkField('password')"
+          @input="clearField('password')"
         />
+        <p v-if="fieldError('password')" id="reset-password-error" class="field-error" role="alert">
+          {{ fieldError('password') }}
+        </p>
       </div>
       <div class="form-field">
         <label for="reset-confirm-password">确认新密码</label>
-        <input
+        <PasswordInput
           id="reset-confirm-password"
           v-model="form.confirmPassword"
           name="confirmPassword"
-          type="password"
           autocomplete="new-password"
-          placeholder="再次输入新密码"
+          :disabled="busy || completed"
+          :aria-invalid="!!fieldError('confirm')"
+          :aria-describedby="fieldError('confirm') ? 'reset-confirm-password-error' : undefined"
+          @blur="checkField('confirm')"
+          @input="clearField('confirm')"
         />
+        <p
+          v-if="fieldError('confirm')"
+          id="reset-confirm-password-error"
+          class="field-error"
+          role="alert"
+        >
+          {{ fieldError('confirm') }}
+        </p>
       </div>
       <button class="primary-action submit-button" type="submit">
         {{ submitting ? '正在重置…' : '设置新密码' }}
@@ -182,11 +225,10 @@ onBeforeUnmount(() => {
     <p v-if="codeAccepted && !completed" class="form-message" role="status">
       请求已受理。如该邮箱已注册，验证码将发送至该邮箱，请查看收件箱。
     </p>
-    <p v-if="error" class="form-message error-message" role="alert">{{ error }}</p>
+    <p v-if="error && !remoteField" class="form-message error-message" role="alert">{{ error }}</p>
     <div v-if="completed" class="form-message success-message" role="status">
       <strong>密码重置成功</strong>
-      <p>所有设备已退出登录，请使用用户名和新密码重新登录。</p>
-      <RouterLink to="/login">前往登录</RouterLink>
+      <p>请使用新密码重新登录。</p>
     </div>
     <p class="form-footnote"><RouterLink to="/login">返回登录</RouterLink></p>
   </form>
@@ -195,10 +237,9 @@ onBeforeUnmount(() => {
 <style scoped>
 .password-reset-form {
   padding: clamp(28px, 5vw, 46px);
-  border: 1px solid #ded7c9;
+  border: 0;
   border-radius: 34px;
-  background: #fffdf8;
-  box-shadow: 0 24px 70px rgb(76 54 8 / 10%);
+  background: #fff;
 }
 h1 {
   margin: 8px 0 12px;
@@ -225,7 +266,7 @@ fieldset {
   clip-path: inset(50%);
 }
 .form-field {
-  margin-top: 20px;
+  margin-top: 24px;
 }
 label {
   display: block;
@@ -289,7 +330,17 @@ button {
   background: #dcefe3;
 }
 .form-footnote {
+  margin: 20px 0 0;
+  font-size: 14px;
   text-align: center;
+}
+a {
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+a:hover,
+a:focus-visible {
+  color: #b67c00;
 }
 @media (max-width: 480px) {
   .field-with-action {

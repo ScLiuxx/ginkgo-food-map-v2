@@ -10,9 +10,13 @@ export async function sendPasswordResetCode(email: string): Promise<void> {
   await httpClient.post<ApiResponse<null>>('/auth/email/code/password-reset', { email })
 }
 
-/** 使用专用验证码设置新密码；成功后所有旧凭证失效，仍须单独登录。 */
-export async function resetPassword(request: PasswordResetRequest): Promise<void> {
-  await httpClient.post<ApiResponse<null>>('/auth/password-reset', request)
+/** 使用专用验证码设置新密码，返回已验证用户名；成功后旧凭证失效，仍须单独登录。 */
+export async function resetPassword(request: PasswordResetRequest): Promise<{ username: string }> {
+  const response = await httpClient.post<ApiResponse<{ username: string }>>(
+    '/auth/password-reset',
+    request,
+  )
+  return response.data.data
 }
 
 /** 请求发送注册验证码；是否允许发送及频率限制最终由服务端决定。 */
@@ -20,9 +24,13 @@ export async function sendRegistrationCode(email: string): Promise<void> {
   await httpClient.post<ApiResponse<null>>('/auth/email/code/register', { email })
 }
 
-/** 提交注册信息。成功响应不包含 Token，注册后仍需单独登录。 */
-export async function register(request: RegistrationRequest): Promise<void> {
-  await httpClient.post<ApiResponse<null>>('/auth/register', request)
+/** 邮箱验证注册并建立登录会话，返回现有登录响应结构。 */
+export async function register(request: RegistrationRequest): Promise<LoginResponse> {
+  const response = await httpClient.post<ApiResponse<LoginResponse>>(
+    '/auth/register-and-login',
+    request,
+  )
+  return response.data.data
 }
 
 /** 登录成功才返回访问凭证，失败提示沿用统一 API 错误格式。 */

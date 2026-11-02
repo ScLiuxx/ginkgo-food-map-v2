@@ -519,6 +519,50 @@ class RestaurantReadApiIntegrationTest {
         insert(206, "高级F待补位置", "HOT_POT", 20, "EXACT", null, null, null, "OPERATING");
     }
 
+    /** 地图不使用目录页码截断，边界包含且与区域列表共享完整筛选。 */
+    @Test
+    void shouldReadViewportPointsIndependentlyOfPagination() throws Exception {
+        mvc.perform(get("/api/restaurants/map-points").param("west","103.93").param("east","103.94")
+                .param("south","30.7544").param("north","30.7644").param("pageSize","1").param("page","99"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.matchedCount").value(2))
+                .andExpect(jsonPath("$.data.returnedCount").value(2)).andExpect(jsonPath("$.data.points[0].id").value("101"))
+                .andExpect(jsonPath("$.data.truncated").value(false)).andExpect(jsonPath("$.data.points[0].createdBy").doesNotExist());
+        mvc.perform(get("/api/restaurants").param("west","103.93").param("east","103.94")
+                .param("south","30.7544").param("north","30.7644").param("pageSize","1").param("page","2"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(2))
+                .andExpect(jsonPath("$.data.records[0].id").value("102"));
+    }
+
+    /** 数量上限之前筛选和稳定排序，不把501个有效点位称为500个。 */
+    @Test
+    void shouldExposePointTruncationAndApplyCombinedFilters() throws Exception {
+        for(int i=0;i<501;i++) insert(10000+i,"地图"+i,"HOT_POT",30,"EXACT",null,30.7,104.1,"OPERATING");
+        mvc.perform(get("/api/restaurants/map-points").param("west","104").param("east","104.2")
+                .param("south","30.6").param("north","30.8").param("category","HOT_POT").param("maxPrice","30"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.matchedCount").value(501))
+                .andExpect(jsonPath("$.data.points.length()").value(500)).andExpect(jsonPath("$.data.truncated").value(true));
+        mvc.perform(get("/api/restaurants/map-points").param("west","104").param("east","104.2")
+                .param("south","30.6").param("north","30.8").param("maxPrice","29"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.matchedCount").value(0));
+    }
+
+    /** 缺边、反向、非数值及越界参数均拒绝，不能忽略后返回全城数据。 */
+    @ParameterizedTest
+    @CsvSource({"west,NaN", "west,181", "east,103", "south,31", "north,-91"})
+    void shouldRejectInvalidViewport(String field,String value) throws Exception {
+        var params = new org.springframework.util.LinkedMultiValueMap<String,String>();
+        params.add("west","104");params.add("east","105");params.add("south","30");params.add("north","31");
+        params.set(field,value);
+        mvc.perform(get("/api/restaurants/map-points").params(params)).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldRequireCompleteMapBoundsAndKeepGlobalCatalogCompatible() throws Exception {
+        mvc.perform(get("/api/restaurants/map-points")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/restaurants").param("west","104")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/restaurants")).andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(7));
+    }
+
     private void assertAdvanced(String price, String meters, String category, boolean hideClosed, String... ids) throws Exception {
         var request = get("/api/restaurants").param("keyword", "高级").param("hideClosed", Boolean.toString(hideClosed));
         if (price != null) request.param("maxPrice", price);

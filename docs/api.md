@@ -1,5 +1,33 @@
 # Ginkgo 美食地图 V2 接口文档
 
+## 账号规则与注册自动登录（2026-11-01）
+
+本节为最新账号契约，覆盖下文旧版本规则。用户名2–24个字符（中文、英文字母、数字、下划线），去首尾空白且区分大小写；V11将username列改为utf8mb4_0900_as_cs，唯一索引保留。邮箱规则不变。新注册与重置密码均为4–32位ASCII可打印字符（字母、数字或英文符号，不允许空格/中文），不强制字符组合。旧密码登录继续原样校验，最长72字节，不追溯新注册限制。
+
+| 路径 | 请求/成功响应 | 说明 |
+| --- | --- | --- |
+| POST /auth/register-and-login | 请求同/register；200，data同/login的accessToken/tokenType/expiresAt/user | 新前端使用；用户事务提交后复用登录限流、JWT和Redis会话，Cache-Control:no-store |
+| POST /auth/register | 请求和201空响应不变 | 保留旧客户端，不自动建立会话；采用新字段校验规则 |
+| POST /auth/password-reset | 请求不变；200，data为{"username":"实际用户名"}，不含密码或令牌 | 专用验证码验证、改密提交及凭证版本递增完成后才返回用户名；旧会话失效；前端跳转/login仅预填用户名，密码留空 |
+
+注册已提交而后续登录受限或会话服务不可用时返回503 AUTH_REGISTER_LOGIN_FAILED，提示“账号已创建，但自动登录失败，请前往登录”，不得据此重复注册或误以为账号回滚。验证码/账号校验失败仍使用原有错误码，绝不签发会话。新返回的用户名仅用于本标签页内存预填，不放入URL、localStorage或sessionStorage。刷新后清除预填状态。
+
+## 地图统一搜索与高德开发代理（2026-10-31）
+
+本站业务接口没有新增写操作。关键词搜索复用公开GET /api/restaurants，省略west/south/east/north以搜索完整本站数据，保留已有分类、排序、价格、距校区筛选及分页；地图移动不改变搜索分页。无关键词时仍使用文末视口契约。搜索时点位由当前页本站记录及本页高德地点组成，不代表全站全量；只在无关键词范围浏览时使用/api/restaurants/map-points。
+
+以下为本地Vite同源安全代理供JS SDK使用，属于开发基础设施，生产静态构建不会自动提供，返回高德原始JSON/JSONP格式，不是本站ApiResponse。
+
+| 方法与路径 | 权限与参数 | 响应及边界 |
+| --- | --- | --- |
+| GET /_AMapService/v3/place/text | 不依赖本站登录；由AMap.PlaceSearch发起。keywords为1–100字符非空词，page为1–100默认1；代理固定餐饮types=050000、offset=10、extensions=base、city=成都市、citylimit=false，服务端补配置Key与安全密钥 | 固定转发restapi.amap.com同路径，基础字段经SDK读取name/id/address/location等；不借用第三方评分。200也可能包含高德业务错误，由SDK适配转为搜索错误，不当作空结果 |
+
+代理拒绝非GET（405 MAP_METHOD_NOT_ALLOWED）、非白名单路径（404 MAP_PATH_NOT_ALLOWED）、空/过长关键词和非法页码（400 MAP_SEARCH_INVALID_QUERY）；缺配置503 MAP_PROXY_NOT_CONFIGURED，上游故障502 MAP_UPSTREAM_UNAVAILABLE，重定向502 MAP_UPSTREAM_REDIRECT。固定JSON错误仅含code。其他已允许底图/坐标转换路径仍保留，周边/地点详情等未开放。代理不记录完整URL，不向浏览器返回安全密钥。
+
+本站收录核对复用公开GET /api/restaurants的100米矩形候选查询（keyword/category为空、所有筛选关闭、pageSize=100），每页最多10个高德地点、3路并发；候选结果完整时，仅同名且80米内唯一记录确认匹配。候选截断/故障显示待核实，不解释为未收录；同名远距离、名称不同或重名歧义不自动关联。前端保留结果序号和取消保护，第三方搜索失败不阻断本站查询。
+
+未新增学生提交、申请保存或审核接口；“提交收录”“手动添加餐厅”均为disabled占位，外部搜索不写数据库或持久化浏览器存储，不生成虚构本站ID/详情。现有管理员维护接口不受此占位影响。
+
 最后核对日期：2026-10-30。
 
 ## 图片上传、取消、点评绑定与正式访问
@@ -222,8 +250,8 @@ DTO 参数校验失败返回 HTTP 400，`data` 为字段错误数组，按字段
 | --- | --- | --- | --- |
 | `email` | string | 是 | 非空、有效校园邮箱；与申请验证码时一致 |
 | `verificationCode` | string | 是 | 严格6位ASCII数字，保留可能出现的前导零 |
-| `username` | string | 是 | 去除首尾空白后3至32个 Unicode 字符，只允许文字、数字和下划线 |
-| `password` | string | 是 | 至少8个 Unicode 字符，UTF-8最多72字节，至少包含一个文字和一个数字，不能含控制字符；不执行 trim |
+| `username` | string | 是 | 去除首尾空白后2至24个字符，只允许中文、英文字母、数字和下划线，区分大小写 |
+| `password` | string | 是 | 4–32位ASCII字母、数字或英文符号，不含空格、中文或控制字符，不强制字符组合，不执行 trim |
 
 ```json
 {
@@ -240,7 +268,7 @@ DTO 参数校验失败返回 HTTP 400，`data` 为字段错误数组，按字段
 
 - 账号邮箱标记为已验证，账号状态为 `ACTIVE`，分配 `ROLE_USER`。
 - 不自动登录、不返回令牌；下一步调用 `/auth/login`。
-- 邮箱和用户名必须唯一。用户名比较遵循数据库排序规则，当前 MySQL 配置为大小写、重音不敏感。
+- 邮箱和用户名必须唯一。V11后用户名比较区分大小写、重音；邮箱沿用原有比较规则。
 - 验证码先消费，再写入账号和角色。账号与角色写入在同一数据库事务中；消费验证码后的数据库写入失败，验证码不会恢复，需要重新申请。
 
 主要失败：
@@ -266,7 +294,7 @@ DTO 参数校验失败返回 HTTP 400，`data` 为字段错误数组，按字段
 | --- | --- | --- | --- |
 | `email` | string | 是 | 非空、有效校园邮箱；规范化后与申请验证码的绑定邮箱一致 |
 | `verificationCode` | string | 是 | 严格6位ASCII数字，保留前导零；仅接受密码重置用途 |
-| `newPassword` | string | 是 | 与注册密码规则一致：至少8个 Unicode 字符，UTF-8最多72字节，至少包含文字和数字，禁止控制字符；不执行 trim |
+| `newPassword` | string | 是 | 与注册密码规则一致：4–32位ASCII字母、数字或英文符号，不含空格/中文，不强制字符组合，不执行 trim |
 
 ```json
 {
@@ -283,7 +311,7 @@ DTO 参数校验失败返回 HTTP 400，`data` 为字段错误数组，按字段
   "success": true,
   "code": "OK",
   "message": "请求成功",
-  "data": null,
+  "data": { "username": "ExampleUser" },
   "timestamp": "2026-10-28T02:00:00Z"
 }
 ```
@@ -1053,3 +1081,43 @@ V8新增review_request_receipts并回填已有发布：作者、UUID、点评/�
 | 500 | COMMON_INTERNAL_SERVER_ERROR | 未预期故障，整体回滚 |
 
 前端比较已认证账号ID与公开作者ID决定入口，不按昵称、管理员角色或预览canDelete授权。服务端独立校验。确认框支持取消/Escape、失败重试；历史面板先关闭、释放滚动锁再确认。成功回第一页，并复用发布后的统计刷新流程。
+
+## 地图视口读取（已实现）
+
+### GET /api/restaurants：可选地图范围
+
+访客可读，无写入副作用。新增west、south、east、north四个GCJ-02十进制边界，四项同时省略保持原目录行为；一旦提供，必须四边齐全，west<east、south<north，经度[-180,180]、纬度[-90,90]，首版不支持跨日期变更线。非数值、缺边、越界、反向、零面积均400 COMMON_VALIDATION_FAILED。
+
+提供视口时排除待定位/缺坐标和软删除餐厅，边界包含；在完整符合区域及业务条件的集合上排序后分页。keyword、category、hideClosed、maxPrice、maxDistanceMeters、全部8种sort和原page/pageSize规则保持不变。距校区筛选仍以清水河参考点计算，不随地图中心移动。记录与total/totalPages同一只读事务快照。
+
+### GET /api/restaurants/map-points
+
+访客可读，仅公开该GET入口，不扩大写入或管理权限。必填west、south、east、north，其余业务筛选与目录相同；page/pageSize不控制点位集合，点位固定最多500条。四边全部缺失400 RESTAURANT_INVALID_INPUT，其他边界校验同上。请求不访问高德、不调用外部搜索、不写数据库，也没有新增审核状态；只查询当前系统已有可见餐厅。
+
+```http
+GET /api/restaurants/map-points?west=104.04&east=104.16&south=30.62&north=30.73&sort=score
+```
+
+返回ApiResponse.data字段：
+
+| 字段 | 含义 |
+| --- | --- |
+| points | 公开轻量点位数组，不随列表翻页变化 |
+| points[].id/name | 字符串餐厅ID、名称 |
+| points[].latitude/longitude | 已确认GCJ-02坐标；不包含待定位记录 |
+| points[].score | 当前每账号最新代表的综合均分；无评分为null |
+| points[].pricePerPerson | 人均整数元或null，不伪造未知消费 |
+| points[].businessStatus | OPERATING/CLOSED，不表示实时开门状态 |
+| matchedCount | 该视口符合条件的完整数量，与点位同一事务快照 |
+| returnedCount | 实际返回数量，最大500 |
+| limit/truncated | 固定500；matchedCount超过returnedCount时为true |
+
+空区域data示例：
+
+```json
+{"points":[],"matchedCount":0,"returnedCount":0,"limit":500,"truncated":false}
+```
+
+排序与目录共用SQL：默认综合评分降序，无评分靠后，同分名称和ID稳定排序，筛选和排序发生在截断前。超限时前端提示放大地图缩小范围，不把500点称为全部；列表仍可按完整匹配数量分页。两个独立HTTP请求不是跨请求原子快照，并发写入时各自反映各自的事务快照。
+
+前端监听高德moveend/zoomend，停顿300毫秒自动刷新最终视口，取消并拒绝迟到响应，失败保留上次结果且明确提示。缺Key或安全代理时保留全局餐厅目录，不能把降级目录当作视口点位验收。本地真实高德底图及自动视口请求已验证，生产环境及App唤起另行验收。

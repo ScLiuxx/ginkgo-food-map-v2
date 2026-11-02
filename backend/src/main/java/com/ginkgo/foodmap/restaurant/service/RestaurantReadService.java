@@ -11,6 +11,8 @@ import com.ginkgo.foodmap.restaurant.mapper.RestaurantCatalogMapper;
 import com.ginkgo.foodmap.restaurant.vo.RestaurantCategoryVo;
 import com.ginkgo.foodmap.restaurant.vo.RestaurantPageVo;
 import com.ginkgo.foodmap.restaurant.vo.RestaurantVo;
+import com.ginkgo.foodmap.restaurant.vo.RestaurantMapPointsVo;
+import com.ginkgo.foodmap.restaurant.vo.RestaurantMapPointVo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -59,6 +61,27 @@ public class RestaurantReadService {
         page.setPageSize(query.getPageSize());
         page.setTotalPages(total / query.getPageSize() + (total % query.getPageSize() == 0 ? 0 : 1));
         return page;
+    }
+
+    /** 地图必须显式指定完整视口，COUNT与点位保持同一事务快照，不加载无用标签。 */
+    public RestaurantMapPointsVo mapPoints(RestaurantListQuery query) {
+        if (query.getWest() == null || query.getEast() == null || query.getSouth() == null
+                || query.getNorth() == null || !query.isBoundsValid()) {
+            throw new BusinessException(RestaurantErrorCode.INVALID_INPUT);
+        }
+        long count = mapper.countVisible(query);
+        var points = count == 0 ? List.<RestaurantMapPointVo>of() : mapper.selectMapPoints(query).stream().map(row -> {
+            var point = new RestaurantMapPointVo();
+            point.setId(row.getId().toString()); point.setName(row.getName());
+            point.setLatitude(row.getLatitude()); point.setLongitude(row.getLongitude());
+            point.setScore(row.getScore()); point.setPricePerPerson(row.getPricePerPerson());
+            point.setBusinessStatus(row.getBusinessStatus());
+            return point;
+        }).toList();
+        var response = new RestaurantMapPointsVo();
+        response.setPoints(points); response.setMatchedCount(count); response.setReturnedCount(points.size());
+        response.setLimit(500); response.setTruncated(count > points.size());
+        return response;
     }
 
     /** 正整数ID限定在Java Long范围，已删除和不存在使用统一错误，不暴露任何管理元数据。 */

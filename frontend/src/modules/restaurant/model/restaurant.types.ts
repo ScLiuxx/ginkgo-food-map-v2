@@ -1,5 +1,11 @@
 /** 页面只读模型，由餐厅API显式转换；旧快照仅用于测试与开发数据准备。 */
 export interface RestaurantReadModel {
+  /** 可选的餐厅级资料：旧接口缺省为未知，不能将未填写当作支持堂食或配送。 */
+  restaurantType?: 'REGULAR' | 'CANTEEN'
+  supportsDineIn?: boolean | null
+  supportsDelivery?: boolean | null
+  /** 可选的前端校园详情扩展，旧接口缺省时保持兼容；不代表当前后端已实现。 */
+  dining?: import('./campusDining').CampusDining
   id: string
   name: string
   category: string
@@ -27,6 +33,9 @@ export type RestaurantSort = 'score' | RatingDimension | 'reviews' | 'price' | '
 
 /** 分类使用服务端稳定编码，所有条件随分页请求提交，不在当前页二次筛选。 */
 export interface CatalogFilters {
+  /** 前端过渡筛选；后端未支持时须读取完整分页再筛选，不能只筛当前页。 */
+  restaurantType?: '' | 'REGULAR' | 'CANTEEN'
+  diningMode?: '' | 'dineIn' | 'delivery'
   keyword: string
   category: string
   sort: RestaurantSort

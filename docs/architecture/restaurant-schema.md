@@ -1,4 +1,51 @@
-# 餐厅模块首批表结构设计
+# 餐厅、食堂与窗口表结构
+
+## 当前增量：V9 / V10（2026-11-01）
+
+已新增 Flyway 迁移 `V9__campus_dining_windows.sql`、`V10__window_review_targets.sql`，不修改 V1–V8。当前业务库仍为 V8；本轮仅在隔离 MySQL 8.4 验证迁移，不自动更新正在运行的数据库。下方首批设计保留为历史依据，以本节增量及迁移 SQL 为当前结构准绳。接口与服务尚未接入窗口，不代表窗口业务已上线。
+
+### 餐厅表新增字段
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `restaurant_type` | VARCHAR(16)，非空，默认 REGULAR | REGULAR 普通餐厅 / CANTEEN 食堂；独立于美食品类 |
+| `supports_dine_in` | BOOLEAN，可空 | 支持堂食；NULL 未知，不猜测食堂默认值 |
+| `supports_delivery` | BOOLEAN，可空 | 支持外卖；NULL 未知；不表示平台提供配送 |
+| `campus_code` | VARCHAR(32)，可空 | QINGSHUIHE / SHAHE；未知为空 |
+
+V9 仅将旧 `category_code=CANTEEN` 的餐厅回填为食堂，保留原分类和更新时间。其他记录默认 REGULAR，不按名称猜测类型。暂保留旧“食堂”分类以兼容旧接口；后续维护接口应以类型字段判断食堂，不再依赖分类。类型、校区与布尔字段均有 CHECK，增加 `(restaurant_type, deleted_at, id)` 查询索引。
+
+### 独立窗口表 `canteen_windows`
+
+| 字段 | 类型 / 可空 | 约束与用途 |
+| --- | --- | --- |
+| `id` | BIGINT UNSIGNED，主键自增 | 稳定身份，不能用名称＋楼层拼接 |
+| `canteen_id` | BIGINT UNSIGNED，非空 | 所属食堂 |
+| `canteen_type` | VARCHAR(16)，非空，固定 CANTEEN | 内部外键锚点，不作为客户端可编辑字段 |
+| `name` | VARCHAR(40)，非空 | 去首尾空白，允许同名窗口 |
+| `floor_number` | SMALLINT，非空 | -10 至 100，负数地下层，0 地面层；楼层导航由窗口数据生成 |
+| `category_code` | VARCHAR(32)，可空 | 引用现有美食品类字典，不允许 CANTEEN |
+| `description` | VARCHAR(500)，可空 | 简介，非空时须去首尾空白 |
+| `price_per_person` / `price_kind` | SMALLINT 可空 / VARCHAR(16) 非空 | 复用 UNKNOWN / EXACT / ESTIMATE；未知为空，否则整数元 1–5000 |
+| `cover_file_id` | BIGINT UNSIGNED，可空 | file 模块逻辑 ID，归属、访问及生命周期由公开服务校验 |
+| `business_status` | VARCHAR(16)，非空 | OPERATING / CLOSED；关闭不删除历史评价 |
+| `created_by` / `updated_by` | BIGINT UNSIGNED，前者非空、后者可空 | 真实账号逻辑 ID，服务端赋值 |
+| `created_at` / `updated_at` | TIMESTAMP(6)，非空 | UTC 创建和更新时间 |
+| `deleted_at` / `deleted_by` | TIMESTAMP(6) / BIGINT UNSIGNED，可空 | 软删除时同时填写，正常状态同时为空 |
+
+`restaurants` 增加组合唯一键 `(id, restaurant_type)`，窗口通过 `(canteen_id, canteen_type)` 建同模块 RESTRICT 外键，保证父对象确实是食堂，也防止已有窗口的食堂被直接改为普通餐厅。分类同模块物理外键；账号、文件为跨模块逻辑引用。增加 `(canteen_id, floor_number, category_code, id)` 索引。软删除与停业状态仍需服务查询校验，物理外键不检查可见性。
+
+不增加楼层表、菜品表或窗口堂食/外卖字段，不生成样例窗口。更名保留 ID；更换经营主体应关闭旧记录并新建 ID，避免旧评价归到新经营者。窗口只能由正式维护/审核流程收录，当前迁移未开放投稿接口或绕过审核的写入入口。
+
+### 窗口评分与模块边界
+
+V10 新增 `window_review_statistics`，归 restaurant 模块，窗口 ID 是主键及同模块 RESTRICT 外键。保存点评条数、计分人数、推荐人数、四维累计分和总分累计值；约束及汇总公式见[评价结构](review-schema.md#当前增量v10窗口评价归属2026-11-01)。普通餐厅继续使用原统计表，食堂旧统计保留作历史，不混入窗口汇总。
+
+服务接入后：食堂分取未删除、营业且有计分人的窗口均分的等权平均；未评分与关闭窗口跳过，真实零分参与。没有符合条件的窗口返回 NULL。暂不额外建食堂汇总表，避免第二份缓存的一致性成本。
+
+窗口维护、可见性验证、发布/删除时统计更新与食堂汇总查询尚未接入 Java 服务；当前 migration 只建立结构，不能独立提供这些业务能力。
+
+## 历史：首批餐厅结构（V3）
 
 日期：2026-10-28。状态：用户已批准方案，V3、隔离MySQL测试、餐厅CRUD API及前端维护已实现；线上能力以实际部署版本为准。
 

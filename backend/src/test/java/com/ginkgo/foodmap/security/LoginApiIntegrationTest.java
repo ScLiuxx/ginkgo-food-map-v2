@@ -62,6 +62,25 @@ class LoginApiIntegrationTest {
     private final Map<String, String> activeSessions = new ConcurrentHashMap<>();
     private UserEntity user;
 
+    /** 注册自动登录复用真实BCrypt/JWT与安全链，最短用户名和纯数字4位密码可用。 */
+    @Test
+    void shouldRegisterAndEstablishUsableSession() throws Exception {
+        String response = mvc.perform(post("/auth/register-and-login").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"new@std.uestc.edu.cn","verificationCode":"123456","username":"Ka","password":"1234"}
+                                """))
+                .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.data.user.username").value("Ka"))
+                .andExpect(jsonPath("$.data.user.roles[0]").value("ROLE_USER"))
+                .andExpect(jsonPath("$.data.user.passwordHash").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+        String token = json.readTree(response).path("data").path("accessToken").asText();
+        mvc.perform(get("/auth/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.username").value("Ka"));
+        verify(codes).consume(VerificationCodePurpose.REGISTER, "new@std.uestc.edu.cn", "123456");
+        assertThat(passwords.matches("1234", users.selectByUsername("Ka").orElseThrow().getPasswordHash())).isTrue();
+    }
+
     @BeforeEach
     void prepareAccount() {
         activeSessions.clear();
@@ -227,15 +246,17 @@ class LoginApiIntegrationTest {
         mvc.perform(post("/auth/password-reset").contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"Student@STD.UESTC.EDU.CN","verificationCode":"012345",
-                                 "newPassword":" NewPassword2026 "}
+                                 "newPassword":"NewPassword2026"}
                                 """))
                 .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))
-                .andExpect(jsonPath("$.success").value(true)).andExpect(jsonPath("$.data").doesNotExist());
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.username").value("ginkgo_user"))
+                .andExpect(jsonPath("$.data.accessToken").doesNotExist());
         verify(codes).consume(VerificationCodePurpose.PASSWORD_RESET, "student@std.uestc.edu.cn", "012345");
         UserEntity changed = users.selectById(user.getId());
         assertThat(changed.getCredentialVersion()).isEqualTo(1L);
         assertThat(changed.getRowVersion()).isEqualTo(1L);
-        assertThat(passwords.matches(" NewPassword2026 ", changed.getPasswordHash())).isTrue();
+        assertThat(passwords.matches("NewPassword2026", changed.getPasswordHash())).isTrue();
         assertThat(passwords.matches("Ginkgo2026", changed.getPasswordHash())).isFalse();
         // 旧会话记录仍在存储中，证明拒绝来自最新凭证版本，而非测试提前删除了会话。
         assertThat(activeSessions).hasSize(2);
@@ -245,10 +266,10 @@ class LoginApiIntegrationTest {
         }
         loginRequest().andExpect(status().isUnauthorized());
         mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"ginkgo_user\",\"password\":\"NewPassword2026\"}"))
+                        .content("{\"username\":\"ginkgo_user\",\"password\":\" NewPassword2026 \"}"))
                 .andExpect(status().isUnauthorized());
         String response = mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"ginkgo_user\",\"password\":\" NewPassword2026 \"}"))
+                        .content("{\"username\":\"ginkgo_user\",\"password\":\"NewPassword2026\"}"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         String freshToken = json.readTree(response).path("data").path("accessToken").asText();
         mvc.perform(get("/auth/me").header("Authorization", "Bearer " + freshToken)).andExpect(status().isOk());

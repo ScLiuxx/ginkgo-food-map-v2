@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { inject } from 'vue'
 import ReplyThread from './ReplyThread.vue'
+import StarScore from '@/shared/ui/StarScore.vue'
 import { ratingDimensions } from '@/modules/restaurant/model/catalog.logic'
 import { overall, reviewGatewayKey, unavailableReviewGateway } from '../model/review'
 import type { ReviewItem } from '../model/review'
+import { hasExampleMarker } from '../model/detailPhotos'
 const gateway = inject(reviewGatewayKey, unavailableReviewGateway)
 /** 当前点评与历史点评使用同一展示组件，回复、照片和删除始终绑定各自记录ID。 */
 defineProps<{
   item: ReviewItem
   preview?: boolean
+  starScale?: boolean
   authenticated: boolean
   /** 已认证账号ID，仅用于入口展示；不能代替服务端授权。 */
   viewerId?: string
@@ -25,31 +28,50 @@ defineEmits<{
 }>()
 </script>
 <template>
-  <article class="review-card" :class="{ 'history-review': item.scoringStatus === 'history' }">
+  <article
+    class="review-card"
+    :class="{ 'history-review': item.scoringStatus === 'history', 'star-review': starScale }"
+  >
     <header>
       <span class="avatar">{{ Array.from(item.username)[0] }}</span>
       <div>
         <strong>{{ item.username }}</strong
-        ><time :datetime="item.createdAt">{{
-          new Date(item.createdAt).toLocaleString('zh-CN')
+        ><time v-if="!starScale" :datetime="item.createdAt">{{
+          new Date(item.createdAt).toLocaleDateString('zh-CN')
         }}</time>
       </div>
-      <span class="verdict"
+      <template v-if="starScale"
+        ><StarScore :score="item.overallScore ?? overall(item.scores)" /><span
+          class="attitude-badge"
+          :class="{ negative: !item.recommended }"
+          >{{ item.recommended ? '推荐' : '不推荐' }}</span
+        ><time class="entry-date" :datetime="item.createdAt">{{
+          new Date(item.createdAt).toLocaleDateString('zh-CN')
+        }}</time></template
+      >
+      <span v-else class="verdict"
         >{{ item.recommended ? '推荐' : '不推荐' }} ·
         {{ (item.overallScore ?? overall(item.scores)).toFixed(2) }}</span
       >
     </header>
-    <p v-if="item.scoringStatus" class="scoring-state" :class="item.scoringStatus">
-      {{
-        item.scoringStatus === 'current' ? '最新点评 · 参与当前评分' : '历史点评 · 不参与当前评分'
-      }}
+    <p v-if="preview || hasExampleMarker(item.body)" class="example-review">
+      示例点评 · 非真实体验
     </p>
+    <p v-if="item.scoringStatus" class="scoring-state" :class="item.scoringStatus">
+      {{ item.scoringStatus === 'current' ? '最新点评' : '历史点评 · 不计分' }}
+    </p>
+    <!-- 仅明确标识的联调记录折叠原文；真实同学正文始终直接展示，不改写存储内容。 -->
+    <details v-if="hasExampleMarker(item.body) && !preview" class="example-body">
+      <summary>查看示例记录</summary>
+      <p class="body">{{ item.body }}</p>
+    </details>
+    <p v-else class="body">{{ item.body }}</p>
     <p class="chips">
       <span v-for="d in ratingDimensions" :key="d.key"
-        >{{ d.label }} {{ item.scores[d.key].toFixed(1) }}</span
+        >{{ d.label }}
+        {{ (starScale ? item.scores[d.key] / 2 : item.scores[d.key]).toFixed(1) }}</span
       >
     </p>
-    <p class="body">{{ item.body }}</p>
 
     <div class="photos">
       <button v-for="p in item.photos" :key="p.id" type="button" @click="$emit('photo', p.url)">
@@ -107,6 +129,7 @@ defineEmits<{
           :key="previous.id"
           :item="previous"
           :preview="preview"
+          :star-scale="starScale"
           :authenticated="authenticated"
           :viewer-id="viewerId"
           :busy="busy"
@@ -122,11 +145,100 @@ defineEmits<{
   </article>
 </template>
 <style scoped>
+/* 正文、照片优先；星级与态度并排，日期退到右侧，低优先级信息保持紧凑。 */
+.star-review.review-card {
+  padding: 24px 0;
+  margin: 0;
+  border-color: #edf0f2;
+}
+.star-review header {
+  flex-wrap: wrap;
+  gap: 9px 12px;
+}
+.star-review .avatar {
+  width: 34px;
+  height: 34px;
+  background: #f3f5f6;
+  color: #87939e;
+}
+.star-review .attitude-badge {
+  background: #fff5eb;
+  color: #df8b42;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.star-review .attitude-badge.negative {
+  background: #f2f3f5;
+  color: #8b939d;
+}
+.star-review .entry-date {
+  margin: 0 0 0 auto;
+  color: #a0a8b1;
+  font-size: 12px;
+}
+.star-review .body {
+  margin: 16px 0 12px;
+  color: #414c58;
+}
+.star-review .chips {
+  font-size: 11px;
+  color: #a0a8b0;
+  gap: 10px;
+}
+.star-review .scoring-state.current,
+.star-review .scoring-state.history {
+  padding: 0;
+  background: none;
+  color: #a5adb5;
+  margin: 8px 12px 0 0;
+}
+.star-review .example-review {
+  display: inline-block;
+  font-size: 11px;
+  margin: 8px 12px 0 0;
+}
+.star-review .example-body {
+  margin: 8px 0;
+}
+.star-review .photos img {
+  width: 104px;
+  height: 104px;
+  border-radius: 5px;
+}
+@media (max-width: 480px) {
+  .star-review header {
+    gap: 6px 8px;
+  }
+  .star-review .entry-date {
+    flex: 1 0 100%;
+    text-align: right;
+    font-size: 11px;
+  }
+  .star-review .photos img {
+    width: 80px;
+    height: 80px;
+  }
+}
+.example-body {
+  margin: 14px 0;
+  color: #687583;
+  font-size: 12px;
+}
+.example-body summary {
+  cursor: pointer;
+  padding: 6px 0;
+}
 .review-card {
   padding: 22px 0;
   border-top: 1px solid #e8dfd0;
   margin-top: 20px;
   min-width: 0;
+}
+.example-review {
+  font-size: 12px;
+  line-height: 1.8;
+  color: #976319;
 }
 header {
   display: flex;

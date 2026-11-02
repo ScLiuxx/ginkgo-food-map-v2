@@ -22,6 +22,7 @@ export const useRestaurantCatalog = defineStore('restaurant-catalog', () => {
   const visibleRestaurants = ref<RestaurantReadModel[]>([])
   const categories = ref<RestaurantCategory[]>([])
   const loading = ref(false)
+  let active = true
   const error = ref<string | null>(null)
   let generation = 0
   let controller: AbortController | undefined
@@ -50,6 +51,7 @@ export const useRestaurantCatalog = defineStore('restaurant-catalog', () => {
 
   /** 直接进入或浏览器返回目录时重新读取；保留缓存卡片供滚动位置恢复。 */
   async function load(): Promise<void> {
+    active = true
     cancelPending()
     const requestGeneration = generation
     controller = new AbortController()
@@ -96,6 +98,7 @@ export const useRestaurantCatalog = defineStore('restaurant-catalog', () => {
   watch(
     () => [JSON.stringify(filters), page.value],
     (current, previous) => {
+      if (!active) return
       cancelPending()
       visibleRestaurants.value = []
       total.value = 0
@@ -117,6 +120,8 @@ export const useRestaurantCatalog = defineStore('restaurant-catalog', () => {
     const previous = JSON.stringify(filters)
     const wasFirstPage = page.value === 1
     Object.assign(filters, {
+      ...(filters.restaurantType !== undefined ? { restaurantType: '' } : {}),
+      ...(filters.diningMode !== undefined ? { diningMode: '' } : {}),
       keyword: '',
       category: '',
       sort: 'score',
@@ -143,6 +148,11 @@ export const useRestaurantCatalog = defineStore('restaurant-catalog', () => {
   }
 
   return {
+    /** 地图接管查询时只复用条件，暂停目录watch，避免同一操作重复发请求。 */
+    pause: () => {
+      active = false
+      cancelPending()
+    },
     filters,
     page,
     pageSize,

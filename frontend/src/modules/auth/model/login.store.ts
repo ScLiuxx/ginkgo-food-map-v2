@@ -8,7 +8,7 @@ import {
 } from '@/shared/api/authSession'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 import { fetchCurrentUser, login, logout } from '../api/authApi'
-import type { CurrentUser, LoginRequest } from './login.types'
+import type { CurrentUser, LoginRequest, LoginResponse } from './login.types'
 
 /** 管理登录展示状态；密码不进入 Store，旧请求也不能恢复已经退出的账号。 */
 export const useLoginStore = defineStore('login', () => {
@@ -35,6 +35,13 @@ export const useLoginStore = defineStore('login', () => {
   )
 
   /** 提交后仅保存令牌和公开用户信息，不保留请求中的密码。 */
+  function acceptSession(result: LoginResponse): void {
+    // 新令牌会同步触发旧身份清理；之后再写入这个令牌对应的用户快照。
+    setAccessToken(result.accessToken)
+    user.value = result.user
+    error.value = null
+  }
+
   async function submit(request: LoginRequest): Promise<boolean> {
     if (loggingIn.value) return false
     const current = ++revision
@@ -43,8 +50,7 @@ export const useLoginStore = defineStore('login', () => {
     try {
       const result = await login(request)
       if (current !== revision) return false
-      setAccessToken(result.accessToken)
-      user.value = result.user
+      acceptSession(result)
       return true
     } catch (reason) {
       if (current === revision) error.value = toErrorMessage(reason)
@@ -106,6 +112,7 @@ export const useLoginStore = defineStore('login', () => {
     authenticated,
     hasSession,
     submit,
+    acceptSession,
     restore,
     signOut,
     clearError,

@@ -8,7 +8,18 @@ const router = createRouter({
       component: () => import('@/pages/review/ReviewHistoryPreviewPage.vue'),
       meta: { title: '多次点评展示预览' },
     },
-    ...(['map', 'messages', 'account'] as const).map((kind) => ({
+    {
+      path: '/map',
+      component: () => import('@/pages/map/MapPage.vue'),
+      meta: { title: '地图找店' },
+    },
+    {
+      path: '/previews/map',
+      component: () => import('@/pages/map/MapPage.vue'),
+      props: { preview: true },
+      meta: { title: '地图界面预览' },
+    },
+    ...(['messages', 'account'] as const).map((kind) => ({
       path: `/${kind}`,
       component: () => import('@/pages/home/CapabilityPage.vue'),
       props: { kind },
@@ -74,7 +85,7 @@ const router = createRouter({
 
 // 单页应用切换路由时同步浏览器标题，便于用户识别当前页面。
 router.afterEach((to) => {
-  document.title = to.meta.title ? `${String(to.meta.title)} · Ginkgo 美食地图` : 'Ginkgo 美食地图'
+  document.title = to.meta.title ? `${String(to.meta.title)} · 泥电美食地图` : '泥电美食地图'
 })
 
 export default router

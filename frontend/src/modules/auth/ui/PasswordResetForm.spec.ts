@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearAccessToken, getAccessToken, setAccessToken } from '@/shared/api/authSession'
 import { resetPassword, sendPasswordResetCode } from '../api/authApi'
 import PasswordResetForm from './PasswordResetForm.vue'
+import { consumeResetLogin } from '../model/loginPrefill'
 
 vi.mock('../api/authApi', () => ({ resetPassword: vi.fn(), sendPasswordResetCode: vi.fn() }))
 
@@ -22,6 +23,7 @@ describe('password reset form', () => {
 
   beforeEach(async () => {
     clearAccessToken()
+    consumeResetLogin()
     vi.resetAllMocks()
     await router.push('/password-reset')
     host = document.createElement('div')
@@ -41,8 +43,8 @@ describe('password reset form', () => {
     const fields = {
       'reset-email': 'Student@STD.UESTC.EDU.CN',
       'reset-code': '012345',
-      'reset-password': ' NewPassword2026 ',
-      'reset-confirm-password': ' NewPassword2026 ',
+      'reset-password': 'NewPassword2026',
+      'reset-confirm-password': 'NewPassword2026',
       ...values,
     }
     for (const [id, value] of Object.entries(fields)) {
@@ -60,7 +62,7 @@ describe('password reset form', () => {
   }
 
   it('submits the dedicated payload and removes old credentials after success', async () => {
-    vi.mocked(resetPassword).mockResolvedValue()
+    vi.mocked(resetPassword).mockResolvedValue({ username: 'ginkgo_user' })
     setAccessToken('old-session')
     fill()
     await submit()
@@ -68,23 +70,24 @@ describe('password reset form', () => {
     expect(resetPassword).toHaveBeenCalledWith({
       email: 'student@std.uestc.edu.cn',
       verificationCode: '012345',
-      newPassword: ' NewPassword2026 ',
+      newPassword: 'NewPassword2026',
     })
     expect(getAccessToken()).toBeNull()
     expect(localStorage.getItem('ginkgo.access-token')).toBeNull()
     for (const id of ['reset-password', 'reset-confirm-password', 'reset-code']) {
       expect(host.querySelector<HTMLInputElement>(`#${id}`)?.value).toBe('')
     }
-    expect(router.currentRoute.value.path).toBe('/password-reset')
-    expect(host.querySelector('.success-message a')?.getAttribute('href')).toBe('/login')
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/login'))
+    expect(consumeResetLogin()).toBe('ginkgo_user')
+    expect(consumeResetLogin()).toBeNull()
   })
 
   it.each([
     [{ 'reset-email': 'student@example.com' }, '学生邮箱'],
     [{ 'reset-code': '12ab' }, '6位数字'],
-    [{ 'reset-password': 'onlyletters' }, '新密码至少8位'],
-    [{ 'reset-password': '密'.repeat(25) + '1' }, '不能超过72字节'],
-    [{ 'reset-password': 'Password2026\u0001' }, '不含控制字符'],
+    [{ 'reset-password': 'abc' }, '密码至少需要4位'],
+    [{ 'reset-password': 'a'.repeat(33) }, '密码不能超过32位'],
+    [{ 'reset-password': 'Password2026\u0001' }, '不允许中文或空格'],
     [{ 'reset-confirm-password': 'DifferentPassword2026' }, '两次输入的新密码不一致'],
   ])('rejects invalid input before calling the server: %j', async (fields, message) => {
     fill(fields)
@@ -108,7 +111,7 @@ describe('password reset form', () => {
   })
 
   it('does not erase a new login created while reset is pending', async () => {
-    let finish!: () => void
+    let finish!: (value: { username: string }) => void
     vi.mocked(resetPassword).mockReturnValue(
       new Promise((resolve) => {
         finish = resolve
@@ -118,7 +121,7 @@ describe('password reset form', () => {
     fill()
     await submit()
     setAccessToken('new-session')
-    finish()
+    finish({ username: 'ginkgo_user' })
     await vi.waitFor(() => expect(host.textContent).toContain('密码重置成功'))
     expect(getAccessToken()).toBe('new-session')
   })
@@ -154,7 +157,7 @@ describe('password reset form', () => {
   })
 
   it('blocks duplicate submissions while a reset request is pending', async () => {
-    let finish!: () => void
+    let finish!: (value: { username: string }) => void
     vi.mocked(resetPassword).mockReturnValue(
       new Promise((resolve) => {
         finish = resolve
@@ -165,7 +168,7 @@ describe('password reset form', () => {
     await submit()
     expect(resetPassword).toHaveBeenCalledTimes(1)
     expect(host.querySelector('fieldset')?.disabled).toBe(true)
-    finish()
+    finish({ username: 'ginkgo_user' })
     await vi.waitFor(() => expect(host.textContent).toContain('密码重置成功'))
   })
 })

@@ -52,7 +52,7 @@ class ReviewSchemaIntegrationTest {
     }
 
     @Test void freshAndRepeatedMigrationWithoutInventedContent() throws SQLException {
-        assertThat(migration(database,null).info().current().getVersion().getVersion()).isEqualTo("8");
+        assertThat(migration(database,null).info().current().getVersion().getVersion()).isEqualTo("11");
         assertThat(migration(database,null).migrate().migrationsExecuted).isZero();
         migration(database,null).validate();
         for (String table : List.of("reviews","review_replies","review_photos","media_files","restaurant_review_statistics"))
@@ -72,7 +72,7 @@ class ReviewSchemaIntegrationTest {
             update(c,"INSERT INTO restaurants(name,category_code,source_type,row_version) VALUES ('原店','OTHER','LEGACY_IMPORT',6)");
             update(c,"INSERT INTO restaurants(name,category_code,source_type,deleted_at,delete_reason_code) VALUES ('旧删除店','OTHER','LEGACY_IMPORT',CURRENT_TIMESTAMP(6),'SYSTEM')");
             update(c,"INSERT INTO restaurant_tags(restaurant_id,tag,position) SELECT id,'保留',0 FROM restaurants");
-            assertThat(migration(db,null).migrate().migrationsExecuted).isEqualTo(5);
+            assertThat(migration(db,null).migrate().migrationsExecuted).isEqualTo(7);
             assertThat(number(c,"SELECT COUNT(*) FROM restaurant_review_statistics WHERE review_count=0 AND recommend_count=0 AND taste_sum=0 AND overall_score_sum=0")).isEqualTo(2);
             assertThat(number(c,"SELECT credential_version FROM users")).isEqualTo(9);
             assertThat(number(c,"SELECT row_version FROM restaurants WHERE name='原店'")).isEqualTo(6);
@@ -92,7 +92,7 @@ class ReviewSchemaIntegrationTest {
                 int score=i==0?8:i==1?6:9;
                 update(c,"INSERT INTO reviews(restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,is_recommended,body,client_request_id,request_hash,created_at) VALUES (1,?,?,?,?,?,?, '真实升级测试正文',UUID_TO_BIN(?),UNHEX(REPEAT('11',32)),'2026-10-29 00:00:00')",i==2?2:1,score,score,score,score,i==1?0:1,UUID.randomUUID().toString());
             }
-            assertThat(migration(db,null).migrate().migrationsExecuted).isEqualTo(4);
+            assertThat(migration(db,null).migrate().migrationsExecuted).isEqualTo(6);
             assertThat(number(c,"SELECT COUNT(*) FROM reviews")).isEqualTo(3);
             assertThat(strings(c,"SELECT CONCAT(review_count,':',participant_count,':',recommend_count,':',overall_score_sum) FROM restaurant_review_statistics WHERE restaurant_id=1")).containsExactly("3:2:1:15.00");
             assertThat(number(c,"SELECT participant_count FROM restaurant_review_statistics WHERE restaurant_id=2")).isZero();
@@ -122,7 +122,7 @@ class ReviewSchemaIntegrationTest {
             update(c,reviewSql(),1,UUID.randomUUID().toString());
             long id=number(c,"SELECT id FROM reviews");
             update(c,"INSERT INTO review_photos(review_id,position,media_file_id) VALUES (?,0,100),(?,1,101)",id,id);
-            assertThat(migration(db,null).migrate().migrationsExecuted).isEqualTo(2);
+            assertThat(migration(db,null).migrate().migrationsExecuted).isEqualTo(4);
             assertThat(strings(c,"SELECT CONCAT(position,':',media_file_id) FROM review_photos ORDER BY position")).containsExactly("0:100","1:101");
             update(c,"INSERT INTO review_photos(review_id,position,media_file_id) VALUES (?,2,102),(?,3,103),(?,4,104)",id,id,id);
             assertThat(number(c,"SELECT COUNT(*) FROM review_photos")).isEqualTo(5);
@@ -138,7 +138,7 @@ class ReviewSchemaIntegrationTest {
         try(var c=connect(db)) {
             update(c,reviewSql(),1,uuid);
             long id=number(c,"SELECT id FROM reviews");
-            assertThat(migration(db,null).migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(migration(db,null).migrate().migrationsExecuted).isEqualTo(3);
             assertThat(strings(c,"SELECT BIN_TO_UUID(client_request_id) FROM review_request_receipts WHERE author_user_id=1 AND review_id=?",id)).containsExactly(uuid);
             update(c,"UPDATE review_request_receipts SET deleted_at=CURRENT_TIMESTAMP(6) WHERE review_id=?",id);
             update(c,"DELETE FROM reviews WHERE id=?",id);

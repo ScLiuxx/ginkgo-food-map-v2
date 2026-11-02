@@ -35,10 +35,16 @@ public class PasswordResetService {
      * 数据库提交后，认证链读取到新凭证版本即拒绝所有旧令牌；Redis 会话记录按原 TTL 回收。
      * Redis 消费与数据库事务无法原子提交，后续冲突或故障需要重新获取验证码，不恢复已消费验证码。</p>
      *
-     * @param request 已通过 HTTP 基础校验的输入，密码保留首尾空格
+     * @param request 已通过 HTTP 基础校验的输入，密码不做trim，含空格时由统一策略拒绝
      */
     @Transactional
     public void resetPassword(PasswordResetRequest request) {
+        resetPasswordAndGetUsername(request);
+    }
+
+    /** 返回已经通过邮箱验证且成功改密的用户名，仅供登录页预填，不建立新会话。 */
+    @Transactional
+    public String resetPasswordAndGetUsername(PasswordResetRequest request) {
         Objects.requireNonNull(request, "request must not be null");
         String email = registrationPolicy.normalizeCampusEmail(request.getEmail());
         registrationPolicy.validatePassword(request.getNewPassword());
@@ -56,6 +62,7 @@ public class PasswordResetService {
                     user.getCredentialVersion(), passwordHash) != 1) {
                 throw new BusinessException(UserErrorCode.PASSWORD_RESET_CONFLICT);
             }
+            return user.getUsername();
         } catch (DataAccessException exception) {
             // 不记录包含 SQL 参数的底层异常，避免邮箱和密码哈希被日志或响应泄露。
             throw new BusinessException(UserErrorCode.PASSWORD_RESET_UNAVAILABLE);

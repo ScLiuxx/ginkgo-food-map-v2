@@ -6,7 +6,12 @@ import type { ReviewItem } from '../model/review'
 import ReviewEntry from './ReviewEntry.vue'
 
 /** 历史只在独立面板内展示；关闭保留记录和回复草稿，不把旧卡片嵌回主列表。 */
-const props = defineProps<{ restaurantId: string; item: ReviewItem; viewerId?: string }>()
+const props = defineProps<{
+  restaurantId: string
+  item: ReviewItem
+  viewerId?: string
+  starScale?: boolean
+}>()
 const emit = defineEmits<{ photo: [url: string]; refresh: []; delete: [item: ReviewItem] }>()
 const gateway = inject(reviewGatewayKey, unavailableReviewGateway)
 const open = ref(false),
@@ -151,6 +156,7 @@ function refresh() {
             v-for="record in records"
             :key="record.id"
             :item="record"
+            :star-scale="starScale"
             :authenticated="!!viewerId"
             :viewer-id="viewerId"
             :busy="false"

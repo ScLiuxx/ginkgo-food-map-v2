@@ -6,6 +6,7 @@ import com.ginkgo.foodmap.restaurant.service.RestaurantReadService;
 import com.ginkgo.foodmap.restaurant.vo.RestaurantCategoryVo;
 import com.ginkgo.foodmap.restaurant.vo.RestaurantPageVo;
 import com.ginkgo.foodmap.restaurant.vo.RestaurantVo;
+import com.ginkgo.foodmap.restaurant.vo.RestaurantMapPointsVo;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.WebDataBinder;
@@ -29,7 +30,7 @@ public class RestaurantReadController {
     @InitBinder("restaurantListQuery")
     void bindQuery(WebDataBinder binder) {
         binder.setAllowedFields("keyword", "category", "tiers", "view", "sort", "hideClosed",
-                "maxPrice", "maxDistanceMeters", "page", "pageSize");
+                "maxPrice", "maxDistanceMeters", "page", "pageSize", "west", "south", "east", "north");
     }
 
     /** 分类字典无需登录，返回稳定编码及展示顺序。 */
@@ -42,6 +43,12 @@ public class RestaurantReadController {
     @GetMapping("/restaurants")
     public ApiResponse<RestaurantPageVo> list(@Valid @ModelAttribute RestaurantListQuery query) {
         return ApiResponse.ok(service.list(query));
+    }
+
+    /** 固定子路径优先于详情ID匹配，仅公开只读点位接口。 */
+    @GetMapping("/restaurants/map-points")
+    public ApiResponse<RestaurantMapPointsVo> mapPoints(@Valid @ModelAttribute RestaurantListQuery query) {
+        return ApiResponse.ok(service.mapPoints(query));
     }
 
     /** 详情没有评价明细、图片或管理字段，后续能力单独定义接口。 */

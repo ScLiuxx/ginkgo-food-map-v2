@@ -1,5 +1,9 @@
 # 前端架构
 
+## 账号交互（2026-11-01）
+
+注册调用/register-and-login并通过login.store.acceptSession接收正式会话后进入首页；令牌与公开身份沿用现有认证状态，密码不进入Store。请求期间出现更新的登录时不覆盖该新会话。密码重置调用/password-reset，成功清理请求开始时的旧令牌，通过loginPrefill模块内存一次性传递服务端返回的用户名，跳转/login；登录密码为空，不自动发送登录请求、不在URL或持久存储传递用户名/密码。字段规则集中于accountValidation，失焦/提交显示框下提示。
+
 ## 技术基线
 
 - Vue 3 单文件组件与 Composition API

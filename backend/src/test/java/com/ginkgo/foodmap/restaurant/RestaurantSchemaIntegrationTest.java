@@ -92,7 +92,7 @@ class RestaurantSchemaIntegrationTest {
     /** 新库只有受控字典，无演示餐厅；重复运行迁移不重复插入分类，也不改变既有角色。 */
     @Test
     void shouldMigrateFreshDatabaseOnceWithoutDemoRestaurants() throws SQLException {
-        assertThat(migration(database, null).info().current().getVersion().getVersion()).isEqualTo("8");
+        assertThat(migration(database, null).info().current().getVersion().getVersion()).isEqualTo("11");
         assertThat(migration(database, null).migrate().migrationsExecuted).isZero();
         assertThat(strings(connection, "SELECT name FROM restaurant_categories ORDER BY sort_order, code"))
                 .containsExactly("火锅", "川菜", "小吃", "食堂", "快餐", "烧烤", "甜品", "冒菜",
@@ -102,7 +102,7 @@ class RestaurantSchemaIntegrationTest {
         assertThat(number(connection, "SELECT COUNT(*) FROM restaurant_tags")).isZero();
         assertThat(strings(connection, "SELECT code FROM roles ORDER BY code"))
                 .containsExactly("ROLE_ADMIN", "ROLE_USER");
-        assertThat(number(connection, "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1")).isEqualTo(8);
+        assertThat(number(connection, "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1")).isEqualTo(10);
         migration(database, null).validate();
     }
 
@@ -123,7 +123,7 @@ class RestaurantSchemaIntegrationTest {
                     """);
             long accountId = number(old, "SELECT id FROM users WHERE username = 'migration_user'");
             Flyway upgrade = migration(upgradeDatabase, null);
-            assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(6);
+            assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(8);
             assertThat(upgrade.migrate().migrationsExecuted).isZero();
             assertThat(number(old, "SELECT id FROM users WHERE username = 'migration_user'")).isEqualTo(accountId);
             assertThat(strings(old, "SELECT password_hash FROM users WHERE id = ?", accountId))

@@ -28,7 +28,7 @@ export function useRestaurantReviewPreview(restaurantId: Ref<string>) {
         if (review)
           photo.value = {
             url: review.photos[0]!.url,
-            label: review.body.includes('联调模拟') ? '联调模拟配图 · 非本店实拍' : '同学点评配图',
+            label: review.body.includes('联调模拟') ? '示意配图 · 非本店实拍' : '同学点评配图',
           }
         state.value = 'ready'
       } catch {

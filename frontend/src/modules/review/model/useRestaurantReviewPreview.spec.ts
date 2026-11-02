@@ -18,7 +18,7 @@ describe('restaurant review preview', () => {
     pageSize: 8,
   })
 
-  it('uses genuine total and first available photo with the simulation label', async () => {
+  it('uses genuine total and marks illustrative photos without internal environment wording', async () => {
     const data = page(12)
     data.records = [
       { photos: [] },
@@ -33,7 +33,7 @@ describe('restaurant review preview', () => {
     await vi.waitFor(() => expect(preview.count.value).toBe(12))
     expect(preview.photo.value).toEqual({
       url: '/api/reviews/5/photos/0',
-      label: '联调模拟配图 · 非本店实拍',
+      label: '示意配图 · 非本店实拍',
     })
     expect(fetchReviewPage).toHaveBeenCalledTimes(1)
     scope.stop()

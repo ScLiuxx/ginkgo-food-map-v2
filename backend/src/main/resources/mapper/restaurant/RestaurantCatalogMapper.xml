@@ -54,6 +54,12 @@
     <!-- COUNT和分页复用同一可见集合；EXISTS使同店多个命中标签仍只算一家店。 -->
     <sql id="visibleConditions">
         WHERE r.deleted_at IS NULL
+        <!-- 地图和区域列表共用视口条件，待定位/缺坐标不进入区域集合，边界包含。 -->
+        <if test="query.west != null">
+            AND r.needs_location = 0 AND r.coordinate_system = 'GCJ02'
+            AND r.longitude BETWEEN #{query.west} AND #{query.east}
+            AND r.latitude BETWEEN #{query.south} AND #{query.north}
+        </if>
         <if test="query.category != ''">AND r.category_code = #{query.category}</if>
         <if test="query.hideClosed">AND r.business_status = 'OPERATING'</if>
         <!-- 两项均在COUNT与LIMIT之前执行；NULL不能通过上限比较，未知值不会当作0。 -->
@@ -98,11 +104,7 @@
         <include refid="visibleConditions"/>
     </select>
 
-    <select id="selectVisiblePage" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantEntity">
-        SELECT <include refid="publicColumns"/>
-        <include refid="catalogFrom"/>
-        <include refid="visibleConditions"/>
-        <!-- 白名单排序在LIMIT前执行；评分降序且null末尾，同分沿用名称及ID稳定次序。 -->
+    <sql id="catalogOrder">
         ORDER BY
         <choose>
             <when test="query.sort == 'price'">r.price_per_person IS NULL, r.price_per_person,</when>
@@ -115,7 +117,23 @@
             <when test="query.sort == 'reviews'">review_count DESC,</when>
         </choose>
         r.name, r.id
+    </sql>
+
+    <select id="selectVisiblePage" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantEntity">
+        SELECT <include refid="publicColumns"/>
+        <include refid="catalogFrom"/>
+        <include refid="visibleConditions"/>
+        <!-- 白名单排序在LIMIT前执行；评分降序且null末尾，同分沿用名称及ID稳定次序。 -->
+        <include refid="catalogOrder"/>
         LIMIT #{query.pageSize} OFFSET #{query.offset}
+    </select>
+
+    <select id="selectMapPoints" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantEntity">
+        SELECT <include refid="publicColumns"/>
+        <include refid="catalogFrom"/>
+        <include refid="visibleConditions"/>
+        <include refid="catalogOrder"/>
+        LIMIT 500
     </select>
 
     <select id="selectVisibleTags" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantTagEntity">

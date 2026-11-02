@@ -80,9 +80,10 @@ app:
     # 注册规则属于 user 模块，允许域名支持逗号分隔的配置列表。
     registration:
       allowed-email-domains: ${AUTH_ALLOWED_EMAIL_DOMAINS:std.uestc.edu.cn}
-      username-min-length: 3
-      username-max-length: 32
-      password-min-length: 8
+      username-min-length: 2
+      username-max-length: 24
+      password-min-length: 4
+      password-max-length: 32
       password-max-bytes: 72
     # 验证码属于用户注册与密码找回流程，由 user 模块管理。
     verification-code:

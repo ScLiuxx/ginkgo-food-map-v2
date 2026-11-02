@@ -4,13 +4,19 @@ import BottomNavigation from '@/shared/ui/layout/BottomNavigation.vue'
 import { useLoginStore } from '@/modules/auth'
 
 import { useRoute } from 'vue-router'
+import { computed } from 'vue'
 const route = useRoute()
 const auth = useLoginStore()
+// 详情沿用首页品牌排版；编辑/新增保留原布局，首页与地图的判断和内容不变。
+const detailPage = computed(
+  () => /^\/restaurants\/[^/]+$/.test(route.path) && route.path !== '/restaurants/new',
+)
 </script>
 
 <template>
   <div class="app-shell">
     <AppHeader
+      :discovery="route.path === '/' || detailPage"
       :authenticated="auth.authenticated"
       :username="auth.user?.username"
       :restoring="auth.restoring"
@@ -24,7 +30,8 @@ const auth = useLoginStore()
       <RouterView />
     </main>
     <BottomNavigation
-      v-if="!/^\/restaurants\/\d+$/.test(route.path)"
+      v-if="!detailPage"
+      :discovery="route.path === '/'"
       :authenticated="auth.authenticated"
     />
   </div>

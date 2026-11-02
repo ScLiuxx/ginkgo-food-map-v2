@@ -1,6 +1,8 @@
 package com.ginkgo.foodmap.restaurant.dto;
 
 import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Min;
@@ -63,6 +65,24 @@ public class RestaurantListQuery {
     @Min(value = 1, message = "每页至少1条")
     @Max(value = 100, message = "每页最多100条")
     private Integer pageSize = 8;
+
+    /** 可选GCJ-02视口；四边必须同时提供，普通目录不传时仍查询完整集合。 */
+    @DecimalMin("-180") @DecimalMax("180")
+    private BigDecimal west;
+    @DecimalMin("-180") @DecimalMax("180")
+    private BigDecimal east;
+    @DecimalMin("-90") @DecimalMax("90")
+    private BigDecimal south;
+    @DecimalMin("-90") @DecimalMax("90")
+    private BigDecimal north;
+
+    /** 首版不支持跨日期变更线，拒绝缺边、反向或零面积，不能静默放宽查询。 */
+    @AssertTrue(message = "地图范围必须完整且西小于东、南小于北")
+    public boolean isBoundsValid() {
+        if (west == null && east == null && south == null && north == null) return true;
+        return west != null && east != null && south != null && north != null
+                && west.compareTo(east) < 0 && south.compareTo(north) < 0;
+    }
 
     /** 先转换为 long 再乘，较大但合法的页码不能发生 int 溢出后读取错误页。 */
     public long getOffset() {

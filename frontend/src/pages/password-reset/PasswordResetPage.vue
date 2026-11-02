@@ -4,42 +4,35 @@ import { PasswordResetForm } from '@/modules/auth'
 
 <template>
   <div class="password-reset-page">
-    <section class="reset-intro" aria-labelledby="reset-intro-title">
-      <p class="eyebrow">GINKGO FOOD MAP</p>
-      <h2 id="reset-intro-title">找回账号，<br />继续探索。</h2>
-      <p>使用注册时绑定的学生邮箱收取验证码，即可设置新密码。</p>
-      <p>重置成功后，请在各个设备上使用新密码重新登录。</p>
-    </section>
+    <RouterLink class="back-link" to="/login">← 返回登录</RouterLink>
     <PasswordResetForm />
   </div>
 </template>
 
 <style scoped>
 .password-reset-page {
-  width: min(1000px, calc(100% - 40px));
+  position: relative;
+  width: min(520px, calc(100% - 40px));
   margin: 0 auto;
   padding: 80px 0 100px;
   display: grid;
-  grid-template-columns: 1fr 1.1fr;
-  gap: clamp(40px, 7vw, 90px);
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
 }
-h2 {
-  margin: 14px 0 22px;
-  font-family: Georgia, 'Songti SC', serif;
-  font-size: clamp(44px, 6vw, 72px);
-  line-height: 1.12;
-  letter-spacing: -0.05em;
+.back-link {
+  position: absolute;
+  top: 24px;
+  left: 0;
+  color: #80786d;
+  text-decoration: none;
 }
-.reset-intro > p:not(.eyebrow) {
-  color: #625c52;
-  line-height: 1.9;
+.back-link:hover,
+.back-link:focus-visible {
+  color: #b67c00;
 }
 @media (max-width: 760px) {
   .password-reset-page {
-    width: calc(100% - 28px);
-    grid-template-columns: 1fr;
-    padding-top: 36px;
+    width: min(520px, calc(100% - 28px));
+    padding-top: 70px;
   }
 }
 </style>

@@ -6,12 +6,24 @@ import { authToken } from '@/shared/api/authSession'
 import { fetchRestaurants } from '@/modules/restaurant/api/restaurantApi'
 import type { RestaurantReadModel } from '@/modules/restaurant/model/restaurant.types'
 import { ratingDimensions } from '@/modules/restaurant/model/catalog.logic'
-import { overall, validBody, reviewGatewayKey, unavailableReviewGateway } from '../model/review'
+import HalfStarRating from './HalfStarRating.vue'
+import {
+  canteenWindows,
+  diningDetails,
+  compareFloors,
+} from '@/modules/restaurant/model/campusDining'
+import { validBody, reviewGatewayKey, unavailableReviewGateway } from '../model/review'
 import { compressPhoto } from '../model/photos'
 import { useReviewPhotos } from '../model/useReviewPhotos'
 import { MAX_REVIEW_PHOTOS } from '../model/review'
 import type { ReviewPublishReceipt } from '../model/review'
-const props = defineProps<{ restaurant?: RestaurantReadModel }>()
+const props = defineProps<{
+  restaurant?: RestaurantReadModel
+  fixedTarget?: boolean
+  targetHint?: string
+  /** 详情对象可定制短操作文案，发布及认证流程共用。 */
+  triggerLabel?: string
+}>()
 const emit = defineEmits<{ published: [] }>()
 const auth = useLoginStore(),
   route = useRoute(),
@@ -39,9 +51,58 @@ const photoDraft = useReviewPhotos(gateway, () => owner)
 const { photos, pending: uploadingPhotos, failed: failedPhotos } = photoDraft
 const locked = computed(() => opened.value && owner !== authToken.value)
 const supportsPhotos = gateway.supportsPhotos !== false
-const total = computed(() => overall(scores.value))
+// 五星仅用于输入展示；提交保留旧接口的四维十分制，不改变后端计分。
+const total = computed(() => Object.values(scores.value).reduce((sum, score) => sum + score, 0) / 8)
+const floor = ref('')
+const windowId = ref('')
 const current = computed(() => restaurants.value.find((r) => r.id === selected.value))
-// 当前无本人代表评分上下文，不能继续使用“每条评价加一票”的旧预测公式。
+const dining = computed(() => (current.value ? diningDetails(current.value) : null))
+const isCanteen = computed(
+  () =>
+    dining.value?.kind !== 'window' &&
+    (current.value?.restaurantType === 'CANTEEN' || dining.value?.kind === 'canteen'),
+)
+const targetLocked = computed(
+  () => !!props.fixedTarget || props.restaurant?.dining?.kind === 'window',
+)
+const windows = computed(() =>
+  current.value
+    ? canteenWindows(current.value.id, dining.value?.windows ?? null).filter((w) => !w.closed)
+    : [],
+)
+// 缺失楼层也可访问，但不虚构楼层；窗口ID必须来自当前食堂的正式关联。
+const floors = computed(() =>
+  [...new Set(windows.value.map((w) => w.floor || '楼层待补充'))].sort(compareFloors),
+)
+const floorWindows = computed(() =>
+  windows.value.filter((w) => (w.floor || '楼层待补充') === floor.value),
+)
+const chosenWindow = computed(() => floorWindows.value.find((w) => w.id === windowId.value))
+const publishTarget = computed(() => (isCanteen.value ? chosenWindow.value?.id : current.value?.id))
+const targetName = computed(() =>
+  isCanteen.value ? chosenWindow.value?.name : current.value?.name,
+)
+const lockedName = computed(() =>
+  [dining.value?.parent?.name, dining.value?.floor, current.value?.name]
+    .filter(Boolean)
+    .join(' · '),
+)
+// 同步清空级联，防止切换食堂或楼层后将旧窗口作为新对象提交。
+watch(
+  selected,
+  () => {
+    floor.value = ''
+    windowId.value = ''
+  },
+  { flush: 'sync' },
+)
+watch(
+  floor,
+  () => {
+    windowId.value = ''
+  },
+  { flush: 'sync' },
+)
 /** 原生dialog提供焦点圈定和Escape；关闭后释放草稿图片URL，旧异步请求不得回填。 */
 function close() {
   const published = opened.value && !!receipt.value
@@ -89,7 +150,14 @@ async function open() {
   const ticket = ++generation
   controller = new globalThis.AbortController()
   restaurants.value = props.restaurant ? [props.restaurant] : []
+  floor.value = ''
+  windowId.value = ''
   selected.value = props.restaurant?.id ?? ''
+  // 详情点评固定到当前对象，尤其不能从窗口悄悄切换到父食堂；全站选店入口仍读取完整目录。
+  if (targetLocked.value && props.restaurant) {
+    loading.value = false
+    return
+  }
   try {
     const all: RestaurantReadModel[] = []
     for (let page = 1; ; page++) {
@@ -110,8 +178,8 @@ async function open() {
       if (page >= result.totalPages) break
     }
     if (ticket !== generation) return
-    restaurants.value = all
-    selected.value = props.restaurant?.id ?? all[0]?.id ?? ''
+    restaurants.value = all.filter((r) => r.dining?.kind !== 'window')
+    selected.value = props.restaurant?.id ?? restaurants.value[0]?.id ?? ''
   } catch {
     if (ticket === generation) error.value = '餐厅列表加载失败，请关闭后重试。'
   } finally {
@@ -163,6 +231,14 @@ async function submit() {
     error.value = '请选择要评价的餐厅。'
     return
   }
+  if (targetLocked.value && selected.value !== props.restaurant?.id) {
+    error.value = '评价对象已变化，请关闭后重新打开。'
+    return
+  }
+  if (!publishTarget.value) {
+    error.value = isCanteen.value ? '请选择具体窗口后再评价。' : '请选择要评价的餐厅。'
+    return
+  }
   if (!validBody(body.value, 5, 500)) {
     error.value = '请填写5–500字的评价（不计首尾空白）。'
     return
@@ -172,7 +248,7 @@ async function submit() {
   const ticket = generation
   // 相同内容重试复用请求号；改动正文、评分或图片后是新请求，避免后端幂等内容冲突。
   const content = JSON.stringify([
-    selected.value,
+    publishTarget.value,
     scores.value,
     recommended.value,
     body.value.trim(),
@@ -182,7 +258,7 @@ async function submit() {
   submittedContent = content
   try {
     const result = await gateway.publish({
-      restaurantId: selected.value,
+      restaurantId: publishTarget.value,
       scores: { ...scores.value },
       recommended: recommended.value,
       body: body.value.trim(),
@@ -237,20 +313,18 @@ watch(
 onUnmounted(close)
 </script>
 <template>
-  <button type="button" class="review-open" @click="open">写评价</button>
+  <button type="button" class="review-open" @click="open">{{ triggerLabel || '写评价' }}</button>
   <dialog ref="dialog" class="review-dialog" @cancel.prevent="requestClose">
     <section v-if="receipt" class="publish-receipt" role="status">
       <h2>{{ receipt.replayed ? '已确认此前发布成功' : '点评发布成功' }}</h2>
       <p>你的点评已发布成功，所选照片已按顺序绑定。</p>
       <dl>
         <dt>餐厅</dt>
-        <dd>{{ current?.name }}</dd>
+        <dd>{{ targetName }}</dd>
         <dt>点评编号</dt>
         <dd class="receipt-id">{{ receipt.reviewId }}</dd>
       </dl>
-      <p class="hint">
-        关闭后将刷新餐厅详情中的点评列表；首页发布后可进入餐厅详情查看。可展开历史点评；餐厅评分统计暂未接通。
-      </p>
+      <p class="hint">关闭后可在对应店铺查看点评。</p>
       <button type="button" class="publish" @click="finish">完成</button>
     </section>
     <form v-else @submit.prevent="submit">
@@ -260,61 +334,89 @@ onUnmounted(close)
           ×
         </button>
       </header>
-      <p class="rating-policy">
-        如果你已评价过这家店，本条将更新你参与计分的四维评分和推荐态度；此前的点评仍会保留。
-      </p>
       <div v-show="!locked" class="review-fields">
         <fieldset class="review-inputs" :disabled="busy || locked">
-          <label
-            >评价哪家店<select v-model="selected" :disabled="loading">
+          <label class="target-label"
+            >评价对象
+            <select
+              v-show="!targetLocked"
+              v-model="selected"
+              aria-label="评价对象"
+              :disabled="loading || targetLocked"
+            >
               <option value="">{{ loading ? '正在加载餐厅…' : '请选择餐厅' }}</option>
               <option v-for="r in restaurants" :key="r.id" :value="r.id">
                 {{ r.name }}{{ r.closed ? '（已停业）' : '' }}
               </option>
-            </select></label
-          >
+            </select>
+          </label>
+          <div v-if="targetLocked" class="locked-target">
+            <span aria-hidden="true">🔒</span><strong>{{ lockedName }}</strong
+            ><small>已锁定</small>
+          </div>
+          <div v-if="isCanteen" class="window-selectors">
+            <label
+              >楼层<select v-model="floor" aria-label="楼层" :disabled="!windows.length">
+                <option value="">请选择楼层</option>
+                <option v-for="f in floors" :key="f" :value="f">{{ f }}</option>
+              </select></label
+            >
+            <label
+              >窗口<select v-model="windowId" aria-label="窗口" :disabled="!floor">
+                <option value="">请选择具体窗口（必选）</option>
+                <option v-for="w in floorWindows" :key="w.id" :value="w.id">{{ w.name }}</option>
+              </select></label
+            >
+          </div>
+          <p v-if="isCanteen && !windows.length" class="target-empty">
+            该食堂暂无收录窗口，请先添加窗口后再评价。
+          </p>
+          <p v-else-if="isCanteen" class="hint target-note">评价将发布到所选窗口</p>
+          <p v-if="targetHint && !isCanteen" class="hint target-note">{{ targetHint }}</p>
           <RouterLink
+            v-if="!targetLocked"
             class="add-missing"
             to="/restaurants/new"
             :aria-disabled="busy || locked"
             @click="busy || locked ? $event.preventDefault() : close()"
             >找不到要评价的店？添加餐厅 →</RouterLink
           >
-          <div class="preview-strip">
-            <span
-              >本条总分 <b>{{ total.toFixed(2) }}</b></span
-            ><span>餐厅综合分发布后由后端更新，当前暂不提供预测。</span>
-          </div>
-          <div v-for="d in ratingDimensions" :key="d.key" class="slider-row">
-            <label :for="'review-' + d.key">{{ d.label }}</label
-            ><input
-              :id="'review-' + d.key"
-              v-model.number="scores[d.key]"
-              type="range"
-              min="0"
-              max="10"
-              step="0.5"
-            /><output>{{ scores[d.key].toFixed(1) }}</output>
-          </div>
-          <p class="hint">四项都是0–10分，步进0.5。本条总分 {{ total.toFixed(2) }}</p>
-          <fieldset>
-            <legend>你的判断</legend>
-            <button type="button" :aria-pressed="recommended" @click="recommended = true">
-              推荐</button
-            ><button type="button" :aria-pressed="!recommended" @click="recommended = false">
-              不推荐
-            </button>
+          <section class="ratings-section" aria-label="四维评分">
+            <div class="section-heading">
+              <h3>四维评分 <small>支持半星</small></h3>
+              <span
+                >本条均分 <b>{{ total.toFixed(2) }}</b></span
+              >
+            </div>
+            <div v-for="d in ratingDimensions" :key="d.key" class="slider-row">
+              <label :for="'review-' + d.key">{{ d.key === 'taste' ? '味道' : d.label }}</label>
+              <HalfStarRating :id="'review-' + d.key" v-model="scores[d.key]" :label="d.label" />
+              <output>{{ (scores[d.key] / 2).toFixed(1) }}</output>
+            </div>
+          </section>
+          <fieldset class="attitude">
+            <legend>你的态度</legend>
+            <div>
+              <button type="button" :aria-pressed="recommended" @click="recommended = true">
+                推荐
+              </button>
+              <button type="button" :aria-pressed="!recommended" @click="recommended = false">
+                不推荐
+              </button>
+            </div>
           </fieldset>
-          <p class="hint">发布账号：{{ auth.user?.username }}</p>
-          <label
-            >写点什么
+          <div class="section-heading body-heading">
+            <label for="review-body">写点什么</label
+            ><small>发布账号：{{ auth.user?.username }}</small>
+          </div>
+          <div class="body-editor">
             <textarea
+              id="review-body"
               v-model="body"
               rows="4"
-              placeholder="比如：二楼阿姨手不抖，八块钱两荤一素，赶早八前来一份刚好。"
-            />
-          </label>
-          <p class="hint">{{ Array.from(body.trim()).length }} / 500 · 至少5个字</p>
+              placeholder="比如：酱汁很香，分量足，下课高峰排队约5分钟…"
+            /><span class="body-count">{{ Array.from(body.trim()).length }}/500 · 至少5字</span>
+          </div>
           <!-- 初始上传框与缩略图列表共用一个选图入口，图片不再堆在大框下方。 -->
           <section
             class="photo-picker"
@@ -341,7 +443,7 @@ onUnmounted(close)
               :disabled="processing || !supportsPhotos"
               @click="photoInput?.click()"
             >
-              照片（最多5张，自动压缩）<span>把图片拖到这里，或点击选择</span>
+              照片 <span>最多5张，拖拽或点击选择</span>
             </button>
             <div v-else class="thumbs">
               <div v-for="(photo, i) in photos" :key="photo.url" class="photo-card">
@@ -385,13 +487,13 @@ onUnmounted(close)
                 <span aria-hidden="true">＋</span>
               </button>
             </div>
-            <p class="hint">
+            <p v-if="!supportsPhotos || processing" class="hint">
               {{
                 !supportsPhotos
                   ? '图片上传尚未开放，本次仅支持文字点评。'
                   : processing
                     ? '正在压缩图片…'
-                    : `已选${photos.length}/${MAX_REVIEW_PHOTOS}张 · 本地预览，最长边1200px，每张不超过300KiB。`
+                    : ''
               }}
             </p>
           </section>
@@ -419,351 +521,26 @@ onUnmounted(close)
                 : '正在处理照片，请稍候…'
           }}
         </p>
-        <span class="hint">认真评价，对下一位同学负责。</span
-        ><button type="button" :disabled="busy" @click="requestClose">取消</button
-        ><button
+        <button type="button" class="cancel-publish" :disabled="busy" @click="requestClose">
+          取消
+        </button>
+        <button
           class="publish"
-          :disabled="busy || processing || loading || locked || uploadingPhotos || failedPhotos"
+          :disabled="
+            busy ||
+            processing ||
+            loading ||
+            locked ||
+            uploadingPhotos ||
+            failedPhotos ||
+            !publishTarget
+          "
           type="submit"
         >
-          {{ busy ? '发布中…' : uploadingPhotos ? '照片上传中…' : '提交评价' }}
+          {{ busy ? '发布中…' : uploadingPhotos ? '照片上传中…' : '发布评价' }}
         </button>
       </footer>
     </form>
   </dialog>
 </template>
-<style scoped>
-.publish-receipt {
-  padding: 28px;
-  line-height: 1.8;
-}
-.publish-receipt h2 {
-  margin-top: 0;
-}
-.publish-receipt dl {
-  padding: 14px;
-  background: #fff7e6;
-  border-radius: 12px;
-}
-.publish-receipt dt {
-  font-size: 12px;
-  color: #8c7958;
-}
-.publish-receipt dd {
-  margin: 4px 0 14px;
-  overflow-wrap: anywhere;
-}
-.receipt-id {
-  user-select: all;
-}
-.locked-message {
-  padding: 0 20px;
-}
-.review-fields {
-  border: 0;
-  margin: 0;
-  min-width: 0;
-  width: 100%;
-}
-
-.rating-policy {
-  padding: 12px;
-  background: #fff8e8;
-  border-radius: 10px;
-  color: #8c7040;
-  font-size: 12px;
-  line-height: 1.8;
-}
-.review-open,
-.publish {
-  background: #2c2923;
-  color: #fff;
-  border: 0;
-  border-radius: 8px;
-  padding: 11px 19px;
-  cursor: pointer;
-}
-.review-dialog {
-  overflow: hidden;
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  font-size: 14px;
-  width: min(680px, calc(100% - 24px));
-  max-height: min(88dvh, 900px);
-  padding: 0;
-  border: 1px solid #d9cfbb;
-  border-radius: 16px;
-  background: #ffffff;
-  color: #342e25;
-}
-.review-dialog::backdrop {
-  background: #24201899;
-}
-.review-dialog form {
-  display: flex;
-  flex-direction: column;
-  max-height: 88dvh;
-}
-.review-fields {
-  overflow: auto;
-  min-height: 0;
-  padding: 16px 18px;
-}
-.review-inputs {
-  min-width: 0;
-  margin: 0;
-}
-header,
-footer {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 18px;
-  background: #fffdf7;
-  flex-shrink: 0;
-}
-header {
-  justify-content: space-between;
-  border-bottom: 1px solid #e8decd;
-}
-h2 {
-  font-size: 16px;
-  margin: 0;
-}
-button {
-  font: inherit;
-  cursor: pointer;
-}
-header button {
-  border: 0;
-  background: none;
-  font-size: 25px;
-}
-label {
-  display: block;
-  font-size: 12.5px;
-  font-weight: 700;
-}
-select,
-textarea {
-  width: 100%;
-  margin: 8px 0 14px;
-  padding: 11px 12px;
-  border: 1px solid #d8ccb7;
-  background: #fdfbf7;
-  border-radius: 10px;
-  font: inherit;
-  font-weight: 400;
-  box-sizing: border-box;
-}
-textarea {
-  resize: vertical;
-  min-height: 110px;
-}
-.preview-strip {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  background: #fcf9f2;
-  border: 1px dashed #e0cba6;
-  border-radius: 12px;
-  margin-bottom: 20px;
-  font-size: 12px;
-}
-.slider-row {
-  display: grid;
-  grid-template-columns: 60px minmax(0, 1fr) 32px;
-  align-items: center;
-  gap: 12px;
-  margin: 15px 0;
-}
-input[type='range'] {
-  appearance: none;
-  width: 100%;
-  height: 22px;
-  background: transparent;
-}
-input[type='range']::-webkit-slider-runnable-track {
-  height: 6px;
-  border-radius: 999px;
-  background: #ece5d6;
-}
-input[type='range']::-webkit-slider-thumb {
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  margin-top: -6px;
-  border-radius: 50%;
-  background: #e9b949;
-  border: 2px solid white;
-  box-shadow: 0 1px 5px #2b2a2647;
-  cursor: pointer;
-}
-input[type='range']::-moz-range-track {
-  height: 6px;
-  border-radius: 999px;
-  background: #ece5d6;
-}
-input[type='range']::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #e9b949;
-  border: 2px solid white;
-}
-.hint {
-  font-size: 12px;
-  color: #80735d;
-  line-height: 1.7;
-}
-fieldset {
-  border: 0;
-  padding: 0;
-  margin: 18px 0;
-}
-fieldset button {
-  padding: 9px 22px;
-  border: 1px solid #d9cfbb;
-  background: #fff;
-  border-radius: 10px;
-  width: calc(50% - 3px);
-  margin-right: 3px;
-}
-fieldset button[aria-pressed='true'] {
-  background: #5b7f5e;
-  color: #ffffff;
-}
-fieldset button:last-child[aria-pressed='true'] {
-  background: #c0392b;
-}
-.photo-input {
-  display: none;
-}
-.review-fields .dropzone {
-  width: 100%;
-  margin: 0;
-  border: 1px dashed #cbb78e;
-  border-radius: 10px;
-  padding: 20px;
-  text-align: center;
-  background: #fdfbf7;
-}
-.dropzone span {
-  display: block;
-  font-size: 12px;
-  margin-top: 8px;
-}
-.thumbs {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 12px;
-}
-.photo-card {
-  width: 80px;
-  min-width: 0;
-}
-.photo-preview {
-  width: 80px;
-  height: 80px;
-  position: relative;
-}
-.thumbs img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 8px;
-}
-.review-fields .photo-remove {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 22px;
-  height: 22px;
-  margin: 0;
-  padding: 0;
-  border: 2px solid white;
-  border-radius: 50%;
-  background: #342e25;
-  color: white;
-  line-height: 18px;
-}
-.review-fields .photo-add {
-  display: grid;
-  place-items: center;
-  flex: 0 0 80px;
-  width: 80px;
-  height: 80px;
-  margin: 0;
-  padding: 0;
-  border: 1px dashed #cbb78e;
-  border-radius: 8px;
-  background: #fdfbf7;
-  color: #8c7958;
-  font-size: 32px;
-  line-height: 1;
-}
-.photo-status {
-  margin: 6px 0 0;
-  font-size: 11px;
-  color: #80735d;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-.review-fields .photo-retry {
-  width: 100%;
-  margin: 4px 0 0;
-  padding: 4px 0;
-  font-size: 11px;
-}
-.error {
-  color: #a1342c;
-  font-size: 13px;
-}
-footer {
-  flex-wrap: wrap;
-  border-top: 1px solid #e8decd;
-  background: white;
-}
-footer .submit-feedback {
-  flex: 0 0 100%;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-footer .hint {
-  flex: 1;
-  min-width: 110px;
-}
-footer button {
-  padding: 10px;
-  border: 1px solid #d9cfbb;
-  border-radius: 8px;
-}
-footer .publish {
-  background: #e9b949;
-  color: #2b2a26;
-}
-button:disabled {
-  opacity: 0.5;
-  cursor: wait;
-}
-@media (max-width: 400px) {
-  footer .hint:not(.submit-feedback) {
-    display: none;
-  }
-  footer {
-    justify-content: flex-end;
-  }
-  .review-fields,
-  header,
-  footer {
-    padding: 14px;
-  }
-  .preview-strip :deep(.cup-badge) {
-    font-size: 11px;
-  }
-}
-</style>
+<style scoped src="./review-composer.css"></style>

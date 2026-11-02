@@ -1,0 +1,170 @@
+/* 随机推荐沿用跨全站分页的原逻辑，只把入口收为工具栏文字按钮。 */
+.random-banner {
+  display: contents;
+}
+.random-banner button {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 6px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #34414f;
+  font: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.random-banner svg {
+  width: 21px;
+  height: 21px;
+}
+button:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 2px solid #ad6f26;
+  outline-offset: 3px;
+}
+.random-dialog {
+  width: min(560px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  border: 0;
+  border-radius: 14px;
+  padding: 26px;
+  background: white;
+  color: #303b47;
+  box-shadow: 0 16px 64px #26334024;
+}
+.random-dialog::backdrop {
+  background: #23303c45;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+h2 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 600;
+}
+header button {
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #667382;
+  font-size: 26px;
+  cursor: pointer;
+}
+.budget {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 22px 0;
+  font-size: 13px;
+}
+select {
+  max-width: 60%;
+  border: 1px solid #e3e7eb;
+  border-radius: 6px;
+  padding: 8px;
+  background: #fff;
+  color: #4c5967;
+  font: inherit;
+}
+.note {
+  font-size: 12px;
+  color: #6b7886;
+  line-height: 1.8;
+}
+.candidate-count {
+  color: #63705d;
+  font-size: 12px;
+}
+.random-result {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+  margin: 24px 0;
+  font-size: 13px;
+}
+h3 {
+  font-size: 18px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.photo-placeholder {
+  display: grid;
+  place-content: center;
+  text-align: center;
+  min-height: 104px;
+  border-radius: 6px;
+  background: #f3f4f5;
+  color: #7c8793;
+}
+.photo-placeholder svg {
+  width: 36px;
+  height: 36px;
+  margin: auto;
+}
+.photo-placeholder small {
+  display: block;
+  font-size: 10px;
+  margin-top: 8px;
+}
+.result-link,
+.reroll {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  text-align: center;
+  padding: 12px;
+  border: 0;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 13px;
+  text-decoration: none;
+  margin-top: 12px;
+}
+.result-link {
+  background: #f3a124;
+  color: #352710;
+}
+.reroll {
+  background: #f0f2f4;
+  color: #465362;
+  cursor: pointer;
+}
+@media (max-width: 1000px) {
+  .random-banner button {
+    gap: 6px;
+    font-size: 12px;
+  }
+  .random-banner svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+@media (max-width: 700px) {
+  .random-banner button {
+    min-height: 38px;
+    font-size: 11px;
+    gap: 4px;
+  }
+  .random-banner svg {
+    width: 16px;
+    height: 16px;
+  }
+  .random-dialog {
+    padding: 22px 20px;
+  }
+}

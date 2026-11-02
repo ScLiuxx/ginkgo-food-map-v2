@@ -23,9 +23,9 @@ class UserRegistrationPolicyTest {
     void setUp() {
         UserRegistrationProperties properties = new UserRegistrationProperties();
         properties.setAllowedEmailDomains(List.of("std.uestc.edu.cn"));
-        properties.setUsernameMinLength(3);
-        properties.setUsernameMaxLength(32);
-        properties.setPasswordMinLength(8);
+        properties.setUsernameMinLength(2);
+        properties.setUsernameMaxLength(24);
+        properties.setPasswordMinLength(4);
         properties.setPasswordMaxBytes(72);
         policy = new UserRegistrationPolicy(properties);
     }
@@ -52,14 +52,20 @@ class UserRegistrationPolicyTest {
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(UserErrorCode.USERNAME_INVALID));
     }
 
-    /** 密码至少包含文字和数字，并受 BCrypt 72 字节上限保护。 */
+    /** 新密码允许纯数字、纯字母和符号，严格校验4–32位边界，不接受空格或中文。 */
     @Test
     void shouldValidatePasswordStrengthAndByteLimit() {
         policy.validatePassword("Ginkgo2026");
+        for (String password : List.of("1234", "abcd", "!!!!", "a".repeat(32))) policy.validatePassword(password);
+        assertThat(policy.normalizeUsername("Ka")).isEqualTo("Ka");
+        assertThat(policy.normalizeUsername("ka")).isEqualTo("ka");
+        assertThat(policy.normalizeUsername("中".repeat(24))).hasSize(24);
 
-        assertThatThrownBy(() -> policy.validatePassword("onlyletters"))
+        for (String invalid : List.of("123", "a".repeat(33), " abcd", "中文密码", "abcd\n")) {
+            assertThatThrownBy(() -> policy.validatePassword(invalid))
                 .isInstanceOfSatisfying(BusinessException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(UserErrorCode.PASSWORD_WEAK));
+        }
         assertThatThrownBy(() -> policy.validatePassword("银".repeat(24) + "1"))
                 .isInstanceOfSatisfying(BusinessException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(UserErrorCode.PASSWORD_WEAK));

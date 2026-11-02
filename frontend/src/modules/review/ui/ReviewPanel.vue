@@ -8,8 +8,15 @@ import ReviewEntry from './ReviewEntry.vue'
 import ReviewHistory from './ReviewHistory.vue'
 import { reviewGatewayKey, unavailableReviewGateway, validBody } from '../model/review'
 import type { ReviewItem } from '../model/review'
-const props = defineProps<{ restaurantId: string; preview?: boolean; revision?: number }>(),
-  emit = defineEmits<{ changed: [] }>()
+import { detailPhotos, type DetailPhotoUpdate } from '../model/detailPhotos'
+const props = defineProps<{
+    restaurantId: string
+    preview?: boolean
+    revision?: number
+    starScale?: boolean
+    title?: string
+  }>(),
+  emit = defineEmits<{ changed: []; photos: [update: DetailPhotoUpdate] }>()
 const gateway = inject(reviewGatewayKey, unavailableReviewGateway),
   auth = useLoginStore(),
   router = useRouter(),
@@ -33,6 +40,10 @@ const page = ref(1),
   totalReviews = ref(0)
 let requestedPage = 1
 const currentOnly = ref(false)
+const contentFilter = ref<'all' | 'recommended' | 'photos'>('all')
+watch(contentFilter, () => {
+  void load(1)
+})
 const viewerId = computed(() =>
   auth.authenticated && auth.user ? String(auth.user.id) : undefined,
 )
@@ -50,24 +61,57 @@ const wall = computed(() =>
 /** 真实传输由适配器提供；未接通时显示失败状态，绝不使用模拟评价回填。 */
 async function load(targetPage = page.value) {
   const ticket = ++generation
+  const restaurantId = props.restaurantId
   controller?.abort()
   controller = new globalThis.AbortController()
   loading.value = true
   records.value = []
   error.value = ''
+  // 复用当前页响应供详情顶部展示，避免为图库额外遍历点评或混入其他对象的图片。
+  emit('photos', { restaurantId, state: 'loading', photos: [] })
   requestedPage = targetPage
   try {
-    const result = await gateway.list(props.restaurantId, controller.signal, targetPage)
+    // 新条件尚无服务端参数：完整读取作者组再筛选分页；失败整体报错，不把当前页冒充全部。
+    // 沿用取消信号和代次校验，切换店铺或条件后不接受晚到的旧响应。
+    const signal = controller.signal
+    const result = {
+      ...(await gateway.list(
+        restaurantId,
+        signal,
+        props.starScale && contentFilter.value !== 'all' ? 1 : targetPage,
+      )),
+    }
+    if (ticket !== generation) return
+    const filter = contentFilter.value
+    if (props.starScale && filter !== 'all') {
+      const all = [...result.records]
+      for (let next = 2; next <= result.totalPages; next++) {
+        const batch = await gateway.list(restaurantId, signal, next)
+        if (ticket !== generation) return
+        all.push(...batch.records)
+      }
+      const matching = [...new Map(all.map((item) => [item.id, item])).values()].filter((item) =>
+        filter === 'recommended' ? item.recommended : item.photos.length > 0,
+      )
+      const pageSize = result.pageSize || 8
+      result.totalGroups = matching.length
+      result.totalPages = Math.ceil(matching.length / pageSize)
+      result.page = Math.max(1, Math.min(targetPage, result.totalPages || 1))
+      result.records = matching.slice((result.page - 1) * pageSize, result.page * pageSize)
+    }
     if (ticket === generation) {
       records.value = result.records
       page.value = result.page
       totalPages.value = result.totalPages
       totalGroups.value = result.totalGroups
       totalReviews.value = result.totalReviews
+      emit('photos', { restaurantId, state: 'ready', photos: detailPhotos(result.records) })
     }
   } catch (reason) {
-    if (ticket === generation)
+    if (ticket === generation) {
       error.value = reason instanceof Error ? reason.message : '评价加载失败，请重试。'
+      emit('photos', { restaurantId, state: 'error', photos: [] })
+    }
   } finally {
     if (ticket === generation) loading.value = false
   }
@@ -169,13 +213,47 @@ function view(url: string) {
 }
 </script>
 <template>
-  <section class="review-panel" aria-labelledby="reviews-title">
+  <section
+    class="review-panel"
+    :class="{ 'star-panel': starScale }"
+    aria-labelledby="reviews-title"
+  >
     <header>
-      <h2 id="reviews-title">同学点评</h2>
+      <h2 id="reviews-title">
+        {{ title || '同学点评' }} <small v-if="starScale">({{ totalReviews }})</small>
+      </h2>
+      <div v-if="starScale" class="content-filters" aria-label="点评筛选">
+        <button
+          type="button"
+          :aria-pressed="contentFilter === 'all'"
+          @click="contentFilter = 'all'"
+        >
+          全部
+        </button>
+        <button
+          type="button"
+          :aria-pressed="contentFilter === 'recommended'"
+          @click="contentFilter = 'recommended'"
+        >
+          推荐
+        </button>
+        <button
+          type="button"
+          :aria-pressed="contentFilter === 'photos'"
+          @click="contentFilter = 'photos'"
+        >
+          有图
+        </button>
+      </div>
       <button type="button" :disabled="loading" @click="load(1)">刷新评价</button>
     </header>
     <p v-if="!preview && !loading && !error" class="scoring-rule">
-      {{ totalGroups }}位同学 · {{ totalReviews }}条点评。每位同学展示最新点评。
+      <template v-if="starScale">{{
+        contentFilter === 'all' ? `${totalGroups} 位同学` : `${totalGroups} 条符合条件`
+      }}</template>
+      <template v-else
+        >{{ totalGroups }}位同学 · {{ totalReviews }}条点评。每位同学展示最新点评。</template
+      >
     </p>
     <template v-if="preview && hasScoringStatus">
       <p class="scoring-rule">
@@ -195,7 +273,9 @@ function view(url: string) {
       <p>{{ error }}</p>
       <button type="button" @click="load(requestedPage)">重试</button>
     </div>
-    <p v-else-if="!records.length" class="empty">还没有人评价，来当第一个吧。</p>
+    <p v-else-if="!records.length" class="empty">
+      {{ contentFilter === 'all' ? '还没有人评价，来当第一个吧。' : '暂无符合条件的点评' }}
+    </p>
     <details v-if="preview && wall.length" class="student-album">
       <summary>同学上传的照片（{{ wall.length }}） · 查看照片与原点评</summary>
       <p>下方各条点评保留作者和照片对应关系，点击照片可查看大图。</p>
@@ -210,6 +290,7 @@ function view(url: string) {
       :key="item.id"
       :item="item"
       :preview="preview"
+      :star-scale="starScale"
       :authenticated="auth.authenticated"
       :viewer-id="viewerId"
       :busy="busy"
@@ -226,6 +307,7 @@ function view(url: string) {
           :restaurant-id="restaurantId"
           :item="item"
           :viewer-id="viewerId"
+          :star-scale="starScale"
           @photo="view"
           @refresh="load()"
           @delete="askDelete"
@@ -268,6 +350,72 @@ function view(url: string) {
   </section>
 </template>
 <style scoped>
+/* 详情页使用自然内容流；原有独立预览继续沿用原展示口径。 */
+.star-panel.review-panel {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: white;
+}
+.star-panel > header {
+  flex-wrap: wrap;
+  gap: 10px 18px;
+}
+.star-panel h2 {
+  font-size: 20px;
+  margin-right: auto;
+}
+.star-panel h2 small {
+  font-size: 14px;
+  font-weight: 400;
+  color: #98a0a9;
+}
+.star-panel > header > button {
+  border: 0;
+  padding: 4px;
+  color: #9aa2ab;
+  font-size: 12px;
+}
+.star-panel .scoring-rule {
+  margin: 8px 0;
+  padding: 0;
+  background: none;
+  color: #99a1aa;
+  font-size: 12px;
+}
+.content-filters {
+  display: flex;
+  gap: 4px;
+}
+.content-filters button {
+  border: 0;
+  border-radius: 5px;
+  padding: 4px 12px;
+  color: #8b95a0;
+  font-size: 13px;
+}
+.content-filters button[aria-pressed='true'] {
+  background: #fff4e9;
+  color: #ed8424;
+}
+.star-panel .empty {
+  padding: 40px 0;
+  color: #9aa2ab;
+  font-size: 13px;
+}
+.star-panel .review-pagination button {
+  border-color: #edf0f2;
+  color: #7c8895;
+}
+@media (max-width: 480px) {
+  .star-panel h2 {
+    flex: 1 0 100%;
+    font-size: 18px;
+  }
+  .star-panel > header > button {
+    margin-left: auto;
+  }
+}
 .scoring-rule {
   font-size: 12px;
   line-height: 1.8;

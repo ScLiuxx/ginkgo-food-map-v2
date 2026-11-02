@@ -20,7 +20,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['config/vite.config.ts'],
+    files: ['config/vite.config.ts', 'config/amapProxy.ts'],
     languageOptions: {
       globals: globals.node,
     },

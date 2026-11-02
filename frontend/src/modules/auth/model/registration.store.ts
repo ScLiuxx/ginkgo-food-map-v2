@@ -5,6 +5,8 @@ import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 
 import { register, sendRegistrationCode } from '../api/authApi'
 import type { RegistrationRequest } from './registration.types'
+import { getAccessToken } from '@/shared/api/authSession'
+import { useLoginStore } from './login.store'
 
 /**
  * 管理注册页面的远程请求状态。
@@ -34,11 +36,15 @@ export const useRegistrationStore = defineStore('registration', () => {
 
   /** 提交注册；失败时只保存可展示的安全提示，不保存请求内容。 */
   async function submit(request: RegistrationRequest): Promise<boolean> {
+    if (registering.value || registered.value) return false
+    const previousToken = getAccessToken()
     registering.value = true
     registered.value = false
     error.value = null
     try {
-      await register(request)
+      const session = await register(request)
+      // 请求期间在其他标签页发生的新登录优先，不能被旧请求覆盖。
+      if (getAccessToken() === previousToken) useLoginStore().acceptSession(session)
       registered.value = true
       return true
     } catch (reason) {

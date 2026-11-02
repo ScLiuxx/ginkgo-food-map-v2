@@ -7,3 +7,5 @@ export { textReviewGateway } from './api/reviewApi'
 export { reviewGatewayKey } from './model/review'
 
 export { useRestaurantReviewPreview } from './model/useRestaurantReviewPreview'
+export { default as DetailPhotoGallery } from './ui/DetailPhotoGallery.vue'
+export type { DetailPhotoUpdate } from './model/detailPhotos'

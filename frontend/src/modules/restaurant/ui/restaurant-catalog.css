@@ -1,0 +1,99 @@
+.restaurant-directory {
+  min-width: 0;
+}
+/* 保留分页后的读屏标题与焦点定位，视觉上不重复展示列表标题和计数。 */
+.catalog-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.restaurant-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 64px;
+  row-gap: 0;
+}
+.directory-empty {
+  padding: 64px 20px;
+  text-align: center;
+  color: #69727e;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.directory-empty h3 {
+  color: #3a434e;
+  font-size: 18px;
+  font-weight: 550;
+}
+.directory-empty .primary-action {
+  border: 0;
+  border-radius: 7px;
+  background: #f1f3f4;
+  color: #3f4854;
+  padding: 12px 18px;
+  cursor: pointer;
+}
+.directory-empty .add-missing {
+  display: block;
+  margin: 16px 0;
+}
+.preview-notice,
+.osm-attribution {
+  color: #6e7783;
+  font-size: 10px;
+  line-height: 1.8;
+  margin: 18px 0 0;
+}
+.preview-notice p {
+  margin: 0;
+}
+.osm-attribution a {
+  color: inherit;
+}
+.catalog-pagination {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 26px;
+}
+.catalog-pagination button {
+  min-height: 40px;
+  min-width: 36px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #56616e;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.catalog-pagination button:hover:enabled {
+  background: #f5f6f7;
+}
+.catalog-pagination button[aria-current] {
+  color: #b56413;
+  font-weight: 650;
+  background: #f6f3ed;
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #ad6f26;
+  outline-offset: 3px;
+}
+@media (max-width: 1000px) {
+  .restaurant-grid {
+    column-gap: 32px;
+  }
+}
+@media (max-width: 700px) {
+  .restaurant-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

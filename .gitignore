@@ -11,6 +11,8 @@ frontend/coverage/
 frontend/.vite/
 
 .env
+frontend/.env.local
+frontend/.env.*.local
 # 本地开发配置包含数据库、SMTP 和验证码密钥，只保留可提交的 example 文件。
 backend/config/application-local.yml
 # RSA 私钥、公钥仅由本机生成，禁止纳入版本控制。

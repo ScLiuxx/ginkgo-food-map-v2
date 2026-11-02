@@ -65,11 +65,12 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.GET,"/api/restaurants/{restaurantId}/reviews/authors/{authorId}/history").permitAll()
                         // 只允许餐厅阅读的三个GET入口；不放开后续写入、管理或嵌套资源。
                         .requestMatchers(HttpMethod.GET, "/api/restaurant-categories", "/api/restaurants",
-                                "/api/restaurants/{id}").permitAll()
+                                "/api/restaurants/{id}", "/api/restaurants/map-points").permitAll()
                         // 只公开明确列出的认证 POST 接口，不放开整个 /auth 路径。
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/auth/register",
+                                "/auth/register-and-login",
                                 "/auth/login",
                                 "/auth/password-reset",
                                 "/auth/email/code/register",

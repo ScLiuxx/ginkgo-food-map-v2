@@ -24,6 +24,51 @@ afterEach(() => {
 
 /** 使用真实Axios配置验证查询白名单、路径和模型转换，防止前后端协议漂移。 */
 describe('restaurant HTTP API', () => {
+  it('filters all legacy pages before pagination and excludes unknown delivery data', async () => {
+    const requests: InternalAxiosRequestConfig[] = []
+    const signal = new AbortController().signal
+    httpClient.defaults.adapter = async (config) => {
+      requests.push(config)
+      const page = config.params.page
+      const records =
+        page === 1
+          ? [{ ...responseFixture, id: '1', categoryName: '火锅', supportsDelivery: true }]
+          : [
+              { ...responseFixture, id: '2', categoryName: '食堂', supportsDelivery: true },
+              { ...responseFixture, id: '3', categoryName: '食堂' },
+            ]
+      return {
+        config,
+        status: 200,
+        statusText: '',
+        headers: new AxiosHeaders(),
+        data: { data: { records, page, pageSize: 100, total: 3, totalPages: 2 } },
+      }
+    }
+    const result = await fetchRestaurants(
+      {
+        keyword: '',
+        category: '',
+        sort: 'score',
+        hideClosed: false,
+        maxPrice: null,
+        maxDistanceMeters: null,
+        restaurantType: 'CANTEEN',
+        diningMode: 'delivery',
+      },
+      1,
+      1,
+      signal,
+    )
+    expect(result.total).toBe(1)
+    expect(result.records.map((record) => record.id)).toEqual(['2'])
+    expect(requests.map((request) => request.params.page)).toEqual([1, 2])
+    expect(requests.every((request) => request.signal === signal)).toBe(true)
+    for (const request of requests) {
+      expect(request.params).not.toHaveProperty('restaurantType')
+      expect(request.params).not.toHaveProperty('diningMode')
+    }
+  })
   it('keeps authenticated CRUD on the captured session and never adds a version or DELETE body', async () => {
     const requests: InternalAxiosRequestConfig[] = []
     setAccessToken('newer-account')

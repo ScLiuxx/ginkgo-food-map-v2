@@ -1,14 +1,22 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
+import PasswordInput from './PasswordInput.vue'
+import './auth-inputs.css'
+import {
+  usernameError,
+  passwordError,
+  emailError,
+  codeError,
+  accountErrorField,
+} from '../model/accountValidation'
 import { useRegistrationStore } from '../model/registration.store'
 
-const CAMPUS_EMAIL_PATTERN = /^[^\s@]+@std\.uestc\.edu\.cn$/i
-const USERNAME_PATTERN = /^[\p{L}\p{N}_]+$/u
-const CODE_PATTERN = /^[0-9]{6}$/
 const RESEND_SECONDS = 60
 
 const registrationStore = useRegistrationStore()
+const router = useRouter()
 // Pinia 会跨路由保留状态，进入页面时主动清理上一次注册结果，但不持久化任何表单字段。
 registrationStore.reset()
 const form = reactive({
@@ -18,40 +26,37 @@ const form = reactive({
   password: '',
   confirmPassword: '',
 })
-const localError = ref<string | null>(null)
+const errors = reactive<Record<string, string | null>>({})
+const remoteField = computed(() => accountErrorField(registrationStore.error))
+function fieldError(field: string) {
+  return errors[field] || (remoteField.value === field ? registrationStore.error : null)
+}
+function checkField(field: string) {
+  if (field === 'email') errors.email = emailError(campusEmail.value)
+  if (field === 'code') errors.code = codeError(form.verificationCode)
+  if (field === 'username') errors.username = usernameError(form.username)
+  if (field === 'password') errors.password = passwordError(form.password)
+  if (field === 'confirm')
+    errors.confirm =
+      form.confirmPassword === form.password && form.confirmPassword ? null : '两次输入的密码不一致'
+}
+function clearField(field: string) {
+  errors[field] = null
+  registrationStore.clearError()
+  if (field === 'password' && form.confirmPassword) {
+    errors.confirm = form.confirmPassword === form.password ? null : '两次输入的密码不一致'
+  }
+}
 const cooldown = ref(0)
 let cooldownTimer: ReturnType<typeof globalThis.setInterval> | undefined
 
-const feedback = computed(() => localError.value ?? registrationStore.error)
+// 后缀固定展示与拼接，用户仅输入邮箱前缀，完整邮箱仍由服务端校验。
+const campusEmail = computed(() => `${form.email.trim()}@std.uestc.edu.cn`)
+const feedback = computed(() => (remoteField.value ? null : registrationStore.error))
 const codeButtonText = computed(() => {
   if (registrationStore.sendingCode) return '正在发送…'
   return cooldown.value > 0 ? `${cooldown.value} 秒后重试` : '发送验证码'
 })
-
-/** 前端先给出即时提示，服务端仍会重新执行全部安全校验。 */
-function validateForm(): string | null {
-  const email = form.email.trim()
-  const username = form.username.trim()
-  const usernameLength = Array.from(username).length
-  const passwordLength = Array.from(form.password).length
-  const passwordBytes = new globalThis.TextEncoder().encode(form.password).length
-
-  if (!CAMPUS_EMAIL_PATTERN.test(email)) return '请使用 @std.uestc.edu.cn 学生邮箱'
-  if (!CODE_PATTERN.test(form.verificationCode)) return '请输入邮件中的6位数字验证码'
-  if (usernameLength < 3 || usernameLength > 32 || !USERNAME_PATTERN.test(username)) {
-    return '用户名应为3至32个文字、数字或下划线'
-  }
-  if (
-    passwordLength < 8 ||
-    passwordBytes > 72 ||
-    !/\p{L}/u.test(form.password) ||
-    !/\p{N}/u.test(form.password)
-  ) {
-    return '密码至少8位并同时包含文字和数字，且不能超过72字节'
-  }
-  if (form.password !== form.confirmPassword) return '两次输入的密码不一致'
-  return null
-}
 
 function startCooldown() {
   cooldown.value = RESEND_SECONDS
@@ -66,13 +71,10 @@ function startCooldown() {
 }
 
 async function handleSendCode() {
-  localError.value = null
   registrationStore.clearError()
-  const normalizedEmail = form.email.trim().toLowerCase()
-  if (!CAMPUS_EMAIL_PATTERN.test(normalizedEmail)) {
-    localError.value = '请先填写正确的电子科技大学学生邮箱'
-    return
-  }
+  const normalizedEmail = campusEmail.value.toLowerCase()
+  checkField('email')
+  if (errors.email) return
 
   if (await registrationStore.sendCode(normalizedEmail)) {
     startCooldown()
@@ -80,12 +82,13 @@ async function handleSendCode() {
 }
 
 async function handleSubmit() {
-  localError.value = validateForm()
+  if (registrationStore.registering || registrationStore.registered) return
   registrationStore.clearError()
-  if (localError.value) return
+  for (const field of ['email', 'code', 'username', 'password', 'confirm']) checkField(field)
+  if (Object.values(errors).some(Boolean)) return
 
   const success = await registrationStore.submit({
-    email: form.email.trim().toLowerCase(),
+    email: campusEmail.value.toLowerCase(),
     verificationCode: form.verificationCode,
     username: form.username.trim(),
     password: form.password,
@@ -95,13 +98,8 @@ async function handleSubmit() {
     form.verificationCode = ''
     form.password = ''
     form.confirmPassword = ''
+    await router.replace('/')
   }
-}
-
-/** 用户继续编辑时清除上一次提示，避免旧错误看起来仍对应当前输入。 */
-function clearFeedback() {
-  localError.value = null
-  registrationStore.clearError()
 }
 
 onBeforeUnmount(() => {
@@ -110,24 +108,33 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <form class="registration-form" novalidate @input="clearFeedback" @submit.prevent="handleSubmit">
+  <form class="registration-form" novalidate @submit.prevent="handleSubmit">
     <div class="form-heading">
       <p class="eyebrow">CREATE ACCOUNT</p>
-      <h1>加入 Ginkgo</h1>
-      <p>使用电子科技大学学生邮箱，记录属于你的校园味道。</p>
+      <h1>加入我们</h1>
     </div>
 
     <div class="form-field">
       <label for="register-email">学生邮箱</label>
       <div class="field-with-action">
-        <input
-          id="register-email"
-          v-model="form.email"
-          type="email"
-          autocomplete="email"
-          placeholder="学号@std.uestc.edu.cn"
-          :disabled="registrationStore.registered"
-        />
+        <div class="email-input">
+          <input
+            id="register-email"
+            v-model="form.email"
+            type="text"
+            autocomplete="off"
+            autocapitalize="none"
+            spellcheck="false"
+            :disabled="registrationStore.registered"
+            :aria-invalid="!!fieldError('email')"
+            :aria-describedby="
+              fieldError('email') ? 'email-suffix register-email-error' : 'email-suffix'
+            "
+            @blur="checkField('email')"
+            @input="clearField('email')"
+          />
+          <span id="email-suffix">@std.uestc.edu.cn</span>
+        </div>
         <button
           class="code-button"
           type="button"
@@ -137,6 +144,10 @@ onBeforeUnmount(() => {
           {{ codeButtonText }}
         </button>
       </div>
+
+      <p v-if="fieldError('email')" id="register-email-error" class="field-error" role="alert">
+        {{ fieldError('email') }}
+      </p>
       <small>验证码5分钟内有效，同一邮箱60秒内只能发送一次。</small>
     </div>
 
@@ -149,9 +160,15 @@ onBeforeUnmount(() => {
         inputmode="numeric"
         autocomplete="one-time-code"
         maxlength="6"
-        placeholder="6位数字验证码"
         :disabled="registrationStore.registered"
+        :aria-invalid="!!fieldError('code')"
+        :aria-describedby="fieldError('code') ? 'register-code-error' : undefined"
+        @blur="checkField('code')"
+        @input="clearField('code')"
       />
+      <p v-if="fieldError('code')" id="register-code-error" class="field-error" role="alert">
+        {{ fieldError('code') }}
+      </p>
     </div>
 
     <div class="form-field">
@@ -161,41 +178,70 @@ onBeforeUnmount(() => {
         v-model="form.username"
         type="text"
         autocomplete="username"
-        maxlength="32"
-        placeholder="3至32个文字、数字或下划线"
         :disabled="registrationStore.registered"
+        :aria-invalid="!!fieldError('username')"
+        :aria-describedby="fieldError('username') ? 'register-username-error' : undefined"
+        @blur="checkField('username')"
+        @input="clearField('username')"
       />
+      <p
+        v-if="fieldError('username')"
+        id="register-username-error"
+        class="field-error"
+        role="alert"
+      >
+        {{ fieldError('username') }}
+      </p>
     </div>
 
     <div class="password-grid">
       <div class="form-field">
         <label for="register-password">密码</label>
-        <input
+        <PasswordInput
           id="register-password"
           v-model="form.password"
-          type="password"
           autocomplete="new-password"
-          placeholder="至少8位，包含文字和数字"
           :disabled="registrationStore.registered"
+          :aria-invalid="!!fieldError('password')"
+          :aria-describedby="fieldError('password') ? 'register-password-error' : undefined"
+          @blur="checkField('password')"
+          @input="clearField('password')"
         />
+        <p
+          v-if="fieldError('password')"
+          id="register-password-error"
+          class="field-error"
+          role="alert"
+        >
+          {{ fieldError('password') }}
+        </p>
       </div>
       <div class="form-field">
         <label for="register-confirm-password">确认密码</label>
-        <input
+        <PasswordInput
           id="register-confirm-password"
           v-model="form.confirmPassword"
-          type="password"
           autocomplete="new-password"
-          placeholder="再次输入密码"
           :disabled="registrationStore.registered"
+          :aria-invalid="!!fieldError('confirm')"
+          :aria-describedby="fieldError('confirm') ? 'register-confirm-password-error' : undefined"
+          @blur="checkField('confirm')"
+          @input="clearField('confirm')"
         />
+        <p
+          v-if="fieldError('confirm')"
+          id="register-confirm-password-error"
+          class="field-error"
+          role="alert"
+        >
+          {{ fieldError('confirm') }}
+        </p>
       </div>
     </div>
 
     <p v-if="feedback" class="form-message error-message" role="alert">{{ feedback }}</p>
     <div v-if="registrationStore.registered" class="form-message success-message" role="status">
-      <strong>账号创建成功</strong>
-      <span>现在可以使用新账号<RouterLink to="/login">前往登录</RouterLink>。</span>
+      <strong>注册成功，正在进入首页…</strong>
     </div>
 
     <button
@@ -206,21 +252,20 @@ onBeforeUnmount(() => {
       {{ registrationStore.registering ? '正在创建账号…' : '创建账号' }}
     </button>
 
-    <p class="form-footnote">注册即表示你会友善、真实地分享校园美食体验。</p>
+    <p class="form-footnote">已有账号？<RouterLink to="/login">前往登录</RouterLink></p>
   </form>
 </template>
 
 <style scoped>
 .registration-form {
   padding: clamp(28px, 5vw, 46px);
-  border: 1px solid #ded7c9;
+  border: 0;
   border-radius: 34px;
-  background: #fffdf8;
-  box-shadow: 0 24px 70px rgb(76 54 8 / 10%);
+  background: #fff;
 }
 
 .form-heading {
-  margin-bottom: 30px;
+  margin-bottom: 0;
 }
 
 .form-heading h1 {
@@ -236,7 +281,7 @@ onBeforeUnmount(() => {
 }
 
 .form-field {
-  margin-top: 20px;
+  margin-top: 24px;
 }
 
 .form-field label {
@@ -298,8 +343,7 @@ onBeforeUnmount(() => {
 
 .password-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .form-message {
@@ -324,8 +368,8 @@ onBeforeUnmount(() => {
 
 .submit-button {
   width: 100%;
-  min-height: 52px;
-  margin-top: 24px;
+  min-height: 50px;
+  margin-top: 28px;
   border: 0;
   border-radius: 999px;
   color: #fff;
@@ -350,5 +394,39 @@ onBeforeUnmount(() => {
   .code-button {
     min-height: 46px;
   }
+}
+.email-input {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid #d8d0c2;
+  border-radius: 14px;
+  background: #fff;
+}
+.email-input:focus-within {
+  outline: 2px solid #b67c00;
+  outline-offset: 2px;
+}
+.email-input input {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+}
+.email-input input:focus {
+  box-shadow: none;
+  outline: none;
+}
+.email-input span {
+  flex-shrink: 0;
+  padding-right: 12px;
+  color: #80786d;
+  font-size: 13px;
+}
+a {
+  text-decoration: none;
+}
+a:hover,
+a:focus-visible {
+  color: #b67c00;
 }
 </style>

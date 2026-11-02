@@ -11,8 +11,8 @@ vi.mock('@/modules/restaurant/api/restaurantApi', () => ({
   fetchRestaurants: vi.fn().mockResolvedValue({ records: [], total: 0, totalPages: 0 }),
 }))
 
-// 原版素材与文案是用户明确要求保留的产品约束，用固定基准防止后续设计再次替换。
-describe('original Ginkgo brand parity', () => {
+// 用户已确认白底布局及泥电品牌，首页不再常驻旧封面和重复营销标题。
+describe('approved homepage composition', () => {
   let app: App | undefined
   let host: HTMLDivElement | undefined
   let pinia: ReturnType<typeof createPinia> | undefined
@@ -24,7 +24,7 @@ describe('original Ginkgo brand parity', () => {
     host = undefined
   })
 
-  it('uses the approved restaurant-first layout and retains brand assets', async () => {
+  it('keeps the brand and functional entries without the old promotional footer', async () => {
     const router = createRouter({
       history: createMemoryHistory(),
       routes: [
@@ -38,14 +38,15 @@ describe('original Ginkgo brand parity', () => {
     pinia = createPinia()
     app = createApp(HomePage).use(pinia).use(router)
     app.mount(host)
-    expect(host.querySelector('h1')?.textContent).toBe('Ginkgo 美食地图')
-    expect(host.querySelector('.discovery-footer figcaption')?.textContent).toBe(
-      '不好吃，就举牌子。',
+    expect(host.querySelector('h1')?.textContent).toBe('泥电美食地图')
+    expect(host.querySelector('.discovery-footer')?.textContent).toContain('校园美食评价社区')
+    expect(host.querySelector('.discovery-footer img')).toBeNull()
+    expect(host.querySelector('.filter-toolbar .random-banner')?.textContent).toContain(
+      '帮我选一家',
     )
-    expect(host.querySelector('.discovery-footer img')?.getAttribute('src')).toContain(
-      'ginkgo-cover.jpg',
+    expect(host.querySelector('input[type="search"]')?.getAttribute('placeholder')).toBe(
+      '搜索餐厅、食堂或窗口…',
     )
-    expect(host.querySelector('.random-banner')?.textContent).toContain('今天吃什么')
     expect(host.textContent).not.toContain('看点评')
   })
 })

@@ -66,14 +66,19 @@ watch(budget, () => {
 onUnmounted(invalidate)
 </script>
 <template>
-  <section class="random-banner">
-    <span class="dice" aria-hidden="true">⚄</span>
-    <div>
-      <h2>今天吃什么？</h2>
-      <p>按当前条件，帮你选一家</p>
-    </div>
-    <button type="button" @click="open">帮我选一家 <span aria-hidden="true">→</span></button>
-  </section>
+  <span class="random-banner"
+    ><button type="button" @click="open">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d="M3 6h3c5 0 7 12 12 12h3m-4-4 4 4-4 4M3 18h3c2 0 4-3 6-6m2-4c1-1 2-2 4-2h3m-4-4 4 4-4 4"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        /></svg
+      >帮我选一家
+    </button></span
+  >
   <dialog ref="dialog" class="random-dialog" aria-labelledby="random-title" @cancel.prevent="close">
     <header>
       <h2 id="random-title">⚄ 今天吃什么</h2>
@@ -128,213 +133,4 @@ onUnmounted(invalidate)
     </button>
   </dialog>
 </template>
-<style scoped>
-.random-banner {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  margin: 16px 0;
-  border: 1px solid #f3e3c5;
-  border-radius: 12px;
-  background: #fff5e2;
-}
-.dice {
-  color: #c08b3f;
-  font-size: 32px;
-  line-height: 1;
-}
-h2 {
-  margin: 0;
-  font-size: 26px;
-}
-.random-banner h2 {
-  font-size: 16px;
-}
-.random-banner p {
-  margin: 4px 0 0;
-  font-size: 11px;
-  color: #958164;
-}
-.random-banner button {
-  margin-left: auto;
-  flex-shrink: 0;
-  min-height: 40px;
-  padding: 8px 16px;
-  border: 1px solid #ebcf9f;
-  border-radius: 9px;
-  background: #fffdf8;
-  color: #aa701c;
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-.random-banner button:hover {
-  background: #ffedcb;
-}
-.random-banner button:focus-visible {
-  outline: 2px solid #f59e0b;
-  outline-offset: 3px;
-}
-.random-dialog {
-  width: min(620px, calc(100% - 24px));
-  max-height: 88dvh;
-  overflow: auto;
-  border: 1px solid #e5d7bc;
-  border-radius: 24px;
-  padding: 26px;
-  background: #fffdf8;
-  color: #2b2a26;
-}
-.random-dialog::backdrop {
-  background: #1d1919a0;
-}
-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-header button {
-  border: 0;
-  background: none;
-  font-size: 28px;
-  cursor: pointer;
-}
-.budget {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 24px 0;
-  font-size: 14px;
-}
-select {
-  font: inherit;
-  border: 1px solid #ddd2be;
-  border-radius: 12px;
-  padding: 8px;
-  max-width: 60%;
-}
-.note {
-  font-size: 13px;
-  color: #807058;
-  line-height: 1.8;
-}
-.candidate-count {
-  color: #8d6721;
-}
-.random-result {
-  display: grid;
-  grid-template-columns: 130px minmax(0, 1fr);
-  gap: 20px;
-  align-items: center;
-  margin: 24px 0;
-}
-h3 {
-  overflow-wrap: anywhere;
-}
-.photo-placeholder {
-  background: #f5eddb;
-  border-radius: 14px;
-  min-height: 130px;
-  display: grid;
-  place-content: center;
-  text-align: center;
-  font-size: 32px;
-  color: #a08e6d;
-}
-.photo-placeholder small {
-  font-size: 11px;
-  display: block;
-  margin-top: 12px;
-}
-.result-link,
-.reroll {
-  display: block;
-  text-align: center;
-  padding: 14px;
-  border-radius: 12px;
-  font: inherit;
-  text-decoration: none;
-  margin: 12px 0;
-  width: 100%;
-  box-sizing: border-box;
-}
-.result-link {
-  background: #e9b949;
-  color: #282a2f;
-}
-.reroll {
-  border: 1px solid #d6b46f;
-  background: white;
-  cursor: pointer;
-}
-@media (max-width: 600px) {
-  .random-banner {
-    padding: 12px;
-    gap: 8px;
-    margin: 12px 0;
-  }
-  .dice {
-    display: none;
-  }
-  .random-banner h2 {
-    font-size: 15px;
-  }
-  .random-banner p {
-    font-size: 10px;
-  }
-  .random-banner button {
-    padding: 8px 12px;
-    min-height: 44px;
-    font-size: 11px;
-  }
-  .random-dialog {
-    padding: 20px;
-  }
-  .random-result {
-    grid-template-columns: 100px minmax(0, 1fr);
-    gap: 14px;
-  }
-  .random-result h3 {
-    font-size: 18px;
-  }
-  .random-result p {
-    font-size: 13px;
-  }
-  .photo-placeholder {
-    min-height: 110px;
-  }
-}
-/* 手机以底部抽屉承接随机结果，桌面保留居中弹层。 */
-@media (max-width: 600px) {
-  .random-dialog {
-    position: fixed;
-    inset: auto 0 0;
-    margin: 0;
-    width: 100%;
-    max-width: 100%;
-    max-height: 90dvh;
-    border-radius: 24px 24px 0 0;
-    padding: 26px 20px calc(20px + env(safe-area-inset-bottom));
-  }
-  .random-dialog h2 {
-    font-size: 24px;
-  }
-  .random-dialog header button {
-    min-width: 44px;
-    min-height: 44px;
-  }
-  .random-dialog::before {
-    content: '';
-    display: block;
-    width: 40px;
-    height: 5px;
-    border-radius: 5px;
-    background: #ddd;
-    margin: -12px auto 18px;
-  }
-  .random-result svg {
-    margin: auto;
-  }
-}
-</style>
+<style scoped src="./random-restaurant.css"></style>

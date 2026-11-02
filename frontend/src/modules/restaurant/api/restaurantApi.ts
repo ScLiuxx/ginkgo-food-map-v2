@@ -1,9 +1,15 @@
 import type { ApiResponse } from '@/shared/api/api.types'
 import { httpClient } from '@/shared/api/httpClient'
 import type { CatalogFilters, RestaurantReadModel } from '../model/restaurant.types'
+import { matchesDiningFilters } from '../model/diningFilters'
 
 /** API字段独立于页面模型，保留字符串ID和所有空值，不将未知价格或评分转换为0。 */
 export interface RestaurantResponse {
+  restaurantType?: RestaurantReadModel['restaurantType']
+  supportsDineIn?: boolean | null
+  supportsDelivery?: boolean | null
+  /** 前端预留的校园详情契约，当前后端没有该字段；不发起不存在的窗口/菜品接口。 */
+  dining?: RestaurantReadModel['dining']
   id: string
   name: string
   categoryCode: string
@@ -64,6 +70,10 @@ export interface RestaurantPage<T = RestaurantReadModel> {
 /** 枚举在边界转换，页面不依赖数据库列名；地址空值仅在显示层转为空串。 */
 export function toRestaurantModel(value: RestaurantResponse): RestaurantReadModel {
   return {
+    restaurantType: value.restaurantType,
+    supportsDineIn: value.supportsDineIn ?? null,
+    supportsDelivery: value.supportsDelivery ?? null,
+    ...(value.dining ? { dining: value.dining } : {}),
     id: value.id,
     name: value.name,
     category: value.categoryName,
@@ -104,11 +114,31 @@ export async function fetchRestaurants(
   page: number,
   pageSize: number,
   signal?: AbortSignal,
+  bounds?: { west: number; south: number; east: number; north: number },
 ): Promise<RestaurantPage> {
+  // 新条件尚无服务端协议，仅选中时遍历旧接口完整分页后过滤、计数、再分页。
+  // 共用取消信号；任一批次失败均抛错，不用不完整结果冒充全部商家。未来由服务端取代此过渡逻辑。
+  if (filters.restaurantType || filters.diningMode) {
+    const original = { ...filters, restaurantType: '' as const, diningMode: '' as const }
+    const records: RestaurantReadModel[] = []
+    for (let batch = 1; ; batch++) {
+      const result = await fetchRestaurants(original, batch, 100, signal, bounds)
+      records.push(...result.records.filter((record) => matchesDiningFilters(record, filters)))
+      if (batch >= result.totalPages) break
+    }
+    return {
+      page,
+      pageSize,
+      total: records.length,
+      totalPages: Math.ceil(records.length / pageSize),
+      records: records.slice((page - 1) * pageSize, page * pageSize),
+    }
+  }
   const response = await httpClient.get<ApiResponse<RestaurantPage<RestaurantResponse>>>(
     '/api/restaurants',
     {
       params: {
+        ...bounds,
         keyword: filters.keyword,
         category: filters.category,
         sort: filters.sort,
