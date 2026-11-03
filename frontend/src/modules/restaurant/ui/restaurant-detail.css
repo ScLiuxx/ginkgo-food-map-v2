@@ -39,7 +39,6 @@ summary:focus-visible {
   border-bottom: 1px solid #edf0f2;
 }
 .detail-hero.canteen-hero {
-  display: block;
   padding-bottom: 24px;
 }
 .detail-heading {
@@ -357,9 +356,6 @@ h2 {
     flex-direction: column-reverse;
     gap: 18px;
     padding-bottom: 22px;
-  }
-  .detail-hero.canteen-hero {
-    display: block;
   }
   .hero-topline {
     flex-wrap: nowrap;

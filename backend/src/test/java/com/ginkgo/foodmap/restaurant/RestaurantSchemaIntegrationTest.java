@@ -498,6 +498,86 @@ class RestaurantSchemaIntegrationTest {
         }
     }
 
+    /** V17保留旧申请及图片关联，校验类型回填、重复迁移和审核状态的NULL组合。 */
+    @Test
+    void shouldPrepareReviewStateWithoutRewritingOriginalRequests() throws SQLException {
+        String database = createDatabase();
+        migration(database, "16").migrate();
+        try (Connection current = connect(database)) {
+            update(current, "INSERT INTO restaurants(id,name,category_code) VALUES(101,'旧商户','OTHER')");
+            update(current, "INSERT INTO restaurant_change_requests(id,restaurant_id,submitted_by,client_request_id,request_hash,proposed_data) VALUES(201,NULL,42,UUID(),UNHEX(SHA2('new',256)),JSON_OBJECT('name','原始投稿')),(202,101,42,UUID(),UNHEX(SHA2('old',256)),JSON_OBJECT('name','原始纠错'))");
+            update(current, "INSERT INTO restaurant_change_photos(request_id,position,media_file_id) VALUES(201,0,901)");
+            String oldColumns = "SELECT CONCAT_WS('|',id,COALESCE(restaurant_id,'NULL'),submitted_by,client_request_id,HEX(request_hash),proposed_data,status,created_at) FROM restaurant_change_requests ORDER BY id";
+            var originals = strings(current, oldColumns);
+            var photos = strings(current, "SELECT CONCAT_WS('|',request_id,position,media_file_id) FROM restaurant_change_photos");
+            var upgrade = migration(database, "17");
+            assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(upgrade.migrate().migrationsExecuted).isZero();
+            upgrade.validate();
+            assertThat(strings(current, oldColumns)).isEqualTo(originals);
+            assertThat(strings(current, "SELECT request_type FROM restaurant_change_requests ORDER BY id")).containsExactly("CREATE", "UPDATE");
+            assertThat(strings(current, "SELECT CONCAT_WS('|',request_id,position,media_file_id) FROM restaurant_change_photos")).isEqualTo(photos);
+            assertThat(number(current, "SELECT COUNT(*) FROM restaurant_change_requests WHERE reviewed_by IS NULL AND reviewed_at IS NULL AND reject_reason IS NULL AND approved_data IS NULL AND before_data IS NULL")).isEqualTo(2);
+            var payloads = strings(current, "SELECT CONCAT_WS('|',HEX(request_hash),proposed_data) FROM restaurant_change_requests ORDER BY id");
+
+            // 新店通过时同一条UPDATE填入新ID及审核结果，纠错保留原ID并记录旧快照。
+            update(current, "INSERT INTO restaurants(id,name,category_code) VALUES(102,'新发布商户','OTHER')");
+            update(current, "UPDATE restaurant_change_requests SET status='APPROVED',restaurant_id=102,reviewed_by=33,reviewed_at=CURRENT_TIMESTAMP(6),approved_data=JSON_OBJECT('name','修订后投稿') WHERE id=201");
+            update(current, "UPDATE restaurant_change_requests SET status='APPROVED',reviewed_by=33,reviewed_at=CURRENT_TIMESTAMP(6),approved_data=JSON_OBJECT('name','修订后纠错'),before_data=JSON_OBJECT('name','旧商户') WHERE id=202");
+            assertThat(strings(current, "SELECT CONCAT_WS('|',request_type,restaurant_id,status) FROM restaurant_change_requests ORDER BY id")).containsExactly("CREATE|102|APPROVED", "UPDATE|101|APPROVED");
+            assertThat(strings(current, "SELECT CONCAT_WS('|',HEX(request_hash),proposed_data) FROM restaurant_change_requests ORDER BY id")).isEqualTo(payloads);
+
+            update(current, "INSERT INTO restaurant_change_requests(id,request_type,submitted_by,client_request_id,request_hash,proposed_data) VALUES(203,'CREATE',42,UUID(),UNHEX(SHA2('pending',256)),JSON_OBJECT('name','待审'))");
+            for (String invalid : List.of(
+                    "request_type='DELETE'", "request_type='CREATE '", "status='PENDING '", "status='DRAFT'",
+                    "request_type='UPDATE'", "restaurant_id=101", "reviewed_by=33", "reviewed_at=CURRENT_TIMESTAMP(6)",
+                    "reject_reason='不应有原因'", "approved_data=JSON_OBJECT()", "before_data=JSON_OBJECT()",
+                    "status='APPROVED'",
+                    "status='APPROVED',restaurant_id=102,reviewed_by=33,reviewed_at=CURRENT_TIMESTAMP(6),approved_data=JSON_ARRAY()",
+                    "status='APPROVED',restaurant_id=102,reviewed_by=0,reviewed_at=CURRENT_TIMESTAMP(6),approved_data=JSON_OBJECT()",
+                    "status='APPROVED',reviewed_by=33,reviewed_at=CURRENT_TIMESTAMP(6),approved_data=JSON_OBJECT()",
+                    "status='APPROVED',restaurant_id=102,reviewed_by=33,reviewed_at=CURRENT_TIMESTAMP(6),approved_data=JSON_OBJECT(),before_data=JSON_OBJECT()",
+                    "request_type='UPDATE',status='APPROVED',restaurant_id=101,reviewed_by=33,reviewed_at=CURRENT_TIMESTAMP(6),approved_data=JSON_OBJECT()",
+                    "status='REJECTED',reviewed_by=33,reviewed_at=CURRENT_TIMESTAMP(6)",
+                    "status='REJECTED',reviewed_by=33,reviewed_at=CURRENT_TIMESTAMP(6),reject_reason='   '",
+                    "status='REJECTED',reviewed_by=0,reviewed_at=CURRENT_TIMESTAMP(6),reject_reason='无效地址'",
+                    "status='REJECTED',reviewed_by=33,reviewed_at=CURRENT_TIMESTAMP(6),reject_reason='无效地址',approved_data=JSON_OBJECT()")) {
+                SQLException failure = assertThrows(SQLException.class, () -> update(current, "UPDATE restaurant_change_requests SET " + invalid + " WHERE id=203"));
+                assertThat(failure.getErrorCode()).as(invalid).isEqualTo(3819);
+            }
+            update(current, "UPDATE restaurant_change_requests SET status='REJECTED',reviewed_by=33,reviewed_at=CURRENT_TIMESTAMP(6),reject_reason='无效地址' WHERE id=203");
+            assertThat(number(current, "SELECT COUNT(*) FROM restaurant_change_requests WHERE status='REJECTED' AND restaurant_id IS NULL")).isEqualTo(1);
+        }
+    }
+
+    /** V18只增加空正式相册，保留历史审核/投稿图；唯一键、顺序边界和模块内外键由真实MySQL验证。 */
+    @Test
+    void shouldAddEmptyPublishedAlbumWithoutPublishingHistoricalApplications() throws SQLException {
+        String albumDatabase = createDatabase();
+        migration(albumDatabase, "17").migrate();
+        try (Connection current = connect(albumDatabase)) {
+            update(current, "INSERT INTO restaurants(id,name,category_code) VALUES(101,'历史商户','OTHER')");
+            update(current, "INSERT INTO restaurant_change_requests(id,restaurant_id,request_type,submitted_by,client_request_id,request_hash,proposed_data) VALUES(201,101,'UPDATE',42,UUID(),UNHEX(SHA2('album-pending',256)),JSON_OBJECT('name','原申请')),(202,101,'UPDATE',42,UUID(),UNHEX(SHA2('album-approved',256)),JSON_OBJECT('name','旧通过'))");
+            update(current, "INSERT INTO restaurant_change_photos(request_id,position,media_file_id) VALUES(201,0,901),(202,0,902)");
+            update(current, "UPDATE restaurant_change_requests SET status='APPROVED',reviewed_by=33,reviewed_at=CURRENT_TIMESTAMP(6),approved_data=JSON_OBJECT('name','旧通过'),before_data=JSON_OBJECT('name','历史商户') WHERE id=202");
+            String oldRequests = "SELECT CONCAT_WS('|',id,restaurant_id,status,HEX(request_hash),proposed_data,COALESCE(approved_data,'NULL'),COALESCE(before_data,'NULL')) FROM restaurant_change_requests ORDER BY id";
+            var before = strings(current, oldRequests);
+            var migration = migration(albumDatabase, "18");
+            assertThat(migration.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(migration.migrate().migrationsExecuted).isZero(); migration.validate();
+            assertThat(strings(current, oldRequests)).isEqualTo(before);
+            assertThat(number(current, "SELECT COUNT(*) FROM restaurant_photos")).isZero();
+            assertThat(number(current, "SELECT COUNT(*) FROM restaurant_change_photos")).isEqualTo(2);
+            update(current, "INSERT INTO restaurant_photos(restaurant_id,media_file_id,position,source_request_id) VALUES(101,902,0,202)");
+            // 文件跨模块不建外键，状态/归属交给服务校验；正式表只直接引用本模块商户及申请。
+            assertThat(strings(current, "SELECT REFERENCED_TABLE_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='restaurant_photos' AND REFERENCED_TABLE_NAME IS NOT NULL ORDER BY REFERENCED_TABLE_NAME"))
+                    .containsExactly("restaurant_change_requests", "restaurants");
+            for (String invalid : List.of("(101,902,1,202)", "(101,903,0,202)", "(999,904,2,202)", "(101,904,2,999)", "(101,0,2,202)", "(101,904,2147483648,202)"))
+                assertThrows(SQLException.class, () -> update(current, "INSERT INTO restaurant_photos(restaurant_id,media_file_id,position,source_request_id) VALUES" + invalid));
+            assertThat(number(current, "SELECT COUNT(*) FROM restaurant_photos")).isEqualTo(1);
+        }
+    }
+
     private static String createDatabase() throws SQLException {
         String name = "ginkgo_restaurant_it_" + UUID.randomUUID().toString().replace("-", "");
         try (Connection admin = connect(""); Statement statement = admin.createStatement()) {

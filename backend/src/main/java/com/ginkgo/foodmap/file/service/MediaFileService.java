@@ -17,6 +17,37 @@ public class MediaFileService {
     private final MediaFileMapper files;
     private final OssStorageClient storage;
 
+    /** 管理员查看已核对申请关联的商户图；拒绝其他用途、其他上传者及未绑定文件。 */
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
+    public byte[] readRestaurantBound(long id, long owner) {
+        return readRestaurantFile(id, owner);
+    }
+
+    /** 仅在restaurant服务核对可见商户/正式相册/已通过来源后调用；没有按文件ID公开的HTTP入口。 */
+    public byte[] readPublishedRestaurant(long id, long owner) {
+        return readRestaurantFile(id, owner);
+    }
+
+    private byte[] readRestaurantFile(long id, long owner) {
+        var row = files.find(id);
+        if (row == null || !"BOUND".equals(row.getStatus()) || !"RESTAURANT".equals(row.getPurpose())
+                || row.getUploaderUserId() != owner) throw new BusinessException(FileErrorCode.NOT_FOUND);
+        return storage.read(row.getBucketName(), row.getStorageKey());
+    }
+
+    /** 审核事务内校验已绑定文件，不再次绑定、不访问OSS；升序锁定防止与文件状态变更交错。 */
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
+    @Transactional(propagation=Propagation.MANDATORY)
+    public void validateRestaurantPublication(List<Long> ids, long owner) {
+        if (ids == null || ids.size() > 5 || ids.stream().distinct().count() != ids.size())
+            throw new BusinessException(FileErrorCode.NOT_BINDABLE);
+        for (long id : ids.stream().sorted().toList()) {
+            var row = files.lock(id);
+            if (row == null || !"BOUND".equals(row.getStatus()) || !"RESTAURANT".equals(row.getPurpose())
+                    || row.getUploaderUserId() != owner) throw new BusinessException(FileErrorCode.NOT_BINDABLE);
+        }
+    }
+
     /** 加入点评事务，固定ID升序加锁；展示顺序由review关联表保留。 */
     @Transactional(propagation=Propagation.MANDATORY)
     public void bind(List<Long> ids,long owner) {

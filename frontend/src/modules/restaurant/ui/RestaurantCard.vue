@@ -1,21 +1,25 @@
 <script setup lang="ts">
 import { useUserLocation } from '@/modules/map/model/userLocation.store'
 const userLocation = useUserLocation()
-import { computed, ref, toRef, watch } from 'vue'
-import { useRestaurantReviewPreview } from '@/modules/review'
+import { computed, ref, watch } from 'vue'
 import { campusDistance, priceLabel } from '../model/catalog.logic'
 import type { RestaurantReadModel } from '../model/restaurant.types'
 import { displayRestaurantTags } from './restaurantPresentation'
 
 const props = defineProps<{ restaurant: RestaurantReadModel }>()
-const { photo, state } = useRestaurantReviewPreview(toRef(() => props.restaurant.id))
+// 封面随目录页批量返回；卡片只加载JPEG，不再为每家店额外请求点评或相册元数据。
+const photo = computed(() => props.restaurant.coverPhoto)
 const imageFailed = ref(false)
-watch(photo, () => {
+watch([() => props.restaurant.id, () => photo.value?.url], () => {
   imageFailed.value = false
 })
 const distance = computed(() => campusDistance(props.restaurant, userLocation.location?.center))
-// 旧分类只足以确认“食堂”记录，不能据此推断其他商家的场所类型及外卖能力。
-const cafeteria = computed(() => props.restaurant.category === '食堂')
+// 类型优先采用服务端明确字段；缺省时才兼容旧食堂分类。
+const cafeteria = computed(
+  () =>
+    props.restaurant.restaurantType === 'CANTEEN' ||
+    (!props.restaurant.restaurantType && props.restaurant.category === '食堂'),
+)
 const businessTags = computed(() =>
   displayRestaurantTags(props.restaurant.tags, props.restaurant.category),
 )
@@ -32,16 +36,16 @@ const distanceLabel = computed(() =>
       <img
         v-if="photo && !imageFailed"
         :src="photo.url"
-        :alt="`${restaurant.name}的点评配图`"
+        :alt="`${restaurant.name}的商户相册封面`"
         loading="lazy"
         decoding="async"
         @error="imageFailed = true"
       />
-      <span v-if="photo && !imageFailed" class="photo-credit">{{ photo.label }}</span>
+      <span v-if="photo && !imageFailed" class="photo-credit">商户相册</span>
       <div
         v-else
         class="catalog-photo-placeholder"
-        :aria-label="imageFailed ? '图片暂时无法加载' : '暂无可展示点评照片'"
+        :aria-label="imageFailed ? '图片暂时无法加载' : '暂无商户相册照片'"
       >
         <svg viewBox="0 0 64 64" fill="none" aria-hidden="true">
           <path
@@ -50,15 +54,7 @@ const distanceLabel = computed(() =>
             stroke-width="1.6"
             stroke-linecap="round"
           /></svg
-        ><small>{{
-          imageFailed
-            ? '图片暂时无法加载'
-            : state === 'loading'
-              ? '配图加载中…'
-              : state === 'error'
-                ? '点评配图暂不可用'
-                : '暂无配图'
-        }}</small>
+        ><small>{{ imageFailed ? '图片暂时无法加载' : '暂无配图' }}</small>
       </div>
     </div>
     <div class="card-copy">

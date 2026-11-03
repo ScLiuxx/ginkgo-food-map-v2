@@ -23,8 +23,8 @@ public interface RestaurantChangeMapper {
     RestaurantChangeEntity findRequest(@Param("actor") long actor, @Param("request") String request);
 
     @Insert("""
-        INSERT INTO restaurant_change_requests(restaurant_id,submitted_by,client_request_id,request_hash,proposed_data)
-        VALUES(#{restaurantId},#{submittedBy},#{clientRequestId},#{requestHash},#{proposedData})
+        INSERT INTO restaurant_change_requests(restaurant_id,request_type,submitted_by,client_request_id,request_hash,proposed_data)
+        VALUES(#{restaurantId},#{requestType},#{submittedBy},#{clientRequestId},#{requestHash},#{proposedData})
         ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)
         """)
     @Options(useGeneratedKeys = true, keyProperty = "id")

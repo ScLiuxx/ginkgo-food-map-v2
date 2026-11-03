@@ -18,6 +18,10 @@ export const useLoginStore = defineStore('login', () => {
   const loggingOut = ref(false)
   const error = ref<string | null>(null)
   const authenticated = computed(() => user.value !== null && authToken.value !== null)
+  // 管理入口只采信登录或 /auth/me 返回的角色；不从本地配置或令牌文本推断权限。
+  const isAdministrator = computed(
+    () => authenticated.value && user.value?.roles.includes('ROLE_ADMIN') === true,
+  )
   const hasSession = computed(() => authToken.value !== null)
   let revision = 0
   let restoringToken: string | null = null
@@ -110,6 +114,7 @@ export const useLoginStore = defineStore('login', () => {
     loggingOut,
     error,
     authenticated,
+    isAdministrator,
     hasSession,
     submit,
     acceptSession,

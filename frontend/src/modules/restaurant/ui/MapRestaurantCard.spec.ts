@@ -1,13 +1,9 @@
 import { createPinia } from 'pinia'
-import { createApp, h, type App } from 'vue'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createApp, type App } from 'vue'
+import { afterEach, describe, expect, it } from 'vitest'
 import MapRestaurantCard from './MapRestaurantCard.vue'
 import { restaurantFixture } from '../api/restaurant.test-data'
 import type { RestaurantReadModel } from '../model/restaurant.types'
-
-vi.mock('./MapRestaurantPhoto.vue', () => ({
-  default: { render: () => h('span', { class: 'dish-placeholder' }) },
-}))
 
 /** 改布局不更改事实：未知指标不变成0，内部标签不回流主界面或修改原始记录。 */
 describe('地图商户分栏信息', () => {
@@ -55,5 +51,12 @@ describe('地图商户分栏信息', () => {
     expect(host.querySelector('.map-facts')?.textContent).toContain('家常菜')
     expect(host.querySelector('.map-address')?.textContent).toBe('校园南路10号')
     expect(host.textContent).not.toContain('测试数据')
+  })
+  it('地图列表和浮层使用目录返回的正式封面地址', () => {
+    mount({ ...restaurantFixture, coverPhoto: { id: '801', url: '/api/restaurants/1/photos/801' } })
+    expect(host.querySelector('.dish-placeholder img')?.getAttribute('src')).toBe(
+      '/api/restaurants/1/photos/801',
+    )
+    expect(host.querySelector('.dish-placeholder img')?.getAttribute('alt')).toBe('商户相册封面')
   })
 })

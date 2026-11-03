@@ -1,26 +1,33 @@
 <script setup lang="ts">
-import { ref, toRef, watch } from 'vue'
-import { useRestaurantReviewPreview } from '@/modules/review'
-/** 仅真实餐厅挂载本组件，复用公开点评配图；失败不影响选店和评分。 */
-const props = defineProps<{ restaurantId: string }>()
-const { photo } = useRestaurantReviewPreview(toRef(() => props.restaurantId))
+import { computed, ref, watch } from 'vue'
+import type { RestaurantReadModel } from '../model/restaurant.types'
+/** 地图列表/浮层直接使用目录或详情返回的正式封面，避免逐商户读取点评配图。 */
+const props = defineProps<{
+  restaurantId: string
+  coverPhoto?: RestaurantReadModel['coverPhoto']
+}>()
+const photo = computed(() => props.coverPhoto)
 const failed = ref(false)
-watch(photo, () => {
+watch([() => props.restaurantId, () => photo.value?.url], () => {
   failed.value = false
 })
 </script>
 <template>
   <span class="dish-placeholder">
-    <img v-if="photo && !failed" :src="photo.url" :alt="photo.label" @error="failed = true" />
-    <span v-if="photo && !failed && photo.label.includes('非本店实拍')" class="map-photo-note"
-      >非本店实拍</span
-    >
+    <img
+      v-if="photo && !failed"
+      :src="photo.url"
+      alt="商户相册封面"
+      loading="lazy"
+      decoding="async"
+      @error="failed = true"
+    />
     <template v-else
       ><svg viewBox="0 0 80 80" aria-hidden="true">
         <circle cx="40" cy="41" r="22" />
         <circle cx="40" cy="41" r="15" />
         <path d="M10 17v19m6-19v19m-3-19v46m54-46v46m0-46c-8 8-8 22 0 22" /></svg
-      ><small>暂无配图</small></template
+      ><small>{{ failed ? '图片暂不可用' : '暂无配图' }}</small></template
     >
   </span>
 </template>

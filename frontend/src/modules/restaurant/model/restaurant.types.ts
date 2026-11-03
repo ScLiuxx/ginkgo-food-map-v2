@@ -1,5 +1,7 @@
 /** 页面只读模型，由餐厅API显式转换；旧快照仅用于测试与开发数据准备。 */
 export interface RestaurantReadModel {
+  /** 当前目录页随响应返回的正式相册封面，不再逐卡片读取点评或相册。 */
+  coverPhoto?: { id: string; url: string } | null
   /** 可选的餐厅级资料：旧接口缺省为未知，不能将未填写当作支持堂食或配送。 */
   restaurantType?: 'REGULAR' | 'CANTEEN'
   supportsDineIn?: boolean | null

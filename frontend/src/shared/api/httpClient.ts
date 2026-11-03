@@ -27,6 +27,7 @@ httpClient.interceptors.request.use((config) => {
     (path === '/api/restaurant-categories' ||
       path === '/api/restaurants' ||
       /^\/api\/restaurants\/[^/]+$/.test(path) ||
+      /^\/api\/restaurants\/[^/]+\/photos(?:\/[^/]+)?$/.test(path) ||
       /^\/api\/restaurants\/[^/]+\/reviews$/.test(path) ||
       /^\/api\/restaurants\/[^/]+\/reviews\/authors\/[^/]+\/history$/.test(path) ||
       /^\/api\/reviews\/[^/]+\/replies$/.test(path))

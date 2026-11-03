@@ -24,6 +24,7 @@ export const responseFixture: RestaurantResponse = {
 }
 
 export const restaurantFixture: RestaurantReadModel = {
+  coverPhoto: null,
   id: responseFixture.id,
   name: responseFixture.name,
   category: '火锅',

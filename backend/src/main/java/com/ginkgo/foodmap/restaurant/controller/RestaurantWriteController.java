@@ -19,7 +19,7 @@ import java.net.URI;
 public class RestaurantWriteController {
     private final RestaurantWriteService service;
 
-    /** 创建者和管理员可读取管理资料，删除记录仅管理员可读；不返回编辑版本。 */
+    /** 仅管理员可读取管理资料，包含删除记录；不返回编辑版本。 */
     @GetMapping("/{id}/management")
     public ResponseEntity<ApiResponse<RestaurantManagementVo>> management(@PathVariable String id) {
         return ok(service.management(id));

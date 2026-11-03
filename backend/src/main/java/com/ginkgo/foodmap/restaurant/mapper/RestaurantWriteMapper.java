@@ -44,4 +44,8 @@ public interface RestaurantWriteMapper {
 
     /** 私有读取可保留删除餐厅的标签；公开查询仍使用原Mapper的父状态过滤。 */
     List<String> selectTags(@Param("id") long id);
+
+    /** 父食堂主行已加锁后检查所有窗口，避免类型切换破坏窗口外键，不排除软删除窗口。 */
+    @org.apache.ibatis.annotations.Select("SELECT EXISTS(SELECT 1 FROM canteen_windows WHERE canteen_id=#{id})")
+    boolean hasWindows(@Param("id") long id);
 }

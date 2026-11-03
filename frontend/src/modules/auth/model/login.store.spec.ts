@@ -17,6 +17,27 @@ const result: LoginResponse = {
 const request = { username: 'ginkgo_user', password: 'Ginkgo2026' }
 
 describe('login store', () => {
+  it('accepts only the backend ROLE_ADMIN role for management access', async () => {
+    const store = useLoginStore()
+    store.acceptSession({ ...result, user: { ...user, roles: ['ROLE_USER', 'ADMIN'] } })
+    expect(store.isAdministrator).toBe(false)
+    store.acceptSession({ ...result, user: { ...user, roles: ['ROLE_ADMIN'] } })
+    expect(store.isAdministrator).toBe(true)
+    clearAccessToken()
+    expect(store.isAdministrator).toBe(false)
+  })
+
+  it('does not infer admin authority from a saved token and removes it after a role downgrade', async () => {
+    setAccessToken('test-session')
+    const store = useLoginStore()
+    expect(store.isAdministrator).toBe(false)
+    vi.mocked(fetchCurrentUser).mockResolvedValue({ ...user, roles: ['ROLE_ADMIN'] })
+    await store.restore()
+    expect(store.isAdministrator).toBe(true)
+    vi.mocked(fetchCurrentUser).mockResolvedValue(user)
+    await store.restore()
+    expect(store.isAdministrator).toBe(false)
+  })
   beforeEach(() => {
     clearAccessToken()
     sessionStorage.clear()

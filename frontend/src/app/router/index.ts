@@ -3,6 +3,21 @@ import { createRouter, createWebHistory } from 'vue-router'
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    // 管理端共用独立布局，身份验证通过后才挂载页面；审核使用真实申请及服务端处理结果。
+    {
+      path: '/admin/login',
+      name: 'admin-login',
+      redirect: '/login',
+    },
+    {
+      path: '/admin',
+      redirect: '/admin/reviews',
+    },
+    {
+      path: '/admin/reviews',
+      component: () => import('@/pages/admin/AdminReviewPage.vue'),
+      meta: { title: '商户审核 · 管理工作台', layout: 'admin' },
+    },
     {
       path: '/previews/review-history',
       component: () => import('@/pages/review/ReviewHistoryPreviewPage.vue'),

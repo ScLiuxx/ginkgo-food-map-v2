@@ -1,0 +1,151 @@
+.restaurant-album {
+  min-width: 0;
+}
+.gallery-main {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 172px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: #f3f4f5;
+  overflow: hidden;
+  cursor: zoom-in;
+}
+.gallery-main > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.gallery-credit {
+  position: absolute;
+  inset: auto 0 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px;
+  color: #fff;
+  background: linear-gradient(transparent, #18212bd9);
+  font-size: 11px;
+}
+.gallery-empty {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 218px;
+  padding: 16px;
+  border-radius: 6px;
+  background: #f5f6f7;
+  color: #626e7b;
+  text-align: center;
+  box-sizing: border-box;
+}
+.gallery-empty strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.gallery-empty p,
+.album-error {
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.gallery-empty svg {
+  width: 46px;
+  height: 46px;
+  fill: none;
+  stroke: #9ba5af;
+  stroke-width: 1.5;
+  margin-bottom: 10px;
+}
+.gallery-empty button,
+.album-pagination button {
+  border: 1px solid #e6d5bd;
+  border-radius: 4px;
+  background: #fff8ed;
+  color: #986523;
+  padding: 6px 9px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.gallery-thumbnails {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  overflow-x: auto;
+  max-width: 100%;
+  padding-bottom: 3px;
+}
+.gallery-thumbnails button {
+  flex: 0 0 48px;
+  height: 44px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  background: #f3f4f5;
+  overflow: hidden;
+  color: #7b858f;
+  font-size: 10px;
+  cursor: pointer;
+}
+.gallery-thumbnails button[aria-pressed='true'] {
+  border-color: #c77d19;
+}
+.gallery-thumbnails img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.album-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 5px;
+  font-size: 10px;
+  color: #7b858f;
+}
+.album-error {
+  color: #a94c36;
+}
+.album-lightbox {
+  border: 0;
+  border-radius: 8px;
+  padding: 16px;
+  max-width: calc(100vw - 24px);
+  background: #fff;
+}
+.album-lightbox::backdrop {
+  background: #151d27cc;
+}
+.album-lightbox img {
+  display: block;
+  max-width: 85vw;
+  max-height: 72dvh;
+  margin: 12px auto 0;
+}
+.album-lightbox p {
+  font-size: 13px;
+  color: #626e7b;
+}
+.album-lightbox button {
+  border: 1px solid #dde1e5;
+  background: #fff;
+  border-radius: 5px;
+  padding: 10px 16px;
+  font: inherit;
+  cursor: pointer;
+}
+button:focus-visible {
+  outline: 2px solid #ad6f26;
+  outline-offset: 3px;
+}
+button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}

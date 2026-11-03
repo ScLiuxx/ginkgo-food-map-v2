@@ -102,6 +102,50 @@ class LoginApiIntegrationTest {
                 .when(sessions).revoke(anyString());
     }
 
+    /** 注册即使夹带客户端角色字段也只授予普通用户；两种公开注册入口均不能生成管理员。 */
+    @Test
+    void shouldNeverGrantAdministratorThroughPublicRegistration() throws Exception {
+        int index = 0;
+        for (String path : List.of("/auth/register", "/auth/register-and-login")) {
+            String username = "role_probe_" + index;
+            String request = """
+                    {"email":"role-probe-%d@std.uestc.edu.cn","verificationCode":"123456",
+                    "username":"%s","password":"1234","role":"ROLE_ADMIN",
+                    "roles":["ROLE_ADMIN"],"isAdmin":true}
+                    """.formatted(index++, username);
+            mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(request))
+                    .andExpect(status().is2xxSuccessful());
+            var roles = jdbc.queryForList("SELECT r.code FROM roles r JOIN user_roles ur ON ur.role_id=r.id "
+                    + "JOIN users u ON u.id=ur.user_id WHERE u.username=?", String.class, username);
+            assertThat(roles).containsExactly("ROLE_USER");
+        }
+    }
+
+    /** 统一登录返回真实角色；管理会话入口拒绝普通用户，撤销角色后原JWT也立即失去管理权限。 */
+    @Test
+    void shouldAuthorizeAdministratorSessionUsingCurrentDatabaseRoles() throws Exception {
+        mvc.perform(get("/api/admin/me")).andExpect(status().isUnauthorized());
+        String userToken = login();
+        mvc.perform(get("/api/admin/me").header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("AUTH_FORBIDDEN"));
+        jdbc.update("INSERT INTO user_roles(user_id, role_id) VALUES (?, 2)", user.getId());
+        String response = loginRequest().andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.user.roles", org.hamcrest.Matchers.hasItem("ROLE_ADMIN")))
+                .andReturn().getResponse().getContentAsString();
+        String adminToken = json.readTree(response).path("data").path("accessToken").asText();
+        mvc.perform(get("/api/admin/me").header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.data.username").value("ginkgo_user"))
+                .andExpect(jsonPath("$.data.passwordHash").doesNotExist());
+        jdbc.update("DELETE FROM user_roles WHERE user_id = ? AND role_id = 2", user.getId());
+        mvc.perform(get("/api/admin/me").header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isForbidden());
+        jdbc.update("INSERT INTO user_roles(user_id, role_id) VALUES (?, 2)", user.getId());
+        mvc.perform(post("/auth/logout").header("Authorization", "Bearer " + adminToken)).andExpect(status().isOk());
+        mvc.perform(get("/api/admin/me").header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isUnauthorized());
+    }
+
     /** 登录返回可被真实过滤链接受的 JWT、公开用户信息及禁止缓存标头，不建立 HttpSession。 */
     @Test
     void shouldLoginAndReadCurrentUser() throws Exception {

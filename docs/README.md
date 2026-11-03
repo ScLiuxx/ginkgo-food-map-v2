@@ -2,7 +2,7 @@
 
 从这里选择文档。根层是经常查阅的当前说明；设计、计划、运维和历史各有固定目录。
 
-地图基础导航已按当前约定收尾：只把餐厅目的地交给高德，不开发站内起点选择；线上及真机验收暂跳过。搜索已区分本站餐厅与高德地点，学生提交收录仍仅占位，详见[功能说明](features.md)。
+地图导航将商户目的地交给高德；用户可提交新店或纠错申请，管理员可读取真实申请与私有图片。各功能当前完成情况见[功能说明](features.md)。
 
 ```text
 docs/
@@ -33,7 +33,10 @@ docs/
 
 - 架构：[模块化单体](architecture/modular-monolith.md)、[前端分层](architecture/frontend.md)。
 - 数据结构：[餐厅/食堂/窗口结构与 V9 增量](architecture/restaurant-schema.md)、[评价结构与 V10 窗口归属](architecture/review-schema.md)；区分迁移脚本就绪与运行库部署状态。
+- 审核存储：[商户申请表V17](architecture/restaurant-schema.md#restaurant_change_requests商户资料待审核申请)，采用request_type和单个restaurant_id，记录审核结果与资料快照；通过/驳回及正式相册发布已实现，新增[正式相册V18](architecture/restaurant-schema.md#restaurant_photos正式商户相册)，餐厅/食堂详情相册及管理端发布记录已接入，首页/地图卡片封面也已接入。
 - 页面：[找店界面方案](plans/discovery-ui.md)。
+- 管理端：[商户审核示意图](plans/admin-review-mockup.html)为设计依据；`/admin/reviews`已接入真实申请查询、就地编辑、通过/驳回及连续审核，见[功能说明](features.md)及[API文档](api.md#5-管理员商户审核)。
+- 统一登录：`/login`按服务端角色分流前台/工作台，`/admin/login`仅兼容跳转；管理身份由后端`/api/admin/me`校验。身份与查询边界见[前端架构](architecture/frontend.md)。
 - 搜索：[Elasticsearch 餐厅搜索方案](plans/elasticsearch-search.md)，当前仅设计，包含资源约束、相关性、可靠同步与降级验收。
 - 地图：[高德地图基础闭环](plans/map-foundation.md)，包含导航、点位接口、页面联动及分步验收。
 - 迁移：[旧系统迁移计划](plans/legacy-migration.md)。
@@ -44,6 +47,7 @@ docs/
 
 - [开发记录01](history/development-01.md)：初始工程、账号与基础认证阶段。
 - [开发记录02](history/development-02.md)：部署、餐厅、评价结构和前端阶段。
+- [开发记录03](history/development-03.md)：地图、商户投稿与图片、统一管理员登录及V17审核存储结构；后续开发记录见当前入口development.md。
 - [原站评价核对与旧规划](history/reviews-development-2026-10-29.md)：已归档，仅用于核对来源与历史决定。
 - [需求依据与餐厅阶段过程](history/requirements-history-2026-10-29.md)：原站差异和已完成阶段记录。
 

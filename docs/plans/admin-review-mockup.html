@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>泥电美食地图 · 商户审核设计预览</title>
+  <style>
+    /* 延续现有首页的白底、橙色文字品牌、细分隔线和无阴影内容布局。 */
+    :root { font-family: Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif; color: #25313d; background: #fff; font-synthesis: none; }
+    * { box-sizing: border-box; } body { margin: 0; } button, input, textarea { font: inherit; } button { cursor: pointer; } button, a, input, textarea { outline-offset: 4px; } button:focus-visible, a:focus-visible { outline: 2px solid #ad6f26; }
+    button { border: 0; background: transparent; color: inherit; } a { color: inherit; text-decoration: none; } .muted { color: #89919a; } .small { font-size: 12px; } .orange { color: #c56b16; }
+    .topbar { height: 84px; display: flex; align-items: center; justify-content: space-between; padding: 0 40px; border-bottom: 1px solid #e9ecef; }
+    .brand { display: flex; align-items: baseline; gap: 14px; font-size: 23px; font-weight: 650; letter-spacing: -.4px; } .brand em { font-style: normal; font-size: 35px; font-weight: 750; color: #e97913; letter-spacing: -1px; }
+    .brand-label { border-left: 1px solid #e1e5e8; padding-left: 20px; margin-left: 10px; font-size: 13px; color: #78818b; font-weight: 400; letter-spacing: 0; }
+    .account { display: flex; align-items: center; gap: 24px; font-size: 12px; } .preview { color: #9b6b35; background: #fbf5ec; border-radius: 4px; padding: 6px 9px; } .avatar { display: inline-grid; place-items: center; border-radius: 50%; background: #f3f1ec; width: 30px; height: 30px; color: #8b7151; margin-right: 8px; }
+    .shell { display: grid; grid-template-columns: 204px minmax(0, 1fr); min-height: calc(100vh - 84px); } .sidebar { border-right: 1px solid #eceef0; padding: 36px 18px; display: flex; flex-direction: column; gap: 8px; } .nav-label { font-size: 10px; color: #929aa3; letter-spacing: 2px; margin: 0 16px 12px; } .nav-item { display: flex; align-items: center; gap: 12px; padding: 13px 15px; border-radius: 6px; font-size: 13px; text-align: left; } .nav-item svg { width: 18px; height: 18px; stroke-width: 1.5; } .nav-item.active { background: #fcf4e8; color: #bd6816; font-weight: 600; } .nav-item .count { margin-left: auto; font-size: 11px; } .nav-item:disabled { cursor: default; color: #a1a8af; } .later { font-size: 9px; margin-left: auto; color: #a8aeb4; } .sidebar-bottom { margin-top: auto; padding: 28px 15px 0; font-size: 11px; line-height: 1.9; color: #959ca4; }
+    main { padding: 32px 38px 26px; min-width: 0; max-width: 1600px; } .breadcrumb { font-size: 11px; color: #939ba3; margin-bottom: 21px; } .breadcrumb span { margin: 0 9px; color: #c3c7cb; } .page-head { display: flex; align-items: end; justify-content: space-between; gap: 20px; } h1 { margin: 0 0 9px; font-size: 27px; font-weight: 650; letter-spacing: -.7px; } .page-head p { margin: 0; color: #818a94; font-size: 12px; } .queue-count { color: #87909a; font-size: 12px; padding-bottom: 3px; } .queue-count b { font-size: 24px; font-weight: 550; color: #bd6816; margin-right: 5px; }
+    .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 29px; border-bottom: 1px solid #e8ebee; } .tabs { display: flex; gap: 28px; } .tab { position: relative; padding: 0 0 16px; font-size: 13px; color: #85909a; white-space: nowrap; } .tab.active { color: #b96616; font-weight: 600; } .tab.active:after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 2px; background: #e48a28; } .tab span { font-size: 11px; margin-left: 6px; } .search { display: flex; align-items: center; background: #f6f7f8; padding: 8px 12px; border-radius: 5px; margin-bottom: 10px; color: #9aa2ab; } .search input { width: 190px; border: 0; outline: 0; background: transparent; font-size: 11px; margin-left: 8px; color: #46515e; }
+    .workspace { display: grid; grid-template-columns: 286px minmax(0, 1fr); margin-top: 23px; } .queue { padding-right: 23px; border-right: 1px solid #e9ecef; } .queue-title { display: flex; justify-content: space-between; font-size: 10px; color: #949ca4; margin: 0 0 15px; } .request { width: 100%; text-align: left; padding: 17px 15px; border: 1px solid transparent; border-bottom-color: #edf0f2; border-radius: 5px; margin-bottom: 7px; } .request.selected { border-color: #efdbbd; background: #fdf9f2; } .request:hover { background: #faf8f4; } .request-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; } .pill { display: inline-block; background: #f4f1eb; color: #9c7548; border-radius: 4px; padding: 4px 6px; font-size: 10px; } .pill.new { background: #edf4ee; color: #66826e; } .request strong { display: block; font-size: 13px; font-weight: 600; margin-bottom: 9px; } .request p { color: #87909a; font-size: 11px; line-height: 1.7; margin: 0 0 14px; } .request-foot { display: flex; justify-content: space-between; color: #929ba3; font-size: 10px; } .queue-end { font-size: 10px; color: #a0a6ad; text-align: center; margin-top: 24px; }
+    .detail { padding-left: 30px; min-width: 0; } .detail-top { display: flex; align-items: center; gap: 9px; margin-bottom: 11px; } .request-id { font-size: 10px; color: #a1a8ae; margin-left: auto; } h2 { font-size: 20px; font-weight: 650; letter-spacing: -.5px; margin: 0 0 11px; } .meta { font-size: 10px; color: #929aa3; display: flex; gap: 14px; flex-wrap: wrap; } .intro { display: flex; align-items: center; gap: 9px; background: #faf7f1; border-radius: 5px; color: #9a7e59; font-size: 11px; padding: 11px 13px; margin: 21px 0 23px; }
+    .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; } h3 { font-size: 13px; font-weight: 600; margin: 0; } .section-head span { font-size: 10px; color: #919aa4; } .legend { display: inline-block; width: 6px; height: 6px; background: #dfac65; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+    .comparison { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; } th { font-weight: 400; color: #959da6; text-align: left; background: #f7f8f9; padding: 10px; } th:first-child { width: 85px; } td { padding: 13px 10px; border-bottom: 1px solid #edf0f2; line-height: 1.65; vertical-align: top; overflow-wrap: anywhere; } td:first-child { color: #8a939d; } td:nth-child(2) { color: #818b96; } .changed { background: #fffbf3; color: #ab641d; } .change-tag { display: inline-block; border: 1px solid #eddfc8; font-size: 9px; border-radius: 3px; padding: 0 4px; margin-left: 7px; color: #b57b34; } .tag { display: inline-block; background: #f4f5f5; border-radius: 3px; margin: 0 4px 2px 0; padding: 1px 5px; color: #7b858e; font-size: 10px; } .changed .tag { background: #f6ecdc; color: #a37031; }
+    .photos-section { margin-top: 25px; } .photos { display: flex; gap: 10px; } .photo { width: 105px; height: 85px; border: 1px dashed #dcd6ca; background: #f8f6f1; border-radius: 5px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; color: #a39b8b; font-size: 10px; } .photo svg { width: 26px; height: 26px; stroke-width: 1.2; } .photo:hover { border-color: #bb8e52; } .photo-note { color: #a3a9af; font-size: 10px; margin-top: 10px; }
+    .review-actions { margin-top: 25px; padding-top: 19px; border-top: 1px solid #e9ecef; display: flex; align-items: center; justify-content: space-between; gap: 10px; } .action-note { font-size: 10px; color: #949da5; line-height: 1.8; } .buttons { display: flex; gap: 9px; flex-shrink: 0; } .btn { border: 1px solid #e0e4e7; border-radius: 5px; padding: 10px 15px; font-size: 11px; background: #fff; } .btn.primary { background: #e98a20; border-color: #e98a20; color: #fff; } .btn:hover { filter: brightness(.97); } footer { margin-top: 26px; color: #a6adb4; font-size: 10px; text-align: right; }
+    dialog { border: 1px solid #e7e4dd; border-radius: 10px; padding: 28px; max-width: 420px; width: calc(100% - 36px); color: #34404b; } dialog::backdrop { background: #25313d55; } dialog h2 { font-size: 19px; } dialog p { font-size: 12px; color: #818a94; line-height: 1.9; } dialog textarea { width: 100%; border: 1px solid #e0e4e7; border-radius: 5px; padding: 12px; min-height: 85px; font-size: 12px; margin: 8px 0 18px; resize: vertical; } dialog .buttons { justify-content: end; } .empty { padding: 40px 10px; font-size: 12px; color: #929aa3; text-align: center; }
+    @media(min-width:1500px) { .workspace { grid-template-columns: 310px minmax(0, 1fr); } main { padding-left: 48px; padding-right: 48px; } td { padding-top: 16px; padding-bottom: 16px; } }
+    /* 小屏改为上下阅读，保留对比列与按钮；示意交互不依赖管理接口。 */
+    @media(max-width:1100px) { .shell { grid-template-columns: 165px minmax(0,1fr); } .sidebar { padding: 30px 10px; } main { padding: 28px 24px; } .workspace { grid-template-columns: 230px minmax(0,1fr); } .queue { padding-right: 15px; } .detail { padding-left: 20px; } .brand-label { display: none; } .review-actions { align-items: start; flex-direction: column; } }
+    @media(max-width:760px) { .topbar { height: 70px; padding: 0 18px; } .brand { gap: 8px; font-size: 17px; } .brand em { font-size: 27px; } .account { gap: 12px; } .account .identity, .account a { display: none; } .preview { font-size: 9px; } .shell { display: block; } .sidebar { padding: 9px 16px; border-right: 0; border-bottom: 1px solid #eceef0; flex-direction: row; overflow: auto; gap: 0; } .sidebar .nav-label, .sidebar-bottom, .later { display: none; } .nav-item { white-space: nowrap; padding: 10px; font-size: 11px; gap: 5px; } .nav-item svg { display: none; } .nav-item .count { margin-left: 5px; } main { padding: 24px 18px; } .breadcrumb { margin-bottom: 17px; } h1 { font-size: 24px; } .page-head p { font-size: 10px; line-height: 1.8; max-width: 245px; } .queue-count { white-space: nowrap; font-size: 10px; } .toolbar { flex-wrap: wrap; margin-top: 24px; } .tabs { gap: 24px; } .search { width: 100%; order: -1; margin-bottom: 16px; } .search input { width: 100%; } .workspace { display: block; } .queue { border: 0; padding: 0 0 20px; } .queue-title { margin-bottom: 12px; } .request { padding: 12px; } .request:not(.selected) { display: none; } .request p, .queue-end { display: none; } .request-top { margin-bottom: 8px; } .request strong { margin-bottom: 12px; } .detail { padding: 21px 0 0; border-top: 1px solid #e9ecef; } .intro { font-size: 10px; line-height: 1.8; } th:first-child { width: 60px; } th, td { padding: 11px 6px; font-size: 10px; } .change-tag { margin-left: 0; } .review-actions { flex-direction: column; align-items: stretch; } .buttons { justify-content: end; } footer { text-align: center; line-height: 1.8; } }
+  </style>
+</head>
+<body>
+  <!-- 本文件仅为设计稿，全部记录均为静态样例，不读取身份或调用业务 API。 -->
+  <svg style="display:none" xmlns="http://www.w3.org/2000/svg"><defs>
+    <symbol id="list" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2h6v2M9 10h6M9 14h6M9 18h4"/></symbol>
+    <symbol id="shop" viewBox="0 0 24 24"><path d="M4 10v10h16V10M3 10l2-6h14l2 6M3 10c0 4 5 4 5 0 0 4 8 4 8 0 0 4 5 4 5 0M9 20v-6h6v6"/></symbol>
+    <symbol id="chat" viewBox="0 0 24 24"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 3v-3H3V6a2 2 0 0 1 2-2Z M7 9h10M7 13h7"/></symbol>
+    <symbol id="history" viewBox="0 0 24 24"><path d="M4 7a9 9 0 1 1-1 9M3 3v5h5M12 7v6l4 2"/></symbol>
+    <symbol id="photo" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m4 18 6-6 4 4 3-3 4 4"/></symbol>
+  </defs></svg>
+  <header class="topbar"><a class="brand" href="http://localhost:5173/"><em>泥电</em>美食地图<span class="brand-label">管理工作台</span></a><div class="account"><span class="preview">设计预览 · 示例数据</span><a href="http://localhost:5173/">返回前台 ↗</a><span class="identity"><span class="avatar">管</span>管理员</span></div></header>
+  <div class="shell">
+    <aside class="sidebar"><p class="nav-label">内容管理</p><button class="nav-item active"><svg fill="none" stroke="currentColor"><use href="#list"/></svg>商户审核<span class="count">3</span></button><button class="nav-item" disabled><svg fill="none" stroke="currentColor"><use href="#shop"/></svg>商户管理<span class="later">后续</span></button><button class="nav-item" disabled><svg fill="none" stroke="currentColor"><use href="#chat"/></svg>点评管理<span class="later">后续</span></button><button class="nav-item" disabled><svg fill="none" stroke="currentColor"><use href="#history"/></svg>操作记录<span class="later">后续</span></button><div class="sidebar-bottom">一起维护校园美食地图<br>让每一份分享都有据可循。</div></aside>
+    <main><div class="breadcrumb">管理工作台<span>/</span>商户审核</div><div class="page-head"><div><h1>商户审核</h1><p>核对同学提交的资料，让可靠的商户信息出现在地图上。</p></div><div class="queue-count"><b>3</b> 条待处理</div></div>
+      <div class="toolbar"><div class="tabs"><button class="tab active" data-tab="pending">待审核<span>3</span></button><button class="tab" data-tab="approved">已通过<span>1</span></button><button class="tab" data-tab="rejected">已拒绝<span>1</span></button></div><label class="search"><span>⌕</span><input aria-label="搜索申请" placeholder="搜索商户名称 / 申请编号"></label></div>
+      <div class="workspace"><section class="queue" aria-label="申请列表"><div class="queue-title"><span id="queue-label">待审核 · 3 条</span><span>最早提交优先 ↓</span></div><div id="requests"></div><div class="queue-end">已显示全部示例申请</div></section>
+        <article class="detail"><div class="detail-top"><span class="pill" id="detail-type">资料纠错</span><span class="small orange" id="detail-status">· 待审核</span><span class="request-id" id="detail-id">申请 #CR20261103001</span></div><h2 id="detail-name">银杏小馆（清水河店）</h2><div class="meta"><span id="detail-user">提交人：小林同学</span><span>2026-11-03 09:42</span><span id="detail-target">现有商户 #1024</span></div><div class="intro" id="intro"><span>ⓘ</span>本次提交仅为待审申请，通过后才会更新公开资料。</div>
+          <div class="section-head"><h3>资料核对</h3><span><i class="legend"></i><span id="change-caption">3 项变更已标出</span></span></div>
+          <table class="comparison"><thead><tr><th>资料项</th><th>当前公开资料</th><th>本次提交</th></tr></thead><tbody id="comparison"></tbody></table>
+          <section class="photos-section"><div class="section-head"><h3>提交的图片 <span class="muted small">/ 2 张</span></h3><span>点击查看大图</span></div><div class="photos"><button class="photo" data-photo="门店外观"><svg fill="none" stroke="currentColor"><use href="#shop"/></svg>门店外观占位</button><button class="photo" data-photo="店内环境"><svg fill="none" stroke="currentColor"><use href="#photo"/></svg>店内环境占位</button></div><p class="photo-note">图片占位仅示意布局；实际图片需登录并具有审核权限后查看。</p></section>
+          <div class="review-actions"><div class="action-note" id="action-note">请核对门店地址与图片内容<br>处理结果将记录审核人和审核时间</div><div class="buttons" id="review-buttons"><button class="btn" data-action="reject">拒绝申请</button><button class="btn primary" data-action="approve">通过并生效&nbsp; →</button></div></div>
+        </article>
+      </div><footer>管理端设计稿 v1 · 全部内容均为示例，操作不会写入实际数据</footer>
+    </main>
+  </div>
+  <dialog id="confirm"><h2 id="dialog-title"></h2><p id="dialog-copy"></p><textarea id="reason" aria-label="拒绝原因" placeholder="填写拒绝原因，方便提交人了解需要补充的内容" hidden></textarea><div class="buttons"><button class="btn" id="cancel">取消</button><button class="btn primary" id="confirm-button">完成演示</button></div></dialog>
+  <script>
+    // 演示状态只保存在内存中，刷新复原；审核按钮不发送网络请求。
+    const items = [
+      { id: 'CR20261103001', name: '银杏小馆（清水河店）', type: '资料纠错', user: '小林同学', time: '09:42', text: '补充详细地址、营业时间和门店照片', status: 'pending', fresh: false },
+      { id: 'CR20261103002', name: '巷口手工面', type: '新店投稿', user: '今天吃什么', time: '10:06', text: '新发现的一家面馆，补充门店与位置', status: 'pending', fresh: true },
+      { id: 'CR20261103003', name: '一碗热汤', type: '资料纠错', user: '路过的同学', time: '10:18', text: '更新人均消费与堂食信息', status: 'pending', fresh: false },
+      { id: 'CR20261102008', name: '梧桐小厨', type: '新店投稿', user: '食堂观察员', time: '昨天', text: '已核对地址，申请通过', status: 'approved', fresh: true },
+      { id: 'CR20261102006', name: '街角咖啡', type: '资料纠错', user: '同学甲', time: '昨天', text: '拒绝原因：提交地址与门店照片不一致', status: 'rejected', fresh: false },
+    ];
+    let tab = 'pending', selected = items[0], action = '';
+    const $ = (selector) => document.querySelector(selector);
+    const statusNames = { pending: '待审核', approved: '已通过', rejected: '已拒绝' };
+    function renderQueue() {
+      const matching = items.filter(item => item.status === tab && (item.name.includes($('.search input').value) || item.id.includes($('.search input').value)));
+      $('#queue-label').textContent = `${statusNames[tab]} · ${matching.length} 条`;
+      $('#requests').replaceChildren();
+      matching.forEach(item => {
+        const button = document.createElement('button');
+        button.className = `request ${item === selected ? 'selected' : ''}`;
+        button.innerHTML = `<div class="request-top"><span class="pill ${item.fresh ? 'new' : ''}">${item.type}</span><span class="muted small">${item.time}</span></div><strong>${item.name}</strong><p>${item.text}</p><div class="request-foot"><span>${item.user}</span><span>2 张图片 · →</span></div>`;
+        button.addEventListener('click', () => { selected = item; renderQueue(); renderDetail(); });
+        $('#requests').append(button);
+      });
+      if (!matching.length) $('#requests').innerHTML = '<p class="empty">没有匹配的示例申请</p>';
+    }
+    function renderDetail() {
+      $('#detail-name').textContent = selected.name;
+      $('#detail-id').textContent = `申请 #${selected.id}`;
+      $('#detail-user').textContent = `提交人：${selected.user}`;
+      $('#detail-type').textContent = selected.type;
+      $('#detail-status').textContent = `· ${statusNames[selected.status]}`;
+      $('#detail-target').textContent = selected.fresh ? '新商户 · 尚未公开' : '现有商户 #1024';
+      $('#change-caption').textContent = selected.fresh ? '新商户资料' : '3 项变更已标出';
+      $('#intro').textContent = selected.status === 'pending' ? 'ⓘ  本次提交仅为待审申请，通过后才会更新公开资料。' : `ⓘ  示例处理结果：${statusNames[selected.status]}。${selected.status === 'rejected' ? '地址与门店照片不一致。' : '资料已在示例中生效。'}`;
+      const rows = [['商户名称', selected.name, selected.name], ['美食品类', '川菜', selected.fresh ? '面馆' : '川菜'], ['详细地址', '清水河校区西门附近', '清水河校区西门外 · 银杏路 16 号'], ['人均消费', '¥25', '¥25'], ['营业时间', '未填写', '10:30–21:00'], ['商户标签', '家常菜', '家常菜 · 可堂食']];
+      $('#comparison').replaceChildren();
+      rows.forEach(([label, before, after], index) => {
+        const changed = selected.fresh || [2, 4, 5].includes(index), row = document.createElement('tr');
+        [label, selected.fresh ? '—' : before, after].forEach((value, column) => {
+          const cell = document.createElement('td'); cell.textContent = value;
+          if (column === 2 && changed) cell.className = 'changed';
+          row.append(cell);
+        });
+        $('#comparison').append(row);
+      });
+      $('#review-buttons').hidden = selected.status !== 'pending';
+      $('#review-buttons').style.display = selected.status === 'pending' ? 'flex' : 'none';
+      $('#action-note').textContent = selected.status === 'pending' ? '请核对门店地址与图片内容，处理结果将留存记录' : '示例处理人：管理员 · 2026-11-03 10:30';
+    }
+    document.querySelectorAll('[data-tab]').forEach(button => button.addEventListener('click', () => {
+      tab = button.dataset.tab; selected = items.find(item => item.status === tab);
+      document.querySelectorAll('[data-tab]').forEach(node => node.classList.toggle('active', node === button));
+      renderQueue(); renderDetail();
+    }));
+    $('.search input').addEventListener('input', renderQueue);
+    document.querySelectorAll('[data-action]').forEach(button => button.addEventListener('click', () => {
+      action = button.dataset.action; $('#dialog-title').textContent = action === 'approve' ? '通过这份申请？' : '拒绝这份申请？';
+      $('#dialog-copy').textContent = action === 'approve' ? `「${selected.name}」的资料将在正式功能中公开生效。当前仅演示确认流程，不会修改实际商户。` : '正式功能中将保存拒绝原因及审核记录。当前仅为交互示意。';
+      $('#reason').hidden = action !== 'reject'; $('#reason').value = ''; $('#reason').setCustomValidity(''); $('#confirm-button').textContent = '完成演示'; $('#confirm').showModal();
+    }));
+    document.querySelectorAll('[data-photo]').forEach(button => button.addEventListener('click', () => {
+      action = 'photo'; $('#dialog-title').textContent = button.dataset.photo; $('#dialog-copy').textContent = '此处预留图片大图预览。设计稿使用占位，不读取真实待审图片。'; $('#reason').hidden = true; $('#confirm-button').textContent = '关闭'; $('#confirm').showModal();
+    }));
+    $('#cancel').addEventListener('click', () => $('#confirm').close());
+    $('#confirm-button').addEventListener('click', () => {
+      if (action === 'reject' && !$('#reason').value.trim()) { $('#reason').setCustomValidity('请填写示例拒绝原因'); $('#reason').reportValidity(); return; }
+      $('#confirm').close();
+    });
+    $('#reason').addEventListener('input', () => $('#reason').setCustomValidity(''));
+    renderQueue(); renderDetail();
+  </script>
+</body>
+</html>

@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 public class RestaurantReadService {
     private final RestaurantCatalogMapper mapper;
+    private final RestaurantPhotoService albums;
 
     /** 面向其他模块的只读可见性校验，不初始化统计、不取得写锁。 */
     public void requireVisible(long id) {
@@ -54,8 +55,13 @@ public class RestaurantReadService {
         long total = mapper.countVisible(query);
         List<RestaurantEntity> rows = query.getOffset() >= total ? List.of() : mapper.selectVisiblePage(query);
         Map<Long, List<String>> tags = tagsFor(rows);
+        var covers = albums.covers(rows.stream().map(RestaurantEntity::getId).toList());
         RestaurantPageVo page = new RestaurantPageVo();
-        page.setRecords(rows.stream().map(row -> toVo(row, tags.getOrDefault(row.getId(), List.of()))).toList());
+        page.setRecords(rows.stream().map(row -> {
+            var result = toVo(row, tags.getOrDefault(row.getId(), List.of()));
+            result.setCoverPhoto(covers.get(row.getId()));
+            return result;
+        }).toList());
         page.setTotal(total);
         page.setPage(query.getPage());
         page.setPageSize(query.getPageSize());
@@ -89,7 +95,9 @@ public class RestaurantReadService {
         long value = RestaurantIdentifiers.id(id);
         RestaurantEntity row = mapper.selectVisibleById(value);
         if (row == null) throw new BusinessException(RestaurantErrorCode.NOT_FOUND);
-        return toVo(row, tagsFor(List.of(row)).getOrDefault(row.getId(), List.of()));
+        var result = toVo(row, tagsFor(List.of(row)).getOrDefault(row.getId(), List.of()));
+        result.setCoverPhoto(albums.covers(List.of(row.getId())).get(row.getId()));
+        return result;
     }
 
     private Map<Long, List<String>> tagsFor(List<RestaurantEntity> rows) {

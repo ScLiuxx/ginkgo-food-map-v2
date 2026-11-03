@@ -11,9 +11,11 @@ import org.springframework.http.HttpStatus;
 public enum RestaurantErrorCode implements ErrorCode {
     INVALID_ID("RESTAURANT_INVALID_ID", HttpStatus.BAD_REQUEST, "餐厅ID格式错误"),
     NOT_FOUND("RESTAURANT_NOT_FOUND", HttpStatus.NOT_FOUND, "餐厅不存在或不可访问"),
+    REQUEST_NOT_FOUND("RESTAURANT_REQUEST_NOT_FOUND", HttpStatus.NOT_FOUND, "商户申请不存在"),
+    PHOTO_NOT_FOUND("RESTAURANT_PHOTO_NOT_FOUND", HttpStatus.NOT_FOUND, "商户相册图片不存在或不可访问"),
     INVALID_INPUT("RESTAURANT_INVALID_INPUT", HttpStatus.BAD_REQUEST, "餐厅信息不符合保存规则"),
     CATEGORY_UNAVAILABLE("RESTAURANT_CATEGORY_UNAVAILABLE", HttpStatus.BAD_REQUEST, "分类不存在或已停用"),
-    FORBIDDEN("RESTAURANT_FORBIDDEN", HttpStatus.FORBIDDEN, "只能管理自己创建的餐厅"),
+    FORBIDDEN("RESTAURANT_FORBIDDEN", HttpStatus.FORBIDDEN, "仅管理员可维护正式餐厅资料"),
     STATE_CONFLICT("RESTAURANT_STATE_CONFLICT", HttpStatus.CONFLICT, "餐厅当前状态不支持此操作");
 
     private final String code;

@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * 餐厅写入应用服务。归属来自认证模块，角色由安全链实时加载；所有公开方法均要求认证。
+ * 餐厅写入应用服务。正式资料仅管理员可维护；普通投稿仅复用输入校验。
  * 主表与标签在同一事务更新；主行锁串行化同店写入，最后成功保存的完整内容生效。
  */
 @Service
@@ -33,19 +33,22 @@ public class RestaurantWriteService {
     private final RestaurantWriteMapper mapper;
     private final CurrentActorService actors;
     private final Validator validator;
+    private final RestaurantPhotoService albums;
 
-    /** 只有创建者/管理员可获取管理资料；删除记录只供管理员管理，公开详情仍隐藏。 */
+    /** 仅管理员可获取管理资料，含删除记录；公开详情仍隐藏已删除商户。 */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    @PreAuthorize("hasRole('ADMIN')")
     public RestaurantManagementVo management(String id) {
-        var actor = actors.requireActor();
+        var actor = requireAdministrator();
         var row = mapper.selectManagementById(RestaurantIdentifiers.id(id));
         requireAccessible(row, actor);
         return managementVo(row);
     }
 
-    /** 登录账号创建真实归属记录；不开放历史导入、无位置发布或客户端指定创建者。 */
+    /** 管理员创建正式记录；不开放历史导入、无位置发布或客户端指定创建者。 */
+    @PreAuthorize("hasRole('ADMIN')")
     public RestaurantManagementVo create(RestaurantSaveRequest request) {
-        var actor = actors.requireActor();
+        var actor = requireAdministrator();
         var row = normalize(request);
         requireCategory(row.getCategoryCode(), null);
         var tags = normalizeTags(request.getTags());
@@ -57,8 +60,9 @@ public class RestaurantWriteService {
     }
 
     /** PUT全量替换业务字段及标签，来源/创建者保持原值；任何失败都回滚主表与标签。 */
+    @PreAuthorize("hasRole('ADMIN')")
     public RestaurantManagementVo update(String id, RestaurantSaveRequest request) {
-        var actor = actors.requireActor();
+        var actor = requireAdministrator();
         var replacement = normalize(request);
         var current = lockAccessible(RestaurantIdentifiers.id(id), actor);
         requireActive(current);
@@ -72,8 +76,9 @@ public class RestaurantWriteService {
     }
 
     /** 删除只更改父状态，保留标签；重复删除返回404/409，不重复修改删除元数据。 */
+    @PreAuthorize("hasRole('ADMIN')")
     public RestaurantManagementVo delete(String id) {
-        var actor = actors.requireActor();
+        var actor = requireAdministrator();
         var current = lockAccessible(RestaurantIdentifiers.id(id), actor);
         requireActive(current);
         if (mapper.softDeleteCurrent(current.getId(), actor.getUserId(), actor.isAdministrator()) != 1) conflict();
@@ -94,12 +99,24 @@ public class RestaurantWriteService {
 
     /** 纠错共用现有字段、分类及标签校验，只规范化申请数据，不修改正式商户。 */
     public void validateChange(RestaurantSaveRequest request, String currentCategory) {
+        normalizeChange(request);
+        requireCategory(request.getCategoryCode(), currentCategory);
+    }
+
+    /** 审核重试仅规范化业务输入，不重新判断后来可能被停用的分类；不赋予任何正式写权限。 */
+    public void normalizeChange(RestaurantSaveRequest request) {
         var row = normalize(request);
-        requireCategory(row.getCategoryCode(), currentCategory);
         request.setName(row.getName());
         request.setAddress(row.getAddress());
         request.setPricePerPerson(row.getPricePerPerson() == null ? null : BigDecimal.valueOf(row.getPricePerPerson()));
         request.setTags(normalizeTags(request.getTags()));
+    }
+
+    /** 普通投稿人只能提交申请；即使内部直接调用服务，也不能按created_by绕过审核修改公开资料。 */
+    private AuthenticatedActor requireAdministrator() {
+        var actor = actors.requireActor();
+        if (!actor.isAdministrator()) throw new BusinessException(RestaurantErrorCode.FORBIDDEN);
+        return actor;
     }
 
     private RestaurantManagementEntity lockAccessible(long id, AuthenticatedActor actor) {
@@ -132,6 +149,7 @@ public class RestaurantWriteService {
     private RestaurantManagementVo managementVo(RestaurantManagementEntity row) {
         var result = new RestaurantManagementVo();
         result.setRestaurant(RestaurantReadService.toVo(row, mapper.selectTags(row.getId())));
+        result.getRestaurant().setCoverPhoto(albums.covers(List.of(row.getId())).get(row.getId()));
         result.setDeleted(row.getDeletedAt() != null);
         return result;
     }
@@ -140,6 +158,12 @@ public class RestaurantWriteService {
     private RestaurantManagementEntity normalize(RestaurantSaveRequest request) {
         if (request == null || !validator.validate(request).isEmpty()) invalid("请检查必填项、编码、位置确认和标签数量");
         var row = new RestaurantManagementEntity();
+        // 审核协议额外包含类型/用餐方式；直接维护旧协议不带这些字段时仍保留已有值。
+        if (request instanceof com.ginkgo.foodmap.restaurant.dto.RestaurantApproveRequest approved) {
+            row.setRestaurantType(approved.getRestaurantType());
+            row.setSupportsDineIn(approved.getSupportsDineIn());
+            row.setSupportsDelivery(approved.getSupportsDelivery());
+        }
         row.setName(text(request.getName(), 40, false));
         row.setAddress(text(request.getAddress(), 80, true));
         row.setCategoryCode(request.getCategoryCode());

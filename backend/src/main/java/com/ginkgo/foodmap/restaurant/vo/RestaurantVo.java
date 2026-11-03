@@ -18,6 +18,8 @@ public class RestaurantVo {
     private String restaurantType;
     private Boolean supportsDineIn;
     private Boolean supportsDelivery;
+    /** 随目录批量返回正式相册首图；无已发布封面为null，不用点评图片补造。 */
+    private RestaurantPhotoViews.Item coverPhoto;
 
     private String categoryName;
     private Integer pricePerPerson;

@@ -12,6 +12,7 @@ const auth = useLoginStore()
 const resetUsername = consumeResetLogin()
 const form = reactive({ username: resetUsername ?? '', password: '' })
 const errors = reactive({ username: '', password: '' })
+let active = true
 
 function checkField(field: 'username' | 'password') {
   errors[field] = (field === 'username' ? form.username.trim() : form.password)
@@ -29,13 +30,19 @@ auth.clearError()
 
 /** 密码只留在表单内，完成提交或离开页面后清除，绝不规范化密码中的空格。 */
 async function handleSubmit() {
+  if (auth.loggingIn || auth.restoring) return
   auth.clearError()
   checkField('username')
   checkField('password')
   if (errors.username || errors.password) return
   const success = await auth.submit({ username: form.username.trim(), password: form.password })
   form.password = ''
-  if (success) {
+  if (success && active) {
+    // 管理账号专用工作台，管理员优先于普通回跳；客户端不能自报角色或跳转到外部地址。
+    if (auth.isAdministrator) {
+      await router.replace('/admin/reviews')
+      return
+    }
     // 只允许餐厅路径和首页写评标记；外部URL、协议相对地址和其他查询不能成为跳转目标。
     const target = route.query.redirect
     const safeTarget =
@@ -48,6 +55,7 @@ async function handleSubmit() {
 }
 
 onBeforeUnmount(() => {
+  active = false
   form.password = ''
 })
 </script>

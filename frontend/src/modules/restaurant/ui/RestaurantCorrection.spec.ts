@@ -14,6 +14,12 @@ import RestaurantCorrection from './RestaurantCorrection.vue'
 import { uploadImage, cancelImage } from '@/modules/file/api/mediaApi'
 import { compressPhoto } from '@/modules/file/model/photos'
 import { searchAMapPlaces } from '@/modules/map/sdk/places'
+import { fetchRestaurantAlbum, fetchRestaurantAlbumImage } from '../api/restaurantAlbumApi'
+
+vi.mock('../api/restaurantAlbumApi', () => ({
+  fetchRestaurantAlbum: vi.fn(),
+  fetchRestaurantAlbumImage: vi.fn(),
+}))
 
 vi.mock('@/modules/file/api/mediaApi', () => ({ uploadImage: vi.fn(), cancelImage: vi.fn() }))
 vi.mock('@/modules/file/model/photos', () => ({ compressPhoto: vi.fn() }))
@@ -43,6 +49,10 @@ describe('商户资料补充与纠错', () => {
       },
     )
     vi.mocked(compressPhoto).mockImplementation(async (file) => file)
+    vi.mocked(fetchRestaurantAlbum).mockResolvedValue({ records: [], nextCursor: null })
+    vi.mocked(fetchRestaurantAlbumImage).mockResolvedValue(
+      new Blob(['jpeg'], { type: 'image/jpeg' }),
+    )
     vi.mocked(uploadImage).mockResolvedValue('101')
     vi.mocked(cancelImage).mockResolvedValue(undefined)
     vi.mocked(fetchCorrectionSource).mockResolvedValue({
@@ -157,6 +167,46 @@ describe('商户资料补充与纠错', () => {
     )
     expect(cancelImage).not.toHaveBeenCalled()
     expect(URL.revokeObjectURL).toHaveBeenCalled()
+  })
+  it('纠错回显已公开照片，旧图不占新增名额也不随photoIds重复提交或清理', async () => {
+    vi.mocked(fetchRestaurantAlbum).mockResolvedValueOnce({
+      records: [{ id: '801', position: 0, cover: true, url: '/api/restaurants/19/photos/801' }],
+      nextCursor: null,
+    })
+    await mount()
+    expect(fetchRestaurantAlbum).toHaveBeenCalledWith('19', null, expect.any(AbortSignal))
+    expect(host.querySelector('.existing-merchant-photos')?.textContent).toContain('当前商户照片')
+    expect(host.querySelector('.existing-merchant-photos img')).not.toBeNull()
+    expect(host.querySelector('.existing-merchant-photos [aria-label^="移除"]')).toBeNull()
+    expect(uploadImage).not.toHaveBeenCalled()
+    expect(cancelImage).not.toHaveBeenCalled()
+    await choosePhoto()
+    await field('我已核对', true)
+    await submit()
+    expect(submitRestaurantCorrection).toHaveBeenCalledWith(
+      '19',
+      expect.objectContaining({ photoIds: ['101'] }),
+      'correction-user',
+    )
+    expect(cancelImage).not.toHaveBeenCalled()
+  })
+  it('只看旧照片并提交文字不上传或取消图片，读取相册失败不阻止资料提交', async () => {
+    vi.mocked(fetchRestaurantAlbum).mockRejectedValueOnce(new Error('相册服务暂不可用'))
+    await mount()
+    expect(host.querySelector('.existing-merchant-photos')?.textContent).toContain(
+      '相册服务暂不可用',
+    )
+    await field('我已核对', true)
+    await submit()
+    expect(submitRestaurantCorrection).toHaveBeenCalledOnce()
+    expect(vi.mocked(submitRestaurantCorrection).mock.calls[0]![1]).not.toHaveProperty('photoIds')
+    expect(uploadImage).not.toHaveBeenCalled()
+    expect(cancelImage).not.toHaveBeenCalled()
+  })
+  it('新店投稿不读取不存在的已有商户相册', async () => {
+    await mount('/restaurants/submit?keyword=新店')
+    expect(host.querySelector('.existing-merchant-photos')).toBeNull()
+    expect(fetchRestaurantAlbum).not.toHaveBeenCalled()
   })
   it('移除和离开时清理未提交图片，上传晚到结果也会被取消', async () => {
     await mount()

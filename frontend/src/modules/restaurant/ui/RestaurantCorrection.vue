@@ -21,6 +21,7 @@ import {
   draftTags,
 } from '../model/restaurantForm'
 import type { RestaurantErrors } from '../model/restaurantForm'
+import RestaurantAlbum from './RestaurantAlbum.vue'
 import {
   readMerchantSubmission,
   type MerchantSubmissionPlace,
@@ -61,6 +62,7 @@ const loading = ref(false),
 const errors = ref<RestaurantErrors>({})
 const receipt = ref('')
 const selectedPlace = ref('')
+const sourceName = ref('')
 const content = computed(() => JSON.stringify([form, extra, photos.value.map((p) => p.url)]))
 const baseline = ref(content.value)
 const dirty = computed(() => content.value !== baseline.value)
@@ -120,6 +122,7 @@ async function load() {
       fetchRestaurantCategories(controller.signal),
     ])
     if (disposed || ticket !== generation) return
+    sourceName.value = row?.name ?? ''
     Object.assign(form, restaurantDraft(row))
     if (props.submission) {
       form.name =
@@ -368,9 +371,17 @@ onBeforeUnmount(() => {
             : errors.locationConfirmed
         }}</small>
       </fieldset>
-      <!-- 预览仅使用本地Object URL；上传文件在申请通过审核前保持私有。 -->
+      <!-- 已公开相册独立只读回显，不进入新上传草稿、五张上限、清理队列或提交photoIds。 -->
+      <fieldset v-if="!submission" class="existing-merchant-photos">
+        <legend>当前商户照片</legend>
+        <p class="intro">
+          以下为已公开的商户照片，可点击查看大图。已有照片无需重复上传；本次新增照片审核通过后追加到相册。
+        </p>
+        <RestaurantAlbum :key="id" :restaurant-id="id" :name="sourceName" />
+      </fieldset>
+      <!-- 新图片使用本地Object URL预览；上传文件在申请通过审核前保持私有。 -->
       <fieldset :disabled="saving">
-        <legend>商户图片</legend>
+        <legend>{{ submission ? '商户图片' : '本次新增图片' }}</legend>
         <input
           ref="photoInput"
           class="photo-input"

@@ -24,6 +24,17 @@ afterEach(() => {
 
 /** 使用真实Axios配置验证查询白名单、路径和模型转换，防止前后端协议漂移。 */
 describe('restaurant HTTP API', () => {
+  it('将随目录返回的正式封面转换为本站地址，无封面保持null', () => {
+    const result = toRestaurantModel({
+      ...responseFixture,
+      coverPhoto: { id: '801', position: 0, cover: true, url: 'https://invalid.example/image.jpg' },
+    })
+    expect(result.coverPhoto).toEqual({
+      id: '801',
+      url: `/api/restaurants/${responseFixture.id}/photos/801`,
+    })
+    expect(toRestaurantModel(responseFixture).coverPhoto).toBeNull()
+  })
   it('filters all legacy pages before pagination and excludes unknown delivery data', async () => {
     const requests: InternalAxiosRequestConfig[] = []
     const signal = new AbortController().signal

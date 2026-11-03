@@ -8,18 +8,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fetchRestaurant } from '../api/restaurantApi'
 import { restaurantFixture } from '../api/restaurant.test-data'
 import RestaurantDetail from './RestaurantDetail.vue'
+import { fetchRestaurantAlbum } from '../api/restaurantAlbumApi'
 
 vi.mock('../api/restaurantApi', () => ({ fetchRestaurant: vi.fn() }))
+vi.mock('../api/restaurantAlbumApi', () => ({
+  fetchRestaurantAlbum: vi.fn(),
+  fetchRestaurantAlbumImage: vi.fn(),
+}))
 // 只模拟发布确认事件，验证详情统计生命周期；真实发布/回复由各自的集成测试覆盖。
 vi.mock('@/modules/review', async () => {
   const { defineComponent, h } = await import('vue')
   return {
-    DetailPhotoGallery: defineComponent({
-      props: { update: { type: Object, required: true }, name: { type: String, required: true } },
-      setup() {
-        return () => h('div', { class: 'test-gallery' })
-      },
-    }),
     ReviewComposer: defineComponent({
       emits: ['published'],
       setup(_, { emit }) {
@@ -56,6 +55,7 @@ describe('restaurant detail API integration', () => {
   beforeEach(async () => {
     vi.resetAllMocks()
     vi.mocked(fetchRestaurant).mockResolvedValue(restaurantFixture)
+    vi.mocked(fetchRestaurantAlbum).mockResolvedValue({ records: [], nextCursor: null })
     currentId.value = restaurantFixture.id
     await router.push('/')
     host = document.createElement('div')
@@ -79,6 +79,12 @@ describe('restaurant detail API integration', () => {
     await mount()
     expect(fetchRestaurant).toHaveBeenCalledWith(restaurantFixture.id, expect.any(AbortSignal))
     expect(host.querySelector('h1')?.textContent).toBe(restaurantFixture.name)
+    expect(fetchRestaurantAlbum).toHaveBeenCalledWith(
+      restaurantFixture.id,
+      null,
+      expect.any(AbortSignal),
+    )
+    expect(host.querySelector('.restaurant-album')?.textContent).toContain('暂无商户照片')
     expect(host.querySelector('.detail-preview')).toBeNull()
     expect(host.querySelector('.detail-extra details')).toBeNull()
     expect(host.querySelector('.detail-tags')?.textContent ?? '').not.toContain('联调模拟')
@@ -321,6 +327,7 @@ describe('restaurant detail API integration', () => {
     expect(host.querySelector('.hero-score strong')?.textContent).toBe('3.5')
     expect(host.querySelector('.aggregate-source')?.textContent).toContain('2 个已评窗口')
     expect(host.querySelectorAll('.window-row')).toHaveLength(3)
+    expect(host.querySelector('.restaurant-album')).not.toBeNull()
     expect(host.querySelector('.score-summary')).toBeNull()
   })
 })

@@ -51,6 +51,8 @@ public class RestaurantChangeService {
     /** 唯一键原子插入或取得旧回执，再锁定核对内容；避免首次并发投稿的检查再插入竞争。 */
     private String save(Long targetId, RestaurantChangeRequest request) {
         var actor = actors.requireActor();
+        // 类型来自服务端调用入口，不接收客户端自报；审核回填新商户ID后也不能改变申请类型。
+        String requestType = targetId == null ? "CREATE" : "UPDATE";
         // ID按long范围校验并保留用户顺序，重复图片会破坏独占绑定，须在写入前拒绝。
         java.util.List<Long> photoIds;
         try { photoIds = request.getPhotoIds().stream().map(Long::parseLong).toList(); }
@@ -63,11 +65,16 @@ public class RestaurantChangeService {
         catch (java.security.NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
         var row = new RestaurantChangeEntity();
         row.setRestaurantId(targetId); row.setSubmittedBy(actor.getUserId());
+        row.setRequestType(requestType);
         row.setClientRequestId(request.getClientRequestId().toString());
         row.setRequestHash(hash); row.setProposedData(payload);
         mapper.insert(row);
         var saved = mapper.findRequest(actor.getUserId(), request.getClientRequestId().toString());
-        if (!Objects.equals(saved.getRestaurantId(), targetId) || !MessageDigest.isEqual(saved.getRequestHash(), hash))
+        // 新店审核后restaurant_id会从NULL变为新ID；只比较原申请类型和原始内容，不把发布结果误判成换目标。
+        // 纠错仍比较原商户ID，防止相同请求编号被复用于另一家店；原始摘要不随管理员修订而更新。
+        boolean sameTarget = "CREATE".equals(requestType) || Objects.equals(saved.getRestaurantId(), targetId);
+        if (!Objects.equals(saved.getRequestType(), requestType) || !sameTarget
+                || !MessageDigest.isEqual(saved.getRequestHash(), hash))
             throw new BusinessException(RestaurantErrorCode.STATE_CONFLICT);
         // insert返回的自增ID不用于判断首次写入：MySQL防重返回旧ID，读取关联才是可靠依据。
         var existingPhotos = mapper.photoIds(saved.getId());

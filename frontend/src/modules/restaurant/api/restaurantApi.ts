@@ -2,9 +2,11 @@ import type { ApiResponse } from '@/shared/api/api.types'
 import { httpClient } from '@/shared/api/httpClient'
 import type { CatalogFilters, RestaurantReadModel } from '../model/restaurant.types'
 import { matchesDiningFilters } from '../model/diningFilters'
+import { restaurantPhotoUrl, type RestaurantAlbumPhoto } from './restaurantAlbumApi'
 
 /** API字段独立于页面模型，保留字符串ID和所有空值，不将未知价格或评分转换为0。 */
 export interface RestaurantResponse {
+  coverPhoto?: RestaurantAlbumPhoto | null
   restaurantType?: RestaurantReadModel['restaurantType']
   supportsDineIn?: boolean | null
   supportsDelivery?: boolean | null
@@ -68,6 +70,9 @@ export interface RestaurantPage<T = RestaurantReadModel> {
 /** 枚举在边界转换，页面不依赖数据库列名；地址空值仅在显示层转为空串。 */
 export function toRestaurantModel(value: RestaurantResponse): RestaurantReadModel {
   return {
+    coverPhoto: value.coverPhoto
+      ? { id: value.coverPhoto.id, url: restaurantPhotoUrl(value.id, value.coverPhoto.id) }
+      : null,
     restaurantType: value.restaurantType,
     supportsDineIn: value.supportsDineIn ?? null,
     supportsDelivery: value.supportsDelivery ?? null,
@@ -247,7 +252,9 @@ export async function submitRestaurantCorrection(
 /** 新店投稿只返回待审申请编号，不能当作正式餐厅ID打开详情。 */
 export async function submitNewRestaurant(input: RestaurantCorrectionInput, token: string) {
   const response = await httpClient.post<ApiResponse<{ id: string; status: 'PENDING' }>>(
-    '/api/restaurant-submissions', input, authenticated(token),
+    '/api/restaurant-submissions',
+    input,
+    authenticated(token),
   )
   return response.data.data
 }

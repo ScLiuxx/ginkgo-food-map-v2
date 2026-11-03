@@ -18,7 +18,8 @@ import static org.mockito.Mockito.*;
 /** 应用服务边界测试：空页不查询标签，ID不截断，公开评分空态保持null。 */
 class RestaurantReadServiceTest {
     private final RestaurantCatalogMapper mapper = mock(RestaurantCatalogMapper.class);
-    private final RestaurantReadService service = new RestaurantReadService(mapper);
+    private final com.ginkgo.foodmap.restaurant.service.RestaurantPhotoService albums = mock(com.ginkgo.foodmap.restaurant.service.RestaurantPhotoService.class);
+    private final RestaurantReadService service = new RestaurantReadService(mapper, albums);
 
     /** 无结果与越界页都返回正确元数据，且不执行无效的IN空集合或额外分页SQL。 */
     @Test
@@ -74,5 +75,22 @@ class RestaurantReadServiceTest {
         assertThat(vo.getReviewCount()).isZero();
         assertThat(vo.getTier()).isEqualTo("none");
         assertThat(vo.getPricePerPerson()).isNull();
+    }
+
+    /** 封面按当前页ID集合批量补齐，不逐条查询，不将无相册商户的null补成其他图片。 */
+    @Test
+    void shouldBatchCoverMetadataForCurrentPage() {
+        var query = new RestaurantListQuery();
+        var first = new RestaurantEntity(); first.setId(1L); first.setName("有图商户");
+        var second = new RestaurantEntity(); second.setId(2L); second.setName("无图商户");
+        var cover = new com.ginkgo.foodmap.restaurant.vo.RestaurantPhotoViews.Item();
+        cover.setId("801"); cover.setPosition(0); cover.setCover(true); cover.setUrl("/api/restaurants/1/photos/801");
+        when(mapper.countVisible(query)).thenReturn(2L);
+        when(mapper.selectVisiblePage(query)).thenReturn(List.of(first, second));
+        when(albums.covers(List.of(1L, 2L))).thenReturn(java.util.Map.of(1L, cover));
+        var result = service.list(query);
+        assertThat(result.getRecords().get(0).getCoverPhoto().getUrl()).isEqualTo("/api/restaurants/1/photos/801");
+        assertThat(result.getRecords().get(1).getCoverPhoto()).isNull();
+        verify(albums, times(1)).covers(List.of(1L, 2L)); verifyNoMoreInteractions(albums);
     }
 }

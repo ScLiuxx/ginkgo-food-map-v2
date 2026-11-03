@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import axios from 'axios'
-import { ReviewComposer, ReviewPanel, DetailPhotoGallery } from '@/modules/review'
-import type { DetailPhotoUpdate } from '@/modules/review'
+import { ReviewComposer, ReviewPanel } from '@/modules/review'
+import RestaurantAlbum from './RestaurantAlbum.vue'
 import { navigationUrl } from '@/modules/map'
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
@@ -43,11 +43,6 @@ const parentLink = computed(() => ({
     windowCategory: typeof route.query.fromCategory === 'string' ? route.query.fromCategory : '',
   },
 }))
-const gallery = ref<DetailPhotoUpdate>({ restaurantId: props.id, state: 'loading', photos: [] })
-/** 图片沿用当前点评页的响应；路由切换时拒绝上一对象晚到的图片。 */
-function updatePhotos(update: DetailPhotoUpdate): void {
-  if (update.restaurantId === props.id) gallery.value = update
-}
 const loading = ref(true)
 const error = ref<string | null>(null)
 let controller: globalThis.AbortController | undefined
@@ -110,7 +105,6 @@ async function loadDetail(): Promise<void> {
   error.value = null
   copyFeedback.value = null
   manualCopyText.value = ''
-  gallery.value = { restaurantId: props.id, state: 'loading', photos: [] }
   failedDishes.value = []
   legacyReviews.value = false
   try {
@@ -194,7 +188,11 @@ function shareRestaurant(): void {
     </nav>
 
     <header class="detail-hero" :class="{ 'canteen-hero': isCanteen }">
-      <DetailPhotoGallery v-if="!isCanteen" :update="gallery" :name="restaurant.name" compact />
+      <RestaurantAlbum
+        :key="restaurant.id"
+        :restaurant-id="restaurant.id"
+        :name="restaurant.name"
+      />
       <div class="detail-heading">
         <div class="hero-topline">
           <h1 id="restaurant-title">{{ restaurant.name }}</h1>
@@ -313,7 +311,6 @@ function shareRestaurant(): void {
         star-scale
         :title="isWindow ? '本窗口点评' : '同学点评'"
         @changed="refreshStatistics"
-        @photos="updatePhotos"
       />
     </section>
     <details

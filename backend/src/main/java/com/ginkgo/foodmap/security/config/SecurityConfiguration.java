@@ -55,8 +55,17 @@ public class SecurityConfiguration {
                 .requestCache(cache -> cache.disable())
                 .httpBasic(basic -> basic.disable()).formLogin(form -> form.disable()).logout(logout -> logout.disable())
                 .authorizeHttpRequests(authorize -> authorize
+                        // 管理命名空间统一要求数据库当前管理员角色，避免仅凭前端入口隐藏授权。
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        // 直接维护正式资料统一收紧到管理员；投稿、纠错等嵌套接口仍按原认证规则执行。
+                        .requestMatchers(HttpMethod.POST, "/api/restaurants", "/api/restaurants/{id}/restore").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/restaurants/{id}").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/restaurants/{id}").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/restaurants/{id}/management").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/api/public/**").permitAll()
                         .requestMatchers(HttpMethod.GET,"/api/reviews/{reviewId}/photos/{position}").permitAll()
+                        // 正式商户相册仅开放明确GET路径，服务逐次验证公开关联及父商户；申请图片仍仅管理员可读。
+                        .requestMatchers(HttpMethod.GET,"/api/restaurants/{id}/photos", "/api/restaurants/{id}/photos/{photoId}").permitAll()
                         // 回复仅公开读取；发布仍要求JWT及有效账号会话。
                         .requestMatchers(HttpMethod.GET,"/api/reviews/{reviewId}/replies").permitAll()
                         // 仅开放主卡列表；历史、本人上下文及管理接口仍保留独立权限边界。

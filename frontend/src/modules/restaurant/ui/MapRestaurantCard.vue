@@ -29,7 +29,11 @@ defineEmits<{ select: [] }>()
     :aria-pressed="selected"
     @click="$emit('select')"
   >
-    <MapRestaurantPhoto v-if="!restaurant.id.startsWith('demo-')" :restaurant-id="restaurant.id" />
+    <MapRestaurantPhoto
+      v-if="!restaurant.id.startsWith('demo-')"
+      :restaurant-id="restaurant.id"
+      :cover-photo="restaurant.coverPhoto"
+    />
     <span v-else class="dish-placeholder" aria-label="示例配图占位"
       ><svg viewBox="0 0 80 80" aria-hidden="true">
         <circle cx="40" cy="41" r="22" />

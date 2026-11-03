@@ -12,12 +12,31 @@ vi.mock('../api/authApi', () => ({ login: vi.fn(), fetchCurrentUser: vi.fn(), lo
 
 /** 在 DOM 中操作真实 Vue 表单，验证输入校验、失败反馈及成功跳转。 */
 describe('login form', () => {
+  it('routes administrator accounts to the workbench instead of ordinary-user return targets', async () => {
+    await router.replace('/login?redirect=/restaurants/new')
+    vi.mocked(login).mockResolvedValue({
+      accessToken: 'test-admin-session',
+      tokenType: 'Bearer',
+      expiresAt: '2099-01-01T00:00:00Z',
+      user: { id: 99, username: 'manager', roles: ['ROLE_USER', 'ROLE_ADMIN'] },
+    })
+    await fillAndSubmit('manager', 'secret-password')
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/admin/reviews'))
+    expect(host.querySelector<HTMLInputElement>('#login-password')?.value).toBe('')
+  })
   let app: App
   let host: HTMLDivElement
   let pinia: ReturnType<typeof createPinia>
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: ['/', '/login', '/register', '/password-reset', '/restaurants/new'].map((path) => ({
+    routes: [
+      '/',
+      '/login',
+      '/register',
+      '/password-reset',
+      '/restaurants/new',
+      '/admin/reviews',
+    ].map((path) => ({
       path,
       component: { template: '<div />' },
     })),
