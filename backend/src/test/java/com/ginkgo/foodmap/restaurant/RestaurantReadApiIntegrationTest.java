@@ -92,7 +92,7 @@ class RestaurantReadApiIntegrationTest {
         insert(107, "百分%_!\\测试", "OTHER", null, "UNKNOWN", null, null, null, "OPERATING");
         insert(9007199254740993L, "Z大ID", "OTHER", null, "UNKNOWN", null, null, null, "OPERATING");
         jdbc.update("UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6), delete_reason_code='SYSTEM' WHERE id=106");
-        jdbc.update("UPDATE restaurants SET source_type='USER', created_by=42, updated_by=43, row_version=7 WHERE id=101");
+        jdbc.update("UPDATE restaurants SET created_by=42, updated_by=43 WHERE id=101");
         jdbc.update("INSERT INTO restaurant_tags(restaurant_id,tag,position) VALUES "
                 + "(101,'招牌',0),(101,'测试搜索',1),(101,'测试组合',2),(102,'测试搜索',0),(106,'仅删除命中',0)");
     }
@@ -252,9 +252,9 @@ class RestaurantReadApiIntegrationTest {
         var result = mvc.perform(get("/api/restaurants/101")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value("101"))
                 .andExpect(jsonPath("$.data.priceKind").value("ESTIMATE"))
-                .andExpect(jsonPath("$.data.sourceType").value("USER"))
+                .andExpect(jsonPath("$.data.sourceType").doesNotExist())
                 .andExpect(jsonPath("$.data.tags.length()").value(3))
-                .andExpect(jsonPath("$.data.distanceKm").value(0.0))
+                .andExpect(jsonPath("$.data.distanceKm").isEmpty())
                 .andExpect(jsonPath("$.data.createdAt").value("2026-10-28T01:02:03.123456Z"))
                 .andReturn();
         var data = json.readTree(result.getResponse().getContentAsString()).get("data");
@@ -340,7 +340,7 @@ class RestaurantReadApiIntegrationTest {
                 .andExpect(jsonPath("$.data.dimensions.value").value(7.5))
                 .andExpect(jsonPath("$.data.dimensions.service").value(6))
                 .andExpect(jsonPath("$.data.dimensions.ambience").value(8.5)).andReturn();
-        var list = mvc.perform(get("/api/restaurants").param("pageSize", "1"))
+        var list = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/restaurants").param("pageSize", "1"))
                 .andExpect(status().isOk()).andReturn();
         assertThat(json.readTree(list.getResponse().getContentAsString()).get("data").get("records").get(0))
                 .isEqualTo(json.readTree(detail.getResponse().getContentAsString()).get("data"));
@@ -533,14 +533,21 @@ class RestaurantReadApiIntegrationTest {
                 .andExpect(jsonPath("$.data.records[0].id").value("102"));
     }
 
-    /** 数量上限之前筛选和稳定排序，不把501个有效点位称为500个。 */
+    /** 点位最多100个，准确返回真实匹配数量；覆盖超限及恰好达到上限的边界。 */
     @Test
     void shouldExposePointTruncationAndApplyCombinedFilters() throws Exception {
-        for(int i=0;i<501;i++) insert(10000+i,"地图"+i,"HOT_POT",30,"EXACT",null,30.7,104.1,"OPERATING");
+        for(int i=0;i<101;i++) insert(10000+i,"地图"+i,"HOT_POT",30,"EXACT",null,30.7,104.1,"OPERATING");
         mvc.perform(get("/api/restaurants/map-points").param("west","104").param("east","104.2")
                 .param("south","30.6").param("north","30.8").param("category","HOT_POT").param("maxPrice","30"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.matchedCount").value(501))
-                .andExpect(jsonPath("$.data.points.length()").value(500)).andExpect(jsonPath("$.data.truncated").value(true));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.matchedCount").value(101))
+                .andExpect(jsonPath("$.data.limit").value(100))
+                .andExpect(jsonPath("$.data.points.length()").value(100)).andExpect(jsonPath("$.data.truncated").value(true));
+        jdbc.update("DELETE FROM restaurants WHERE id=10100");
+        mvc.perform(get("/api/restaurants/map-points").param("west","104").param("east","104.2")
+                .param("south","30.6").param("north","30.8").param("category","HOT_POT").param("maxPrice","30"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.matchedCount").value(100))
+                .andExpect(jsonPath("$.data.returnedCount").value(100))
+                .andExpect(jsonPath("$.data.truncated").value(false));
         mvc.perform(get("/api/restaurants/map-points").param("west","104").param("east","104.2")
                 .param("south","30.6").param("north","30.8").param("maxPrice","29"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.matchedCount").value(0));
@@ -584,10 +591,49 @@ class RestaurantReadApiIntegrationTest {
                 id, reviews, participants, recommended, overall, taste, value, service, ambience);
     }
 
+    /** 好评排序使用推荐比例，区别于综合分；无评分记录排在已计分记录后。 */
+    @Test
+    void shouldSortByRecommendationRate() throws Exception {
+        statistics(101, 10, 10, 5, "90", "90", "90", "90", "90");
+        statistics(102, 2, 2, 2, "14", "14", "14", "14", "14");
+        mvc.perform(get("/api/restaurants").param("sort","recommend"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.records[0].id").value("102"))
+                .andExpect(jsonPath("$.data.records[1].id").value("101"));
+        mvc.perform(get("/api/restaurants").param("sort","score"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.records[0].id").value("101"));
+    }
+
+    /** 用户原点决定全目录排序，不把用户锁在某个校区；未授权距离为空。 */
+    @Test
+    void shouldSortFromUserAndHandleMissingOrInvalidLocation() throws Exception {
+        jdbc.update("UPDATE restaurants SET latitude=30.675789,longitude=104.099671 WHERE id=101");
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/restaurants")
+                        .param("latitude","30.675789").param("longitude","104.099671").param("sort","distance"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(7))
+                .andExpect(jsonPath("$.data.records[0].id").value("101"))
+                .andExpect(jsonPath("$.data.records[0].distanceKm").value(0.0));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/restaurants"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.records[0].distanceKm").isEmpty());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/restaurants").param("latitude","30"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/restaurants").param("latitude","91").param("longitude","104"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/restaurants/map-points")
+                        .param("latitude","30.675789").param("longitude","104.099671").param("maxDistanceMeters","1")
+                        .param("west","104.0").param("east","104.2").param("south","30.6").param("north","30.8"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.matchedCount").value(1));
+    }
+
+    /** 历史查询用例显式提供测试用户位置，继续验证原有距离边界，不依赖隐含校区。 */
+    private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder get(String path) {
+        return org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(path)
+                .param("latitude","30.7544").param("longitude","103.9312");
+    }
+
     private void insert(long id, String name, String category, Integer price, String kind, String address,
                         Double latitude, Double longitude, String businessStatus) {
         jdbc.update("INSERT INTO restaurants(id,name,category_code,price_per_person,price_kind,address,latitude,longitude,"
-                        + "needs_location,business_status,source_type) VALUES (?,?,?,?,?,?,?,?,?,?,'LEGACY_IMPORT')",
+                        + "needs_location,business_status) VALUES (?,?,?,?,?,?,?,?,?,?)",
                 id, name, category, price, kind, address, latitude, longitude, latitude == null, businessStatus);
     }
 

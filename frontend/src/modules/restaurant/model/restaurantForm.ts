@@ -80,7 +80,6 @@ export function restaurantInput(form: RestaurantDraft): RestaurantSaveInput {
     address: form.address.trim() || null,
     latitude: Number(form.latitude),
     longitude: Number(form.longitude),
-    coordinateSystem: 'GCJ02',
     locationConfirmed: true,
     businessStatus: form.businessStatus,
     tags: draftTags(form.tags),

@@ -27,7 +27,7 @@ public interface RestaurantCatalogMapper {
     /** 全局筛选与白名单排序在 LIMIT 之前执行，offset 使用 long。 */
     List<RestaurantEntity> selectVisiblePage(@Param("query") RestaurantListQuery query);
 
-    /** 独立于目录分页读取视口点位；SQL固定最多500条，不接受客户端扩大限额。 */
+    /** 独立于目录分页读取视口点位；最多100条，避免点位过密且不接受客户端扩大限额。 */
     List<RestaurantEntity> selectMapPoints(@Param("query") RestaurantListQuery query);
 
     /** 仅批量读取本页可见餐厅的标签，并再次检查父餐厅未删除。 */

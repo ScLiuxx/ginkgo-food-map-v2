@@ -32,15 +32,15 @@
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO restaurants(name, category_code, price_per_person, price_kind, address, latitude, longitude,
-            coordinate_system, needs_location, business_status, source_type, created_by, updated_by)
+            needs_location, business_status, created_by, updated_by)
         VALUES (#{name}, #{categoryCode}, #{pricePerPerson}, #{priceKind}, #{address}, #{latitude}, #{longitude},
-            #{coordinateSystem}, FALSE, #{businessStatus}, 'USER', #{createdBy}, #{updatedBy})
+            FALSE, #{businessStatus}, #{createdBy}, #{updatedBy})
     </insert>
 
     <update id="updateCurrent">
         UPDATE restaurants SET name=#{row.name}, category_code=#{row.categoryCode},
             price_per_person=#{row.pricePerPerson}, price_kind=#{row.priceKind}, address=#{row.address},
-            latitude=#{row.latitude}, longitude=#{row.longitude}, coordinate_system=#{row.coordinateSystem},
+            latitude=#{row.latitude}, longitude=#{row.longitude},
             needs_location=FALSE, business_status=#{row.businessStatus}, updated_by=#{actor},
             updated_at=CURRENT_TIMESTAMP(6)
         WHERE id=#{row.id} AND deleted_at IS NULL

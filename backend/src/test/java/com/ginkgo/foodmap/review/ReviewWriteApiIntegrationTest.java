@@ -73,7 +73,7 @@ class ReviewWriteApiIntegrationTest {
             jdbc.update("INSERT INTO users(id,username,email,password_hash,email_verified) VALUES(?,?,?,?,TRUE)",id,"reviewer_"+id,"reviewer"+id+"@example.test","test-only");
             jdbc.update("INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code='ROLE_USER'",id);
         }
-        jdbc.update("INSERT INTO restaurants(id,name,category_code,source_type,created_by) VALUES(1,'发布店','OTHER','LEGACY_IMPORT',11),(2,'另一店','OTHER','LEGACY_IMPORT',11)");
+        jdbc.update("INSERT INTO restaurants(id,name,category_code,created_by) VALUES(1,'发布店','OTHER',11),(2,'另一店','OTHER',11)");
         when(sessions.isActive(anyString(),anyLong(),anyLong())).thenReturn(true);
         owner=token(11,false);other=token(22,false);
     }

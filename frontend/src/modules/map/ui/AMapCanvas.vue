@@ -3,7 +3,8 @@ import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { loadAMap } from '../sdk/amap'
 import type { AMapSDK, SDKMap, SDKMarker, SDKBounds } from '../sdk/types'
 import type { MapBounds, MapPoint, MapFocus } from '../api/mapApi'
-import { useMyLocation } from '../model/location'
+import { storeToRefs } from 'pinia'
+import { useUserLocation } from '../model/userLocation.store'
 
 const props = withDefaults(
   defineProps<{
@@ -28,15 +29,21 @@ let markers: SDKMarker[] = []
 let destroyed = false,
   attempt = 0
 let resize: globalThis.ResizeObserver | undefined
-const { locating, location, message: locationMessage, locate } = useMyLocation(() => sdk)
+const userLocation = useUserLocation()
+const { locating, location, message: locationMessage } = storeToRefs(userLocation)
+const locate = userLocation.locate
 let myMarker: SDKMarker | undefined
+let lastLocated: number | undefined
 
 /** 本人位置单独管理，餐厅点位刷新不会清掉蓝点，也不会把蓝点当作餐厅。 */
-watch(location, (position) => {
+watch([location, () => props.points], ([position]) => {
   if (!map || !sdk || destroyed) return
   if (myMarker) map.remove([myMarker])
   myMarker = undefined
   if (!position) return
+  // 点位刷新时仅恢复蓝点，不反复拉回视野。
+  const shouldCenter = !lastLocated || lastLocated !== position.timestamp
+  lastLocated = position.timestamp
   const dot = globalThis.document.createElement('span')
   dot.className = 'amap-my-location'
   dot.setAttribute('role', 'img')
@@ -50,7 +57,7 @@ watch(location, (position) => {
   })
   map.add([myMarker])
   // 使用现有moveend/zoomend -> 防抖视口查询，继续只展示本站数据库里的餐厅。
-  map.setZoomAndCenter(16, position.center)
+  if (shouldCenter) map.setZoomAndCenter(16, position.center)
 })
 
 /** 读取SDK实际视口，经度在前；固定精度避免浮点微动引起相同区域反复查询。 */
@@ -149,7 +156,7 @@ watch(() => props.selected, highlight)
 /** 搜索结果可在当前视口外，主动点击才移动；悬停和后台搜索不抢走用户视角。 */
 function focusResult() {
   if (!destroyed && props.focus && map)
-    map.setZoomAndCenter(16, [props.focus.longitude, props.focus.latitude])
+    map.setZoomAndCenter(props.focus.zoom ?? 16, [props.focus.longitude, props.focus.latitude])
 }
 watch(() => props.focus, focusResult)
 onMounted(() => {
@@ -180,8 +187,8 @@ onUnmounted(() => {
     <div v-if="!error && map" class="amap-controls">
       <button aria-label="放大地图" @click="map?.zoomIn()">＋</button
       ><button aria-label="缩小地图" @click="map?.zoomOut()">−</button
-      ><button class="reset" @click="map?.setZoomAndCenter(14, [103.9312, 30.7544])">
-        ⌖<small>回校区</small>
+      ><button class="reset" @click="map?.setZoomAndCenter(11, [104.02, 30.67])">
+        ⌖<small>总览</small>
       </button>
       <button
         class="reset locate"

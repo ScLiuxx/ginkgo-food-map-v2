@@ -20,7 +20,7 @@ describe('用户主动单次定位', () => {
       timestamp: Date.now(),
     } as GeolocationPosition
     function acquired() {
-      getCurrentPosition.mock.calls[0]![0](position)
+      getCurrentPosition.mock.calls.at(-1)![0](position)
     }
     function converted() {
       convertFrom.mock.calls[0]![2]('complete', {
@@ -77,6 +77,7 @@ describe('用户主动单次定位', () => {
     convertFrom.mock.calls[0]![2]('error', {})
     expect(state.message.value).toContain('转换失败')
     state.locate()
+    acquired()
     await vi.advanceTimersByTimeAsync(20000)
     expect(state.message.value).toContain('超时')
     state.locate()
@@ -94,6 +95,16 @@ describe('用户主动单次定位', () => {
     state.locate()
     expect(state.message.value).toContain('不支持')
     expect(getCurrentPosition).not.toHaveBeenCalled()
+  })
+  it('等待授权超过20秒后，仍接受位置并完成转换', async () => {
+    const { state, acquired, converted } = setup()
+    state.locate()
+    await vi.advanceTimersByTimeAsync(30000)
+    expect(state.locating.value).toBe(true)
+    acquired()
+    converted()
+    expect(state.location.value?.center).toEqual([104.1, 30.675])
+    expect(state.locating.value).toBe(false)
   })
   it('卸载取消计时并忽略迟到定位和转换结果', () => {
     const { state, scope, acquired, converted } = setup()

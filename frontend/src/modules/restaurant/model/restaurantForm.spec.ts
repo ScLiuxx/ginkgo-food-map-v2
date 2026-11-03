@@ -58,7 +58,6 @@ describe('restaurant editor input rules', () => {
       address: null,
       latitude: 30.7544,
       longitude: 103.9312,
-      coordinateSystem: 'GCJ02',
       locationConfirmed: true,
       businessStatus: 'OPERATING',
       tags: ['第一个', '第二个'],

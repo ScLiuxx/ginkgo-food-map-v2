@@ -13,7 +13,6 @@ const catalog = useRestaurantCatalog()
 const filters = computed(() => props.filters ?? catalog.filters)
 const groups = computed(() => [
   { key: 'price', label: '人均消费' },
-  { key: 'distance', label: '距离校区' },
   { key: 'venue', label: props.campusFilters ? '餐厅类型' : '场所类型' },
   { key: 'dining', label: '用餐方式' },
 ])
@@ -21,25 +20,21 @@ const activeGroup = ref('price')
 const content = ref<globalThis.HTMLDivElement>()
 const position = ref<Record<string, string>>({})
 const prices = [20, 30, 50, 100]
-const distances = [500, 1000, 2000, 3000]
 const count = computed(
   () =>
     Number(filters.value.maxPrice !== null) +
-    Number(filters.value.maxDistanceMeters !== null) +
     (props.campusFilters
       ? Number(!!filters.value.restaurantType) + Number(!!filters.value.diningMode)
       : 0),
 )
 const draft = reactive<{
   maxPrice: number | null
-  maxDistanceMeters: number | null
   restaurantType: NonNullable<CatalogFilters['restaurantType']>
   diningMode: NonNullable<CatalogFilters['diningMode']>
 }>({
   restaurantType: '',
   diningMode: '',
   maxPrice: null,
-  maxDistanceMeters: null,
 })
 const dialog = ref<globalThis.HTMLDialogElement>()
 const trigger = ref<globalThis.HTMLButtonElement>()
@@ -90,7 +85,6 @@ function open() {
     restaurantType: filters.value.restaurantType || '',
     diningMode: filters.value.diningMode || '',
     maxPrice: filters.value.maxPrice,
-    maxDistanceMeters: filters.value.maxDistanceMeters,
   })
   trigger.value?.scrollIntoView?.({ block: 'nearest' })
   placeDropdown()
@@ -124,7 +118,8 @@ function close() {
 function apply() {
   Object.assign(filters.value, {
     maxPrice: draft.maxPrice,
-    maxDistanceMeters: draft.maxDistanceMeters,
+    // 已移除距离入口，确认筛选时清除旧会话残留的距离限制。
+    maxDistanceMeters: null,
   })
   // 仅首页开放新条件；保持旧消费者的字段集合，不把占位条件泄漏到地图筛选。
   if (props.campusFilters) {
@@ -138,7 +133,6 @@ function apply() {
 function reset() {
   Object.assign(draft, {
     maxPrice: null,
-    maxDistanceMeters: null,
     restaurantType: '',
     diningMode: '',
   })
@@ -234,30 +228,6 @@ onUnmounted(cleanup)
                 </button>
               </div>
               <p>包含所选金额；已填报金额和估值均可筛选，价格未知的餐厅将排除。</p>
-            </fieldset>
-            <fieldset data-group="distance">
-              <legend>距离校区 · 直线距离</legend>
-              <div class="advanced-choices">
-                <button
-                  type="button"
-                  :aria-pressed="draft.maxDistanceMeters === null"
-                  @click="draft.maxDistanceMeters = null"
-                >
-                  不限
-                </button>
-                <button
-                  v-for="distance in distances"
-                  :key="distance"
-                  type="button"
-                  :aria-pressed="draft.maxDistanceMeters === distance"
-                  @click="draft.maxDistanceMeters = distance"
-                >
-                  {{ distance < 1000 ? `${distance} 米以内` : `${distance / 1000} 公里以内` }}
-                </button>
-              </div>
-              <p>
-                以清水河校区固定参考点计算直线距离，非步行距离。位置缺失或待确认的餐厅将排除，无需定位授权。
-              </p>
             </fieldset>
             <!-- 首页启用兼容筛选；地图暂保留原占位，避免列表与点位使用不同口径。 -->
             <template v-if="campusFilters">

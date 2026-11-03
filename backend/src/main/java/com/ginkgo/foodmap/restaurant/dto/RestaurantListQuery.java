@@ -31,6 +31,17 @@ public class RestaurantListQuery {
     @Pattern(regexp = "(?:[A-Z][A-Z0-9_]{0,31})?", message = "分类编码格式错误")
     private String category = "";
 
+    /** 用户单次授权取得的GCJ-02位置，仅用于本次查询，不写入数据库。 */
+    @DecimalMin("-90") @DecimalMax("90")
+    private BigDecimal latitude;
+    @DecimalMin("-180") @DecimalMax("180")
+    private BigDecimal longitude;
+
+    @AssertTrue(message = "用户经纬度必须同时提供")
+    public boolean isUserLocationValid() {
+        return (latitude == null) == (longitude == null);
+    }
+
     @NotNull
     @Size(max = 6, message = "最多选择6种杯型")
     private List<@NotNull @Pattern(regexp = "bucket|super|large|medium|small|none",
@@ -41,7 +52,7 @@ public class RestaurantListQuery {
     private String view = "all";
 
     @NotNull
-    @Pattern(regexp = "score|taste|value|service|ambience|reviews|price|distance", message = "排序方式错误")
+    @Pattern(regexp = "score|taste|value|service|ambience|reviews|price|distance|recommend", message = "排序方式错误")
     private String sort = "score";
 
     @NotNull
@@ -52,7 +63,7 @@ public class RestaurantListQuery {
     @Digits(integer = 8, fraction = 2, message = "人均上限最多8位整数和2位小数")
     private BigDecimal maxPrice;
 
-    /** 距校区参考点的球面直线距离，单位米；空值不限，不依赖浏览器定位。 */
+    /** 距当前请求用户位置的球面直线距离上限，单位米；空值不限。 */
     @Min(value = 1, message = "距离上限至少1米")
     @Max(value = 20040000, message = "距离上限超出球面距离范围")
     private Integer maxDistanceMeters;

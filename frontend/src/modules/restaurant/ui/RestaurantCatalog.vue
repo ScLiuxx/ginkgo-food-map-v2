@@ -3,6 +3,7 @@ import { nextTick, onMounted, onUnmounted, useTemplateRef } from 'vue'
 import { useRestaurantCatalog } from '../model/catalog.store'
 import RestaurantFilters from './RestaurantFilters.vue'
 import RestaurantCard from './RestaurantCard.vue'
+import SubmitRestaurantButton from './SubmitRestaurantButton.vue'
 
 const catalog = useRestaurantCatalog()
 onMounted(() => {
@@ -15,7 +16,10 @@ async function changePage(page: number): Promise<void> {
   catalog.goToPage(page)
   await nextTick()
   resultsHeading.value?.focus({ preventScroll: true })
-  resultsHeading.value?.scrollIntoView?.({ block: 'start', behavior: 'instant' })
+  resultsHeading.value?.scrollIntoView?.({
+    block: 'start',
+    behavior: 'instant',
+  })
 }
 </script>
 
@@ -52,6 +56,17 @@ async function changePage(page: number): Promise<void> {
         :restaurant="restaurant"
       />
     </div>
+    <div
+      v-else-if="
+        catalog.filters.sort === 'distance' &&
+        (catalog.filters.latitude == null || catalog.filters.longitude == null)
+      "
+      class="directory-empty"
+      role="status"
+    >
+      <h3>取得位置后，按距离由近到远显示餐厅</h3>
+      <p>请完成定位授权；若定位失败，可重试或切换其他排序。</p>
+    </div>
     <div v-else-if="catalog.loading" class="directory-empty" role="status">正在加载餐厅…</div>
     <div v-else class="directory-empty" role="status">
       <h3>换个条件，也许就遇见了。</h3>
@@ -62,7 +77,10 @@ async function changePage(page: number): Promise<void> {
             : '没有找到符合条件的餐厅，试试店名、地址或不同分类。'
         }}
       </p>
-      <span class="add-missing">未找到的餐厅可后续补充，提交收录暂未开放。</span>
+      <SubmitRestaurantButton
+        v-if="catalog.filters.keyword.trim() && catalog.resultsCurrent && catalog.total === 0"
+        :keyword="catalog.filters.keyword"
+      />
       <button
         v-if="
           catalog.filters.keyword ||

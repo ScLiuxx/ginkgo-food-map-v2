@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  reactive,
+  ref,
+  watch,
+} from 'vue'
 import {
   campusDistance,
   filterRestaurants,
@@ -17,11 +25,15 @@ import { mapExamples, navigationUrl, placeNavigationUrl } from '../model/map'
 import { usePlaceSearch } from '../model/placeSearch'
 import type { MapFocus, MapPoint } from '../api/mapApi'
 import PlaceSearchResults from './PlaceSearchResults.vue'
+import { SubmitRestaurantButton } from '@/modules/restaurant'
 import type { CatalogFilters } from '@/modules/restaurant'
 import MapIllustration from './MapIllustration.vue'
+import NearbyLocation from '@/modules/restaurant/ui/NearbyLocation.vue'
 
 /** 预览只操作本地样例；正式页复用目录筛选状态并读取真实视口接口。 */
-const props = withDefaults(defineProps<{ preview?: boolean }>(), { preview: false })
+const props = withDefaults(defineProps<{ preview?: boolean }>(), {
+  preview: false,
+})
 const catalog = useRestaurantCatalog()
 if (!props.preview) catalog.pause()
 const filters = props.preview
@@ -44,7 +56,8 @@ const closeListButton = ref<globalThis.HTMLButtonElement>()
 /** 手机切换成完整列表后地图控件不可见，主动移动焦点；关闭时返回列表入口，避免焦点留在隐藏区域。 */
 watch(expanded, async (open) => {
   if (!globalThis.matchMedia?.('(max-width: 700px)').matches) return
-  const restore = !open && !!resultPanel.value?.contains(globalThis.document.activeElement)
+  const restore =
+    !open && !!resultPanel.value?.contains(globalThis.document.activeElement)
   await nextTick()
   if (expanded.value !== open) return
   if (open) closeListButton.value?.focus({ preventScroll: true })
@@ -62,7 +75,9 @@ watch(selectionPanel, (panel, _previous, onCleanup) => {
   onCleanup(() => observer.disconnect())
 })
 const viewport = useViewport(filters, !props.preview)
-const searching = computed(() => !props.preview && Boolean(filters.keyword.trim()))
+const searching = computed(
+  () => !props.preview && Boolean(filters.keyword.trim()),
+)
 const places = usePlaceSearch(() => filters.keyword, !props.preview)
 const focusTarget = ref<MapFocus | null>(null)
 let focusSequence = 0
@@ -70,7 +85,10 @@ const remoteSelection = ref<RestaurantReadModel | null>(null)
 let selectionSequence = 0
 const categories = computed(() =>
   props.preview
-    ? ['火锅', '川菜', '小吃', '快餐', '烧烤'].map((name) => ({ code: name, name }))
+    ? ['火锅', '川菜', '小吃', '快餐', '烧烤'].map((name) => ({
+        code: name,
+        name,
+      }))
     : // 与首页一致：食堂是场所类型，不展示为顶部美食品类；不删除原始分类或商家记录。
       catalog.categories.filter(
         (category) => category.code !== 'CANTEEN' && category.name !== '食堂',
@@ -80,24 +98,35 @@ const restaurants = computed(() => {
   if (!props.preview) return viewport.rows.value
   return filterRestaurants(mapExamples, filters).filter(
     (r) =>
-      (filters.maxPrice === null || (r.price !== null && r.price <= filters.maxPrice)) &&
+      (filters.maxPrice === null ||
+        (r.price !== null && r.price <= filters.maxPrice)) &&
       (filters.maxDistanceMeters === null ||
-        (campusDistance(r) !== null && campusDistance(r)! * 1000 <= filters.maxDistanceMeters)),
+        (campusDistance(r) !== null &&
+          campusDistance(r)! * 1000 <= filters.maxDistanceMeters)),
   )
 })
 const selected = computed(
   () =>
     restaurants.value.find((r) => r.id === selectedId.value) ??
-    (remoteSelection.value?.id === selectedId.value ? remoteSelection.value : null),
+    (remoteSelection.value?.id === selectedId.value
+      ? remoteSelection.value
+      : null),
 )
 const selectedPlace = computed(
-  () => places.records.value.find((place) => `amap:${place.id}` === selectedId.value) ?? null,
+  () =>
+    places.records.value.find(
+      (place) => `amap:${place.id}` === selectedId.value,
+    ) ?? null,
 )
-const hasSelection = computed(() => Boolean(selected.value || selectedPlace.value))
+const hasSelection = computed(() =>
+  Boolean(selected.value || selectedPlace.value),
+)
 // 已经显示在本站当前页的同一店铺不再重复列出；不确定匹配关系的地点保持独立。
 const externalRows = computed(() =>
   places.records.value.filter(
-    (place) => !place.match || !restaurants.value.some((row) => row.id === place.match!.id),
+    (place) =>
+      !place.match ||
+      !restaurants.value.some((row) => row.id === place.match!.id),
   ),
 )
 const canvasPoints = computed<MapPoint[]>(() => [
@@ -131,20 +160,12 @@ watch(
   },
 )
 const advancedCount = computed(
-  () => Number(filters.maxPrice !== null) + Number(filters.maxDistanceMeters !== null),
+  () =>
+    Number(filters.maxPrice !== null) +
+    Number(filters.maxDistanceMeters !== null),
 )
 const loading = computed(() => !props.preview && viewport.loading.value)
 const error = computed(() => (props.preview ? null : viewport.error.value))
-const sortOptions = [
-  ['score', '综合评分'],
-  ['distance', '离校区最近'],
-  ['price', '人均从低到高'],
-  ['reviews', '点评最多'],
-  ['taste', '味道优先'],
-  ['value', '性价比优先'],
-  ['ambience', '环境优先'],
-  ['service', '服务优先'],
-]
 watch([restaurants, places.records], ([rows, external]) => {
   const visible = (id: string) =>
     rows.some((r) => r.id === id) ||
@@ -183,7 +204,8 @@ function selectRestaurant(id: string) {
 }
 /** 两类结果共用侧栏滚动区；直接到高德分组，不滚动整页或改变查询条件。 */
 async function showPlaceResults() {
-  if (globalThis.matchMedia?.('(max-width: 700px)').matches) expanded.value = true
+  if (globalThis.matchMedia?.('(max-width: 700px)').matches)
+    expanded.value = true
   await nextTick()
   if (!placesAnchor.value || !resultPanel.value) return
   const top =
@@ -196,7 +218,9 @@ async function showPlaceResults() {
 function onCardFocusOut(event: globalThis.FocusEvent) {
   if (
     event.relatedTarget instanceof globalThis.Node &&
-    (event.currentTarget as globalThis.HTMLElement).contains(event.relatedTarget)
+    (event.currentTarget as globalThis.HTMLElement).contains(
+      event.relatedTarget,
+    )
   )
     return
   selection.leave()
@@ -213,7 +237,8 @@ watch(selectedId, (id) => {
   ) {
     void fetchRestaurant(id)
       .then((row) => {
-        if (ticket === selectionSequence && selectedId.value === id) remoteSelection.value = row
+        if (ticket === selectionSequence && selectedId.value === id)
+          remoteSelection.value = row
       })
       .catch(() => {
         if (ticket === selectionSequence) selection.close()
@@ -229,18 +254,31 @@ onUnmounted(() => {
   <section
     class="map-workspace"
     :class="{ 'is-preview': preview }"
-    :style="{ '--map-selection-height': `${hasSelection ? selectionHeight : 0}px` }"
+    :style="{
+      '--map-selection-height': `${hasSelection ? selectionHeight : 0}px`,
+    }"
     aria-label="地图找店"
   >
     <div class="map-topline">
       <h1>地图找店</h1>
-      <span>⌖ 清水河校区</span><RouterLink v-if="preview" to="/map">返回真实餐厅 →</RouterLink>
+      <RouterLink v-if="preview" to="/map">返回真实餐厅 →</RouterLink>
     </div>
     <div class="map-layout">
       <div class="map-search">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.6" />
-          <path d="m16 16 4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          <circle
+            cx="10.5"
+            cy="10.5"
+            r="6.5"
+            stroke="currentColor"
+            stroke-width="1.6"
+          />
+          <path
+            d="m16 16 4 4"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+          />
         </svg>
         <input
           v-model="filters.keyword"
@@ -252,7 +290,11 @@ onUnmounted(() => {
       </div>
       <div class="map-filter-area">
         <nav class="map-categories" aria-label="美食分类">
-          <button :aria-pressed="!filters.category" @click="filters.category = ''">全部美食</button
+          <button
+            :aria-pressed="!filters.category"
+            @click="filters.category = ''"
+          >
+            全部美食</button
           ><button
             v-for="category in categories"
             :key="category.code"
@@ -263,11 +305,8 @@ onUnmounted(() => {
           </button>
         </nav>
         <div class="map-filter-toolbar">
-          <select v-model="filters.sort" aria-label="排序方式">
-            <option v-for="option in sortOptions" :key="option[0]" :value="option[0]">
-              {{ option[1] }}
-            </option></select
-          ><button
+          <NearbyLocation v-if="!preview" :filters="filters" />
+          <button
             class="map-hide-closed"
             :aria-pressed="filters.hideClosed"
             @click="filters.hideClosed = !filters.hideClosed"
@@ -277,7 +316,10 @@ onUnmounted(() => {
           ><RestaurantAdvancedFilters :filters="filters" />
         </div>
         <div v-if="advancedCount" class="map-applied">
-          <button v-if="filters.maxPrice !== null" @click="filters.maxPrice = null">
+          <button
+            v-if="filters.maxPrice !== null"
+            @click="filters.maxPrice = null"
+          >
             人均 ≤ {{ filters.maxPrice }}元 ×</button
           ><button
             v-if="filters.maxDistanceMeters !== null"
@@ -380,7 +422,9 @@ onUnmounted(() => {
           }}
         </p>
         <p
-          v-if="!preview && restaurants.some((r) => r.tags.includes('OSM测试数据'))"
+          v-if="
+            !preview && restaurants.some((r) => r.tags.includes('OSM测试数据'))
+          "
           class="map-data-note"
         >
           © OpenStreetMap contributors ·
@@ -393,6 +437,16 @@ onUnmounted(() => {
         </p>
         <div v-if="searching" id="map-place-results" ref="placesAnchor">
           <PlaceSearchResults
+            :keyword="filters.keyword"
+            :can-submit="
+              !preview &&
+              !loading &&
+              !error &&
+              viewport.resultsCurrent.value &&
+              viewport.total.value === 0 &&
+              !places.loading.value &&
+              !places.error.value
+            "
             :records="externalRows"
             :hidden-count="places.records.value.length - externalRows.length"
             :loading="places.loading.value"
@@ -444,11 +498,18 @@ onUnmounted(() => {
           {{ searching ? '正在搜索本站餐厅…' : '正在更新此区域…' }}
         </p>
         <p v-if="!preview && error" class="map-auto-status" role="alert">
-          {{ searching ? '本站搜索失败，请重试。' : '区域更新失败，当前显示上次结果。'
+          {{
+            searching
+              ? '本站搜索失败，请重试。'
+              : '区域更新失败，当前显示上次结果。'
           }}<button @click="viewport.load">重试</button>
         </p>
-        <p v-if="!preview && viewport.truncated.value" class="map-truncation" role="status">
-          此区域超过500家，当前显示500个点位，请放大地图缩小范围。
+        <p
+          v-if="!preview && viewport.truncated.value"
+          class="map-truncation"
+          role="status"
+        >
+          此区域餐厅较多，最多显示100个点位，请放大地图查看更小范围。
         </p>
         <div
           v-if="hasSelection"
@@ -460,10 +521,18 @@ onUnmounted(() => {
           @focusin="selection.keepOpen"
           @focusout="onCardFocusOut"
         >
-          <button class="map-sheet-handle" :aria-expanded="expanded" @click="expanded = !expanded">
+          <button
+            class="map-sheet-handle"
+            :aria-expanded="expanded"
+            @click="expanded = !expanded"
+          >
             {{ expanded ? '收起餐厅列表' : '展开餐厅列表' }}
           </button>
-          <button class="map-popup-close" aria-label="关闭选中餐厅" @click="selection.close">
+          <button
+            class="map-popup-close"
+            aria-label="关闭选中餐厅"
+            @click="selection.close"
+          >
             ×
           </button>
           <template v-if="selected">
@@ -473,7 +542,8 @@ onUnmounted(() => {
               @select="expanded = !expanded"
             />
             <div class="map-selection-actions">
-              <RouterLink v-if="!preview" :to="`/restaurants/${selected.id}`">查看详情</RouterLink
+              <RouterLink v-if="!preview" :to="`/restaurants/${selected.id}`"
+                >查看详情</RouterLink
               ><button v-else disabled>查看详情</button
               ><a
                 v-if="navigationUrl(selected)"
@@ -487,7 +557,9 @@ onUnmounted(() => {
                 {{ preview ? '在高德中打开 ↗' : '位置待确认' }}
               </button>
             </div>
-            <small v-if="!preview && navigationUrl(selected)" class="navigation-origin"
+            <small
+              v-if="!preview && navigationUrl(selected)"
+              class="navigation-origin"
               >定位与路线由高德地图处理</small
             >
           </template>
@@ -508,14 +580,24 @@ onUnmounted(() => {
               <h3>{{ selectedPlace.name }}</h3>
               <p>{{ selectedPlace.address || '地址待补充' }}</p>
               <p>
-                {{ [selectedPlace.district, selectedPlace.category].filter(Boolean).join(' · ') }}
+                {{
+                  [selectedPlace.district, selectedPlace.category]
+                    .filter(Boolean)
+                    .join(' · ')
+                }}
               </p>
             </div>
             <div class="map-selection-actions">
-              <RouterLink v-if="selectedPlace.match" :to="`/restaurants/${selectedPlace.match.id}`"
+              <RouterLink
+                v-if="selectedPlace.match"
+                :to="`/restaurants/${selectedPlace.match.id}`"
                 >查看本站详情</RouterLink
               >
-              <button v-else disabled>提交收录 · 暂未开放</button>
+              <SubmitRestaurantButton
+                v-else-if="selectedPlace.matchState === 'unmatched'"
+                :place="selectedPlace"
+              />
+              <span v-else>正在核实收录状态，暂不能提交</span>
               <a
                 v-if="placeNavigationUrl(selectedPlace)"
                 :href="placeNavigationUrl(selectedPlace)!"
@@ -526,7 +608,9 @@ onUnmounted(() => {
               >
               <button v-else class="map-navigate" disabled>位置待确认</button>
             </div>
-            <small class="navigation-origin">来源：高德地图 · 定位与路线由高德处理</small>
+            <small class="navigation-origin"
+              >来源：高德地图 · 定位与路线由高德处理</small
+            >
           </template>
         </div>
       </div>

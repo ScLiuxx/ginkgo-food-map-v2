@@ -20,9 +20,19 @@ public class MediaFileService {
     /** 加入点评事务，固定ID升序加锁；展示顺序由review关联表保留。 */
     @Transactional(propagation=Propagation.MANDATORY)
     public void bind(List<Long> ids,long owner) {
+        bindPurpose(ids, owner, "REVIEW");
+    }
+
+    /** 商户申请服务先校验申请归属；加入申请事务，任一图片不合法时全部回滚。 */
+    @Transactional(propagation=Propagation.MANDATORY)
+    public void bindRestaurantPhotos(List<Long> ids, long owner) {
+        bindPurpose(ids, owner, "RESTAURANT");
+    }
+
+    private void bindPurpose(List<Long> ids, long owner, String purpose) {
         for(long id:ids.stream().sorted().toList()) {
             var row=files.lock(id);
-            if(row==null || row.getUploaderUserId()!=owner || files.bind(id,owner)!=1)
+            if(row==null || row.getUploaderUserId()!=owner || !purpose.equals(row.getPurpose()) || files.bind(id,owner)!=1)
                 throw new BusinessException(FileErrorCode.NOT_BINDABLE);
         }
     }
@@ -39,7 +49,8 @@ public class MediaFileService {
     /** 仅在调用方已验证点评可见性与关联后读取；不提供按文件ID公开HTTP访问。 */
     public byte[] readBound(long id) {
         var row=files.find(id);
-        if(row==null || !"BOUND".equals(row.getStatus())) throw new BusinessException(FileErrorCode.NOT_FOUND);
+        if(row==null || !"BOUND".equals(row.getStatus()) || !"REVIEW".equals(row.getPurpose()))
+            throw new BusinessException(FileErrorCode.NOT_FOUND);
         return storage.read(row.getBucketName(),row.getStorageKey());
     }
 }

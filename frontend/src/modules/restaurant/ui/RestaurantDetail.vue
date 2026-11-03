@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import axios from 'axios'
-import { ReviewComposer, ReviewPanel, ScoreRadar, DetailPhotoGallery } from '@/modules/review'
+import { ReviewComposer, ReviewPanel, DetailPhotoGallery } from '@/modules/review'
 import type { DetailPhotoUpdate } from '@/modules/review'
 import { navigationUrl } from '@/modules/map'
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 import { fetchRestaurant } from '../api/restaurantApi'
 import type { RestaurantReadModel } from '../model/restaurant.types'
-import { campusDistance, priceLabel, ratingDimensions } from '../model/catalog.logic'
+import { priceLabel, ratingDimensions } from '../model/catalog.logic'
 import StarScore from '@/shared/ui/StarScore.vue'
 import { useRoute } from 'vue-router'
 import { diningDetails, canteenRating } from '../model/campusDining'
@@ -56,7 +56,6 @@ let generation = 0
 const publicTags = computed(
   () => restaurant.value?.tags.filter((tag) => !isProvenanceTag(tag)) ?? [],
 )
-const distance = computed(() => (restaurant.value ? campusDistance(restaurant.value) : null))
 const copyFeedback = ref<string | null>(null)
 const manualCopyText = ref('')
 // 回执确认后分别刷新点评和统计，保留整个详情组件与讨论面板。
@@ -252,6 +251,12 @@ function shareRestaurant(): void {
           <span v-if="!isWindow && !isCanteen">{{ restaurant.category }}</span>
           <span class="detail-location">{{ restaurant.address || '地址待补充' }}</span>
         </div>
+        <RouterLink
+          v-if="!isWindow"
+          class="correction-entry"
+          :to="`/restaurants/${encodeURIComponent(restaurant.id)}/correction`"
+          >✎ 补充 / 纠错</RouterLink
+        >
         <div v-if="!isCanteen && publicTags.length" class="detail-tags">
           <span v-for="tag in publicTags.slice(0, 4)" :key="tag">{{ tag }}</span>
         </div>
@@ -354,40 +359,6 @@ function shareRestaurant(): void {
           @focus="($event.target as HTMLTextAreaElement).select()"
         />
       </label>
-      <details>
-        <summary>位置与商家资料</summary>
-        <p>
-          {{ restaurant.address || '地址待补充'
-          }}<template v-if="dining.campus"> · {{ dining.campus }}</template
-          ><template v-if="dining.floor"> · {{ dining.floor }}</template>
-        </p>
-        <p class="distance-note">
-          {{
-            distance === null
-              ? '位置尚未确认'
-              : `距清水河校区约 ${distance.toFixed(1)} km · 直线距离`
-          }}
-        </p>
-        <p v-if="dining.description">{{ dining.description }}</p>
-        <p>
-          {{
-            restaurant.priceKind === 'estimate' ? '人均为估值。' : ''
-          }}营业及消费信息请以到店为准。
-        </p>
-      </details>
-      <details v-if="!isCanteen" class="score-details">
-        <summary>计分说明与详细评分</summary>
-        <p>
-          {{ restaurant.participantCount }} 人参与 ·
-          {{
-            restaurant.recommendRate === null
-              ? '暂无推荐率'
-              : `${Math.round(restaurant.recommendRate * 100)}% 推荐`
-          }}。每位同学仅取最新有效点评计分。
-        </p>
-        <RouterLink to="/scoring-guide">评分规则 ↗</RouterLink>
-        <ScoreRadar :dimensions="restaurant.dimensions" />
-      </details>
       <RestaurantManagementActions :id="restaurant.id" :key="restaurant.id" />
     </footer>
   </article>

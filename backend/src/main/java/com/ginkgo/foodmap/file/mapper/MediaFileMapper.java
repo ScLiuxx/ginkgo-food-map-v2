@@ -9,9 +9,9 @@ import java.util.List;
 public interface MediaFileMapper {
     /** 上传前提交清理凭据；一小时保护窗口远大于SDK的30秒请求上限。 */
     @Insert("""
-        INSERT INTO media_files(uploader_user_id,bucket_name,storage_key,content_type,byte_size,width,height,sha256,status,expires_at)
+        INSERT INTO media_files(uploader_user_id,bucket_name,storage_key,content_type,byte_size,width,height,sha256,status,expires_at,purpose)
         VALUES(#{uploaderUserId},#{bucketName},#{storageKey},'image/jpeg',#{byteSize},#{width},#{height},UNHEX(#{sha256}),
-        'UPLOADING',TIMESTAMPADD(HOUR,1,CURRENT_TIMESTAMP(6)))
+        'UPLOADING',TIMESTAMPADD(HOUR,1,CURRENT_TIMESTAMP(6)),#{purpose})
         """)
     @Options(useGeneratedKeys=true,keyProperty="id")
     int reserve(MediaFile file);

@@ -50,8 +50,8 @@ def main():
                     continue
                 cursor.execute('''INSERT INTO restaurants
                     (name, category_code, price_per_person, price_kind, address,
-                     needs_location, business_status, source_type)
-                    VALUES (%s, %s, %s, 'ESTIMATE', %s, TRUE, %s, 'LEGACY_IMPORT')''',
+                     needs_location, business_status)
+                    VALUES (%s, %s, %s, 'ESTIMATE', %s, TRUE, %s)''',
                     (item['name'], item['categoryCode'], item['pricePerPerson'], item['address'], item['businessStatus']))
                 restaurant_id = cursor.lastrowid
                 cursor.executemany('INSERT INTO restaurant_tags (restaurant_id, tag, position) VALUES (%s, %s, %s)',

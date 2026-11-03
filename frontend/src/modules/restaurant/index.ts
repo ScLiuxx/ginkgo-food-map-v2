@@ -9,3 +9,4 @@ export { fetchRestaurants, fetchRestaurant, fetchRestaurantCategories } from './
 export type { RestaurantResponse } from './api/restaurantApi'
 export type { CatalogFilters, RestaurantReadModel } from './model/restaurant.types'
 export { default as RestaurantAdvancedFilters } from './ui/RestaurantAdvancedFilters.vue'
+export { default as SubmitRestaurantButton } from './ui/SubmitRestaurantButton.vue'

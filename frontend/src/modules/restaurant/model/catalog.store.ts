@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { useUserLocation } from '@/modules/map/model/userLocation.store'
 import { computed, onScopeDispose, reactive, ref, watch } from 'vue'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 import { fetchRestaurantCategories, fetchRestaurants } from '../api/restaurantApi'
@@ -15,6 +16,16 @@ export const useRestaurantCatalog = defineStore('restaurant-catalog', () => {
     maxPrice: null,
     maxDistanceMeters: null,
   })
+  const userLocation = useUserLocation()
+  // 单次位置跨首页/地图共享，移除校区隐式过滤；每次重新定位后触发完整服务端排序。
+  watch(
+    () => userLocation.location,
+    (position) => {
+      filters.longitude = position?.center[0]
+      filters.latitude = position?.center[1]
+    },
+    { immediate: true },
+  )
   const page = ref(1)
   const pageSize = 8
   const total = ref(0)
@@ -22,6 +33,9 @@ export const useRestaurantCatalog = defineStore('restaurant-catalog', () => {
   const visibleRestaurants = ref<RestaurantReadModel[]>([])
   const categories = ref<RestaurantCategory[]>([])
   const loading = ref(false)
+  const loadedFilters = ref('')
+  // 防抖等待期间也须核对条件快照，不能用上一轮的空结果显示“未找到”投稿入口。
+  const resultsCurrent = computed(() => loadedFilters.value === JSON.stringify(filters))
   let active = true
   const error = ref<string | null>(null)
   let generation = 0
@@ -59,6 +73,14 @@ export const useRestaurantCatalog = defineStore('restaurant-catalog', () => {
     loading.value = true
     error.value = null
     const snapshot = { ...filters }
+    // 选中距离但尚未取得原点时等待定位，不能用后端无原点的稳定次序冒充距离排序。
+    if (snapshot.sort === 'distance' && (snapshot.latitude == null || snapshot.longitude == null)) {
+      visibleRestaurants.value = []
+      total.value = 0
+      pages.value = 1
+      loading.value = false
+      return
+    }
     try {
       const [dictionary, result] = await Promise.all([
         categories.value.length
@@ -76,6 +98,7 @@ export const useRestaurantCatalog = defineStore('restaurant-catalog', () => {
         return
       }
       visibleRestaurants.value = result.records
+      loadedFilters.value = JSON.stringify(snapshot)
     } catch (reason) {
       if (requestGeneration !== generation || signal.aborted) return
       visibleRestaurants.value = []
@@ -161,6 +184,7 @@ export const useRestaurantCatalog = defineStore('restaurant-catalog', () => {
     visibleRestaurants,
     categories,
     loading,
+    resultsCurrent,
     error,
     pageNumbers,
     load,

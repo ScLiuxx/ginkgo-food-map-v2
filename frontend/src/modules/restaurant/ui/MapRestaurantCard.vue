@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useUserLocation } from '@/modules/map/model/userLocation.store'
+const userLocation = useUserLocation()
 import { computed } from 'vue'
 import type { RestaurantReadModel } from '../model/restaurant.types'
 import { campusDistance, priceLabel } from '../model/catalog.logic'
@@ -6,7 +8,7 @@ import MapRestaurantPhoto from './MapRestaurantPhoto.vue'
 import { displayRestaurantTags } from './restaurantPresentation'
 /** 同一商户在列表及浮层共用明确的评分/消费分栏；缺失数据使用文字状态，不补造数值。 */
 const props = defineProps<{ restaurant: RestaurantReadModel; selected: boolean }>()
-const distance = computed(() => campusDistance(props.restaurant))
+const distance = computed(() => campusDistance(props.restaurant, userLocation.location?.center))
 const businessTags = computed(() =>
   displayRestaurantTags(props.restaurant.tags, props.restaurant.category),
 )
@@ -16,7 +18,7 @@ const categoryLabel = computed(() =>
 const distanceLabel = computed(() =>
   distance.value === null
     ? '位置待确认'
-    : `距校区 ${distance.value < 1 ? Math.round(distance.value * 1000) + '米' : distance.value.toFixed(1) + '公里'}`,
+    : `距你 ${distance.value < 1 ? Math.round(distance.value * 1000) + '米' : distance.value.toFixed(1) + '公里'}`,
 )
 defineEmits<{ select: [] }>()
 </script>
@@ -80,7 +82,7 @@ defineEmits<{ select: [] }>()
           <circle cx="12" cy="10" r="2.2" stroke="currentColor" stroke-width="1.4" />
         </svg>
         <span
-          ><small class="map-distance" title="距清水河校区参考点的直线距离，不是距您的位置"
+          ><small class="map-distance" title="距用户当前位置的直线距离，不是距您的位置"
             >{{ distanceLabel }}<span v-if="distance !== null"> · 直线</span></small
           >
           <small v-if="restaurant.address" class="map-address">{{

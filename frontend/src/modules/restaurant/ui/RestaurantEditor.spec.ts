@@ -133,7 +133,6 @@ describe('restaurant maintenance form', () => {
     expect(createRestaurant).toHaveBeenCalledWith(
       expect.objectContaining({
         name: '新建测试店',
-        coordinateSystem: 'GCJ02',
         pricePerPerson: null,
         address: null,
         tags: [],

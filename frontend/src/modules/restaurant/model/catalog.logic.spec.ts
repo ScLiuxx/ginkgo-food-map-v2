@@ -92,7 +92,7 @@ describe('restaurant reading rules', () => {
 
   it('does not invent a distance for missing, unconfirmed or invalid coordinates', () => {
     const campus = candidate('campus', null, { latitude: 30.7544, longitude: 103.9312 })
-    expect(campusDistance(campus)).toBe(0)
+    expect(campusDistance(campus, [103.9312, 30.7544])).toBe(0)
     expect(campusDistance({ ...campus, latitude: null })).toBeNull()
     expect(campusDistance({ ...campus, needsLocation: true })).toBeNull()
     expect(campusDistance({ ...campus, latitude: NaN })).toBeNull()
@@ -119,7 +119,7 @@ describe('restaurant reading rules', () => {
     expect(previewRestaurants).toHaveLength(25)
     expect(new Set(previewRestaurants.map((restaurant) => restaurant.id)).size).toBe(25)
     for (const restaurant of previewRestaurants) {
-      expect(restaurant.source).toBe('legacy-preview')
+      expect(restaurant).not.toHaveProperty('source')
       expect(restaurant.score).toBeNull()
       expect(restaurant.reviewCount).toBe(0)
       expect(restaurant.recommendRate).toBeNull()

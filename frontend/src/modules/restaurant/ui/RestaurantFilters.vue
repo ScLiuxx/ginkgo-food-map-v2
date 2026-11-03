@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRestaurantCatalog } from '../model/catalog.store'
-import type { RestaurantSort } from '../model/restaurant.types'
 import RestaurantAdvancedFilters from './RestaurantAdvancedFilters.vue'
 import RandomRestaurant from './RandomRestaurant.vue'
+import NearbyLocation from './NearbyLocation.vue'
 
 /** 分类、排序与经营状态直接操作同一份目录状态，由store统一重置页码并查询。 */
 const catalog = useRestaurantCatalog()
@@ -11,26 +11,6 @@ const catalog = useRestaurantCatalog()
 const cuisineCategories = computed(() =>
   catalog.categories.filter((category) => category.code !== 'CANTEEN' && category.name !== '食堂'),
 )
-const sortGroups: { label: string; options: { key: RestaurantSort; label: string }[] }[] = [
-  {
-    label: '常用排序',
-    options: [
-      { key: 'score', label: '综合评分' },
-      { key: 'distance', label: '离校区最近' },
-      { key: 'price', label: '人均从低到高' },
-      { key: 'reviews', label: '点评最多' },
-    ],
-  },
-  {
-    label: '单项评分排序',
-    options: [
-      { key: 'taste', label: '味道优先' },
-      { key: 'value', label: '性价比优先' },
-      { key: 'ambience', label: '环境优先' },
-      { key: 'service', label: '服务优先' },
-    ],
-  },
-]
 // 分类、排序和经营状态不生成重复标签；仅高级价格/距离条件展示可移除标签。
 </script>
 
@@ -68,17 +48,8 @@ const sortGroups: { label: string; options: { key: RestaurantSort; label: string
         {{ category.name }}
       </button>
     </nav>
-    <div class="filter-toolbar" role="group" aria-label="排序与经营状态">
-      <div class="sort-control">
-        <!-- 原生分组单选框负责键盘导航、选中回显及关闭行为，避免再维护一套排序草稿。 -->
-        <select v-model="catalog.filters.sort" aria-label="排序方式">
-          <optgroup v-for="group in sortGroups" :key="group.label" :label="group.label">
-            <option v-for="sort in group.options" :key="sort.key" :value="sort.key">
-              {{ sort.label }}
-            </option>
-          </optgroup>
-        </select>
-      </div>
+    <div class="filter-toolbar" role="group" aria-label="餐厅筛选">
+      <NearbyLocation />
       <button
         class="hide-closed"
         type="button"

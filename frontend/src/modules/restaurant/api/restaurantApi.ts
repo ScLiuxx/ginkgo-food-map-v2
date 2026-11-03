@@ -21,7 +21,6 @@ export interface RestaurantResponse {
   longitude: number | null
   needsLocation: boolean
   businessStatus: 'OPERATING' | 'CLOSED'
-  sourceType: 'USER' | 'LEGACY_IMPORT'
   distanceKm: number | null
   tags: string[]
   score: number | null
@@ -53,7 +52,6 @@ export interface RestaurantSaveInput {
   address: string | null
   latitude: number
   longitude: number
-  coordinateSystem: 'GCJ02'
   locationConfirmed: true
   businessStatus: RestaurantResponse['businessStatus']
   tags: string[]
@@ -92,7 +90,6 @@ export function toRestaurantModel(value: RestaurantResponse): RestaurantReadMode
     reviewCount: value.reviewCount,
     participantCount: value.participantCount,
     dimensions: value.dimensions,
-    source: value.sourceType,
     distanceKm: value.distanceKm,
   }
 }
@@ -139,6 +136,8 @@ export async function fetchRestaurants(
     {
       params: {
         ...bounds,
+        latitude: filters.latitude,
+        longitude: filters.longitude,
         keyword: filters.keyword,
         category: filters.category,
         sort: filters.sort,
@@ -210,6 +209,45 @@ export async function deleteRestaurant(id: string, token: string) {
   const response = await httpClient.delete<ApiResponse<RestaurantManagement>>(
     `/api/restaurants/${encodeURIComponent(id)}`,
     authenticated(token),
+  )
+  return response.data.data
+}
+
+/** 纠错读取公开资料，允许登录用户为任意公开商户提出申请，不获取归属管理权限。 */
+export async function fetchCorrectionSource(id: string, signal?: AbortSignal) {
+  const response = await httpClient.get<ApiResponse<RestaurantResponse>>(
+    `/api/restaurants/${encodeURIComponent(id)}`,
+    { signal },
+  )
+  return response.data.data
+}
+
+export interface RestaurantCorrectionInput extends RestaurantSaveInput {
+  photoIds?: string[]
+  clientRequestId: string
+  restaurantType: 'REGULAR' | 'CANTEEN'
+  supportsDineIn: boolean | null
+  supportsDelivery: boolean | null
+}
+
+/** 仅创建待审核申请；固定发起时的账号，失败不自动重试，保留请求ID供手动重试。 */
+export async function submitRestaurantCorrection(
+  id: string,
+  input: RestaurantCorrectionInput,
+  token: string,
+) {
+  const response = await httpClient.post<ApiResponse<{ id: string; status: 'PENDING' }>>(
+    `/api/restaurants/${encodeURIComponent(id)}/change-requests`,
+    input,
+    authenticated(token),
+  )
+  return response.data.data
+}
+
+/** 新店投稿只返回待审申请编号，不能当作正式餐厅ID打开详情。 */
+export async function submitNewRestaurant(input: RestaurantCorrectionInput, token: string) {
+  const response = await httpClient.post<ApiResponse<{ id: string; status: 'PENDING' }>>(
+    '/api/restaurant-submissions', input, authenticated(token),
   )
   return response.data.data
 }

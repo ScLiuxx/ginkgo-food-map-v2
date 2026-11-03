@@ -9,7 +9,7 @@ import { ReviewComposer } from '@/modules/review'
     <RestaurantCatalog />
     <div class="home-review"><ReviewComposer /></div>
     <footer class="discovery-footer">
-      泥电美食地图 · 校园美食评价社区 <RouterLink to="/scoring-guide">评分说明</RouterLink>
+      泥电美食地图 · 校园美食评价社区
     </footer>
   </div>
 </template>

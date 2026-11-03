@@ -92,6 +92,16 @@ public class RestaurantWriteService {
         return managementVo(mapper.selectManagementById(current.getId()));
     }
 
+    /** 纠错共用现有字段、分类及标签校验，只规范化申请数据，不修改正式商户。 */
+    public void validateChange(RestaurantSaveRequest request, String currentCategory) {
+        var row = normalize(request);
+        requireCategory(row.getCategoryCode(), currentCategory);
+        request.setName(row.getName());
+        request.setAddress(row.getAddress());
+        request.setPricePerPerson(row.getPricePerPerson() == null ? null : BigDecimal.valueOf(row.getPricePerPerson()));
+        request.setTags(normalizeTags(request.getTags()));
+    }
+
     private RestaurantManagementEntity lockAccessible(long id, AuthenticatedActor actor) {
         var row = mapper.lockById(id);
         requireAccessible(row, actor);
@@ -148,7 +158,6 @@ public class RestaurantWriteService {
         coordinate(request.getLongitude(), 73, 136);
         row.setLatitude(request.getLatitude());
         row.setLongitude(request.getLongitude());
-        row.setCoordinateSystem("GCJ02");
         row.setNeedsLocation(false);
         row.setBusinessStatus(request.getBusinessStatus());
         return row;

@@ -70,6 +70,8 @@ class ImageUploadIntegrationTest {
         reset(sessions,storage);
         jdbc.update("DELETE FROM review_request_receipts");
         jdbc.update("DELETE FROM review_photos");
+        jdbc.update("DELETE FROM restaurant_change_photos");
+        jdbc.update("DELETE FROM restaurant_change_requests");
         jdbc.update("DELETE FROM media_files");
         jdbc.update("DELETE FROM reviews");jdbc.update("DELETE FROM restaurant_review_statistics");
         jdbc.update("DELETE FROM restaurants");jdbc.update("DELETE FROM user_roles");jdbc.update("DELETE FROM users");
@@ -77,7 +79,7 @@ class ImageUploadIntegrationTest {
             jdbc.update("INSERT INTO users(id,username,email,password_hash,email_verified) VALUES(?,?,?,?,TRUE)",id,"reviewer_"+id,"reviewer"+id+"@example.test","test-only");
             jdbc.update("INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code='ROLE_USER'",id);
         }
-        jdbc.update("INSERT INTO restaurants(id,name,category_code,source_type,created_by) VALUES(1,'发布店','OTHER','LEGACY_IMPORT',11),(2,'另一店','OTHER','LEGACY_IMPORT',11)");
+        jdbc.update("INSERT INTO restaurants(id,name,category_code,created_by) VALUES(1,'发布店','OTHER',11),(2,'另一店','OTHER',11)");
         when(sessions.isActive(anyString(),anyLong(),anyLong())).thenReturn(true);
         owner=token(11,false);other=token(22,false);
     }
@@ -159,6 +161,79 @@ class ImageUploadIntegrationTest {
         assertThat(files.find(Long.parseLong(expired))).isNull();
         assertThat(files.find(Long.parseLong(valid))).isNotNull();
     }
+    /** 商户上传沿用同Bucket私有对象，但用途及目录隔离，未提交文件可取消并清理。 */
+    private String uploadMerchant(String actor) throws Exception {
+        var response=mvc.perform(multipart("/api/files/images").file(new org.springframework.mock.web.MockMultipartFile(
+            "file","merchant.jpg","image/jpeg",JpegImageProcessorTest.jpeg(80,60)))
+            .param("purpose","RESTAURANT").header("Authorization","Bearer "+actor))
+            .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        return json.readTree(response).get("data").get("fileId").asString();
+    }
+    private Map<String,Object> merchantInput(List<String> ids) {
+        var input=new LinkedHashMap<String,Object>();
+        input.put("clientRequestId",UUID.randomUUID().toString()); input.put("name","待审图片商户");
+        input.put("categoryCode","OTHER");input.put("latitude",30.67);input.put("longitude",104.1);
+        input.put("locationConfirmed",true);input.put("photoIds",ids);return input;
+    }
+    private org.springframework.test.web.servlet.ResultActions submitMerchant(String endpoint, Map<String,Object> body) throws Exception {
+        return mvc.perform(post(endpoint).header("Authorization","Bearer "+owner)
+            .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body)));
+    }
+    @Test void merchantPhotosBindInOrderAndReplayWithoutPublishing() throws Exception {
+        String first=uploadMerchant(owner),second=uploadMerchant(owner);
+        verify(storage,times(2)).put(eq("test-oss-bucket"),matches("restaurant-images/[a-f0-9-]+\\.jpg"),any(byte[].class));
+        var input=merchantInput(List.of(second,first));
+        String body=submitMerchant("/api/restaurant-submissions",input).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String id=json.readTree(body).get("data").get("id").asString();
+        submitMerchant("/api/restaurant-submissions",input).andExpect(status().isCreated()).andExpect(jsonPath("$.data.id").value(id));
+        assertThat(jdbc.queryForList("SELECT media_file_id FROM restaurant_change_photos WHERE request_id=? ORDER BY position",String.class,id)).containsExactly(second,first);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM media_files WHERE status='BOUND' AND purpose='RESTAURANT'",Long.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurants",Long.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM review_photos",Long.class)).isZero();
+        mvc.perform(delete("/api/files/images/"+first).header("Authorization","Bearer "+owner)).andExpect(status().isConflict());
+        cleanupJob().cleanup();verify(storage,never()).delete(anyString(),anyString());
+        input.put("photoIds",List.of(first,second));
+        submitMerchant("/api/restaurant-submissions",input).andExpect(status().isConflict());
+    }
+    @Test void correctionPhotosStayPrivateAndCannotCrossBindToReviews() throws Exception {
+        String id=uploadMerchant(owner);
+        publish(reviewInput(List.of(id),UUID.randomUUID().toString())).andExpect(status().isConflict());
+        assertThat(files.find(Long.parseLong(id)).getStatus()).isEqualTo("TEMPORARY");
+        submitMerchant("/api/restaurants/1/change-requests",merchantInput(List.of(id))).andExpect(status().isCreated());
+        assertThat(jdbc.queryForObject("SELECT name FROM restaurants WHERE id=1",String.class)).isEqualTo("发布店");
+        // 不提供按文件ID公开读取；待审图片也不能通过点评读取服务泄漏。
+        var service=new com.ginkgo.foodmap.file.service.MediaFileService(files,storage);
+        org.junit.jupiter.api.Assertions.assertThrows(com.ginkgo.foodmap.common.exception.BusinessException.class,
+            ()->service.readBound(Long.parseLong(id)));
+        verify(storage,never()).read(anyString(),anyString());
+    }
+    @Test void invalidMerchantPhotoRollsBackAllBindingsAndRequest() throws Exception {
+        String valid=uploadMerchant(owner),otherFile=uploadMerchant(other),review=uploadId(),expired=uploadMerchant(owner);
+        jdbc.update("UPDATE media_files SET expires_at=CURRENT_TIMESTAMP-INTERVAL 1 SECOND WHERE id=?",expired);
+        for(String invalid:List.of(otherFile,review,expired,"999999")) {
+            submitMerchant("/api/restaurant-submissions",merchantInput(List.of(valid,invalid))).andExpect(status().isConflict());
+            assertThat(files.find(Long.parseLong(valid)).getStatus()).isEqualTo("TEMPORARY");
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_change_requests",Long.class)).isZero();
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_change_photos",Long.class)).isZero();
+        }
+        submitMerchant("/api/restaurant-submissions",merchantInput(List.of(valid,valid))).andExpect(status().isBadRequest());
+        submitMerchant("/api/restaurant-submissions",merchantInput(List.of("9999999999999999999"))).andExpect(status().isBadRequest());
+        submitMerchant("/api/restaurant-submissions",merchantInput(List.of(valid,review,expired,otherFile,"5","6"))).andExpect(status().isBadRequest());
+        mvc.perform(delete("/api/files/images/"+valid).header("Authorization","Bearer "+owner)).andExpect(status().isNoContent());
+        verify(storage).delete(eq("test-oss-bucket"),startsWith("restaurant-images/"));
+    }
+    @Test void concurrentMerchantPhotoSubmissionUsesOneBinding() throws Exception {
+        String id=uploadMerchant(owner);var input=merchantInput(List.of(id));var start=new CountDownLatch(1);
+        try(var executor=Executors.newFixedThreadPool(2)) {
+            var a=executor.submit(()->{start.await();return submitMerchant("/api/restaurant-submissions",input).andReturn();});
+            var b=executor.submit(()->{start.await();return submitMerchant("/api/restaurant-submissions",input).andReturn();});
+            start.countDown();
+            assertThat(a.get(15,TimeUnit.SECONDS).getResponse().getStatus()).isEqualTo(201);
+            assertThat(b.get(15,TimeUnit.SECONDS).getResponse().getStatus()).isEqualTo(201);
+        }
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_change_photos",Long.class)).isEqualTo(1);
+    }
+
     private String token(long user,boolean expired) {
         return issueToken(user,expired);
     }

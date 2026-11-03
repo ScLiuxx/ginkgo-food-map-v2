@@ -61,7 +61,7 @@ class ReviewReadApiIntegrationTest {
         jdbc.update("DELETE FROM restaurant_review_statistics"); jdbc.update("DELETE FROM restaurants");
         jdbc.update("DELETE FROM user_roles"); jdbc.update("DELETE FROM users");
         jdbc.update("INSERT INTO users(id,username,email,password_hash,email_verified) VALUES(11,'read_owner','read11@example.test','private-password',TRUE),(22,'read_other','read22@example.test','private-password',TRUE)");
-        jdbc.update("INSERT INTO restaurants(id,name,category_code,source_type,created_by) VALUES(1,'读取店','OTHER','LEGACY_IMPORT',11),(2,'空店','OTHER','LEGACY_IMPORT',11)");
+        jdbc.update("INSERT INTO restaurants(id,name,category_code,created_by) VALUES(1,'读取店','OTHER',11),(2,'空店','OTHER',11)");
     }
 
     @AfterAll static void cleanup() throws SQLException {

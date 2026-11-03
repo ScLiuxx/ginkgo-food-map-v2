@@ -74,6 +74,8 @@ app:
       region: ${OSS_REGION:}
       bucket: ${OSS_BUCKET:}
       prefix: review-images/
+      # 与点评共用私有Bucket；RAM需允许此目录的Put/Get/Delete。
+      restaurant-prefix: restaurant-images/
       temporary-ttl: 24h
       cleanup-delay-ms: 60000
   user:

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { PlaceResult } from '../model/placeSearch'
+import { SubmitRestaurantButton } from '@/modules/restaurant'
 defineProps<{
   records: PlaceResult[]
   hiddenCount: number
@@ -9,6 +10,8 @@ defineProps<{
   page: number
   pages: number
   selected: string | null
+  keyword?: string
+  canSubmit?: boolean
 }>()
 defineEmits<{ select: [id: string]; retry: []; pageChange: [page: number] }>()
 </script>
@@ -77,8 +80,8 @@ defineEmits<{ select: [id: string]; retry: []; pageChange: [page: number] }>()
     <p class="place-scope">
       来源：高德地图 · 结果临时展示，不自动加入本站。{{ total > 1000 ? '最多查看前100页。' : '' }}
     </p>
-    <div class="place-placeholder">
-      <span>两边都没找到？</span><button disabled>手动添加餐厅 · 暂未开放</button>
+    <div v-if="canSubmit && keyword?.trim() && !loading && !error" class="place-placeholder">
+      <span>没有找到对应店铺？</span><SubmitRestaurantButton :keyword="keyword" />
     </div>
   </section>
 </template>

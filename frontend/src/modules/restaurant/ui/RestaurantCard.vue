@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useUserLocation } from '@/modules/map/model/userLocation.store'
+const userLocation = useUserLocation()
 import { computed, ref, toRef, watch } from 'vue'
 import { useRestaurantReviewPreview } from '@/modules/review'
 import { campusDistance, priceLabel } from '../model/catalog.logic'
@@ -11,7 +13,7 @@ const imageFailed = ref(false)
 watch(photo, () => {
   imageFailed.value = false
 })
-const distance = computed(() => campusDistance(props.restaurant))
+const distance = computed(() => campusDistance(props.restaurant, userLocation.location?.center))
 // 旧分类只足以确认“食堂”记录，不能据此推断其他商家的场所类型及外卖能力。
 const cafeteria = computed(() => props.restaurant.category === '食堂')
 const businessTags = computed(() =>
@@ -20,7 +22,7 @@ const businessTags = computed(() =>
 const distanceLabel = computed(() =>
   distance.value === null
     ? '位置待补充'
-    : `距校区 ${distance.value < 1 ? Math.round(distance.value * 1000) + '米' : distance.value.toFixed(1) + '公里'}`,
+    : `距你 ${distance.value < 1 ? Math.round(distance.value * 1000) + '米' : distance.value.toFixed(1) + '公里'}`,
 )
 </script>
 
@@ -92,7 +94,7 @@ const distanceLabel = computed(() =>
         <p
           v-if="distance !== null || restaurant.address"
           class="card-distance"
-          :title="restaurant.address || '距清水河校区参考点的直线距离'"
+          :title="restaurant.address || '距用户当前位置的直线距离'"
         >
           <span v-if="distance !== null">{{ distanceLabel }}</span
           ><span v-if="restaurant.address" class="merchant-address">{{ restaurant.address }}</span>

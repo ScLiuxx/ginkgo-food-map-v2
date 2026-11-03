@@ -33,15 +33,12 @@ public class RestaurantSaveRequest {
 
     private String address;
 
+    /** 系统统一使用GCJ-02，导入时完成转换，不再逐条保存或接受坐标系字段。 */
     @NotNull(message = "请确认餐厅纬度")
     private BigDecimal latitude;
 
     @NotNull(message = "请确认餐厅经度")
     private BigDecimal longitude;
-
-    @NotNull
-    @Pattern(regexp = "GCJ02", message = "仅支持GCJ-02坐标")
-    private String coordinateSystem = "GCJ02";
 
     @NotNull
     @AssertTrue(message = "请明确确认餐厅位置")

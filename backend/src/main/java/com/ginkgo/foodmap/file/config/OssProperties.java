@@ -20,5 +20,7 @@ public class OssProperties {
     private String accessKeySecret = "";
     /** 后端生成的对象统一位于独立目录，禁止接受客户端传入路径。 */
     private String prefix = "review-images/";
+    /** 共用Bucket中的商户私有图片目录，与点评上传用途分开。 */
+    private String restaurantPrefix = "restaurant-images/";
     private Duration temporaryTtl = Duration.ofHours(24);
 }

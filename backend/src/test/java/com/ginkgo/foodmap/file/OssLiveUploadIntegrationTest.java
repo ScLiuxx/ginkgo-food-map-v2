@@ -49,6 +49,7 @@ class OssLiveUploadIntegrationTest {
     @Autowired ObjectMapper json;
     @Autowired JwtEncoder encoder;
     @Autowired AuthenticationProperties authentication;
+    @Autowired com.ginkgo.foodmap.file.config.OssProperties ossProperties;
     @MockitoBean LoginSessionService sessions;
     @Autowired com.ginkgo.foodmap.file.storage.OssStorageClient storage;
     @Autowired com.ginkgo.foodmap.file.mapper.MediaFileMapper files;
@@ -62,10 +63,10 @@ class OssLiveUploadIntegrationTest {
         try {
             var source=new org.springframework.boot.env.YamlPropertySourceLoader().load("oss-live",new org.springframework.core.io.FileSystemResource(configPath)).getFirst();
             registry.add("app.file.oss.enabled",()->true);
-            for(var name:List.of("endpoint","region","bucket","access-key-id","access-key-secret")) {
+            for(var name:List.of("endpoint","region","bucket","access-key-id","access-key-secret","restaurant-prefix")) {
                 var key="app.file.oss."+name;
                 var value=source.getProperty(key);
-                registry.add(key,()->value);
+                if (value != null) registry.add(key,()->value);
             }
             registry.add("app.file.oss.cleanup-delay-ms",()->3600000);
         } catch(java.io.IOException e) { throw new IllegalStateException("Cannot read live OSS config"); }
@@ -87,7 +88,7 @@ class OssLiveUploadIntegrationTest {
             jdbc.update("INSERT INTO users(id,username,email,password_hash,email_verified) VALUES(?,?,?,?,TRUE)",id,"reviewer_"+id,"reviewer"+id+"@example.test","test-only");
             jdbc.update("INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code='ROLE_USER'",id);
         }
-        jdbc.update("INSERT INTO restaurants(id,name,category_code,source_type,created_by) VALUES(1,'发布店','OTHER','LEGACY_IMPORT',11),(2,'另一店','OTHER','LEGACY_IMPORT',11)");
+        jdbc.update("INSERT INTO restaurants(id,name,category_code,created_by) VALUES(1,'发布店','OTHER',11),(2,'另一店','OTHER',11)");
         when(sessions.isActive(anyString(),anyLong(),anyLong())).thenReturn(true);
         owner=token(11,false);other=token(22,false);
     }
@@ -97,15 +98,22 @@ class OssLiveUploadIntegrationTest {
         try(var c=connect("");var s=c.createStatement()){s.executeUpdate("DROP DATABASE `"+database+"`");}
     }
     /** 验证真实multipart、JWT、MySQL与私有OSS，包含本人取消和他人越权，不发布点评。 */
-    @Test void uploadsReadsAndImmediatelyCancelsRealImage() throws Exception {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings={"REVIEW","RESTAURANT"})
+    void uploadsReadsAndImmediatelyCancelsRealImage(String purpose) throws Exception {
         var response=mvc.perform(multipart("/api/files/images")
             .file(new org.springframework.mock.web.MockMultipartFile("file","test.jpg","image/jpeg",JpegImageProcessorTest.jpeg(48,32)))
+            .param("purpose",purpose)
             .header("Authorization","Bearer "+owner))
             .andExpect(status().isCreated()).andExpect(jsonPath("$.data.width").value(48)).andExpect(jsonPath("$.data.height").value(32))
             .andReturn().getResponse().getContentAsString();
         String id=json.readTree(response).get("data").get("fileId").asString();
         var row=files.find(Long.parseLong(id));
         assertThat(row.getStatus()).isEqualTo("TEMPORARY");
+        assertThat(row.getPurpose()).isEqualTo(purpose);
+        // 按实际配置核验前缀，兼容同级目录与受限RAM下的子目录部署。
+        assertThat(row.getStorageKey()).startsWith(purpose.equals("RESTAURANT")
+                ? ossProperties.getRestaurantPrefix() : ossProperties.getPrefix());
         byte[] downloaded=storage.read(row.getBucketName(),row.getStorageKey());
         assertThat(javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(downloaded)).getWidth()).isEqualTo(48);
         mvc.perform(delete("/api/files/images/"+id).header("Authorization","Bearer "+other)).andExpect(status().isNotFound());

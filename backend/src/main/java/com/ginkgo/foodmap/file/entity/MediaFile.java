@@ -15,5 +15,6 @@ public class MediaFile {
     private int height;
     private String sha256;
     private String status;
+    private String purpose;
     private Instant expiresAt;
 }

@@ -30,8 +30,9 @@ export function useMyLocation(getSDK: () => Pick<AMapSDK, 'convertFrom'> | undef
     locating.value = true
     message.value = '正在申请一次定位，请在浏览器提示中选择是否允许。'
     let finished = false
-    // 浏览器的timeout不涵盖等待授权的时间；额外设置总时限，避免界面一直等待。
-    const timer = globalThis.setTimeout(() => fail('定位等待超时，请确认浏览器权限后重试。'), 20000)
+    // 授权由用户决定，不把阅读权限提示的时间计为失败；设备取位置由浏览器timeout限制。
+    // 取得GPS后才启动转换时限，避免用户较晚允许时成功回调被旧总计时器丢弃。
+    let timer: ReturnType<typeof globalThis.setTimeout> | undefined
     function finish() {
       finished = true
       globalThis.clearTimeout(timer)
@@ -59,6 +60,7 @@ export function useMyLocation(getSDK: () => Pick<AMapSDK, 'convertFrom'> | undef
             return
           }
           message.value = '已获得位置，正在转换地图坐标…'
+          timer = globalThis.setTimeout(() => fail('位置坐标转换超时，请稍后重试。'), 12000)
           try {
             sdk!.convertFrom([longitude, latitude], 'gps', (status, result) => {
               if (finished || disposed) return

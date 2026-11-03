@@ -22,10 +22,10 @@ public interface RestaurantWriteMapper {
     /** 按MySQL真实去重规则保留首个标签及输入顺序，不在Java近似模拟ai_ci排序规则。 */
     List<String> distinctTags(@Param("tags") List<String> tags);
 
-    /** 自增ID回填到实体；来源及操作者由服务赋值，时间由数据库生成。 */
+    /** 自增ID回填到实体；操作者由服务赋值，时间由数据库生成。 */
     int insert(RestaurantManagementEntity entity);
 
-    /** 只替换可编辑字段，WHERE再次校验归属和删除状态，不修改source_type/created_by。 */
+    /** 只替换可编辑字段，WHERE再次校验归属和删除状态，不修改created_by。 */
     int updateCurrent(@Param("row") RestaurantManagementEntity row, @Param("actor") long actor,
                       @Param("admin") boolean admin);
 

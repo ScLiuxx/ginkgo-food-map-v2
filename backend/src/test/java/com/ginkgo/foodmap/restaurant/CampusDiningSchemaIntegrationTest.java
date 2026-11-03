@@ -238,6 +238,7 @@ class CampusDiningSchemaIntegrationTest {
     }
     private static Flyway migration(String name,String target) {
         var config=Flyway.configure().dataSource(url(name),USER,password()).locations("classpath:db/migration").cleanDisabled(true);
-        if(target!=null)config.target(MigrationVersion.fromVersion(target)); return config.load();
+        // 该套夹具验证V9/V10的历史升级，V12删列由单独的餐厅迁移测试覆盖。
+        config.target(MigrationVersion.fromVersion(target==null ? "11" : target)); return config.load();
     }
 }

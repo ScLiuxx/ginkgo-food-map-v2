@@ -47,7 +47,7 @@ class RestaurantSchemaIntegrationTest {
     private static String database;
     private Connection connection;
 
-    /** 独立空库执行全部迁移，不复制V3 SQL，也不依赖应用真实配置或JWT密钥。 */
+    /** 历史约束固定在V11，V12精简迁移由独立测试验证，不依赖业务库或JWT密钥。 */
     @BeforeAll
     static void prepareSchema() throws SQLException {
         if (!SERVER.matches("jdbc:mysql://(127\\.0\\.0\\.1|localhost):[0-9]{1,5}/")) {
@@ -102,7 +102,7 @@ class RestaurantSchemaIntegrationTest {
         assertThat(number(connection, "SELECT COUNT(*) FROM restaurant_tags")).isZero();
         assertThat(strings(connection, "SELECT code FROM roles ORDER BY code"))
                 .containsExactly("ROLE_ADMIN", "ROLE_USER");
-        assertThat(number(connection, "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1")).isEqualTo(10);
+        assertThat(number(connection, "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1")).isEqualTo(11);
         migration(database, null).validate();
     }
 
@@ -123,7 +123,7 @@ class RestaurantSchemaIntegrationTest {
                     """);
             long accountId = number(old, "SELECT id FROM users WHERE username = 'migration_user'");
             Flyway upgrade = migration(upgradeDatabase, null);
-            assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(8);
+            assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(9);
             assertThat(upgrade.migrate().migrationsExecuted).isZero();
             assertThat(number(old, "SELECT id FROM users WHERE username = 'migration_user'")).isEqualTo(accountId);
             assertThat(strings(old, "SELECT password_hash FROM users WHERE id = ?", accountId))
@@ -138,6 +138,28 @@ class RestaurantSchemaIntegrationTest {
     }
 
     /** 同名分店合法；历史归属、地址与位置未知时保持NULL，不能默认伪装为校园坐标。 */
+    /** 删除校区归属不修改商户其他业务资料、标签或历史申请，重复启动不再次迁移。 */
+    @Test
+    void shouldRemoveCampusWithoutChangingOtherBusinessData() throws SQLException {
+        String upgradeDatabase = createDatabase();
+        migration(upgradeDatabase, "13").migrate();
+        try (Connection old = connect(upgradeDatabase)) {
+            update(old, "INSERT INTO restaurants(id,name,category_code,campus_code,latitude,longitude,needs_location) VALUES(501,'迁移保留商户','OTHER','SHAHE',30.675789,104.099671,0)");
+            update(old, "INSERT INTO restaurant_tags VALUES(501,'保留标签',0)");
+            update(old, "INSERT INTO restaurant_change_requests(restaurant_id,submitted_by,client_request_id,request_hash,proposed_data) VALUES(501,42,?,UNHEX(REPEAT('00',32)),JSON_OBJECT('name','待审资料'))", UUID.randomUUID().toString());
+            var before = strings(old, "SELECT CONCAT_WS('|',id,name,category_code,address,latitude,longitude,created_at,updated_at) FROM restaurants WHERE id=501");
+            var receipt = strings(old, "SELECT CAST(proposed_data AS CHAR) FROM restaurant_change_requests");
+            var upgrade = migration(upgradeDatabase, "14");
+            assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(upgrade.migrate().migrationsExecuted).isZero();
+            upgrade.validate();
+            assertThat(number(old, "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='restaurants' AND column_name='campus_code'")).isZero();
+            assertThat(strings(old, "SELECT CONCAT_WS('|',id,name,category_code,address,latitude,longitude,created_at,updated_at) FROM restaurants WHERE id=501")).isEqualTo(before);
+            assertThat(strings(old, "SELECT tag FROM restaurant_tags WHERE restaurant_id=501")).containsExactly("保留标签");
+            assertThat(strings(old, "SELECT CAST(proposed_data AS CHAR) FROM restaurant_change_requests")).isEqualTo(receipt);
+        }
+    }
+
     @Test
     void shouldAllowBranchesAndUnknownLegacyFields() throws SQLException {
         long first = insertLegacy("同名餐厅");
@@ -338,6 +360,96 @@ class RestaurantSchemaIntegrationTest {
                 .containsExactly("2026-10-28 09:02:03.123456");
     }
 
+    /** V12在有资料的旧库上只删除三列，保留坐标、归属、软删除、标签和评分统计。 */
+    @Test
+    void shouldSimplifyVersionTwelveWithoutLosingBusinessOrAccountData() throws SQLException {
+        String upgradeDatabase = createDatabase();
+        migration(upgradeDatabase, "11").migrate();
+        try (Connection old = connect(upgradeDatabase)) {
+            update(old, "INSERT INTO users(id,username,email,password_hash,row_version) VALUES (42,'v12_fixture','v12@example.invalid','test-only-placeholder',7)");
+            update(old, """
+                    INSERT INTO restaurants(id,name,category_code,address,latitude,longitude,needs_location,
+                        source_type,created_by,updated_by,row_version,created_at,updated_at)
+                    VALUES (101,'迁移测试店','OTHER','测试街道',30.754400,103.931200,FALSE,
+                        'USER',42,42,9,'2026-10-01','2026-10-02')
+                    """);
+            update(old, "INSERT INTO restaurants(id,name,category_code,source_type,deleted_at,delete_reason_code) VALUES (102,'旧删除店','OTHER','LEGACY_IMPORT','2026-10-03','SYSTEM')");
+            update(old, "INSERT INTO restaurant_tags(restaurant_id,tag,position) VALUES (101,'测试标签',0)");
+            update(old, "INSERT INTO restaurant_review_statistics(restaurant_id,review_count,participant_count,recommend_count,taste_sum,value_sum,service_sum,ambience_sum,overall_score_sum) VALUES (101,1,1,1,8,8,8,8,8)");
+            var before = strings(old, "SELECT CONCAT_WS('|',id,name,address,latitude,longitude,created_by,updated_by,created_at,updated_at) FROM restaurants WHERE id=101");
+            var upgrade = migration(upgradeDatabase, "12");
+            assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(upgrade.migrate().migrationsExecuted).isZero();
+            upgrade.validate();
+            assertThat(strings(old, "SELECT CONCAT_WS('|',id,name,address,latitude,longitude,created_by,updated_by,created_at,updated_at) FROM restaurants WHERE id=101")).isEqualTo(before);
+            assertThat(number(old, "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='restaurants' AND column_name IN ('row_version','coordinate_system','source_type')")).isZero();
+            assertThat(number(old, "SELECT row_version FROM users WHERE id=42")).isEqualTo(7);
+            assertThat(strings(old, "SELECT tag FROM restaurant_tags WHERE restaurant_id=101")).containsExactly("测试标签");
+            assertThat(number(old, "SELECT review_count FROM restaurant_review_statistics WHERE restaurant_id=101")).isEqualTo(1);
+            assertThat(strings(old, "SELECT delete_reason_code FROM restaurants WHERE id=102 AND deleted_at IS NOT NULL AND needs_location=1")).containsExactly("SYSTEM");
+            // 删列同时重建机器码约束，仍须拒绝尾随空格；坐标成对规则继续由数据库兜底。
+            for (String assignment : List.of("price_kind='UNKNOWN '", "business_status='OPERATING '", "latitude=NULL")) {
+                SQLException error = assertThrows(SQLException.class, () -> update(old, "UPDATE restaurants SET " + assignment + " WHERE id=101"));
+                assertThat(error.getErrorCode()).isEqualTo(3819);
+            }
+        }
+    }
+
+    /** 从空库顺序执行V1至V12，验证新装不依赖手工删列且不会注入餐厅数据。 */
+    @Test
+    void shouldCreateFreshSimplifiedSchema() throws SQLException {
+        String fresh = createDatabase();
+        var latest = migration(fresh, "12");
+        latest.migrate();
+        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("12");
+        assertThat(latest.migrate().migrationsExecuted).isZero();
+        try (Connection current = connect(fresh)) {
+            assertThat(number(current, "SELECT COUNT(*) FROM restaurants")).isZero();
+            assertThat(number(current, "SELECT COUNT(*) FROM restaurant_categories")).isEqualTo(13);
+            assertThat(number(current, "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='restaurants' AND column_name IN ('row_version','coordinate_system','source_type')")).isZero();
+        }
+    }
+
+    /** V15允许无目标的新店申请，旧纠错快照与外键保持，重复迁移不产生额外变化。 */
+    @Test
+    void shouldAllowNewSubmissionsWithoutChangingExistingCorrections() throws SQLException {
+        String database = createDatabase();
+        migration(database, "14").migrate();
+        try (Connection current = connect(database)) {
+            update(current, "INSERT INTO restaurants(id,name,category_code) VALUES (101,'迁移保留商户','OTHER')");
+            update(current, "INSERT INTO restaurant_change_requests(restaurant_id,submitted_by,client_request_id,request_hash,proposed_data) VALUES (101,42,UUID(),UNHEX(SHA2('old',256)),JSON_OBJECT('name','旧纠错'))");
+            var before = strings(current, "SELECT CONCAT_WS('|',id,restaurant_id,submitted_by,client_request_id,HEX(request_hash),proposed_data,status,created_at) FROM restaurant_change_requests");
+            var upgrade = migration(database, "15");
+            assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(upgrade.migrate().migrationsExecuted).isZero();
+            upgrade.validate();
+            assertThat(strings(current, "SELECT CONCAT_WS('|',id,restaurant_id,submitted_by,client_request_id,HEX(request_hash),proposed_data,status,created_at) FROM restaurant_change_requests")).isEqualTo(before);
+            update(current, "INSERT INTO restaurant_change_requests(restaurant_id,submitted_by,client_request_id,request_hash,proposed_data) VALUES (NULL,42,UUID(),UNHEX(SHA2('new',256)),JSON_OBJECT('name','新店'))");
+            assertThat(number(current, "SELECT COUNT(*) FROM restaurant_change_requests WHERE restaurant_id IS NULL AND status='PENDING'")).isEqualTo(1);
+            SQLException missing = assertThrows(SQLException.class, () -> update(current, "INSERT INTO restaurant_change_requests(restaurant_id,submitted_by,client_request_id,request_hash,proposed_data) VALUES (999,42,UUID(),UNHEX(SHA2('invalid',256)),JSON_OBJECT())"));
+            assertThat(missing.getErrorCode()).isEqualTo(1452);
+            SQLException delete = assertThrows(SQLException.class, () -> update(current, "DELETE FROM restaurants WHERE id=101"));
+            assertThat(delete.getErrorCode()).isEqualTo(1451);
+            assertThat(number(current, "SELECT COUNT(*) FROM restaurants")).isEqualTo(1);
+        }
+    }
+
+    /** V16只给旧文件补REVIEW用途，不更改对象路径或申请摘要；重复执行无额外变化。 */
+    @Test
+    void shouldPreserveFilesAndRequestsWhenAddingMerchantPhotos() throws SQLException {
+        String database = createDatabase();migration(database,"15").migrate();
+        try(Connection current=connect(database)) {
+            update(current,"INSERT INTO media_files(id,uploader_user_id,bucket_name,storage_key,content_type,byte_size,width,height,sha256,status,expires_at) VALUES(101,42,'test-bucket','review-images/old.jpg','image/jpeg',100,10,10,UNHEX(SHA2('old',256)),'TEMPORARY',CURRENT_TIMESTAMP+INTERVAL 1 DAY)");
+            update(current,"INSERT INTO restaurant_change_requests(submitted_by,client_request_id,request_hash,proposed_data) VALUES(42,UUID(),UNHEX(SHA2('old',256)),JSON_OBJECT('name','旧申请'))");
+            var before=strings(current,"SELECT CONCAT_WS('|',id,submitted_by,client_request_id,HEX(request_hash),proposed_data) FROM restaurant_change_requests");
+            var upgrade=migration(database,"16");assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(upgrade.migrate().migrationsExecuted).isZero();upgrade.validate();
+            assertThat(strings(current,"SELECT CONCAT_WS('|',purpose,storage_key,status) FROM media_files")).containsExactly("REVIEW|review-images/old.jpg|TEMPORARY");
+            assertThat(strings(current,"SELECT CONCAT_WS('|',id,submitted_by,client_request_id,HEX(request_hash),proposed_data) FROM restaurant_change_requests")).isEqualTo(before);
+            assertThat(number(current,"SELECT COUNT(*) FROM restaurant_change_photos")).isZero();
+        }
+    }
+
     /** 测试夹具只创建历史候选，不编造任何评价、评分或已核实信息。 */
     private long insertLegacy(String name) throws SQLException {
         try (var statement = connection.prepareStatement(
@@ -415,7 +527,8 @@ class RestaurantSchemaIntegrationTest {
     private static Flyway migration(String name, String target) {
         var config = Flyway.configure().dataSource(url(name), USERNAME, password())
                 .locations("classpath:db/migration").cleanDisabled(true);
-        if (target != null) config.target(MigrationVersion.fromVersion(target));
+        // 原有测试验证旧约束；明确指定12的测试覆盖删列后的结构与数据保留。
+        config.target(MigrationVersion.fromVersion(target == null ? "11" : target));
         return config.load();
     }
 }

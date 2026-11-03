@@ -33,12 +33,21 @@ public class ImageUploadService {
 
     /** 预登记保证云端超时或进程崩溃时仍有持久化清理凭据；失败请求不返回可绑定ID。 */
     public ImageUploadVo upload(InputStream source) {
+        return upload(source, "REVIEW");
+    }
+
+    /** 用途仅接受服务端白名单，路径由配置生成；商户与点评共用私有OSS及临时回收流程。 */
+    public ImageUploadVo upload(InputStream source, String purpose) {
+        if (!"REVIEW".equals(purpose) && !"RESTAURANT".equals(purpose))
+            throw new BusinessException(FileErrorCode.INVALID_IMAGE);
         long owner = actors.requireActor().getUserId();
         storage.requireAvailable();
         var image = policy.process(source);
         var file = new MediaFile();
         file.setUploaderUserId(owner); file.setBucketName(properties.getBucket());
-        file.setStorageKey(properties.getPrefix()+UUID.randomUUID()+".jpg");
+        file.setPurpose(purpose);
+        String prefix = "RESTAURANT".equals(purpose) ? properties.getRestaurantPrefix() : properties.getPrefix();
+        file.setStorageKey(prefix+UUID.randomUUID()+".jpg");
         file.setByteSize(image.getBytes().length);file.setWidth(image.getWidth());file.setHeight(image.getHeight());
         file.setSha256(image.getSha256());
         tx().executeWithoutResult(s -> files.reserve(file));

@@ -15,16 +15,18 @@ public class RestaurantVo {
     private String id;
     private String name;
     private String categoryCode;
+    private String restaurantType;
+    private Boolean supportsDineIn;
+    private Boolean supportsDelivery;
+
     private String categoryName;
     private Integer pricePerPerson;
     private String priceKind;
     private String address;
     private BigDecimal latitude;
     private BigDecimal longitude;
-    private String coordinateSystem;
     private boolean needsLocation;
     private String businessStatus;
-    private String sourceType;
     private Instant createdAt;
     private Instant updatedAt;
     private Double distanceKm;

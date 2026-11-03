@@ -141,8 +141,8 @@ def main():
                     raise ValueError('标签超过上限')
                 if args.apply:
                     cur.execute('''INSERT INTO restaurants (name,category_code,price_kind,price_per_person,address,
-                        latitude,longitude,coordinate_system,needs_location,business_status,source_type)
-                        VALUES (%s,%s,'UNKNOWN',NULL,%s,%s,%s,'GCJ02',FALSE,'OPERATING','LEGACY_IMPORT')''',
+                        latitude,longitude,needs_location,business_status)
+                        VALUES (%s,%s,'UNKNOWN',NULL,%s,%s,%s,FALSE,'OPERATING')''',
                                 (row['name'],row['categoryCode'],row['address'],row['latitude'],row['longitude']))
                     row['restaurantId'] = cur.lastrowid
                     cur.executemany('INSERT INTO restaurant_tags (restaurant_id,tag,position) VALUES (%s,%s,%s)',

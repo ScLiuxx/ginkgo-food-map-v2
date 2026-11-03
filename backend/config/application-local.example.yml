@@ -48,6 +48,8 @@ app:
       # 两者同时填写则优先使用；都留空时读取OSS_ACCESS_KEY_ID/OSS_ACCESS_KEY_SECRET环境变量。
       access-key-id: ""
       access-key-secret: ""
+      # 商户待审图沿用同一个Bucket，须授予此目录对象读写删除权限。
+      restaurant-prefix: restaurant-images/
       temporary-ttl: 24h
   user:
     verification-code:

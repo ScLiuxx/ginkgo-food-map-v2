@@ -7,9 +7,12 @@ export const ratingDimensions: { key: RatingDimension; label: string; descriptio
   { key: 'ambience', label: '环境', description: '卫生、座位与噪音，能否舒服吃顿饭。' },
 ]
 
-/** 参考点为清水河校区，计算直线公里数；位置未确认时不显示虚构距离。 */
-export function campusDistance(restaurant: RestaurantReadModel): number | null {
-  if (restaurant.distanceKm !== undefined) return restaurant.distanceKm
+/** 以已授权的GCJ-02用户位置计算直线公里数；无原点时仅使用服务器明确返回的距离。 */
+export function campusDistance(
+  restaurant: RestaurantReadModel,
+  origin?: [number, number],
+): number | null {
+  if (!origin) return restaurant.distanceKm ?? null
   const { latitude, longitude } = restaurant
   if (
     restaurant.needsLocation ||
@@ -22,11 +25,11 @@ export function campusDistance(restaurant: RestaurantReadModel): number | null {
   )
     return null
   const rad = Math.PI / 180
-  const dLat = (latitude - 30.7544) * rad
-  const dLng = (longitude - 103.9312) * rad
+  const dLat = (latitude - origin[1]) * rad
+  const dLng = (longitude - origin[0]) * rad
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos(30.7544 * rad) * Math.cos(latitude * rad) * Math.sin(dLng / 2) ** 2
+    Math.cos(origin[1] * rad) * Math.cos(latitude * rad) * Math.sin(dLng / 2) ** 2
   return 6371 * 2 * Math.asin(Math.sqrt(Math.min(1, a)))
 }
 
@@ -57,6 +60,7 @@ export function filterRestaurants(
   })
   const value = (restaurant: RestaurantReadModel): number | null => {
     if (filters.sort === 'distance') return campusDistance(restaurant)
+    if (filters.sort === 'recommend') return restaurant.recommendRate
     if (filters.sort === 'reviews') return restaurant.reviewCount
     if (filters.sort === 'price')
       return restaurant.price !== null && restaurant.price > 0 ? restaurant.price : null

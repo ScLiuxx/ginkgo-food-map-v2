@@ -1,3 +1,4 @@
+import { createPinia } from 'pinia'
 import { createApp, h, type App } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import MapRestaurantCard from './MapRestaurantCard.vue'
@@ -18,7 +19,7 @@ describe('地图商户分栏信息', () => {
   function mount(restaurant: RestaurantReadModel) {
     host = document.createElement('div')
     document.body.append(host)
-    app = createApp(MapRestaurantCard, { restaurant, selected: false })
+    app = createApp(MapRestaurantCard, { restaurant, selected: false }).use(createPinia())
     app.mount(host)
   }
   it('评分和消费明确分栏，未知值保持文字，内部来源标签不展示或改写', () => {

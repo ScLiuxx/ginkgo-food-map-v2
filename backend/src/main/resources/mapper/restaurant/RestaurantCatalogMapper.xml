@@ -18,26 +18,29 @@
     </sql>
 
     <!--
-        参考点来源为原站index.html的CAMPUS定义（30.7544,103.9312，清水河校区），
-        沿用既有距离排序的GCJ-02坐标和6371km地球半径；不是校园边界或步行距离。
+        参考点为请求中的GCJ-02用户位置，使用6371km地球半径；不是步行距离。
         统一以米计算，WHERE与返回距离复用同一表达式，防止阈值/排序口径漂移。
         待确认、缺坐标或异常坐标均不计算；LEAST/GREATEST防止浮点误差超出ASIN定义域。
     -->
+    <!-- 用户位置仅作为绑定参数参与球面距离计算；未授权/缺坐标时返回NULL，不使用校区替代。 -->
     <sql id="distanceMetersExpression">
-        CASE WHEN r.needs_location = 0 AND r.latitude BETWEEN -90 AND 90
-            AND r.longitude BETWEEN -180 AND 180 AND r.coordinate_system = 'GCJ02'
-            THEN 6371000 * 2 * ASIN(SQRT(LEAST(1.0, GREATEST(0.0,
-                POWER(SIN(RADIANS(r.latitude - 30.7544) / 2), 2)
-                + COS(RADIANS(30.7544)) * COS(RADIANS(r.latitude))
-                * POWER(SIN(RADIANS(r.longitude - 103.9312) / 2), 2)))))
-            ELSE NULL END
+        <choose>
+            <when test="_parameter.containsKey('query') and query.latitude != null and query.longitude != null">
+                CASE WHEN r.needs_location = 0 AND r.latitude BETWEEN -90 AND 90 AND r.longitude BETWEEN -180 AND 180
+                THEN 6371000 * 2 * ASIN(SQRT(LEAST(1.0, GREATEST(0.0,
+                    POWER(SIN(RADIANS(r.latitude - #{query.latitude}) / 2), 2)
+                    + COS(RADIANS(#{query.latitude})) * COS(RADIANS(r.latitude))
+                    * POWER(SIN(RADIANS(r.longitude - #{query.longitude}) / 2), 2))))) ELSE NULL END
+            </when>
+            <otherwise>NULL</otherwise>
+        </choose>
     </sql>
 
     <!-- 显式列白名单不加载创建者和删除信息；公开distanceKm字段继续使用公里，保持原契约。 -->
     <sql id="publicColumns">
-        r.id, r.name, r.category_code, c.name AS category_name, r.price_per_person, r.price_kind,
-        r.address, r.latitude, r.longitude, r.coordinate_system, r.needs_location,
-        r.business_status, r.source_type, r.created_at, r.updated_at,
+        r.id, r.name, r.category_code, r.restaurant_type, r.supports_dine_in, r.supports_delivery, c.name AS category_name, r.price_per_person, r.price_kind,
+        r.address, r.latitude, r.longitude, r.needs_location,
+        r.business_status, r.created_at, r.updated_at,
         COALESCE(s.review_count, 0) AS review_count,
         COALESCE(s.participant_count, 0) AS participant_count,
         <!-- 扩展十进制精度再除法，避免MySQL默认6位小数丢失排序差异；不做展示舍入。 -->
@@ -56,7 +59,7 @@
         WHERE r.deleted_at IS NULL
         <!-- 地图和区域列表共用视口条件，待定位/缺坐标不进入区域集合，边界包含。 -->
         <if test="query.west != null">
-            AND r.needs_location = 0 AND r.coordinate_system = 'GCJ02'
+            AND r.needs_location = 0
             AND r.longitude BETWEEN #{query.west} AND #{query.east}
             AND r.latitude BETWEEN #{query.south} AND #{query.north}
         </if>
@@ -114,6 +117,7 @@
             <when test="query.sort == 'value'">value IS NULL, value DESC,</when>
             <when test="query.sort == 'service'">service IS NULL, service DESC,</when>
             <when test="query.sort == 'ambience'">ambience IS NULL, ambience DESC,</when>
+            <when test="query.sort == 'recommend'">recommend_rate IS NULL, recommend_rate DESC, participant_count DESC,</when>
             <when test="query.sort == 'reviews'">review_count DESC,</when>
         </choose>
         r.name, r.id
@@ -133,7 +137,7 @@
         <include refid="catalogFrom"/>
         <include refid="visibleConditions"/>
         <include refid="catalogOrder"/>
-        LIMIT 500
+        LIMIT 100
     </select>
 
     <select id="selectVisibleTags" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantTagEntity">

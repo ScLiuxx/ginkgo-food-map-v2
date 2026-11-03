@@ -38,11 +38,6 @@ vi.mock('@/modules/review', async () => {
           )
       },
     }),
-    ScoreRadar: defineComponent({
-      setup() {
-        return () => h('div')
-      },
-    }),
   }
 })
 
@@ -53,7 +48,7 @@ describe('restaurant detail API integration', () => {
   const currentId = ref(restaurantFixture.id)
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: ['/', '/scoring-guide'].map((path) => ({ path, component: { template: '<div />' } })),
+    routes: ['/'].map((path) => ({ path, component: { template: '<div />' } })),
   })
   const settle = async () => {
     for (let i = 0; i < 6; i++) await nextTick()
@@ -85,13 +80,13 @@ describe('restaurant detail API integration', () => {
     expect(fetchRestaurant).toHaveBeenCalledWith(restaurantFixture.id, expect.any(AbortSignal))
     expect(host.querySelector('h1')?.textContent).toBe(restaurantFixture.name)
     expect(host.querySelector('.detail-preview')).toBeNull()
-    expect(host.querySelector('.detail-extra details')?.hasAttribute('open')).toBe(false)
+    expect(host.querySelector('.detail-extra details')).toBeNull()
     expect(host.querySelector('.detail-tags')?.textContent ?? '').not.toContain('联调模拟')
     expect(host.querySelector('.detail-cup')).toBeNull()
     expect(host.querySelector('.hero-score')?.textContent).toContain('待评级')
     expect(host.querySelector('.score-summary')?.textContent).toContain('待评级')
     expect(host.querySelector('.detail-subtitle')?.textContent).toContain('人均待补')
-    expect(host.querySelector('.distance-note')?.textContent).toContain('位置尚未确认')
+    expect(host.querySelector('.distance-note')).toBeNull()
   })
 
   it('distinguishes a missing record from a temporary server failure', async () => {
@@ -155,11 +150,10 @@ describe('restaurant detail API integration', () => {
       reviewCount: 7,
     })
     await mount()
-    const text = host.querySelector('.score-details')!.textContent!
     expect(host.querySelector('.hero-score')?.textContent).toContain('0.0')
-    expect(text).toContain('0%')
     expect(host.querySelector('.detail-subtitle')?.textContent).toContain('7 条点评')
-    expect(text).toContain('2 人参与')
+    expect(host.textContent).toContain('2 人评分')
+    expect(host.querySelector('.score-details')).toBeNull()
   })
 
   it('refreshes statistics after acknowledgement without unmounting reviews and retries reading separately', async () => {

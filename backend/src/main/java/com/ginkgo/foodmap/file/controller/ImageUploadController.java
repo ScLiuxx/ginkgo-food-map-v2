@@ -20,9 +20,10 @@ public class ImageUploadController {
 
     /** 单张multipart上传；统一响应避免返回Bucket或任意对象地址。 */
     @PostMapping(consumes=MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ApiResponse<ImageUploadVo>> upload(@RequestPart("file") MultipartFile file) {
+    public ResponseEntity<ApiResponse<ImageUploadVo>> upload(@RequestPart("file") MultipartFile file,
+            @RequestParam(defaultValue="REVIEW") String purpose) {
         try (var stream=file.getInputStream()) {
-            return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(ApiResponse.ok(service.upload(stream)));
+            return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(ApiResponse.ok(service.upload(stream,purpose)));
         } catch (IOException e) { throw new BusinessException(FileErrorCode.INVALID_IMAGE); }
     }
 

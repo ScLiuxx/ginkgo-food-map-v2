@@ -81,6 +81,7 @@ class RestaurantWriteApiIntegrationTest {
     @BeforeEach
     void prepare() {
         reset(mapper, sessions);
+        jdbc.update("DELETE FROM restaurant_change_requests");
         jdbc.update("DELETE FROM restaurant_tags");
         jdbc.update("DELETE FROM restaurants");
         jdbc.update("DELETE FROM user_roles");
@@ -125,7 +126,8 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(tags(created.get("restaurant"))).containsExactly("招牌", "咖啡", "CAFE");
         assertThat(jdbc.queryForObject("SELECT created_by FROM restaurants WHERE id=?", Long.class, id)).isEqualTo(11);
         assertThat(jdbc.queryForObject("SELECT updated_by FROM restaurants WHERE id=?", Long.class, id)).isEqualTo(11);
-        assertThat(jdbc.queryForObject("SELECT source_type FROM restaurants WHERE id=?", String.class, id)).isEqualTo("USER");
+        assertThat(created.get("restaurant").has("sourceType")).isFalse();
+        assertThat(created.get("restaurant").has("coordinateSystem")).isFalse();
         mvc.perform(get("/api/restaurants/" + id)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.score").isEmpty()).andExpect(jsonPath("$.data.reviewCount").value(0));
         perform(get("/api/restaurants/" + id + "/management"), owner, null)
@@ -181,15 +183,14 @@ class RestaurantWriteApiIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
-    /** 历史未知归属不按昵称或登录自动认领，管理员纠错也不改变原来源/创建者。 */
+    /** 历史未知归属不按昵称或登录自动认领，管理员纠错也不改变原创建者。 */
     @Test
-    void shouldKeepLegacyOwnershipAndSourceDuringAdminCorrection() throws Exception {
-        jdbc.update("INSERT INTO restaurants(id,name,category_code,source_type) VALUES(101,'历史夹具','OTHER','LEGACY_IMPORT')");
+    void shouldKeepUnknownOwnershipDuringAdminCorrection() throws Exception {
+        jdbc.update("INSERT INTO restaurants(id,name,category_code) VALUES(101,'历史夹具','OTHER')");
         var update = valid();
         perform(put("/api/restaurants/101"), owner, update).andExpect(status().isForbidden());
         perform(put("/api/restaurants/101"), admin, update).andExpect(status().isOk());
         assertThat(jdbc.queryForObject("SELECT created_by FROM restaurants WHERE id=101", Long.class)).isNull();
-        assertThat(jdbc.queryForObject("SELECT source_type FROM restaurants WHERE id=101", String.class)).isEqualTo("LEGACY_IMPORT");
         assertThat(jdbc.queryForObject("SELECT needs_location FROM restaurants WHERE id=101", Boolean.class)).isFalse();
     }
 
@@ -241,7 +242,7 @@ class RestaurantWriteApiIntegrationTest {
     /** 禁止传入身份、来源、评分、版本等越权字段，拼错字段也不默默返回保存成功。 */
     @ParameterizedTest
     @ValueSource(strings = {"createdBy", "updatedBy", "sourceType", "id", "rowVersion", "score", "tier",
-            "reviewCount", "deletedAt", "deletedBy", "needsLocation", "administrator", "unknownField"})
+            "coordinateSystem", "reviewCount", "deletedAt", "deletedBy", "needsLocation", "administrator", "unknownField"})
     void shouldRejectUnknownAndPrivilegedCreationFields(String field) throws Exception {
         var input = valid(); input.put(field, "forged");
         perform(post("/api/restaurants"), owner, input).andExpect(status().isBadRequest())
@@ -252,7 +253,7 @@ class RestaurantWriteApiIntegrationTest {
     /** 字段级空值/编码问题在DTO校验拒绝，金额/坐标精度与组合规则在服务拒绝。 */
     @ParameterizedTest
     @CsvSource({"name,''", "categoryCode,other", "categoryCode,OTHER ", "priceKind,unknown",
-            "coordinateSystem,WGS84", "businessStatus,OPEN"})
+            "businessStatus,OPEN"})
     void shouldRejectInvalidCodesAndRequiredText(String field, String value) throws Exception {
         var input = valid(); input.put(field, value.equals("OTHER") ? "OTHER " : value);
         perform(post("/api/restaurants"), owner, input).andExpect(status().isBadRequest());
@@ -425,7 +426,7 @@ class RestaurantWriteApiIntegrationTest {
                 .andExpect(jsonPath("$.data.restaurant.pricePerPerson").isEmpty())
                 .andExpect(jsonPath("$.data.rowVersion").doesNotExist());
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_tags WHERE restaurant_id=?", Long.class, id)).isZero();
-        assertThat(jdbc.queryForObject("SELECT source_type FROM restaurants WHERE id=?", String.class, id)).isEqualTo("USER");
+        assertThat(jdbc.queryForObject("SELECT created_by FROM restaurants WHERE id=?", Long.class, id)).isEqualTo(11);
     }
 
     /** 管理响应和公开响应均不返回版本；旧版客户端提交rowVersion按未知JSON字段拒绝。 */
@@ -442,6 +443,103 @@ class RestaurantWriteApiIntegrationTest {
         perform(put("/api/restaurants/" + id), owner, obsolete).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("COMMON_MALFORMED_REQUEST"));
         perform(delete("/api/restaurants/" + id), owner, null).andExpect(status().isOk());
+    }
+
+    /** 非创建者可提交完整待审申请，但不能改变正式资料；重试防重、伪造字段与无效位置均拒绝。 */
+    @Test
+    void shouldSubmitCorrectionWithoutChangingPublicRestaurant() throws Exception {
+        String id = create(valid()).get("restaurant").get("id").asString();
+        var input = valid();
+        input.put("clientRequestId", UUID.randomUUID().toString());
+        input.put("name", " 待审核新店名 ");
+        input.put("restaurantType", "CANTEEN");
+        input.put("supportsDineIn", true);
+        input.put("supportsDelivery", false);
+        input.put("priceKind", "EXACT"); input.put("pricePerPerson",25);
+        String endpoint = "/api/restaurants/" + id + "/change-requests";
+        mvc.perform(post(endpoint).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(input)))
+                .andExpect(status().isUnauthorized());
+        var result = perform(post(endpoint), other, input).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.status").value("PENDING")).andReturn();
+        String application = json.readTree(result.getResponse().getContentAsString()).get("data").get("id").asString();
+        perform(post(endpoint), other, input).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.id").value(application));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_change_requests", Long.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT submitted_by FROM restaurant_change_requests WHERE id=?", Long.class, application)).isEqualTo(22);
+        assertThat(jdbc.queryForObject("SELECT JSON_UNQUOTE(JSON_EXTRACT(proposed_data,'$.name')) FROM restaurant_change_requests WHERE id=?", String.class, application)).isEqualTo("待审核新店名");
+        assertThat(jdbc.queryForObject("SELECT name FROM restaurants WHERE id=?", String.class, id)).isEqualTo("CRUD测试夹具");
+        assertThat(jdbc.queryForObject("SELECT price_per_person FROM restaurants WHERE id=?", Integer.class, id)).isNull();
+        input.put("name","不同申请内容");
+        perform(post(endpoint), other, input).andExpect(status().isConflict());
+        input.put("clientRequestId",UUID.randomUUID().toString()); input.put("submittedBy",11);
+        perform(post(endpoint), other, input).andExpect(status().isBadRequest());
+        input.remove("submittedBy"); input.put("latitude",99);
+        perform(post(endpoint), other, input).andExpect(status().isBadRequest());
+        input.put("latitude",30.7544); input.put("campusCode","SHAHE");
+        perform(post(endpoint), other, input).andExpect(status().isBadRequest());
+        input.remove("campusCode");
+        perform(post("/api/restaurants/999999/change-requests"), other, input).andExpect(status().isNotFound());
+    }
+
+    /** 新店投稿只产生待审快照，不生成餐厅、标签或评分；匿名与伪造状态均拒绝。 */
+    @Test
+    void shouldSubmitNewRestaurantWithoutPublishing() throws Exception {
+        var input = valid(); input.put("clientRequestId", UUID.randomUUID().toString());
+        String endpoint = "/api/restaurant-submissions";
+        mvc.perform(post(endpoint).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(input)))
+                .andExpect(status().isUnauthorized());
+        var result = perform(post(endpoint), other, input).andExpect(status().isCreated())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.data.status").value("PENDING")).andReturn();
+        String id = json.readTree(result.getResponse().getContentAsString()).get("data").get("id").asString();
+        perform(post(endpoint), other, input).andExpect(status().isCreated()).andExpect(jsonPath("$.data.id").value(id));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_change_requests", Long.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT restaurant_id FROM restaurant_change_requests WHERE id=?", Long.class, id)).isNull();
+        assertThat(jdbc.queryForObject("SELECT submitted_by FROM restaurant_change_requests WHERE id=?", Long.class, id)).isEqualTo(22);
+        for (String table : List.of("restaurants", "restaurant_tags", "restaurant_review_statistics")) {
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM " + table, Long.class)).isZero();
+        }
+        input.put("name", "不同内容");
+        perform(post(endpoint), other, input).andExpect(status().isConflict());
+        input.put("clientRequestId", UUID.randomUUID().toString()); input.put("status", "APPROVED");
+        perform(post(endpoint), other, input).andExpect(status().isBadRequest());
+        input.remove("status"); input.put("locationConfirmed", false);
+        perform(post(endpoint), other, input).andExpect(status().isBadRequest());
+        input.put("locationConfirmed", true);
+        jdbc.update("UPDATE restaurant_categories SET enabled=FALSE WHERE code='OTHER'");
+        perform(post(endpoint), other, input).andExpect(status().isBadRequest());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_change_requests", Long.class)).isEqualTo(1);
+    }
+
+    /** 新店没有目标行锁，使用唯一键原子防重；两个首次并发请求获得相同回执。 */
+    @Test
+    void shouldDeduplicateConcurrentNewSubmissions() throws Exception {
+        var input = valid(); input.put("clientRequestId", UUID.randomUUID().toString());
+        var start = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var a = executor.submit(() -> { start.await(); return perform(post("/api/restaurant-submissions"), other, input).andReturn(); });
+            var b = executor.submit(() -> { start.await(); return perform(post("/api/restaurant-submissions"), other, input).andReturn(); });
+            start.countDown();
+            var first = a.get(15, TimeUnit.SECONDS); var second = b.get(15, TimeUnit.SECONDS);
+            assertThat(first.getResponse().getStatus()).isEqualTo(201);
+            assertThat(second.getResponse().getStatus()).isEqualTo(201);
+            assertThat(json.readTree(first.getResponse().getContentAsString()).get("data").get("id").asString())
+                    .isEqualTo(json.readTree(second.getResponse().getContentAsString()).get("data").get("id").asString());
+        }
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_change_requests", Long.class)).isEqualTo(1);
+    }
+
+    /** 同账号跨新建和纠错共用请求号命名空间，不能把新店回执误作已有商户的纠错回执。 */
+    @Test
+    void shouldRejectReusingSubmissionIdentityForCorrection() throws Exception {
+        String target = create(valid()).get("restaurant").get("id").asString();
+        var input = valid(); input.put("clientRequestId", UUID.randomUUID().toString());
+        perform(post("/api/restaurant-submissions"), other, input).andExpect(status().isCreated());
+        perform(post("/api/restaurants/" + target + "/change-requests"), other, input).andExpect(status().isConflict());
+        input.put("clientRequestId", UUID.randomUUID().toString());
+        perform(post("/api/restaurants/" + target + "/change-requests"), other, input).andExpect(status().isCreated());
+        perform(post("/api/restaurant-submissions"), other, input).andExpect(status().isConflict());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_change_requests", Long.class)).isEqualTo(2);
     }
 
     private Map<String, Object> valid() {

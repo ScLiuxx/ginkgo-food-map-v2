@@ -60,5 +60,4 @@ export const mapExamples: RestaurantReadModel[] = [
   priceKind: 'exact',
   dimensions: { taste: null, value: null, service: null, ambience: null },
   recommendRate: null,
-  source: 'legacy-preview',
 }))

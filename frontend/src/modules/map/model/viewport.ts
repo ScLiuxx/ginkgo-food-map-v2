@@ -15,6 +15,8 @@ export function useViewport(filters: CatalogFilters, enabled = true) {
     pages = ref(1)
   const rows = ref<RestaurantReadModel[]>([]),
     points = ref<MapPoint[]>([])
+  // 只有当前筛选成功完成后，空结果才可用于展示新店投稿入口。
+  const successfulFilters = ref('')
   const loading = ref(false),
     error = ref<string | null>(null),
     truncated = ref(false)
@@ -32,12 +34,22 @@ export function useViewport(filters: CatalogFilters, enabled = true) {
     if (!enabled) return
     cancel()
     const ticket = sequence,
+      filterKey = JSON.stringify(filters),
       snapshot = { ...filters },
       searching = Boolean(snapshot.keyword.trim()),
       area = !searching && bounds.value ? { ...bounds.value } : undefined
     // 此轮新条件仅用于首页；地图点位接口尚无对应能力，排除共享状态中的新字段，避免点位与列表口径不同。
     delete snapshot.restaurantType
     delete snapshot.diningMode
+    // 无用户位置时等待授权，清掉旧点位，避免继续呈现其他排序的结果。
+    if (snapshot.sort === 'distance' && (snapshot.latitude == null || snapshot.longitude == null)) {
+      rows.value = []
+      points.value = []
+      total.value = 0
+      pages.value = 1
+      loadedKey = ''
+      return
+    }
     const key = JSON.stringify([snapshot, area])
     const reloadPoints = key !== loadedKey
     controller = new AbortController()
@@ -81,6 +93,7 @@ export function useViewport(filters: CatalogFilters, enabled = true) {
         truncated.value = markers.truncated
       }
       loadedKey = key
+      successfulFilters.value = filterKey
     } catch (reason) {
       if (ticket === sequence && !signal.aborted) error.value = toErrorMessage(reason)
     } finally {
@@ -133,5 +146,6 @@ export function useViewport(filters: CatalogFilters, enabled = true) {
     load,
     goToPage,
     stale: computed(() => Boolean(error.value) || loading.value),
+    resultsCurrent: computed(() => successfulFilters.value === JSON.stringify(filters)),
   }
 }

@@ -34,6 +34,7 @@ docs/
 - 架构：[模块化单体](architecture/modular-monolith.md)、[前端分层](architecture/frontend.md)。
 - 数据结构：[餐厅/食堂/窗口结构与 V9 增量](architecture/restaurant-schema.md)、[评价结构与 V10 窗口归属](architecture/review-schema.md)；区分迁移脚本就绪与运行库部署状态。
 - 页面：[找店界面方案](plans/discovery-ui.md)。
+- 搜索：[Elasticsearch 餐厅搜索方案](plans/elasticsearch-search.md)，当前仅设计，包含资源约束、相关性、可靠同步与降级验收。
 - 地图：[高德地图基础闭环](plans/map-foundation.md)，包含导航、点位接口、页面联动及分步验收。
 - 迁移：[旧系统迁移计划](plans/legacy-migration.md)。
 - 运维：[自动部署与排障](operations/deployment.md)。

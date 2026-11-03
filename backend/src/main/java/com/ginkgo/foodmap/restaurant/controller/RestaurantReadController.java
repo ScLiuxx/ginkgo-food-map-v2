@@ -30,7 +30,7 @@ public class RestaurantReadController {
     @InitBinder("restaurantListQuery")
     void bindQuery(WebDataBinder binder) {
         binder.setAllowedFields("keyword", "category", "tiers", "view", "sort", "hideClosed",
-                "maxPrice", "maxDistanceMeters", "page", "pageSize", "west", "south", "east", "north");
+                "latitude", "longitude", "maxPrice", "maxDistanceMeters", "page", "pageSize", "west", "south", "east", "north");
     }
 
     /** 分类字典无需登录，返回稳定编码及展示顺序。 */

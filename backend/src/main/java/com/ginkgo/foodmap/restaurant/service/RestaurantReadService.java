@@ -80,7 +80,7 @@ public class RestaurantReadService {
         }).toList();
         var response = new RestaurantMapPointsVo();
         response.setPoints(points); response.setMatchedCount(count); response.setReturnedCount(points.size());
-        response.setLimit(500); response.setTruncated(count > points.size());
+        response.setLimit(100); response.setTruncated(count > points.size());
         return response;
     }
 
@@ -105,16 +105,17 @@ public class RestaurantReadService {
         vo.setId(row.getId().toString());
         vo.setName(row.getName());
         vo.setCategoryCode(row.getCategoryCode());
+        vo.setRestaurantType(row.getRestaurantType());
+        vo.setSupportsDineIn(row.getSupportsDineIn());
+        vo.setSupportsDelivery(row.getSupportsDelivery());
         vo.setCategoryName(row.getCategoryName());
         vo.setPricePerPerson(row.getPricePerPerson());
         vo.setPriceKind(row.getPriceKind());
         vo.setAddress(row.getAddress());
         vo.setLatitude(row.getLatitude());
         vo.setLongitude(row.getLongitude());
-        vo.setCoordinateSystem(row.getCoordinateSystem());
         vo.setNeedsLocation(row.isNeedsLocation());
         vo.setBusinessStatus(row.getBusinessStatus());
-        vo.setSourceType(row.getSourceType());
         vo.setCreatedAt(row.getCreatedAt());
         vo.setUpdatedAt(row.getUpdatedAt());
         vo.setDistanceKm(row.getDistanceKm());

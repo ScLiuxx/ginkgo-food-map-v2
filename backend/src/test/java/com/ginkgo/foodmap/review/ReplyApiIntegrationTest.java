@@ -78,7 +78,7 @@ class ReplyApiIntegrationTest {
             jdbc.update("INSERT INTO users(id,username,email,password_hash,email_verified) VALUES(?,?,?,?,TRUE)", id,"reply_"+id,"reply"+id+"@example.test","test-only");
             jdbc.update("INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code='ROLE_USER'",id);
         }
-        jdbc.update("INSERT INTO restaurants(id,name,category_code,source_type,created_by) VALUES(1,'回复测试店','OTHER','LEGACY_IMPORT',11),(2,'另一店','OTHER','LEGACY_IMPORT',11)");
+        jdbc.update("INSERT INTO restaurants(id,name,category_code,created_by) VALUES(1,'回复测试店','OTHER',11),(2,'另一店','OTHER',11)");
         for (long id : List.of(1L,2L,3L))
             jdbc.update("INSERT INTO reviews(id,restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,is_recommended,body,client_request_id,request_hash) VALUES(?,?,11,7,7,7,7,TRUE,'测试点评正文',UUID_TO_BIN(?),UNHEX(REPEAT('01',32)))",id,id==3?2:1,UUID.randomUUID().toString());
         when(sessions.isActive(anyString(),anyLong(),anyLong())).thenReturn(true);

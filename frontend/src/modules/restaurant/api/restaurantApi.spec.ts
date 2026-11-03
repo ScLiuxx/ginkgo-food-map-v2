@@ -120,14 +120,12 @@ describe('restaurant HTTP API', () => {
         pricePerPerson: 65,
         priceKind: 'ESTIMATE',
         businessStatus: 'CLOSED',
-        sourceType: 'USER',
         distanceKm: 2.34,
       }),
     ).toMatchObject({
       price: 65,
       priceKind: 'estimate',
       closed: true,
-      source: 'USER',
       distanceKm: 2.34,
     })
   })

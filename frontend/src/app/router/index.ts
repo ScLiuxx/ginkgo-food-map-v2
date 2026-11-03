@@ -26,6 +26,13 @@ const router = createRouter({
       meta: { title: { map: '地图', messages: '消息', account: '我的' }[kind] },
     })),
     {
+      path: '/restaurants/submit',
+      name: 'restaurant-submit',
+      component: () => import('@/modules/restaurant/ui/RestaurantCorrection.vue'),
+      props: { submission: true },
+      meta: { title: '提交店铺' },
+    },
+    {
       path: '/restaurants/new',
       name: 'restaurant-create',
       component: () => import('@/pages/restaurant/RestaurantEditorPage.vue'),
@@ -39,17 +46,18 @@ const router = createRouter({
       meta: { title: '编辑餐厅' },
     },
     {
+      path: '/restaurants/:id/correction',
+      name: 'restaurant-correction',
+      component: () => import('@/modules/restaurant/ui/RestaurantCorrection.vue'),
+      props: true,
+      meta: { title: '补充 / 纠错' },
+    },
+    {
       path: '/restaurants/:id',
       name: 'restaurant-detail',
       component: () => import('@/pages/restaurant/RestaurantPage.vue'),
       props: true,
       meta: { title: '餐厅详情' },
-    },
-    {
-      path: '/scoring-guide',
-      name: 'scoring-guide',
-      component: () => import('@/pages/scoring/ScoringGuidePage.vue'),
-      meta: { title: '评分说明' },
     },
     {
       path: '/password-reset',

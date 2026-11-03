@@ -250,3 +250,39 @@ h3 {
     font-size: 13px;
   }
 }
+
+/* 单列商家行保持图片、评分、类别和地址对齐；手机保留紧凑图片尺寸。 */
+@media (min-width: 701px) {
+  .restaurant-card {
+    padding: 24px 0;
+    gap: 28px;
+    min-height: 218px;
+  }
+  .card-media {
+    flex-basis: 190px;
+    width: 190px;
+    height: 182px;
+    background: #e9eaed;
+  }
+  .catalog-photo-placeholder {
+    background: #e9eaed;
+    color: #92969e;
+  }
+  .card-copy {
+    padding-top: 6px;
+  }
+  h3 {
+    font-size: 22px;
+    margin-bottom: 14px;
+  }
+  .card-price.unknown {
+    font-size: 15px;
+    color: #535a62;
+  }
+  .card-service {
+    margin-top: 15px;
+  }
+  .card-distance {
+    font-size: 13px;
+  }
+}

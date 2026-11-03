@@ -21,6 +21,8 @@ export interface MapPoint {
 }
 /** 仅用户点击结果时发起地图定位；序号允许重复点击同一家再次居中。 */
 export interface MapFocus {
+  /** 切换校区用区域视野，点选商家仍默认放大到门店。 */
+  zoom?: number
   longitude: number
   latitude: number
   sequence: number

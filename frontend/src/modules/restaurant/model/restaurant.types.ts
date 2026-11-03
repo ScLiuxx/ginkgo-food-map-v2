@@ -23,16 +23,20 @@ export interface RestaurantReadModel {
   participantCount: number
   recommendRate: number | null
   dimensions: Record<RatingDimension, number | null>
-  source: 'USER' | 'LEGACY_IMPORT' | 'legacy-preview'
   /** 真实接口以服务端距离为准；旧快照没有此字段时才在纯逻辑测试中计算。 */
   distanceKm?: number | null
 }
 
 export type RatingDimension = 'taste' | 'value' | 'service' | 'ambience'
-export type RestaurantSort = 'score' | RatingDimension | 'reviews' | 'price' | 'distance'
+export type RestaurantSort =
+  'score' | RatingDimension | 'reviews' | 'price' | 'distance' | 'recommend'
 
 /** 分类使用服务端稳定编码，所有条件随分页请求提交，不在当前页二次筛选。 */
 export interface CatalogFilters {
+  /** GCJ-02用户位置：仅在授权成功后随查询发送，不持久化。 */
+  latitude?: number
+  longitude?: number
+  /** 校区与距离基准同步提交给服务端，缺省供旧调用兼容。 */
   /** 前端过渡筛选；后端未支持时须读取完整分页再筛选，不能只筛当前页。 */
   restaurantType?: '' | 'REGULAR' | 'CANTEEN'
   diningMode?: '' | 'dineIn' | 'delivery'

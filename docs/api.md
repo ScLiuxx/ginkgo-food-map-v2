@@ -1,5 +1,69 @@
 # Ginkgo 美食地图 V2 接口文档
 
+## 商户待审图片
+
+`POST /api/files/images?purpose=RESTAURANT`：需要登录，`multipart/form-data`，单文件字段`file`。复用现有上传接口，省略purpose时默认REVIEW；只接受REVIEW/RESTAURANT，非法值400 `FILE_INVALID_IMAGE`。两种用途共享Bucket但使用独立目录，商户默认`restaurant-images/`，点评沿用`review-images/`。后端生成随机路径并显式设置对象为私有，不返回OSS URL。部署时RAM须允许商户目录的Put/Get/Delete；可用`app.file.oss.restaurant-prefix`配置目录，当前本地设为已有授权范围内的`review-images/restaurants/`。Bucket须符合现有未启用版本控制的清理约定。
+
+上传前浏览器将JPEG/PNG/WebP压缩成JPEG，原图不超过20MiB、4000万像素；服务端独立校验有效JPEG、300KiB及最长边1200px。201、`Cache-Control:no-store`，统一封装的`data`示例：`{"fileId":"101","byteSize":20480,"width":800,"height":600,"expiresAt":"2026-11-03T14:00:00Z"}`。401未登录、400 `FILE_INVALID_IMAGE`类型或尺寸无效、413 `FILE_TOO_LARGE`文件过大、503 `FILE_STORAGE_UNAVAILABLE`存储不可用。
+
+`DELETE /api/files/images/{fileId}`：需要登录，仅能取消本人未绑定文件，支持两种用途。204完成，202删除意图已接受、后台继续重试；404 `FILE_NOT_FOUND`不可操作，409 `FILE_ALREADY_BOUND`表示已经绑定，应先确认提交结果。未绑定文件默认24小时有效；取消或到期后先持久化删除意图，再删OSS，成功后删除文件登记。上传失败和进程异常沿用预登记补偿机制。
+
+新店投稿和纠错请求新增可选`photoIds`字符串数组（默认空，最多5项，正long范围、唯一，顺序为展示顺序）。只有本人、未过期、已完成上传且用途为RESTAURANT的临时图片可绑定。错误用途、过期、他人或已绑定文件返回409 `FILE_NOT_BINDABLE`；字段错误/重复ID返回400。图片绑定、申请及有序关联在同一事务提交，任一图片失败全部回滚。相同请求编号、内容和图片顺序重试返回旧回执，不重新绑定；换图或调换顺序须新编号，否则409 `RESTAURANT_STATE_CONFLICT`。空图片列表从规范化JSON摘要省略，保持旧文字申请重试兼容。
+
+提交只绑定待审申请，不修改正式商户图片。没有按文件ID公开读取图片的接口，点评图片读取服务也拒绝商户用途；当前未实现审核、拒绝、撤回、正式展示或图片转正接口。已绑定的待审图片不会按临时到期清理，须由后续审核/撤回流程明确释放，不能声称已具备拒绝清理能力。前端保留本地预览，失败可重试或移除；离开清理失败由后端到期兜底，提交超时后取消已绑定文件会被409保护。
+
+
+## 新商户投稿
+
+`POST /api/restaurant-submissions`：需要登录，普通用户可用。请求完整业务资料与下方纠错接口相同，不带目标商户ID。分类必须存在且启用；位置为GCJ-02并明确确认，不可指定提交人、正式商户ID、审核状态、评分或未知字段。
+
+成功201、`Cache-Control: no-store`，响应示例：`{"success":true,"code":"OK","message":"请求成功","data":{"id":"61","status":"PENDING"},"timestamp":"2026-11-02T13:30:00Z"}`。只新增待审申请，申请的`restaurant_id=NULL`；不创建公开商户、标签、点评或评分。管理员审核和审核通过后的发布接口尚未实现。
+
+请求中的`clientRequestId`为必填UUID；同一账号相同编号和规范化内容重试返回同一回执，首次并发重试也只保存一份。编号与纠错共用命名空间；不同内容、不同目标或新建/纠错之间复用编号返回409 `RESTAURANT_STATE_CONFLICT`。401 `AUTH_UNAUTHENTICATED`表示未登录；400 `RESTAURANT_INVALID_INPUT`表示业务字段无效，400 `RESTAURANT_CATEGORY_UNAVAILABLE`表示分类不存在或停用；绑定与Bean Validation错误沿用全局错误码，未知JSON字段返回400 `COMMON_MALFORMED_REQUEST`。
+
+前端`/restaurants/submit`复用纠错表单：带入搜索词，选中的门店通过当前标签页内存草稿传递地址和位置，URL只含关键词与随机草稿编号；登录回跳保留路由，刷新后需重新选店。搜索结果加载失败时不展示“未找到”的投稿入口；提交失败保留表单及请求编号供手动重试。
+
+## 商户资料补充与纠错
+
+商户不再具有校区归属，公开响应及申请不包含`campusCode`；提交该过时字段按未知字段返回400。目录与地图查询移除`campus`筛选，距离只基于请求中的用户原点；旧客户端的`campus`查询参数不参与绑定或筛选。
+
+`POST /api/restaurants/{id}/change-requests`：需要登录，无需是商户创建者；目标必须是未删除的商户。仅新增待审核申请，不修改公开商户、标签、点评或统计。管理员审核接口尚未实现；既有归属管理接口保持原有权限。
+
+请求为完整业务资料，沿用餐厅保存校验：
+
+```json
+{
+  "clientRequestId": "2bd0946c-291c-49af-8670-319ca4f64f5d",
+  "name": "商户名称",
+  "categoryCode": "HOT_POT",
+  "restaurantType": "REGULAR",
+  "priceKind": "UNKNOWN",
+  "pricePerPerson": null,
+  "supportsDineIn": true,
+  "supportsDelivery": null,
+  "address": "商户地址",
+  "latitude": 30.670582,
+  "longitude": 104.107260,
+  "locationConfirmed": true,
+  "businessStatus": "OPERATING",
+  "tags": []
+}
+```
+
+`clientRequestId`为必填UUID，同一账号使用相同编号及规范化内容重试，返回同一申请；改动内容须使用新编号。`restaurantType`取REGULAR/CANTEEN；堂食、外卖各为true/false/null（未知）。坐标为GCJ-02，需明确确认。其余字段约束与餐厅保存一致；不可指定提交人、审核状态、评分或其他未知字段。
+
+成功为201、`Cache-Control: no-store`，使用统一响应封装，`data`为`{"id":"51","status":"PENDING"}`。400 `RESTAURANT_INVALID_INPUT`表示资料校验失败；401 `AUTH_UNAUTHENTICATED`表示未登录；404 `RESTAURANT_NOT_FOUND`表示目标不存在或已删除；409 `RESTAURANT_STATE_CONFLICT`表示同一请求编号被用于不同商户或内容。JSON绑定、Bean Validation错误沿用全局参数错误码。网络失败可保留原编号手动重试，不自动生成第二份申请。
+
+公开餐厅列表/详情增加`restaurantType`、`supportsDineIn`、`supportsDelivery`，供纠错预填。评分、点评、图片和归属信息不属于此申请的可编辑字段。
+
+纠错页面将商户名称框与现有高德餐饮搜索合并，输入名称即可搜索并选择门店，选择后将高德GCJ-02位置规范到六位小数，并自动填写店名、地址及确认状态，不开放坐标输入框；未更换位置可确认后保留原值。搜索复用`AMap.PlaceSearch`和`GET /_AMapService/v3/place/text`代理，不新增本站接口，不申请用户定位。提交接口仍按数值坐标及确认状态校验；界面选择并非服务端对高德门店真实性的认证。未选择的搜索候选不保存，选择的资料在提交后仅进入待审申请。
+
+页面排序：综合排序使用`sort=score`；距离最近在用户点击并授权定位后使用`sort=distance`及GCJ-02经纬度；好评优先使用`sort=recommend`，按推荐比例降序，同率按计分人数降序，再按名称/ID稳定排序，未评分排末尾。页面不提供人均排序按钮，接口原有price排序仍保留。
+
+用户位置查询：`GET /api/restaurants`、`GET /api/restaurants/map-points` 支持可选的 `latitude`（-90至90）、`longitude`（-180至180），必须成对提供且为GCJ-02坐标，非法或缺边返回400。`sort=distance`在分页前按距该原点的球面直线距离升序，`distanceKm`返回公里，已有`maxDistanceMeters`使用同一原点。未传用户位置时距离为null，距离排序退化为名称/ID稳定次序，不能声称离用户最近；详情及管理资料没有查询原点，返回null距离。前端详情根据商家经纬度与当前授权位置计算展示距离。坐标不写库，接口仍公开只读，其他排序/筛选/分页规则保留。前端不再默认限制清水河校区。浏览器原始GPS坐标需先转换为GCJ-02再发送，不能直接混用。
+
+
+
 ## 账号规则与注册自动登录（2026-11-01）
 
 本节为最新账号契约，覆盖下文旧版本规则。用户名2–24个字符（中文、英文字母、数字、下划线），去首尾空白且区分大小写；V11将username列改为utf8mb4_0900_as_cs，唯一索引保留。邮箱规则不变。新注册与重置密码均为4–32位ASCII可打印字符（字母、数字或英文符号，不允许空格/中文），不强制字符组合。旧密码登录继续原样校验，最长72字节，不追溯新注册限制。
@@ -26,7 +90,7 @@
 
 本站收录核对复用公开GET /api/restaurants的100米矩形候选查询（keyword/category为空、所有筛选关闭、pageSize=100），每页最多10个高德地点、3路并发；候选结果完整时，仅同名且80米内唯一记录确认匹配。候选截断/故障显示待核实，不解释为未收录；同名远距离、名称不同或重名歧义不自动关联。前端保留结果序号和取消保护，第三方搜索失败不阻断本站查询。
 
-未新增学生提交、申请保存或审核接口；“提交收录”“手动添加餐厅”均为disabled占位，外部搜索不写数据库或持久化浏览器存储，不生成虚构本站ID/详情。现有管理员维护接口不受此占位影响。
+外部搜索中的“提交收录”“手动添加餐厅”仍为disabled占位，外部搜索不写数据库或持久化浏览器存储，不生成虚构本站ID/详情。已有商户的资料申请使用本文“商户资料补充与纠错”接口；管理员审核处理尚未实现，现有归属管理接口权限不变。
 
 最后核对日期：2026-10-30。
 
@@ -634,10 +698,8 @@ $loginResult = $null
       "address": "测试地址",
       "latitude": 30.754400,
       "longitude": 103.931200,
-      "coordinateSystem": "GCJ02",
       "needsLocation": false,
       "businessStatus": "OPERATING",
-      "sourceType": "LEGACY_IMPORT",
       "createdAt": "2026-10-28T01:02:03.123456Z",
       "updatedAt": "2026-10-28T01:02:03.123456Z",
       "distanceKm": 0.0,
@@ -658,7 +720,7 @@ $loginResult = $null
 }
 ```
 
-`id`始终为字符串。`pricePerPerson=null`和 `priceKind=UNKNOWN`表示未知；`EXACT`是填报金额，不表示平台已核实；`ESTIMATE`是估值。地址未知为null；待定位的经纬度及距离均为null。`sourceType`仅为 `USER` 或 `LEGACY_IMPORT`，后者不证明信息已核实或已认领。`OPERATING`表示经营记录，非此刻营业状态。
+`id`始终为字符串。`pricePerPerson=null`和 `priceKind=UNKNOWN`表示未知；`EXACT`是填报金额，不表示平台已核实；`ESTIMATE`是估值。地址未知为null；待定位的经纬度及距离均为null。所有经纬度统一为GCJ-02；响应不再返回 `coordinateSystem` 或 `sourceType`。`OPERATING`表示经营记录，非此刻营业状态。
 
 上述示例为无人评分状态。统计来自restaurant模块自有的`restaurant_review_statistics`，不跨模块关联点评表；列表和详情复用相同投影，与计数、分页及标签保持同一REPEATABLE_READ快照。缺少零统计行的旧餐厅也可读取，GET不初始化或修复数据；首次发评仍在原事务中惰性初始化。统计核对和重建属于运维/后续能力，不在每次公开GET扫描所有点评。
 
@@ -669,7 +731,7 @@ $loginResult = $null
 | `score` | 最新有效代表点评的单条综合分累计值÷人数；单条综合分先按HALF_UP保留两位 |
 | `dimensions` | 各维度代表分累计值÷人数，字段为`taste/value/service/ambience` |
 | `recommendRate` | 代表点评中推荐人数÷计分人数，0–1比例，非0–100百分数，不由综合分推导 |
-| `tier` | 权威杯型，阈值见[评分需求](requirements.md#score-01评分计算与杯型原版迁移p1正确性-p0)，不按展示舍入值判档 |
+| `tier` | 权威杯型，阈值见[评分需求](requirements.md#score-01计分口径)，不按展示舍入值判档 |
 
 有评分的隔离样例：小王8分后再评6分、小李9分，返回`reviewCount:3`、`participantCount:2`、`score:7.5`；两位当前代表中一位推荐时`recommendRate:0.5`，`tier:super`。若四维均同单条分，则四维均为7.5。无人评分时分数、四维和推荐率显式为null，两个计数为0、`tier:none`；真实0分正常返回0与`tier:small`。初版用户等权，不加入推荐排序修正；接口保留高精度十进制结果，前端仅格式化为一位评分/整数百分比，使用`tier`判档。
 
@@ -721,10 +783,8 @@ $loginResult = $null
     "address": null,
     "latitude": 30.754400,
     "longitude": 103.931200,
-    "coordinateSystem": "GCJ02",
     "needsLocation": false,
     "businessStatus": "OPERATING",
-    "sourceType": "USER",
     "createdAt": "2026-10-28T01:02:03.123456Z",
     "updatedAt": "2026-10-28T01:02:03.123456Z",
     "distanceKm": 0.0,
@@ -757,7 +817,6 @@ $loginResult = $null
 | `address` | 默认null | 去首尾Unicode空白后最多80个Unicode码点，空白转null |
 | `latitude` | 必填 | 数值3–54，最多6位有效小数 |
 | `longitude` | 必填 | 数值73–136，最多6位有效小数 |
-| `coordinateSystem` | 默认 `GCJ02` | 只允许 `GCJ02`，显式null不允许，不自动转换外部坐标 |
 | `locationConfirmed` | 必填 | 必须为true，不允许无位置发布；服务端不自动填默认校园坐标，准确性需提交者确认 |
 | `businessStatus` | 默认 `OPERATING` | `OPERATING`或 `CLOSED`，显式null不允许 |
 | `tags` | 默认空数组 | 最多提交8项，不能为null；各项去首尾空白后非空，按数据库排序规则去重保留首项和顺序；去重后总Unicode码点数最多80 |
@@ -773,14 +832,13 @@ Unicode长度与Java的UTF-16长度不同，例如单个emoji按一个码点计�
   "address": "测试地址",
   "latitude": 30.754400,
   "longitude": 103.931200,
-  "coordinateSystem": "GCJ02",
   "locationConfirmed": true,
   "businessStatus": "OPERATING",
   "tags": ["学生聚餐", "晚餐"]
 }
 ```
 
-成功201，`Location: /api/restaurants/{新ID}`，`data`为12.1管理资料，`deleted: false`、`sourceType: "USER"`。创建/修改者由当前账号写入。不会生成评价、评分、其他店铺或新登录会话，不发邮件。同名不覆盖已有记录；当前没有请求幂等键，超时应先核对结果，不要自动无限重试POST。
+成功201，`Location: /api/restaurants/{新ID}`，`data`为12.1管理资料，`deleted: false`。创建/修改者由当前账号写入。不会生成评价、评分、其他店铺或新登录会话，不发邮件。同名不覆盖已有记录；当前没有请求幂等键，超时应先核对结果，不要自动无限重试POST。
 
 ### 12.3 编辑资料、标签及经营状态
 
@@ -788,9 +846,9 @@ Unicode长度与Java的UTF-16长度不同，例如单个emoji按一个码点计�
 
 这是**完整替换**：必须重新提交名称、分类、坐标、位置确认；省略地址会清空，省略标签会清空，省略人均会回到UNKNOWN，省略经营状态按OPERATING保存。客户端应填写完整请求，不能当作局部PATCH。可通过 `businessStatus` 切换停业/正常经营，停业不等于删除。
 
-采用最后成功保存覆盖：两人打开同一份资料后都可以依次成功保存，后保存的完整资料覆盖前一次，包括旧页面携带的旧值；不会因资料在页面打开后被别人改过而报版本冲突。新分类必须启用，当前已停用分类允许保持原值。修改历史记录仍保留原来源和创建者；补齐位置后清除待定位状态。未知/内部JSON字段拒绝，不允许提交创建者、来源或评分。
+采用最后成功保存覆盖：两人打开同一份资料后都可以依次成功保存，后保存的完整资料覆盖前一次，包括旧页面携带的旧值；不会因资料在页面打开后被别人改过而报版本冲突。新分类必须启用，当前已停用分类允许保持原值。修改历史记录仍保留原创建者；补齐位置后清除待定位状态。未知/内部JSON字段拒绝，不允许提交创建者或评分，也不接受已删除的来源字段。
 
-事务内先 `SELECT … FOR UPDATE` 锁主行核验当前权限和删除状态，UPDATE按ID、归属和未删除条件执行，不比较版本。同一家店的并发写入串行执行，资料、整组标签、操作者和修改时间同事务保存，任一步失败全部回滚。最终资料和标签必须完整来自同一次保存，不会交叉混合。原V3的 `row_version` 列保留，但应用不读取、比较或递增；本次不修改迁移。
+事务内先 `SELECT … FOR UPDATE` 锁主行核验当前权限和删除状态，UPDATE按ID、归属和未删除条件执行，不比较版本。同一家店的并发写入串行执行，资料、整组标签、操作者和修改时间同事务保存，任一步失败全部回滚。最终资料和标签必须完整来自同一次保存，不会交叉混合。V12已删除餐厅 `row_version`、`coordinate_system`、`source_type` 列。坐标统一为GCJ-02；客户端仍须确认位置。旧客户端提交 `coordinateSystem`、`sourceType` 或 `rowVersion` 会按未知字段返回400（`COMMON_MALFORMED_REQUEST`）。
 
 ### 12.4 软删除
 
@@ -1092,7 +1150,7 @@ V8新增review_request_receipts并回填已有发布：作者、UUID、点评/�
 
 ### GET /api/restaurants/map-points
 
-访客可读，仅公开该GET入口，不扩大写入或管理权限。必填west、south、east、north，其余业务筛选与目录相同；page/pageSize不控制点位集合，点位固定最多500条。四边全部缺失400 RESTAURANT_INVALID_INPUT，其他边界校验同上。请求不访问高德、不调用外部搜索、不写数据库，也没有新增审核状态；只查询当前系统已有可见餐厅。
+访客可读，仅公开该GET入口，不扩大写入或管理权限。必填west、south、east、north，其余业务筛选与目录相同；page/pageSize不控制点位集合，点位固定最多100条。四边全部缺失400 RESTAURANT_INVALID_INPUT，其他边界校验同上。请求不访问高德、不调用外部搜索、不写数据库，也没有新增审核状态；只查询当前系统已有可见餐厅。
 
 ```http
 GET /api/restaurants/map-points?west=104.04&east=104.16&south=30.62&north=30.73&sort=score
@@ -1109,15 +1167,15 @@ GET /api/restaurants/map-points?west=104.04&east=104.16&south=30.62&north=30.73&
 | points[].pricePerPerson | 人均整数元或null，不伪造未知消费 |
 | points[].businessStatus | OPERATING/CLOSED，不表示实时开门状态 |
 | matchedCount | 该视口符合条件的完整数量，与点位同一事务快照 |
-| returnedCount | 实际返回数量，最大500 |
-| limit/truncated | 固定500；matchedCount超过returnedCount时为true |
+| returnedCount | 实际返回数量，最大100 |
+| limit/truncated | 固定100；matchedCount超过returnedCount时为true |
 
 空区域data示例：
 
 ```json
-{"points":[],"matchedCount":0,"returnedCount":0,"limit":500,"truncated":false}
+{"points":[],"matchedCount":0,"returnedCount":0,"limit":100,"truncated":false}
 ```
 
-排序与目录共用SQL：默认综合评分降序，无评分靠后，同分名称和ID稳定排序，筛选和排序发生在截断前。超限时前端提示放大地图缩小范围，不把500点称为全部；列表仍可按完整匹配数量分页。两个独立HTTP请求不是跨请求原子快照，并发写入时各自反映各自的事务快照。
+排序与目录共用SQL：默认综合评分降序，无评分靠后，同分名称和ID稳定排序，筛选和排序发生在截断前。超限时前端提示放大地图缩小范围，不把100点称为全部；列表仍可按完整匹配数量分页。两个独立HTTP请求不是跨请求原子快照，并发写入时各自反映各自的事务快照。
 
 前端监听高德moveend/zoomend，停顿300毫秒自动刷新最终视口，取消并拒绝迟到响应，失败保留上次结果且明确提示。缺Key或安全代理时保留全局餐厅目录，不能把降级目录当作视口点位验收。本地真实高德底图及自动视口请求已验证，生产环境及App唤起另行验收。

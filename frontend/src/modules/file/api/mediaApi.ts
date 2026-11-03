@@ -3,7 +3,11 @@ import type { ApiResponse } from '@/shared/api/api.types'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 
 /** 上传固定发起账号；浏览器负责生成multipart边界，禁止手工覆盖Content-Type。 */
-export async function uploadImage(file: File, token: string): Promise<string> {
+export async function uploadImage(
+  file: File,
+  token: string,
+  purpose: 'REVIEW' | 'RESTAURANT' = 'REVIEW',
+): Promise<string> {
   const form = new FormData()
   form.append('file', file)
   try {
@@ -12,6 +16,9 @@ export async function uploadImage(file: File, token: string): Promise<string> {
       form,
       {
         headers: { Authorization: `Bearer ${token}` },
+        params: { purpose },
+        // 后端OSS请求有独立30秒上限，浏览器留出压缩后处理及网络余量。
+        timeout: 45_000,
       },
     )
     const id = response.data.data?.fileId

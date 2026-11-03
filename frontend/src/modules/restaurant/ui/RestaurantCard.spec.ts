@@ -1,3 +1,4 @@
+import { createPinia } from 'pinia'
 import { createApp, nextTick, ref, type App } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -24,7 +25,7 @@ describe('商户行的真实资料边界', () => {
     await router.push('/')
     host = document.createElement('div')
     document.body.append(host)
-    app = createApp(RestaurantCard, { restaurant }).use(router)
+    app = createApp(RestaurantCard, { restaurant }).use(router).use(createPinia())
     app.mount(host)
     await nextTick()
   }

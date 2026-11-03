@@ -46,7 +46,7 @@ describe('地图自动查询', () => {
       points: [],
       matchedCount: 0,
       returnedCount: 0,
-      limit: 500,
+      limit: 100,
       truncated: false,
     })
     return { state, filters }
