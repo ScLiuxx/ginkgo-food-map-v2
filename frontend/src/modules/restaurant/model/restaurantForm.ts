@@ -48,11 +48,14 @@ function coordinate(value: string, min: number, max: number): boolean {
 }
 
 /** 客户端给出可定位的输入反馈；分类启用及标签同库去重仍由服务端最终校验。 */
-export function validateRestaurantDraft(form: RestaurantDraft): RestaurantErrors {
+export function validateRestaurantDraft(
+  form: RestaurantDraft,
+  type: 'REGULAR' | 'CANTEEN' = 'REGULAR',
+): RestaurantErrors {
   const errors: RestaurantErrors = {}
   if (!form.name.trim() || characterCount(form.name.trim()) > 40)
     errors.name = '名称需为1–40个字符。'
-  if (!form.categoryCode) errors.categoryCode = '请选择餐厅分类。'
+  if (type === 'REGULAR' && !form.categoryCode) errors.categoryCode = '请选择餐厅分类。'
   if (characterCount(form.address.trim()) > 80) errors.address = '地址最多80个字符。'
   if (
     form.priceKind !== 'UNKNOWN' &&
@@ -71,10 +74,14 @@ export function validateRestaurantDraft(form: RestaurantDraft): RestaurantErrors
 }
 
 /** 始终构造完整替换请求；未知价格/空地址明确为null，不能把省略误当成保留。 */
-export function restaurantInput(form: RestaurantDraft): RestaurantSaveInput {
+export function restaurantInput(
+  form: RestaurantDraft,
+  type: 'REGULAR' | 'CANTEEN' = 'REGULAR',
+): RestaurantSaveInput {
   return {
     name: form.name.trim(),
-    categoryCode: form.categoryCode,
+    // 即使草稿曾选择普通餐厅分类，食堂请求也始终显式使用null。
+    categoryCode: type === 'CANTEEN' ? null : form.categoryCode,
     priceKind: form.priceKind,
     pricePerPerson: form.priceKind === 'UNKNOWN' ? null : Number(form.price),
     address: form.address.trim() || null,

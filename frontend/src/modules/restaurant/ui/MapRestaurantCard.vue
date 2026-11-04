@@ -13,7 +13,11 @@ const businessTags = computed(() =>
   displayRestaurantTags(props.restaurant.tags, props.restaurant.category),
 )
 const categoryLabel = computed(() =>
-  props.restaurant.category === '其他' ? '' : props.restaurant.category,
+  props.restaurant.restaurantType === 'CANTEEN'
+    ? '食堂'
+    : props.restaurant.category === '其他'
+      ? ''
+      : props.restaurant.category,
 )
 const distanceLabel = computed(() =>
   distance.value === null

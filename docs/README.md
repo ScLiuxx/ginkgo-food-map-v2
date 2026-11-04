@@ -32,12 +32,15 @@ docs/
 ## 设计与计划
 
 - 架构：[模块化单体](architecture/modular-monolith.md)、[前端分层](architecture/frontend.md)。
-- 数据结构：[餐厅/食堂/窗口结构与 V9 增量](architecture/restaurant-schema.md)、[评价结构与 V10 窗口归属](architecture/review-schema.md)；区分迁移脚本就绪与运行库部署状态。
+- 数据结构：[餐厅/食堂/窗口结构](architecture/restaurant-schema.md)、[评价与窗口归属](architecture/review-schema.md)、[Elasticsearch商户搜索结构](architecture/elasticsearch-schema.md)；区分结构就绪、实际部署与业务接入状态。
+- 分类：V19将商户与窗口归并为九个一级美食分类，旧编码停用保留；编码及历史兼容见[分类结构](architecture/restaurant-schema.md#restaurant_categories餐厅分类)，本地数据整理结果见[开发记录](development.md)。
 - 审核存储：[商户申请表V17](architecture/restaurant-schema.md#restaurant_change_requests商户资料待审核申请)，采用request_type和单个restaurant_id，记录审核结果与资料快照；通过/驳回及正式相册发布已实现，新增[正式相册V18](architecture/restaurant-schema.md#restaurant_photos正式商户相册)，餐厅/食堂详情相册及管理端发布记录已接入，首页/地图卡片封面也已接入。
 - 页面：[找店界面方案](plans/discovery-ui.md)。
 - 管理端：[商户审核示意图](plans/admin-review-mockup.html)为设计依据；`/admin/reviews`已接入真实申请查询、就地编辑、通过/驳回及连续审核，见[功能说明](features.md)及[API文档](api.md#5-管理员商户审核)。
 - 统一登录：`/login`按服务端角色分流前台/工作台，`/admin/login`仅兼容跳转；管理身份由后端`/api/admin/me`校验。身份与查询边界见[前端架构](architecture/frontend.md)。
-- 搜索：[Elasticsearch 餐厅搜索方案](plans/elasticsearch-search.md)，当前仅设计，包含资源约束、相关性、可靠同步与降级验收。
+- 搜索：[Elasticsearch结构](architecture/elasticsearch-schema.md)及[实施方案](plans/elasticsearch-search.md)；本地现行v002空索引与别名已建立，包含21个主字段和IK配置。[真实商户分词与词库评测](plans/restaurant-search-evaluation.md)已完成9562家商户、44条查询的隔离实验；正式数据导入、公开搜索与同步仍待实现。
+- 词库：[IK配置与维护](../deploy/elasticsearch/README.md)；本地已启用“冒菜、螺蛳粉、天街”，完成持久挂载和相同数据上的真实ES索引重建回归，网站查询仍使用MySQL。
+- 搜索投影：已实现[内部批量组装服务](../backend/src/main/java/com/ginkgo/foodmap/restaurant/service/RestaurantSearchProjectionService.java)及字段校验，支持完整文档和删除墓碑；V21已实现MySQL版本存储及业务事务递增，版本与数据同快照读取，正式导入及同步仍待实现，契约见[ES结构](architecture/elasticsearch-schema.md)。
 - 地图：[高德地图基础闭环](plans/map-foundation.md)，包含导航、点位接口、页面联动及分步验收。
 - 迁移：[旧系统迁移计划](plans/legacy-migration.md)。
 - 运维：[自动部署与排障](operations/deployment.md)。

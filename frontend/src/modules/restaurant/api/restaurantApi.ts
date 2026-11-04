@@ -14,8 +14,9 @@ export interface RestaurantResponse {
   dining?: RestaurantReadModel['dining']
   id: string
   name: string
-  categoryCode: string
-  categoryName: string
+  /** 食堂不适用美食分类，编码及名称均为null。 */
+  categoryCode: string | null
+  categoryName: string | null
   pricePerPerson: number | null
   priceKind: 'UNKNOWN' | 'EXACT' | 'ESTIMATE'
   address: string | null
@@ -48,7 +49,7 @@ export interface RestaurantManagement {
 /** PUT为完整替换，显式提交全部可编辑字段；身份、来源、评分及版本均不属于输入。 */
 export interface RestaurantSaveInput {
   name: string
-  categoryCode: string
+  categoryCode: string | null
   priceKind: RestaurantResponse['priceKind']
   pricePerPerson: number | null
   address: string | null
@@ -79,7 +80,7 @@ export function toRestaurantModel(value: RestaurantResponse): RestaurantReadMode
     ...(value.dining ? { dining: value.dining } : {}),
     id: value.id,
     name: value.name,
-    category: value.categoryName,
+    category: value.restaurantType === 'CANTEEN' ? '' : (value.categoryName ?? ''),
     address: value.address ?? '',
     tags: value.tags,
     latitude: value.latitude,

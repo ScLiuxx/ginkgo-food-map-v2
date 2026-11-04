@@ -7,6 +7,8 @@ import com.ginkgo.foodmap.restaurant.vo.RestaurantCategoryVo;
 import com.ginkgo.foodmap.restaurant.vo.RestaurantPageVo;
 import com.ginkgo.foodmap.restaurant.vo.RestaurantVo;
 import com.ginkgo.foodmap.restaurant.vo.RestaurantMapPointsVo;
+import com.ginkgo.foodmap.common.exception.BusinessException;
+import com.ginkgo.foodmap.restaurant.exception.RestaurantErrorCode;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.WebDataBinder;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.request.NativeWebRequest;
 
 import java.util.List;
 
@@ -26,10 +29,14 @@ import java.util.List;
 public class RestaurantReadController {
     private final RestaurantReadService service;
 
-    /** 只绑定公开查询字段，避免客户端注入派生offset或其他内部属性。 */
+    /** 只绑定公开字段；已移除的杯型/分档视图明确拒绝，避免静默忽略后返回误导结果。 */
     @InitBinder("restaurantListQuery")
-    void bindQuery(WebDataBinder binder) {
-        binder.setAllowedFields("keyword", "category", "tiers", "view", "sort", "hideClosed",
+    void bindQuery(WebDataBinder binder, NativeWebRequest request) {
+        if (request.getParameterMap().keySet().stream()
+                .anyMatch(key -> key.equals("view") || key.equals("tiers") || key.startsWith("tiers["))) {
+            throw new BusinessException(RestaurantErrorCode.INVALID_INPUT, "已不支持杯型或评分分档视图筛选");
+        }
+        binder.setAllowedFields("keyword", "category", "sort", "hideClosed",
                 "latitude", "longitude", "maxPrice", "maxDistanceMeters", "page", "pageSize", "west", "south", "east", "north");
     }
 

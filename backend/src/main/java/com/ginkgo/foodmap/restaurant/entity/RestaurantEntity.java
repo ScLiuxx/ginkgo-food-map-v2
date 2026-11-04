@@ -57,7 +57,4 @@ public class RestaurantEntity {
     private BigDecimal service;
     @TableField(exist = false)
     private BigDecimal ambience;
-    /** SQL直接比较累计值与人数乘阈值，不使用已舍入均分判档。 */
-    @TableField(exist = false)
-    private String tier;
 }

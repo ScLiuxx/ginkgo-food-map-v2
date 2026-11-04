@@ -99,6 +99,38 @@ describe('真实申请查询状态', () => {
     state = scope.run(() => useRestaurantRequests())!
   }
 
+  it('待审食堂清空旧分类，切回普通餐厅后必须选择分类才可通过', async () => {
+    const old = detail('11')
+    old.proposed.restaurantType = 'CANTEEN'
+    vi.mocked(fetchRequestDetail).mockResolvedValue(old)
+    start()
+    await vi.runAllTimersAsync()
+    await flush()
+    expect(state.draft.value.categoryCode).toBeNull()
+    expect(state.comparison.value.find((row) => row.key === 'categoryCode')?.after).toBe(
+      '不适用（食堂）',
+    )
+    state.editField('categoryCode', 'OTHER')
+    expect(state.draft.value.categoryCode).toBeNull()
+    state.editField('restaurantType', 'REGULAR')
+    await state.decide('approve')
+    expect(approveRequest).not.toHaveBeenCalled()
+    expect(state.decisionError.value).toBe('请选择美食品类')
+    state.editField('restaurantType', 'CANTEEN')
+    state.continuous.value = false
+    vi.mocked(approveRequest).mockRejectedValue(new Error('保留草稿'))
+    await state.decide('approve')
+    expect(approveRequest).toHaveBeenCalledWith(
+      '11',
+      expect.objectContaining({
+        restaurantType: 'CANTEEN',
+        categoryCode: null,
+      }),
+      'request-reader',
+    )
+    expect(old.proposed.categoryCode).toBe('OTHER')
+  })
+
   it('真实列表与详情按独立契约加载，false和零不被当作未知', async () => {
     start()
     await vi.runAllTimersAsync()

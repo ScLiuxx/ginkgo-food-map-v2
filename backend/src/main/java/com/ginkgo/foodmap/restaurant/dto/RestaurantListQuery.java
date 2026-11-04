@@ -11,12 +11,10 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
-import java.util.ArrayList;
 import java.math.BigDecimal;
-import java.util.List;
 
 /**
- * 公开目录的查询参数，排序与杯型只接受页面已有的稳定编码。
+ * 公开目录的查询参数，仅开放综合分、点评数、价格、距离及推荐率排序。
  *
  * <p>分页在数据库执行；每页上限用于限制单次读取成本。派生属性没有 Setter，不能由 HTTP
  * 输入覆盖 SQL 条件；LIKE 使用 ! 转义，用户输入的百分号、下划线和反斜杠都按字面量搜索。</p>
@@ -43,16 +41,7 @@ public class RestaurantListQuery {
     }
 
     @NotNull
-    @Size(max = 6, message = "最多选择6种杯型")
-    private List<@NotNull @Pattern(regexp = "bucket|super|large|medium|small|none",
-            message = "杯型编码错误") String> tiers = new ArrayList<>();
-
-    @NotNull
-    @Pattern(regexp = "all|recommended|pitfall", message = "浏览范围错误")
-    private String view = "all";
-
-    @NotNull
-    @Pattern(regexp = "score|taste|value|service|ambience|reviews|price|distance|recommend", message = "排序方式错误")
+    @Pattern(regexp = "score|reviews|price|distance|recommend", message = "排序方式错误")
     private String sort = "score";
 
     @NotNull

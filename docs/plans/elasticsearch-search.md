@@ -1,6 +1,6 @@
 # Elasticsearch 餐厅搜索方案
 
-状态：2026-11-02设计草案，尚未接入ES、安装服务或执行数据库迁移。分支`feat/elasticsearch-search`，基线为`feat/map-foundation`的`8a03df3`；保留上一轮未提交的详情页评分规则入口删除。
+状态：2026-11-04更新，当前分支`feat/es-search`。本地ES/Kibana 9.5.4及IK已就绪；默认关闭的可选连接已验证，实际依赖为Spring Data Elasticsearch 6.0.8、Java Client 9.2.9。现行空索引为restaurant-search-v002，restaurant-search别名已切换至v002；v001保留追溯。版本化JSON、可重复初始化工具及实际字段定义见[ES数据结构](../architecture/elasticsearch-schema.md)。尚未导入真实商户、切换公开搜索或实现同步；MySQL投影版本已由V21及业务事务递增实现，组装器从同一快照读取版本；尚无Outbox或ES写入器，未对业务库执行V21。
 
 ## 现状与目标
 
@@ -12,30 +12,23 @@
 
 ## 资源与依赖
 
-架构文档记录的服务器规格是2核2GB，尚未重新核验实际配置；不直接将ES叠加到现有生产主机。先本地独立容器验证；上线前测量MySQL、Java、Redis与ES总内存、文件缓存和磁盘开销，再决定扩容或独立部署。单节点仅作为开发/演示方案，不宣称高可用，暂不额外部署Kibana。
+架构文档记录的服务器规格是2核2GB，尚未重新核验实际CPU/内存；已实查云主机只有40GB系统盘，约12GB已用、26GB可用。不直接将ES叠加到现有生产主机。先在本地既有容器验证，ES与Kibana各设2GB内存上限；上线前测量MySQL、Java、Redis与ES总内存、文件缓存和磁盘开销，再决定扩容或独立部署。单节点仅作为开发/演示方案，不宣称高可用；本地已有Kibana用于学习，生产暂不额外部署Kibana。
 
 项目是Java21、Spring Boot4.0.9。实施时读取Maven实际解析的Spring Data/Java Client版本，对照官方矩阵锁定ES和分词插件版本，不使用`latest`，不照搬旧教程的TransportClient/旧客户端。优先以Spring Data Elasticsearch的Operations接口封装查询，业务层不依赖ES DSL；具体依赖通过最小集成测试确定。
 
 ## 查询与索引
 
-逻辑索引名`restaurant-search`通过alias指向`restaurant-search-v001`等物理索引，显式mapping、字段白名单；每家餐厅一文档，文档ID固定为餐厅ID。
+2026-11-04已完成[真实商户分词与词库评测](restaurant-search-evaluation.md)：9562家公开商户、44条固定查询，比较现行SQL与三种实验查询。保留ik_smart查询方向，本地已启用小词表“冒菜、螺蛳粉、天街”，并在相同数据/用例上重建实验索引验证实际搜索改善。配置与持久化见[词典维护](../../deploy/elasticsearch/README.md)。相关集基于预先字段规则，仍需新的查询集及人工相关性标注，不将本次探索实验视为正式接入验收。
 
-| 字段 | 建议类型与目的 |
-| --- | --- |
-| id、categoryCode、businessStatus、priceKind | keyword或明确的数值ID类型，精确过滤 |
-| name、categoryName、tags、address | text全文检索，name另有规范化keyword精确字段 |
-| name.partial | 受限字符ngram子字段，验证店名片段召回；不对所有字段无界扩词 |
-| price | 整数分或按现有金额精度定义的scaled_float，未知为空，不填0 |
-| score、各维度均分、reviewCount、participantCount | 数值读模型；无评分为空，正式评分仍以MySQL为准 |
-| overallScoreSum及必要累计值 | 用于核验现有精确阈值语义，不能只保存四舍五入的展示分 |
-| deleted、projectionVersion | 删除墓碑与投影并发版本，不复用业务编辑版本协议 |
-| location、needsLocation | 已确认位置才建立地理字段，坐标统一GCJ-02；餐厅不逐行保存坐标系 |
+逻辑索引名`restaurant-search`通过alias指向当前物理索引`restaurant-search-v002`，显式mapping、字段白名单；每家餐厅一文档，文档ID固定为餐厅ID。
 
-中文分词先以官方SmartCN作为基线，对照原生CJK/字符ngram做真实店名评测；不预设某个分词器一定更好。SmartCN不自动提供拼音；“兰牛→兰州牛肉面”需要明确别名，“lz”需要单独拼音字段/插件，均列第二阶段。也不把中文错别字容错视为默认能力。
+v002实际结构以[ES字段定义](../architecture/elasticsearch-schema.md#字段定义)为准：21个主字段及name.exact子字段，id为long、价格为整数元、业务评分使用ratingScore命名，包含餐厅类型和堂食/外卖三态。食堂分类为空，不另建食堂美食品类。coverPhotoId仅存储正式相册封面关联ID，不参与检索；不保存杯型、四维评分或创建/更新时间。未加入name.partial、拼音及累计分字段；后续评测确有需要时通过新结构版本扩展。
+
+中文分词使用已选定并安装的IK，建索引ik_max_word、默认查询ik_smart；两种分析器已实测可运行，真实商户召回与排序质量仍需评测。IK不自动提供拼音；“兰牛→兰州牛肉面”需要明确别名，“lz”需要单独拼音字段/插件，均列第二阶段。也不把中文错别字容错视为默认能力。
 
 相关性查询组合：规范化店名全等与短语命中高权重，name高于分类/标签，地址较低；权重只作为待评测参数，不宣称通用最优值。价格、营业状态、分类、视口作为filter，不用相关度分数代替过滤。单字词、无空格组合词和无结果查询纳入评测。
 
-现有GCJ-02查询与地图坐标必须保持同一坐标约定；ES不会自动转换坐标。geo_point用于区域/距离能力验证，但不能直接声称和当前MySQL球面距离实现完全等价。边界、距离阈值、未知坐标和GCJ-02近似距离需做一致性对照；如需地理精度调整，单独变更契约。已取消杯型的产品方向与遗留tiers/view参数存在历史差异，不能在搜索改造时默默恢复杯型UI；兼容接口的精确阈值单独验证。
+现有GCJ-02查询与地图坐标必须保持同一坐标约定；ES不会自动转换坐标。geo_point用于区域/距离能力验证，但不能直接声称和当前MySQL球面距离实现完全等价。边界、距离阈值、未知坐标和GCJ-02近似距离需做一致性对照；如需地理精度调整，单独变更契约。杯型计算、响应及tiers/view筛选已移除，旧参数明确返回400；四维排序暂不支持，不建立这些模式的兼容搜索路径。
 
 ## 读链路与接口边界
 
@@ -43,7 +36,7 @@
 2. ES路径必须在同一次查询中完成关键词、已支持过滤、排序、总数和分页，禁止取ES前100个ID后交给SQL筛选并假称完整结果。
 3. ES返回候选和排序，MySQL批量回查当前页的公开资料与可见性，按ES顺序组装，防止已删除店继续展示。此回查只是可见性防线，不能让ES总数、当前资料和过滤结果自动获得强一致性。
 4. 如果回查发现删除或过滤相关版本变化，首版整次请求回退SQL，重新计算总数与分页，不静默删几条却保留旧total。恢复/新增但尚未入索引导致的漏召回仍只能靠同步补偿；当积压/健康检查达到阈值时切回SQL。正常搜索属于最终一致性。
-5. 搜索列表和搜索状态下地图点位复用同一查询规则与引擎选择策略，避免一个使用分词、另一个仍使用LIKE；保留地图500点上限与truncated语义。两个独立请求不承诺跨请求的同一快照。
+5. 搜索列表和搜索状态下地图点位复用同一查询规则与引擎选择策略，避免一个使用分词、另一个仍使用LIKE；保留当前地图100点上限与truncated语义。两个独立请求不承诺跨请求的同一快照。
 6. 高德地点与本站餐厅的结果仍区分来源，不通过同名或ES相似度直接认领店铺。
 
 相关度是新增接口排序语义，实施时明确默认值、兼容旧sort参数、降级元数据及前端行为，然后同步api.md；本草案不把计划写成现行接口。手动选择评分等排序时不得页内重排；价格未知、分数未知、并列ID次序、金额精度和分数近邻差异须回归。ES浮点均分不能未经验证替代现有高精度DECIMAL排序；未通过的模式保留SQL路径，明确其基础关键词语义。
@@ -51,6 +44,8 @@
 当前前端用页码翻页，首版保留浅分页并明确最大可达结果窗口和越界错误，不任意提高ES窗口，也不隐瞒截断总数。若要无限滚动或遍历大量结果，再设计PIT+search_after及游标接口；PIT只稳定ES快照，不冻结MySQL回查。正式接入前先确定页码上限是否影响当前产品验收。
 
 ## 可靠同步
+
+2026-11-04已实现内部投影读取与纯组装规则：每批最多100店，独立RR只读快照，复用公开封面规则，校验空值/类型/金额/坐标/统计，支持最小删除墓碑；只组装不写ES。版本由内部调用方显式提供，尚无可靠版本来源，后续必须与持久版本及来源快照绑定。完整性缺失整批失败，不以静默跳过代替补偿。
 
 采用餐厅模块拥有的事务Outbox：业务写入、对应餐厅投影版本递增、待同步事件在同一MySQL事务提交。复用现有餐厅行锁保护同一对象版本；点评发布/删除/恢复通过现有`RestaurantReviewApplicationService`更新统计时，同事务标记该餐厅索引变更，review模块不访问restaurant Mapper。
 
@@ -85,7 +80,7 @@ ES异常、超时、索引未就绪、版本不支持的筛选模式通过完整
 ## 官方依据
 
 - [Spring Data Elasticsearch版本矩阵](https://docs.spring.io/spring-data/elasticsearch/reference/elasticsearch/versions.html)：客户端与服务端选择依据。
-- [SmartCN](https://www.elastic.co/docs/reference/elasticsearch/plugins/analysis-smartcn)：中文/中英混合分词与插件安装约束。
+- [IK Analysis](https://github.com/infinilabs/analysis-ik)：已采用的中文分析器及插件版本。
 - [Near real-time search](https://www.elastic.co/docs/manage-data/data-store/near-real-time-search)：refresh可见性。
 - [Index API](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-index)：外部版本控制。
 - [分页](https://www.elastic.co/docs/reference/elasticsearch/rest-apis/paginate-search-results)：结果窗口、PIT与search_after。

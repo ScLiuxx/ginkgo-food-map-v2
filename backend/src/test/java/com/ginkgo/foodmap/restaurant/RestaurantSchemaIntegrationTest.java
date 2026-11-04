@@ -578,6 +578,102 @@ class RestaurantSchemaIntegrationTest {
         }
     }
 
+    /** V19合并正式资料而不改变历史申请，保留旧编码并确保新装/升级都只有九个启用类目。 */
+    @Test
+    void shouldMergeNineCategoriesWithoutRewritingRequestHistory() throws SQLException {
+        String categoryDatabase = createDatabase();
+        migration(categoryDatabase, "18").migrate();
+        try (Connection current = connect(categoryDatabase)) {
+            var oldCodes = List.of("SICHUAN", "SNACK", "MAO_CAI", "NOODLE", "MALA_TANG",
+                    "PORRIDGE_NOODLE", "LIGHT_MEAL", "CANTEEN", "HOT_POT", "BARBECUE", "DESSERT", "FAST_FOOD", "OTHER");
+            for (int i = 0; i < oldCodes.size(); i++) {
+                update(current, "INSERT INTO restaurants(id,name,category_code,restaurant_type) VALUES(?,?,?,?)",
+                        101 + i, "分类迁移" + i, oldCodes.get(i), i == 7 ? "CANTEEN" : "REGULAR");
+            }
+            update(current, "INSERT INTO canteen_windows(canteen_id,name,floor_number,category_code,created_by) VALUES(108,'粉面窗口',1,'NOODLE',42)");
+            update(current, "INSERT INTO restaurant_change_requests(restaurant_id,request_type,submitted_by,client_request_id,request_hash,proposed_data) VALUES(101,'UPDATE',42,UUID(),UNHEX(SHA2('category',256)),JSON_OBJECT('categoryCode','SICHUAN'))");
+            String requests = "SELECT CONCAT_WS('|',id,restaurant_id,HEX(request_hash),proposed_data,status,created_at) FROM restaurant_change_requests";
+            var before = strings(current, requests);
+            var upgrade = migration(categoryDatabase, "19");
+            assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(upgrade.migrate().migrationsExecuted).isZero();
+            upgrade.validate();
+            assertThat(strings(current, "SELECT code FROM restaurant_categories WHERE enabled=1 ORDER BY sort_order"))
+                    .containsExactly("FAST_FOOD", "CHINESE", "HOT_POT", "BARBECUE", "DRY_POT_FISH", "INTERNATIONAL", "DESSERT", "DRINK", "OTHER");
+            assertThat(strings(current, "SELECT category_code FROM restaurants ORDER BY id"))
+                    .containsExactly("CHINESE", "FAST_FOOD", "FAST_FOOD", "FAST_FOOD", "FAST_FOOD", "FAST_FOOD", "FAST_FOOD", "OTHER", "HOT_POT", "BARBECUE", "DESSERT", "FAST_FOOD", "OTHER");
+            assertThat(strings(current, "SELECT restaurant_type FROM restaurants WHERE id=108")).containsExactly("CANTEEN");
+            assertThat(strings(current, "SELECT category_code FROM canteen_windows")).containsExactly("FAST_FOOD");
+            assertThat(strings(current, requests)).isEqualTo(before);
+            assertThat(number(current, "SELECT COUNT(*) FROM restaurant_categories WHERE enabled=0")).isEqualTo(8);
+        }
+        String fresh = createDatabase();
+        migration(fresh, "19").migrate();
+        try (Connection current = connect(fresh)) {
+            assertThat(number(current, "SELECT COUNT(*) FROM restaurant_categories WHERE enabled=1")).isEqualTo(9);
+            assertThat(number(current, "SELECT COUNT(*) FROM restaurants")).isZero();
+        }
+    }
+
+    /** V20只清空食堂分类，保留窗口及历史资料，并由数据库拒绝类型/分类不一致的写入。 */
+    @Test
+    void shouldRemoveCanteenCategoriesWithoutChangingWindowsOrHistory() throws SQLException {
+        String target = createDatabase();
+        migration(target, "19").migrate();
+        try (Connection current = connect(target)) {
+            update(current, "INSERT INTO restaurants(id,name,category_code,restaurant_type) VALUES(101,'迁移食堂','CHINESE','CANTEEN'),(102,'普通餐厅','OTHER','REGULAR')");
+            update(current, "INSERT INTO canteen_windows(canteen_id,name,floor_number,category_code,created_by) VALUES(101,'面食窗口',1,'FAST_FOOD',42)");
+            update(current, "INSERT INTO restaurant_change_requests(restaurant_id,request_type,submitted_by,client_request_id,request_hash,proposed_data) VALUES(101,'UPDATE',42,UUID(),UNHEX(SHA2('old-canteen',256)),JSON_OBJECT('categoryCode','CHINESE','restaurantType','CANTEEN'))");
+            String metadata = "SELECT CONCAT_WS('|',id,name,restaurant_type,created_at,updated_at) FROM restaurants ORDER BY id";
+            String history = "SELECT CONCAT_WS('|',id,HEX(request_hash),proposed_data,status,created_at) FROM restaurant_change_requests";
+            var beforeMetadata = strings(current, metadata);
+            var beforeHistory = strings(current, history);
+            var upgrade = migration(target, "20");
+            assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(upgrade.migrate().migrationsExecuted).isZero();
+            upgrade.validate();
+            assertThat(strings(current, "SELECT category_code FROM restaurants ORDER BY id")).containsExactly(null, "OTHER");
+            assertThat(strings(current, "SELECT category_code FROM canteen_windows")).containsExactly("FAST_FOOD");
+            assertThat(strings(current, metadata)).isEqualTo(beforeMetadata);
+            assertThat(strings(current, history)).isEqualTo(beforeHistory);
+            assertThrows(SQLException.class, () -> update(current, "UPDATE restaurants SET category_code='OTHER' WHERE id=101"));
+            assertThrows(SQLException.class, () -> update(current, "UPDATE restaurants SET category_code=NULL WHERE id=102"));
+            assertThrows(SQLException.class, () -> update(current, "UPDATE restaurants SET category_code='NON_EXISTENT' WHERE id=102"));
+        }
+        String fresh = createDatabase();
+        migration(fresh, "20").migrate();
+        try (Connection current = connect(fresh)) {
+            update(current, "INSERT INTO restaurants(name,category_code,restaurant_type) VALUES('无分类食堂',NULL,'CANTEEN')");
+            assertThat(number(current, "SELECT COUNT(*) FROM restaurant_categories WHERE enabled=1")).isEqualTo(9);
+        }
+    }
+
+    /** V21给存量（含删除）和新建商户版本1，不修改资料、标签或审计时间，重复迁移无副作用。 */
+    @Test
+    void shouldInitializeSearchVersionsWithoutChangingBusinessData() throws SQLException {
+        String target = createDatabase();
+        migration(target, "20").migrate();
+        try (Connection current = connect(target)) {
+            update(current, "INSERT INTO restaurants(id,name,category_code) VALUES(101,'保留商户','OTHER'),(102,'删除商户','OTHER')");
+            update(current, "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM' WHERE id=102");
+            update(current, "INSERT INTO restaurant_tags VALUES(101,'保留标签',0)");
+            String metadata = "SELECT CONCAT_WS('|',id,name,category_code,created_at,updated_at,COALESCE(deleted_at,'NULL')) FROM restaurants ORDER BY id";
+            var before = strings(current, metadata);
+            var upgrade = migration(target, "21");
+            assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(upgrade.migrate().migrationsExecuted).isZero();
+            upgrade.validate();
+            assertThat(strings(current, metadata)).isEqualTo(before);
+            assertThat(number(current, "SELECT COUNT(*) FROM restaurants WHERE search_projection_version=1")).isEqualTo(2);
+            assertThat(strings(current, "SELECT tag FROM restaurant_tags WHERE restaurant_id=101")).containsExactly("保留标签");
+            update(current, "INSERT INTO restaurants(id,name,category_code) VALUES(103,'新建商户','OTHER')");
+            assertThat(number(current, "SELECT search_projection_version FROM restaurants WHERE id=103")).isEqualTo(1);
+            assertThrows(SQLException.class, () -> update(current, "UPDATE restaurants SET search_projection_version=0 WHERE id=101"));
+            assertThrows(SQLException.class, () -> update(current, "UPDATE restaurants SET search_projection_version=-1 WHERE id=101"));
+            assertThrows(SQLException.class, () -> update(current, "UPDATE restaurants SET search_projection_version=NULL WHERE id=101"));
+        }
+    }
+
     private static String createDatabase() throws SQLException {
         String name = "ginkgo_restaurant_it_" + UUID.randomUUID().toString().replace("-", "");
         try (Connection admin = connect(""); Statement statement = admin.createStatement()) {

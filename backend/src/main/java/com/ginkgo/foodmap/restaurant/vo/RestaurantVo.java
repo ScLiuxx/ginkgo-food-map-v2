@@ -38,7 +38,6 @@ public class RestaurantVo {
     private long reviewCount;
     /** 有效计分账号数；同人历史点评不增加该人数，也不重复贡献分数。 */
     private long participantCount;
-    private String tier = "none";
     private Dimensions dimensions = new Dimensions();
 
     /** 四维均分的空值是尚无评价，不可转换为零分。 */

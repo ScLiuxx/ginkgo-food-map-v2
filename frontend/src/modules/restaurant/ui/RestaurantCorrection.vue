@@ -53,6 +53,16 @@ const extra = reactive<{
   dineIn: string
   delivery: string
 }>({ restaurantType: 'REGULAR', dineIn: '', delivery: '' })
+// 类型切换清除不适用的分类及错误；切回普通餐厅后需重新明确主营分类。
+watch(
+  () => extra.restaurantType,
+  () => {
+    if (loading.value) return
+    form.categoryCode = ''
+    delete errors.value.categoryCode
+  },
+  { flush: 'sync' },
+)
 const categories = ref<RestaurantCategory[]>([])
 const originalCategory = ref('')
 const loading = ref(false),
@@ -140,6 +150,7 @@ async function load() {
       dineIn: row?.supportsDineIn == null ? '' : String(row.supportsDineIn),
       delivery: row?.supportsDelivery == null ? '' : String(row.supportsDelivery),
     })
+    if (extra.restaurantType === 'CANTEEN') form.categoryCode = ''
     categories.value = dictionary
     originalCategory.value = row?.categoryCode ?? ''
     baseline.value = content.value
@@ -176,16 +187,19 @@ async function submit() {
     photoError.value = '请等待图片上传完成，失败的图片可重试或移除。'
     return
   }
-  errors.value = validateRestaurantDraft(form)
+  errors.value = validateRestaurantDraft(form, extra.restaurantType)
   const category = categories.value.find((c) => c.code === form.categoryCode)
-  if (!category || (!category.enabled && category.code !== originalCategory.value))
+  if (
+    extra.restaurantType === 'REGULAR' &&
+    (!category || (!category.enabled && category.code !== originalCategory.value))
+  )
     errors.value.categoryCode = '请选择可用分类。'
   if (Object.keys(errors.value).length) return
   saving.value = true
   saveError.value = ''
   try {
     const input: RestaurantCorrectionInput = {
-      ...restaurantInput(form),
+      ...restaurantInput(form, extra.restaurantType),
       clientRequestId,
       ...(photos.value.length ? { photoIds: photos.value.map((p) => p.fileId!) } : {}),
       restaurantType: extra.restaurantType,
@@ -298,7 +312,7 @@ onBeforeUnmount(() => {
           @select="selectPlace"
         />
         <div class="fields">
-          <label
+          <label v-if="extra.restaurantType === 'REGULAR'"
             >美食品类<select v-model="form.categoryCode" :aria-invalid="!!errors.categoryCode">
               <option value="">请选择分类</option>
               <option v-for="c in visibleCategories" :key="c.code" :value="c.code">

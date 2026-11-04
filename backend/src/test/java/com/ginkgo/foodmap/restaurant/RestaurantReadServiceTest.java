@@ -73,7 +73,6 @@ class RestaurantReadServiceTest {
         assertThat(vo.getDimensions().getTaste()).isNull();
         assertThat(vo.getRecommendRate()).isNull();
         assertThat(vo.getReviewCount()).isZero();
-        assertThat(vo.getTier()).isEqualTo("none");
         assertThat(vo.getPricePerPerson()).isNull();
     }
 

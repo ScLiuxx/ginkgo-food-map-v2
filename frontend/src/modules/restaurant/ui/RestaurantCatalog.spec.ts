@@ -78,7 +78,7 @@ describe('restaurant catalog API integration', () => {
   /** 分类只有导航一个入口，翻页后切分类仍保留排序及停业语义，每次只请求一次。 */
   it('changes category without resetting independent filters and resets pagination once', async () => {
     const store = useRestaurantCatalog(pinia)
-    store.filters.sort = 'value'
+    store.filters.sort = 'recommend'
     store.filters.hideClosed = true
     await settle()
     store.goToPage(2)
@@ -98,7 +98,7 @@ describe('restaurant catalog API integration', () => {
         latitude: undefined,
         longitude: undefined,
         category: 'HOT_POT',
-        sort: 'value',
+        sort: 'recommend',
         hideClosed: true,
         maxPrice: null,
         maxDistanceMeters: null,
@@ -162,7 +162,7 @@ describe('restaurant catalog API integration', () => {
 
   it('toggles the closed marker immediately and preserves category and sort in both directions', async () => {
     const store = useRestaurantCatalog(pinia)
-    Object.assign(store.filters, { category: 'HOT_POT', sort: 'taste' })
+    Object.assign(store.filters, { category: 'HOT_POT', sort: 'reviews' })
     await settle()
     const toggle = host.querySelector<HTMLButtonElement>('.hide-closed')!
     for (const hideClosed of [true, false]) {
@@ -179,7 +179,7 @@ describe('restaurant catalog API integration', () => {
           latitude: undefined,
           longitude: undefined,
           category: 'HOT_POT',
-          sort: 'taste',
+          sort: 'reviews',
           hideClosed,
           maxPrice: null,
           maxDistanceMeters: null,
@@ -249,7 +249,7 @@ describe('restaurant catalog API integration', () => {
   /** 模拟dialog只为验证状态，真实模态焦点、Escape和小屏滚动另由浏览器验收。 */
   it('applies an isolated advanced draft once and preserves all main filters', async () => {
     const store = useRestaurantCatalog(pinia)
-    Object.assign(store.filters, { category: 'HOT_POT', sort: 'value', hideClosed: true })
+    Object.assign(store.filters, { category: 'HOT_POT', sort: 'recommend', hideClosed: true })
     await settle()
     store.goToPage(2)
     await settle()
@@ -275,7 +275,7 @@ describe('restaurant catalog API integration', () => {
         latitude: undefined,
         longitude: undefined,
         category: 'HOT_POT',
-        sort: 'value',
+        sort: 'recommend',
         hideClosed: true,
         maxPrice: 30,
         maxDistanceMeters: null,
@@ -306,7 +306,7 @@ describe('restaurant catalog API integration', () => {
     expect(fetchRestaurants).toHaveBeenCalledTimes(calls + 2)
     expect(store.filters).toMatchObject({
       category: 'HOT_POT',
-      sort: 'value',
+      sort: 'recommend',
       hideClosed: true,
       maxPrice: null,
       maxDistanceMeters: null,

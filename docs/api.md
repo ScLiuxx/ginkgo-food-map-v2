@@ -230,6 +230,7 @@
 {"id":"51","status":"APPROVED","restaurantId":"101","reviewedBy":"33","reviewedAt":"2026-11-03T07:00:00Z","rejectReason":null,"replayed":false,"publishedPhotos":[{"id":"801","position":0,"cover":true,"url":"/api/restaurants/101/photos/801"}]}
 ```
 
+- 首次通过时，REGULAR必须提供可用的categoryCode；CANTEEN必须使用categoryCode=null或省略。类型与分类不匹配返回400 RESTAURANT_INVALID_INPUT，不自动将食堂归到“其他美食”。旧的已通过食堂按原完整内容重试仍返回首次回执，不重新写入历史分类。
 - CREATE创建正式餐厅和有序标签，created_by/updated_by均为实际审核管理员，新ID回填申请restaurant_id，request_type保持CREATE。投稿人保留在submitted_by，不因此获得直接维护权限。
 - UPDATE更新原ID及餐厅类型、堂食/外卖三态，保留既有创建者、来源及评分；before_data保存事务内更新前的业务字段及标签（含类型、用餐方式），approved_data保存规范化后的最终业务字段。新店before_data为空。存在任意窗口关联的食堂不能改为普通餐厅，返回409 RESTAURANT_STATE_CONFLICT，包括软删除窗口仍有外键引用的情况。
 - 商户、标签、正式相册关联和审核状态在同一个事务提交或回滚。纠错统一先锁商户、再锁申请；新店先锁申请并创建正式商户；文件校验按文件ID升序加锁。审核人取当前认证，时间由数据库生成，不能回退终态。
@@ -258,7 +259,21 @@ reason必填，DTO最多200个UTF-16单元，去Unicode首尾空白后不能为�
 
 ### 6.1 分类
 
-`GET /api/restaurant-categories`无参数，成功200、data为`[{"code":"HOT_POT","name":"火锅","sortOrder":1,"enabled":true}]`，按sortOrder、code排序。包括停用分类以展示历史资料，停用分类不能用于新建或切换分类。
+`GET /api/restaurant-categories`无参数，成功200、data为`[{"code":"FAST_FOOD","name":"小吃快餐","sortOrder":1,"enabled":true}]`，按sortOrder、code排序。包括停用分类以展示历史资料；前台导航和新建选择只使用enabled=true，停用分类不能用于新建或切换分类。
+
+| 启用编码 | 名称 |
+| --- | --- |
+| FAST_FOOD | 小吃快餐 |
+| CHINESE | 中餐地方菜 |
+| HOT_POT | 火锅串串 |
+| BARBECUE | 烧烤烤肉 |
+| DRY_POT_FISH | 香锅烤鱼 |
+| INTERNATIONAL | 国际美食 |
+| DESSERT | 甜品烘焙 |
+| DRINK | 饮品 |
+| OTHER | 其他美食 |
+
+普通餐厅只指定一个主营类目，没有二级分类；食堂由restaurantType=CANTEEN表示，categoryCode和categoryName均为null，不归入九类。食堂窗口保留自身美食品类。旧申请的原始分类编码和已完成审核快照保留；旧待审食堂首次通过时使用空分类，普通餐厅需选用可用分类。
 
 ### 6.2 目录
 
@@ -268,7 +283,7 @@ reason必填，DTO最多200个UTF-16单元，去Unicode首尾空白后不能为�
 | --- | --- | --- |
 | `keyword` | 空 | 最长100字符，搜索名称/地址/标签；通配符按字面量处理 |
 | `category` | 空 | 大写分类编码；空表示不限 |
-| `sort` | score | score/taste/value/service/ambience/reviews/price/distance/recommend |
+| `sort` | score | score/reviews/price/distance/recommend；taste/value/service/ambience暂不支持，返回400 |
 | `hideClosed` | false | true时隐藏停业商户 |
 | `maxPrice` | 无 | 大于0，最多8位整数和2位小数；未知价格不符合上限筛选 |
 | `latitude` / `longitude` | 无 | 用户GCJ-02原点，范围[-90,90]/[-180,180]，必须成对提供 |
@@ -276,12 +291,11 @@ reason必填，DTO最多200个UTF-16单元，去Unicode首尾空白后不能为�
 | `west/east/south/north` | 无 | 可选视口，四边同时提供，经度[-180,180]、纬度[-90,90]，west<east且south<north |
 | `page` | 1 | 正整数，最多2147483647 |
 | `pageSize` | 8 | 1–100 |
-| `tiers` | 空 | 可重复查询参数，最多6项，bucket/super/large/medium/small/none |
-| `view` | all | all/recommended/pitfall |
 
-条件取交集，在完整可见集合上排序、计数后分页，时间/名称/ID提供稳定次序。评分类与推荐率排序未知值排后，人均升序；距离按请求用户原点升序，缺原点时距离为null且按名称/ID稳定排序。视口不支持跨日期变更线，边界包含，提供视口时排除待定位记录。用户坐标不保存。
+条件取交集，在完整可见集合上排序、计数后分页，同值按名称/ID提供稳定次序。评分类与推荐率排序未知值排后，人均升序；好评率并列时先按计分人数降序，再按名称/ID排序。距离按请求用户原点升序，缺原点时距离为null且按名称/ID稳定排序。视口不支持跨日期变更线，边界包含，提供视口时排除待定位记录。用户坐标不保存。
 
-兼容字段口径：tier按未展示舍入的均分划分，>=8.6 bucket、>=7.4 super、>=6.2 large、>=5 medium、其余small，无评分none；view=recommended为均分>=6.2，pitfall为均分<5，均排除无人评分。当前用户界面不要求展示tier。
+杯型计算与响应字段tier已移除；目录和地图请求若携带view、tiers或tiers数组参数，返回400 `RESTAURANT_INVALID_INPUT`，不静默忽略旧筛选。详情与点评保留四维评分展示。
+
 
 成功200，data为`{records,total,page,pageSize,totalPages}`；空或越界页不返回404。单条餐厅结构：
 
@@ -292,11 +306,13 @@ reason必填，DTO最多200个UTF-16单元，去Unicode首尾空白后不能为�
   "address":"商户地址","latitude":30.670582,"longitude":104.107260,"needsLocation":false,
   "businessStatus":"OPERATING","createdAt":"2026-11-03T06:00:00Z","updatedAt":"2026-11-03T06:00:00Z",
   "distanceKm":null,"tags":["家常菜"],"score":null,"recommendRate":null,"reviewCount":0,"participantCount":0,
-  "tier":"none","dimensions":{"taste":null,"value":null,"service":null,"ambience":null}
+  "dimensions":{"taste":null,"value":null,"service":null,"ambience":null}
 }
 ```
 
 无人计分的分数/推荐率/四维为null，真实0分保持0。reviewCount计全部有效点评，participantCount计每人最新有效代表。score为代表点评综合分累计值/人数，recommendRate为推荐人数/人数（0–1），历史点评不重复贡献评分。地址、价格和位置未知保持null，不用模拟值补齐。列表/详情不返回创建者、删除元数据或数据库版本。
+
+食堂响应使用`"restaurantType":"CANTEEN","categoryCode":null,"categoryName":null`。不传category时目录及地图包含食堂；指定美食品类时不包含食堂。餐厅类型通过现有前端独立筛选选择，不把CANTEEN作为美食分类参数。
 
 目录、详情及管理回执的restaurant新增coverPhoto：无正式相册首图为null，否则为`{id,position:0,cover:true,url}`，例如`{"id":"801","position":0,"cover":true,"url":"/api/restaurants/101/photos/801"}`。首页/地图卡片直接使用此正式封面；目录在分页完成后按当前页商户ID集合一次批量补齐元数据，不逐卡片读取相册/点评，不在列表查询中访问OSS。查询要求商户未删除、来源申请已通过且目标一致；仅有待审照片或点评照片不会产生封面。
 
@@ -342,7 +358,7 @@ reason必填，DTO最多200个UTF-16单元，去Unicode首尾空白后不能为�
 | --- | --- |
 | `clientRequestId` | 必填UUID，同次失败重试沿用 |
 | `name` | 去首尾Unicode空白后1–40码点，同名分店允许 |
-| `categoryCode` | 必填有效分类，必须存在且可用 |
+| `categoryCode` | REGULAR时必填有效分类，必须存在且可用；CANTEEN时必须为null或省略，不接受空字符串或非空分类 |
 | `restaurantType` | REGULAR/CANTEEN，默认REGULAR |
 | `priceKind` / `pricePerPerson` | 默认UNKNOWN/null；EXACT或ESTIMATE时为1–5000的整数元，UNKNOWN必须null |
 | `address` | 最多80码点，空白转null |
@@ -356,6 +372,8 @@ reason必填，DTO最多200个UTF-16单元，去Unicode首尾空白后不能为�
 不可指定作者、商户ID、新建/纠错类型、审核人/状态、评分及未知字段；未知字段400 `COMMON_MALFORMED_REQUEST`。服务端决定CREATE/UPDATE类型。成功201、禁止缓存，data为`{"id":"51","status":"PENDING"}`，只是申请受理，不发布商户或覆盖公开资料。
 
 同账号同UUID与原始规范化内容重试返回原回执，图片顺序也参与一致性判断。不同内容/目标/申请类型复用编号409 `RESTAURANT_STATE_CONFLICT`；新建通过后回填商户ID不被当作原目标变化。原始资料摘要不随管理员修订而更新。回执中的PENDING代表首次受理，不用于查询最新审核状态。
+
+已有带分类的旧食堂申请仍可按原请求内容重试，不改写原快照或摘要；新请求不得为食堂填写美食分类。
 
 字段无效400 `RESTAURANT_INVALID_INPUT`或通用校验错误；分类不可用400 `RESTAURANT_CATEGORY_UNAVAILABLE`；纠错目标不存在/已删除404 `RESTAURANT_NOT_FOUND`；图片不可绑定409 `FILE_NOT_BINDABLE`。申请、图片绑定及顺序关联同事务保存，任一失败整体回滚。
 
@@ -373,7 +391,7 @@ reason必填，DTO最多200个UTF-16单元，去Unicode首尾空白后不能为�
 
 管理资料中的restaurant字段与公开餐厅结构相同，响应禁止缓存。编辑不要求版本号，最后成功保存的整份资料及标签生效；事务锁住同一商户主行，不能部分保存或混合两次标签。新分类必须启用，当前停用分类可保持原值。删除不会把停业改为营业，恢复不会创建新归属。
 
-直接维护协议仍不接收restaurantType、supportsDineIn、supportsDelivery；新建采用REGULAR/未知，更新保留原有这三个字段。类型和用餐方式的申请发布由5.5审核协议处理，不能将两个请求DTO混用。
+直接维护协议不接收restaurantType、supportsDineIn、supportsDelivery；新建采用REGULAR/未知且分类必填，更新保留原有这三个字段。更新已有食堂时categoryCode必须为空，普通餐厅则必须有分类。类型和用餐方式的申请发布由5.5审核协议处理，不能将两个请求DTO混用。
 
 不存在404 `RESTAURANT_NOT_FOUND`；普通账号403 `AUTH_FORBIDDEN`；服务内部身份防线可返回403 `RESTAURANT_FORBIDDEN`。已删除编辑、重复删除、重复恢复409 `RESTAURANT_STATE_CONFLICT`。未知、内部或版本字段400 `COMMON_MALFORMED_REQUEST`。直接新建无请求幂等键，超时须先核对结果。
 
@@ -422,7 +440,7 @@ UUID必填；四维完整，0–10且步进0.5；recommended为真实布尔值�
 `GET /api/restaurants/{restaurantId}/reviews`公开。page默认1、正整数；pageSize默认8、1–50，按作者组计数。200、禁止缓存，data结构：
 
 ```json
-{"records":[{"author":{"id":"22","username":"同学甲"},"currentReview":{"id":"101","scores":{"taste":8,"value":7.5,"service":7,"ambience":8},"overallScore":7.63,"tier":"super","recommended":true,"body":"这次出餐很快，分量也比较足。","createdAt":"2026-11-03T06:00:00Z","scoringStatus":"current","photos":[{"id":"501","position":0,"url":"/api/reviews/101/photos/0"}]},"historyCount":0,"nextHistoryCursor":null}],"totalGroups":1,"totalReviews":1,"page":1,"pageSize":8,"totalPages":1}
+{"records":[{"author":{"id":"22","username":"同学甲"},"currentReview":{"id":"101","scores":{"taste":8,"value":7.5,"service":7,"ambience":8},"overallScore":7.63,"recommended":true,"body":"这次出餐很快，分量也比较足。","createdAt":"2026-11-03T06:00:00Z","scoringStatus":"current","photos":[{"id":"501","position":0,"url":"/api/reviews/101/photos/0"}]},"historyCount":0,"nextHistoryCursor":null}],"totalGroups":1,"totalReviews":1,"page":1,"pageSize":8,"totalPages":1}
 ```
 
 每组只返回作者最新有效点评，历史不内嵌；照片有序最多5张。totalGroups与totalReviews区分人数和条数，空/越界页返回真实总数与空records。父店不可见404，停业可读。ID/分页非法400 `REVIEW_INVALID_QUERY`或通用校验错误。

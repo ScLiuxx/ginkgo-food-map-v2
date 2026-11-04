@@ -126,6 +126,11 @@ export function useRestaurantRequests() {
       draft.value = structuredClone(result.approved ?? result.proposed)
       if (result.application.status === 'PENDING' && draft.value.restaurantType == null)
         draft.value.restaurantType = result.current?.restaurantType ?? 'REGULAR'
+      // 旧待审申请可能仍带食堂分类，只修订本次草稿，不改写原投稿或已完成的历史快照。
+      if (result.application.status === 'PENDING' && draft.value.restaurantType === 'CANTEEN') {
+        draft.value.categoryCode = null
+        draft.value.categoryName = null
+      }
       photos.value = result.photos.map((photo) => ({
         position: photo.position,
         src: '',
@@ -223,7 +228,13 @@ export function useRestaurantRequests() {
     const yes = (value: unknown) => (value === true ? '支持' : value === false ? '不支持' : '未知')
     const fields: [string, (data: Record<string, unknown>) => string][] = [
       ['商户名称', (data) => text(data.name)],
-      ['美食品类', (data) => text(data.categoryName || data.categoryCode)],
+      [
+        '美食品类',
+        (data) =>
+          data.restaurantType === 'CANTEEN' && data.categoryCode == null
+            ? '不适用（食堂）'
+            : text(data.categoryName || data.categoryCode),
+      ],
       [
         '商户类型',
         (data) =>
@@ -290,7 +301,12 @@ export function useRestaurantRequests() {
   /** 所有编辑都落在当前申请草稿；不从格式化后的金额、未知文案或分类名称构造请求。 */
   function editField(key: string, value: unknown) {
     if (submitting.value || detail.value?.application.status !== 'PENDING') return
+    if (key === 'categoryCode' && draft.value.restaurantType === 'CANTEEN') return
     draft.value[key] = value
+    if (key === 'restaurantType') {
+      draft.value.categoryCode = null
+      draft.value.categoryName = null
+    }
     if (key === 'categoryCode')
       draft.value.categoryName =
         categories.value.find((entry) => entry.code === value)?.name ?? value
@@ -303,7 +319,7 @@ export function useRestaurantRequests() {
   function input(): ReviewInput {
     const data = draft.value
     if (typeof data.name !== 'string' || !data.name.trim()) throw new Error('请填写商户名称')
-    if (!data.categoryCode) throw new Error('请选择美食品类')
+    if (data.restaurantType !== 'CANTEEN' && !data.categoryCode) throw new Error('请选择美食品类')
     if (
       typeof data.latitude !== 'number' ||
       !Number.isFinite(data.latitude) ||
@@ -325,7 +341,7 @@ export function useRestaurantRequests() {
       supportsDineIn: typeof data.supportsDineIn === 'boolean' ? data.supportsDineIn : null,
       supportsDelivery: typeof data.supportsDelivery === 'boolean' ? data.supportsDelivery : null,
       name: data.name,
-      categoryCode: String(data.categoryCode),
+      categoryCode: data.restaurantType === 'CANTEEN' ? null : String(data.categoryCode),
       address: data.address == null ? null : String(data.address),
       latitude: data.latitude,
       longitude: data.longitude,

@@ -36,7 +36,7 @@ public class RestaurantChangeService {
         long id = RestaurantIdentifiers.id(targetId);
         var target = mapper.lockTarget(id);
         if (target == null) throw new BusinessException(RestaurantErrorCode.NOT_FOUND);
-        validation.validateChange(request, target.getCategoryCode());
+        validateSubmission(request, target.getCategoryCode());
         return save(id, request);
     }
 
@@ -44,8 +44,21 @@ public class RestaurantChangeService {
     @Transactional
     public String submitNew(RestaurantChangeRequest request) {
         if (!validator.validate(request).isEmpty()) throw new BusinessException(RestaurantErrorCode.INVALID_INPUT);
-        validation.validateChange(request, null);
+        validateSubmission(request, null);
         return save(null, request);
+    }
+
+    /**
+     * 新食堂申请必须无分类；已有旧申请允许按原内容重试，不能因分类规则升级改写其摘要。
+     * 此处只放行到后面的完整摘要/目标比较，不允许借旧请求编号新增不符合规则的申请。
+     */
+    private void validateSubmission(RestaurantChangeRequest request, String currentCategory) {
+        if ("CANTEEN".equals(request.getRestaurantType()) && request.getCategoryCode() != null
+                && mapper.existingRequest(actors.requireActor().getUserId(), request.getClientRequestId().toString()) != null) {
+            validation.normalizeChange(request);
+            return;
+        }
+        validation.validateChange(request, currentCategory);
     }
 
     /** 唯一键原子插入或取得旧回执，再锁定核对内容；避免首次并发投稿的检查再插入竞争。 */

@@ -64,8 +64,7 @@ export function filterRestaurants(
     if (filters.sort === 'reviews') return restaurant.reviewCount
     if (filters.sort === 'price')
       return restaurant.price !== null && restaurant.price > 0 ? restaurant.price : null
-    if (filters.sort === 'score') return restaurant.score
-    return restaurant.dimensions[filters.sort]
+    return restaurant.score
   }
   return result.sort((left, right) => {
     const a = value(left)

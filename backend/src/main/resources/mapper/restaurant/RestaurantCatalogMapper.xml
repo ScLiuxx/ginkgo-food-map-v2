@@ -3,18 +3,9 @@
 <mapper namespace="com.ginkgo.foodmap.restaurant.mapper.RestaurantCatalogMapper">
     <!-- 兼容旧版本后建餐厅缺失零统计行；公开读取不初始化数据，不跨模块关联reviews。 -->
     <sql id="catalogFrom">
-        FROM restaurants r JOIN restaurant_categories c ON c.code = r.category_code
+        <!-- 食堂没有美食品类，必须保留左侧商户，不能因NULL分类丢失详情、计数或地图点位。 -->
+        FROM restaurants r LEFT JOIN restaurant_categories c ON c.code = r.category_code
         LEFT JOIN restaurant_review_statistics s ON s.restaurant_id = r.id
-    </sql>
-
-    <!-- 判档使用精确乘法，避免循环小数除法或展示四舍五入把8.599...推入全家桶。 -->
-    <sql id="tierExpression">
-        CASE WHEN COALESCE(s.participant_count, 0) = 0 THEN 'none'
-            WHEN s.overall_score_sum &gt;= 8.6 * s.participant_count THEN 'bucket'
-            WHEN s.overall_score_sum &gt;= 7.4 * s.participant_count THEN 'super'
-            WHEN s.overall_score_sum &gt;= 6.2 * s.participant_count THEN 'large'
-            WHEN s.overall_score_sum &gt;= 5.0 * s.participant_count THEN 'medium'
-            ELSE 'small' END
     </sql>
 
     <!--
@@ -50,7 +41,6 @@
         CAST(s.value_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0) AS value,
         CAST(s.service_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0) AS service,
         CAST(s.ambience_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0) AS ambience,
-        <include refid="com.ginkgo.foodmap.restaurant.mapper.RestaurantCatalogMapper.tierExpression"/> AS tier,
         (<include refid="com.ginkgo.foodmap.restaurant.mapper.RestaurantCatalogMapper.distanceMetersExpression"/>) / 1000 AS distance_km
     </sql>
 
@@ -71,17 +61,6 @@
         </if>
         <if test="query.maxDistanceMeters != null">
             AND (<include refid="distanceMetersExpression"/>) &lt;= #{query.maxDistanceMeters}
-        </if>
-        <if test="!query.tiers.isEmpty()">
-            AND (<include refid="tierExpression"/>) IN
-            <foreach collection="query.tiers" item="tier" open="(" close=")" separator=",">#{tier}</foreach>
-        </if>
-        <!-- 推荐视图沿用原产品大杯及以上，踩雷为小杯；与用户独立推荐率无关。 -->
-        <if test="query.view == 'recommended'">
-            AND s.participant_count &gt; 0 AND s.overall_score_sum &gt;= 6.2 * s.participant_count
-        </if>
-        <if test="query.view == 'pitfall'">
-            AND s.participant_count &gt; 0 AND s.overall_score_sum &lt; 5.0 * s.participant_count
         </if>
         <if test="query.keyword.strip() != ''">
             AND (r.name LIKE #{query.keywordPattern} ESCAPE '!'
@@ -113,10 +92,6 @@
             <when test="query.sort == 'price'">r.price_per_person IS NULL, r.price_per_person,</when>
             <when test="query.sort == 'distance'">distance_km IS NULL, distance_km,</when>
             <when test="query.sort == 'score'">score IS NULL, score DESC,</when>
-            <when test="query.sort == 'taste'">taste IS NULL, taste DESC,</when>
-            <when test="query.sort == 'value'">value IS NULL, value DESC,</when>
-            <when test="query.sort == 'service'">service IS NULL, service DESC,</when>
-            <when test="query.sort == 'ambience'">ambience IS NULL, ambience DESC,</when>
             <when test="query.sort == 'recommend'">recommend_rate IS NULL, recommend_rate DESC, participant_count DESC,</when>
             <when test="query.sort == 'reviews'">review_count DESC,</when>
         </choose>

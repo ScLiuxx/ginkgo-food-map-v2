@@ -49,7 +49,7 @@ class ReviewWriteApiIntegrationTest {
     @Autowired AuthenticationProperties authentication;
     @MockitoBean LoginSessionService sessions;
     @MockitoSpyBean RestaurantReviewApplicationService statistics;
-    private String owner,other;
+    private String owner,other,admin;
     private RestaurantReviewApplicationService statisticsTarget;
 
     /** 测试仅访问显式回环实例，创建成功才登记可清理随机库。 */
@@ -69,13 +69,15 @@ class ReviewWriteApiIntegrationTest {
         jdbc.update("DELETE FROM media_files");jdbc.update("DELETE FROM review_request_receipts");
         jdbc.update("DELETE FROM reviews");jdbc.update("DELETE FROM restaurant_review_statistics");
         jdbc.update("DELETE FROM restaurants");jdbc.update("DELETE FROM user_roles");jdbc.update("DELETE FROM users");
-        for(long id:List.of(11L,22L)) {
+        for(long id:List.of(11L,22L,33L)) {
             jdbc.update("INSERT INTO users(id,username,email,password_hash,email_verified) VALUES(?,?,?,?,TRUE)",id,"reviewer_"+id,"reviewer"+id+"@example.test","test-only");
             jdbc.update("INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code='ROLE_USER'",id);
         }
+        // 正式商户管理已收紧为管理员；普通点评作者仍只具有自己的点评权限。
+        jdbc.update("INSERT INTO user_roles(user_id,role_id) SELECT 33,id FROM roles WHERE code='ROLE_ADMIN'");
         jdbc.update("INSERT INTO restaurants(id,name,category_code,created_by) VALUES(1,'发布店','OTHER',11),(2,'另一店','OTHER',11)");
         when(sessions.isActive(anyString(),anyLong(),anyLong())).thenReturn(true);
-        owner=token(11,false);other=token(22,false);
+        owner=token(11,false);other=token(22,false);admin=token(33,false);
     }
     @AfterAll static void cleanup() throws SQLException {
         if(!created)return;
@@ -98,19 +100,43 @@ class ReviewWriteApiIntegrationTest {
         for(String column:List.of("taste_sum","value_sum","service_sum","ambience_sum","overall_score_sum"))
             assertThat((BigDecimal)row.get(column)).isEqualByComparingTo(sum);
     }
+    /** 统计推进版本但不伪造资料编辑时间；版本耗尽时评价、回执和统计全部回滚。 */
+    @Test void advancesSearchVersionWithoutChangingBusinessAuditAndRollsBackOnOverflow() throws Exception {
+        var before = jdbc.queryForMap("SELECT updated_at,updated_by FROM restaurants WHERE id=1");
+        var data = input(8,true,UUID.randomUUID().toString());
+        publish(owner,1,data).andExpect(status().isCreated());
+        assertThat(projectionVersion()).isEqualTo(2);
+        assertThat(jdbc.queryForMap("SELECT updated_at,updated_by FROM restaurants WHERE id=1")).isEqualTo(before);
+        jdbc.update("UPDATE restaurants SET search_projection_version=? WHERE id=1", Long.MAX_VALUE);
+        publish(owner,1,input(6,false,UUID.randomUUID().toString())).andExpect(status().isInternalServerError());
+        assertThat(projectionVersion()).isEqualTo(Long.MAX_VALUE);
+        assertThat(count("reviews")).isEqualTo(1);
+        assertThat(count("review_request_receipts")).isEqualTo(1);
+        assertStats(1,1,1,"8");
+        // 原成功请求的幂等重试不需要新版本，耗尽时仍可返回原回执。
+        publish(owner,1,data).andExpect(status().isOk());
+        long id = jdbc.queryForObject("SELECT id FROM reviews",Long.class);
+        removeReview(owner,id).andExpect(status().isInternalServerError());
+        assertThat(count("reviews")).isEqualTo(1);assertStats(1,1,1,"8");
+    }
+
+    private long projectionVersion() {
+        return jdbc.queryForObject("SELECT search_projection_version FROM restaurants WHERE id=1", Long.class);
+    }
+
     @Test void preservesHistoryAndCountsPeopleNotReviews() throws Exception {
         publish(owner,1,input(8,true,UUID.randomUUID().toString())).andExpect(status().isCreated())
             .andExpect(header().string("Cache-Control","no-store")).andExpect(jsonPath("$.data.replayed").value(false));
         publish(owner,1,input(6,false,UUID.randomUUID().toString())).andExpect(status().isCreated());
         publish(other,1,input(9,true,UUID.randomUUID().toString())).andExpect(status().isCreated());
-        assertThat(count("reviews")).isEqualTo(3);assertStats(3,2,1,"15");
+        assertThat(count("reviews")).isEqualTo(3);assertStats(3,2,1,"15");assertThat(projectionVersion()).isEqualTo(4);
         mvc.perform(get("/api/restaurants/1")).andExpect(status().isOk())
             .andExpect(jsonPath("$.data.reviewCount").value(3))
             .andExpect(jsonPath("$.data.participantCount").value(2))
             .andExpect(jsonPath("$.data.score").value(7.5))
             .andExpect(jsonPath("$.data.recommendRate").value(0.5))
-            .andExpect(jsonPath("$.data.tier").value("super"));
-        mvc.perform(get("/api/restaurants/1/management").header("Authorization","Bearer "+owner))
+            .andExpect(jsonPath("$.data.tier").doesNotExist());
+        mvc.perform(get("/api/restaurants/1/management").header("Authorization","Bearer "+admin))
             .andExpect(status().isOk()).andExpect(jsonPath("$.data.restaurant.score").value(7.5))
             .andExpect(jsonPath("$.data.restaurant.participantCount").value(2));
     }
@@ -122,7 +148,7 @@ class ReviewWriteApiIntegrationTest {
         publish(owner,1,data).andExpect(status().isOk()).andExpect(jsonPath("$.data.reviewId").value(id)).andExpect(jsonPath("$.data.replayed").value(true));
         data.put("body","这次是不同的正文内容");publish(owner,1,data).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("REVIEW_REQUEST_CONFLICT"));
         publish(owner,2,input(7,true,uuid)).andExpect(status().isConflict());
-        publish(other,1,input(7,true,uuid)).andExpect(status().isCreated());assertStats(2,2,2,"14");
+        publish(other,1,input(7,true,uuid)).andExpect(status().isCreated());assertStats(2,2,2,"14");assertThat(projectionVersion()).isEqualTo(3);
     }
     @Test void rejectsAnonymousExpiredDisabledAndInvalidSession() throws Exception {
         mvc.perform(post("/api/restaurants/1/reviews").contentType(MediaType.APPLICATION_JSON)
@@ -157,9 +183,13 @@ class ReviewWriteApiIntegrationTest {
         publish(owner,1,input(7,true,UUID.randomUUID().toString())).andExpect(status().isNotFound());
     }
     @Test void rollsBackStatisticsAndReviewAndAllowsRetry() throws Exception {
-        doThrow(new org.springframework.dao.DataIntegrityViolationException("injected failure")).when(statisticsTarget).applyDelta(anyLong(),any());
+        // 真实执行统计和版本递增后再失败，证明已推进的版本也随整个发布事务撤销。
+        doAnswer(invocation -> {
+            invocation.callRealMethod();
+            throw new org.springframework.dao.DataIntegrityViolationException("injected failure after version advance");
+        }).when(statisticsTarget).applyDelta(anyLong(),any());
         var data=input(7,true,UUID.randomUUID().toString());publish(owner,1,data).andExpect(status().isConflict());
-        assertThat(count("reviews")).isZero();assertThat(count("restaurant_review_statistics")).isZero();
+        assertThat(count("reviews")).isZero();assertThat(count("restaurant_review_statistics")).isZero();assertThat(projectionVersion()).isEqualTo(1);
         reset(statisticsTarget);publish(owner,1,data).andExpect(status().isCreated());assertStats(1,1,1,"7");
     }
     @Test void concurrentReplayAndAuthorUpdatesRemainConsistent() throws Exception {
@@ -173,6 +203,7 @@ class ReviewWriteApiIntegrationTest {
             var latest=jdbc.queryForMap("SELECT overall_score,is_recommended FROM reviews WHERE restaurant_id=1 ORDER BY created_at DESC,id DESC LIMIT 1");
             long recommended=Boolean.TRUE.equals(latest.get("is_recommended"))?1:0;
             assertStats(7,1,recommended,latest.get("overall_score").toString());
+            assertThat(projectionVersion()).isEqualTo(8);
         }
     }
     @Test void concurrentCrossRestaurantUuidHasOneWinner() throws Exception {
@@ -189,7 +220,7 @@ class ReviewWriteApiIntegrationTest {
         try(var pool=Executors.newFixedThreadPool(2)) {
             var a=pool.submit(()->publish(owner,1,input(7,true,UUID.randomUUID().toString())).andReturn().getResponse().getStatus());
             assertThat(reached.await(10,TimeUnit.SECONDS)).isTrue();
-            var b=pool.submit(()->mvc.perform(delete("/api/restaurants/1").header("Authorization","Bearer "+owner)).andReturn().getResponse().getStatus());
+            var b=pool.submit(()->mvc.perform(delete("/api/restaurants/1").header("Authorization","Bearer "+admin)).andReturn().getResponse().getStatus());
             try{assertThat(b.isDone()).isFalse();}finally{release.countDown();}
             assertThat(a.get(20,TimeUnit.SECONDS)).isEqualTo(201);assertThat(b.get(20,TimeUnit.SECONDS)).isEqualTo(200);
             mvc.perform(get("/api/restaurants/1")).andExpect(status().isNotFound());
@@ -224,12 +255,12 @@ class ReviewWriteApiIntegrationTest {
         long second = publishId(owner, 6, false);
         publishId(other, 9, true);
         mvc.perform(delete("/api/reviews/"+second)).andExpect(status().isUnauthorized());
-        removeReview(other, second).andExpect(status().isForbidden());assertStats(3,2,1,"15");
+        removeReview(other, second).andExpect(status().isForbidden());assertStats(3,2,1,"15");assertThat(projectionVersion()).isEqualTo(4);
         removeReview(owner, second).andExpect(status().isNoContent()).andExpect(header().string("Cache-Control","no-store"));
         assertStats(2,2,2,"17");
         mvc.perform(get("/api/restaurants/1/reviews")).andExpect(status().isOk())
             .andExpect(jsonPath("$.data.totalReviews").value(2)).andExpect(jsonPath("$.data.totalGroups").value(2));
-        removeReview(owner, second).andExpect(status().isNoContent());assertStats(2,2,2,"17");
+        removeReview(owner, second).andExpect(status().isNoContent());assertStats(2,2,2,"17");assertThat(projectionVersion()).isEqualTo(5);
         removeReview(other, second).andExpect(status().isForbidden());
         removeReview(owner, first).andExpect(status().isNoContent());assertStats(1,1,1,"9");
         long last=jdbc.queryForObject("SELECT id FROM reviews",Long.class);
@@ -257,9 +288,14 @@ class ReviewWriteApiIntegrationTest {
         jdbc.update("INSERT INTO media_files(id,uploader_user_id,bucket_name,storage_key,content_type,byte_size,width,height,sha256,status,bound_at) VALUES(991,11,'test-bucket','review/delete.jpg','image/jpeg',100,10,10,UNHEX(REPEAT('00',32)),'BOUND',CURRENT_TIMESTAMP(6))");
         jdbc.update("INSERT INTO review_photos(review_id,position,media_file_id) VALUES(?,0,991)",id);
         jdbc.update("INSERT INTO review_replies(review_id,author_user_id,body,client_request_id,request_hash) VALUES(?,22,'回复正文',UUID_TO_BIN(?),UNHEX(REPEAT('00',32)))",id,UUID.randomUUID().toString());
-        doThrow(new org.springframework.dao.DataIntegrityViolationException("injected failure")).when(statisticsTarget).applyDelta(anyLong(),any());
+        // 删除已完成统计和版本更新后失败，回滚时不得消耗版本或删除媒体关联。
+        doAnswer(invocation -> {
+            invocation.callRealMethod();
+            throw new org.springframework.dao.DataIntegrityViolationException("injected failure after version advance");
+        }).when(statisticsTarget).applyDelta(anyLong(),any());
         removeReview(owner,id).andExpect(status().isConflict());
         assertThat(count("reviews")).isEqualTo(1);assertThat(count("review_replies")).isEqualTo(1);assertThat(count("review_photos")).isEqualTo(1);
+        assertThat(projectionVersion()).isEqualTo(2);
         assertThat(jdbc.queryForObject("SELECT status FROM media_files WHERE id=991",String.class)).isEqualTo("BOUND");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM review_request_receipts WHERE deleted_at IS NOT NULL",Long.class)).isZero();assertStats(1,1,1,"8");
         reset(statisticsTarget);removeReview(owner,id).andExpect(status().isNoContent());

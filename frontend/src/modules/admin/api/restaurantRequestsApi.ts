@@ -48,7 +48,8 @@ export interface ReviewInput {
   supportsDineIn: boolean | null
   supportsDelivery: boolean | null
   name: string
-  categoryCode: string
+  /** 食堂通过时必须为空；普通餐厅必须明确选择美食品类。 */
+  categoryCode: string | null
   priceKind: 'UNKNOWN' | 'EXACT' | 'ESTIMATE'
   pricePerPerson: number | null
   address: string | null

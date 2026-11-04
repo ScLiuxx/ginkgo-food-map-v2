@@ -132,7 +132,6 @@ public class RestaurantReadService {
         vo.setRecommendRate(row.getRecommendRate());
         vo.setReviewCount(row.getReviewCount());
         vo.setParticipantCount(row.getParticipantCount());
-        vo.setTier(row.getTier() == null ? "none" : row.getTier());
         var dimensions = new RestaurantVo.Dimensions();
         dimensions.setTaste(row.getTaste());
         dimensions.setValue(row.getValue());

@@ -7,9 +7,11 @@ import NearbyLocation from './NearbyLocation.vue'
 
 /** 分类、排序与经营状态直接操作同一份目录状态，由store统一重置页码并查询。 */
 const catalog = useRestaurantCatalog()
-// 食堂属于餐厅类型，不与火锅、面食等美食品类并列；完整分类字典仍供原有业务使用。
+// 分类字典保留停用编码供历史资料显示；公开导航只展示启用的大类，食堂使用独立类型。
 const cuisineCategories = computed(() =>
-  catalog.categories.filter((category) => category.code !== 'CANTEEN' && category.name !== '食堂'),
+  catalog.categories.filter(
+    (category) => category.enabled && category.code !== 'CANTEEN' && category.name !== '食堂',
+  ),
 )
 // 分类、排序和经营状态不生成重复标签；仅高级价格/距离条件展示可移除标签。
 </script>

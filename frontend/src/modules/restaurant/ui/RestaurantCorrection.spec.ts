@@ -147,6 +147,36 @@ describe('商户资料补充与纠错', () => {
     input.dispatchEvent(new Event('change', { bubbles: true }))
     await settle()
   }
+  it('食堂回显无分类，切换为普通餐厅后必须重新选择分类', async () => {
+    vi.mocked(fetchCorrectionSource).mockResolvedValue({
+      ...responseFixture,
+      restaurantType: 'CANTEEN',
+      categoryCode: null,
+      categoryName: null,
+      latitude: 30.75,
+      longitude: 103.93,
+    })
+    await mount()
+    expect(
+      [...host.querySelectorAll('label')].some((l) => l.textContent?.includes('美食品类')),
+    ).toBe(false)
+    await field('餐厅类型', 'REGULAR')
+    await field('我已核对', true)
+    await submit()
+    expect(submitRestaurantCorrection).not.toHaveBeenCalled()
+    expect(host.textContent).toContain('请选择可用分类')
+    await field('餐厅类型', 'CANTEEN')
+    await submit()
+    expect(submitRestaurantCorrection).toHaveBeenCalledWith(
+      '19',
+      expect.objectContaining({
+        restaurantType: 'CANTEEN',
+        categoryCode: null,
+      }),
+      'correction-user',
+    )
+  })
+
   it('选图预览、失败重试后随申请提交图片ID，成功离开不删除已绑定文件', async () => {
     await mount()
     vi.mocked(uploadImage).mockRejectedValueOnce(new Error('存储暂不可用')).mockResolvedValue('101')
@@ -314,7 +344,7 @@ describe('商户资料补充与纠错', () => {
       expect.objectContaining({
         clientRequestId: expect.any(String),
         name: '更正后店名',
-        categoryCode: 'OTHER',
+        categoryCode: null,
         restaurantType: 'CANTEEN',
         priceKind: 'EXACT',
         pricePerPerson: 42,

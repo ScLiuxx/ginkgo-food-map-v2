@@ -27,6 +27,8 @@ const catalog = useRestaurantCatalog()
 const form = reactive(restaurantDraft())
 const categories = ref<RestaurantCategory[]>([])
 const originalCategory = ref('')
+// 直接维护协议保留现有类型；编辑食堂时只隐藏不适用的分类，不擅自切换类型。
+const restaurantType = ref<'REGULAR' | 'CANTEEN'>('REGULAR')
 const loading = ref(false)
 const loadError = ref('')
 const saving = ref(false)
@@ -93,6 +95,7 @@ async function load(): Promise<void> {
     }
     categories.value = dictionary
     originalCategory.value = snapshot?.restaurant.categoryCode ?? ''
+    restaurantType.value = snapshot?.restaurant.restaurantType ?? 'REGULAR'
     Object.assign(form, restaurantDraft(snapshot?.restaurant))
     baseline.value = JSON.stringify(form)
   } catch (reason) {
@@ -163,9 +166,12 @@ async function submit(): Promise<void> {
     getAccessToken() !== boundToken
   )
     return
-  errors.value = validateRestaurantDraft(form)
+  errors.value = validateRestaurantDraft(form, restaurantType.value)
   const category = categories.value.find((c) => c.code === form.categoryCode)
-  if (!category || (!category.enabled && category.code !== originalCategory.value))
+  if (
+    restaurantType.value === 'REGULAR' &&
+    (!category || (!category.enabled && category.code !== originalCategory.value))
+  )
     errors.value.categoryCode = '请选择可用分类。'
   saveError.value = ''
   if (Object.keys(errors.value).length) {
@@ -174,7 +180,7 @@ async function submit(): Promise<void> {
   }
   saving.value = true
   try {
-    const input = restaurantInput(form)
+    const input = restaurantInput(form, restaurantType.value)
     const result = props.id
       ? await updateRestaurant(props.id, input, boundToken)
       : await createRestaurant(input, boundToken)
@@ -278,7 +284,7 @@ onBeforeUnmount(() => {
             />
             <p v-if="errors.name" id="error-name" class="field-error">{{ errors.name }}</p>
           </div>
-          <div class="editor-field">
+          <div v-if="restaurantType === 'REGULAR'" class="editor-field">
             <label for="restaurant-category">分类 <span>必填</span></label>
             <select
               id="restaurant-category"

@@ -9,6 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -47,8 +48,8 @@ class RestaurantReadControllerTest {
     /** 白名单、类型转换和分页上下界统一返回字段错误，不进入数据库查询。 */
     @ParameterizedTest
     @CsvSource({"page,0", "page,-1", "page,abc", "page,2147483648", "pageSize,0", "pageSize,101",
-            "pageSize,abc", "hideClosed,maybe", "sort,id desc", "sort,PRICE", "view,unknown",
-            "category,other", "category,'OTHER '", "tiers,unknown", "tiers,'none,unknown'"})
+            "pageSize,abc", "hideClosed,maybe", "sort,id desc", "sort,PRICE",
+            "category,other", "category,'OTHER '", "sort,taste", "sort,value", "sort,service", "sort,ambience"})
     void shouldRejectInvalidQuery(String field, String value) throws Exception {
         mvc.perform(get("/api/restaurants").param(field, value))
                 .andExpect(status().isBadRequest())
@@ -56,24 +57,31 @@ class RestaurantReadControllerTest {
         verifyNoInteractions(service);
     }
 
-    /** 多杯型、中文搜索及最大合法页码可以绑定，且偏移量仍为正long。 */
+    /** 中文搜索及最大合法页码可以绑定，且偏移量仍为正long。 */
     @Test
-    void shouldBindMultipleTiersWithoutOverflow() throws Exception {
-        mvc.perform(get("/api/restaurants").param("tiers", "none", "small")
+    void shouldBindSearchWithoutOverflow() throws Exception {
+        mvc.perform(get("/api/restaurants")
                         .param("keyword", "  火锅  ").param("page", "2147483647").param("pageSize", "100"))
                 .andExpect(status().isOk());
         var query = ArgumentCaptor.forClass(RestaurantListQuery.class);
         verify(service).list(query.capture());
-        assertThat(query.getValue().getTiers()).containsExactly("none", "small");
         assertThat(query.getValue().getOffset()).isEqualTo(214748364600L);
     }
 
-    /** 防止超长关键词和过多筛选输入扩大单次请求成本。 */
+    /** 已移除的参数明确报错，不能被悄悄忽略后返回全部商户。 */
+    @ParameterizedTest
+    @ValueSource(strings = {"tiers", "tiers[]", "tiers[0]", "view"})
+    void shouldRejectRemovedClassificationQueries(String field) throws Exception {
+        mvc.perform(get("/api/restaurants").param(field, "none"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("RESTAURANT_INVALID_INPUT"));
+        verifyNoInteractions(service);
+    }
+
+    /** 防止超长关键词扩大单次请求成本。 */
     @Test
-    void shouldBoundSearchAndTierInputs() throws Exception {
+    void shouldBoundSearchInputs() throws Exception {
         mvc.perform(get("/api/restaurants").param("keyword", "食".repeat(101)))
-                .andExpect(status().isBadRequest());
-        mvc.perform(get("/api/restaurants").param("tiers", "none", "none", "none", "none", "none", "none", "none"))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }

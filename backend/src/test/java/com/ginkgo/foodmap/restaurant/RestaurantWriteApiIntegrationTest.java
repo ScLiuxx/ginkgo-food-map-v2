@@ -129,6 +129,7 @@ class RestaurantWriteApiIntegrationTest {
         input.put("tags", List.of(" 招牌 ", "咖啡", "招牌", "CAFE", "café"));
         var created = create(input);
         String id = created.get("restaurant").get("id").asString();
+        assertThat(projectionVersion(id)).isEqualTo(1);
         assertThat(created.has("rowVersion")).isFalse();
         assertThat(created.get("restaurant").get("name").asString()).isEqualTo("测试餐厅");
         assertThat(created.get("restaurant").get("address").asString()).isEqualTo("测试地址");
@@ -153,6 +154,8 @@ class RestaurantWriteApiIntegrationTest {
         perform(delete("/api/restaurants/" + id), admin, null)
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.rowVersion").doesNotExist())
                 .andExpect(jsonPath("$.data.deleted").value(true));
+        assertThat(projectionVersion(id)).isEqualTo(3);
+        assertThat(projectionVersion(id)).isEqualTo(3);
         mvc.perform(get("/api/restaurants/" + id)).andExpect(status().isNotFound());
         mvc.perform(get("/api/restaurants")).andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(0));
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_tags WHERE restaurant_id=?", Long.class, id)).isEqualTo(2);
@@ -167,6 +170,7 @@ class RestaurantWriteApiIntegrationTest {
         mvc.perform(get("/api/restaurants/" + id)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.tags[1]").value("第二项"))
                 .andExpect(jsonPath("$.data.businessStatus").value("CLOSED"));
+        assertThat(projectionVersion(id)).isEqualTo(4);
         assertThat(jdbc.queryForMap("SELECT deleted_at,deleted_by,delete_reason_code FROM restaurants WHERE id=?", id).values())
                 .allMatch(Objects::isNull);
         assertThat(jdbc.queryForObject("SELECT created_by FROM restaurants WHERE id=?", Long.class, id)).isEqualTo(33);
@@ -345,7 +349,7 @@ class RestaurantWriteApiIntegrationTest {
                 .andExpect(jsonPath("$.code").value("RESTAURANT_CATEGORY_UNAVAILABLE"));
         var input = valid();
         perform(put("/api/restaurants/" + id), admin, input).andExpect(status().isOk());
- input.put("categoryCode", "SICHUAN");
+ input.put("categoryCode", "CHINESE");
         perform(put("/api/restaurants/" + id), admin, input).andExpect(status().isOk());
  input.put("categoryCode", "OTHER");
         perform(put("/api/restaurants/" + id), admin, input).andExpect(status().isBadRequest());
@@ -365,6 +369,7 @@ class RestaurantWriteApiIntegrationTest {
                 .containsExactly("原标签");
         perform(post("/api/restaurants"), admin, valid()).andExpect(status().isInternalServerError());
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurants", Long.class)).isEqualTo(1);
+        assertThat(projectionVersion(id)).isEqualTo(1);
     }
 
     /** 并发编辑都可成功，最终资料及整组标签来自最后一个写入事务，不能交叉混合。 */
@@ -385,6 +390,7 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(name).isIn("并发甲", "并发乙");
         assertThat(jdbc.queryForList("SELECT tag FROM restaurant_tags WHERE restaurant_id=? ORDER BY position", String.class, id))
                 .containsExactly(name.equals("并发甲") ? "甲1" : "乙1", name.equals("并发甲") ? "甲2" : "乙2");
+        assertThat(projectionVersion(id)).isEqualTo(3);
     }
 
     /** 删除与编辑串行执行：先编辑可随后删除，先删除则后续编辑404，不能被PUT意外恢复。 */
@@ -461,7 +467,7 @@ class RestaurantWriteApiIntegrationTest {
         var input = valid();
         input.put("clientRequestId", UUID.randomUUID().toString());
         input.put("name", " 待审核新店名 ");
-        input.put("restaurantType", "CANTEEN");
+        input.put("restaurantType", "CANTEEN"); input.put("categoryCode", null);
         input.put("supportsDineIn", true);
         input.put("supportsDelivery", false);
         input.put("priceKind", "EXACT"); input.put("pricePerPerson",25);
@@ -653,10 +659,10 @@ class RestaurantWriteApiIntegrationTest {
     void shouldPublishRestaurantTypeAndDiningModesFromCorrection() throws Exception {
         String target = create(valid()).get("restaurant").get("id").asString();
         var submission = valid(); submission.put("clientRequestId", UUID.randomUUID().toString());
-        submission.put("restaurantType", "CANTEEN"); submission.put("supportsDineIn", true); submission.put("supportsDelivery", false);
+        submission.put("restaurantType", "CANTEEN"); submission.put("categoryCode", null); submission.put("supportsDineIn", true); submission.put("supportsDelivery", false);
         String id = submitted("/api/restaurants/" + target + "/change-requests", submission);
         mvc.perform(get("/api/restaurants/" + target)).andExpect(status().isOk()).andExpect(jsonPath("$.data.restaurantType").value("REGULAR"));
-        var approved = valid(); approved.put("restaurantType", "CANTEEN"); approved.put("supportsDineIn", true); approved.put("supportsDelivery", false);
+        var approved = valid(); approved.put("restaurantType", "CANTEEN"); approved.put("categoryCode", null); approved.put("supportsDineIn", true); approved.put("supportsDelivery", false);
         String endpoint = "/api/admin/restaurant-requests/" + id + "/approve";
         perform(post(endpoint), admin, approved).andExpect(status().isOk());
         mvc.perform(get("/api/restaurants/" + target)).andExpect(status().isOk())
@@ -670,12 +676,13 @@ class RestaurantWriteApiIntegrationTest {
         approved.put("restaurantType", "REGULAR");
         perform(post(endpoint), admin, approved).andExpect(status().isConflict());
         // 独立的直接维护旧协议不带这三个字段，应保留现有类型和用餐方式。
-        perform(put("/api/restaurants/" + target), admin, valid()).andExpect(status().isOk())
+        var direct = valid(); direct.put("categoryCode", null);
+        perform(put("/api/restaurants/" + target), admin, direct).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.restaurant.restaurantType").value("CANTEEN"));
-        var next = valid(); next.put("clientRequestId", UUID.randomUUID().toString()); next.put("restaurantType", "CANTEEN");
+        var next = valid(); next.put("clientRequestId", UUID.randomUUID().toString()); next.put("restaurantType", "CANTEEN"); next.put("categoryCode", null);
         next.put("supportsDineIn", null); next.put("supportsDelivery", true);
         String nextId = submitted("/api/restaurants/" + target + "/change-requests", next);
-        approved.put("restaurantType", "CANTEEN"); approved.put("supportsDineIn", null); approved.put("supportsDelivery", true);
+        approved.put("restaurantType", "CANTEEN"); approved.put("categoryCode", null); approved.put("supportsDineIn", null); approved.put("supportsDelivery", true);
         perform(post("/api/admin/restaurant-requests/" + nextId + "/approve"), admin, approved).andExpect(status().isOk());
         mvc.perform(get("/api/restaurants/" + target)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.supportsDineIn").isEmpty()).andExpect(jsonPath("$.data.supportsDelivery").value(true));
@@ -684,13 +691,13 @@ class RestaurantWriteApiIntegrationTest {
     /** 新建食堂也要写正式类型；有窗口的食堂不可切回普通餐厅，冲突不能误报审核成功。 */
     @Test
     void shouldCreateCanteenAndProtectExistingWindowReferences() throws Exception {
-        var submission = valid(); submission.put("clientRequestId", UUID.randomUUID().toString()); submission.put("restaurantType", "CANTEEN");
+        var submission = valid(); submission.put("clientRequestId", UUID.randomUUID().toString()); submission.put("restaurantType", "CANTEEN"); submission.put("categoryCode", null);
         String id = submitted("/api/restaurant-submissions", submission);
-        var approved = valid(); approved.put("restaurantType", "CANTEEN"); approved.put("supportsDineIn", true);
+        var approved = valid(); approved.put("restaurantType", "CANTEEN"); approved.put("categoryCode", null); approved.put("supportsDineIn", true);
         var response = perform(post("/api/admin/restaurant-requests/" + id + "/approve"), admin, approved).andExpect(status().isOk()).andReturn();
         String target = json.readTree(response.getResponse().getContentAsString()).at("/data/restaurantId").asString();
         assertThat(jdbc.queryForObject("SELECT restaurant_type FROM restaurants WHERE id=?", String.class, target)).isEqualTo("CANTEEN");
-        submission.put("clientRequestId", UUID.randomUUID().toString()); submission.put("restaurantType", "REGULAR");
+        submission.put("clientRequestId", UUID.randomUUID().toString()); submission.put("restaurantType", "REGULAR"); submission.put("categoryCode", "OTHER");
         String nextId = submitted("/api/restaurants/" + target + "/change-requests", submission);
         jdbc.update("INSERT INTO canteen_windows(canteen_id,name,floor_number,created_by) VALUES(?,'窗口夹具',1,33)", target);
         try {
@@ -699,6 +706,67 @@ class RestaurantWriteApiIntegrationTest {
         } finally { jdbc.update("DELETE FROM canteen_windows WHERE canteen_id=?", target); }
         perform(post("/api/admin/restaurant-requests/" + nextId + "/approve"), admin, valid()).andExpect(status().isOk());
         mvc.perform(get("/api/restaurants/" + target)).andExpect(status().isOk()).andExpect(jsonPath("$.data.restaurantType").value("REGULAR"));
+    }
+
+    /** 类型与分类联合校验，空分类食堂仍可参与公开目录、地图及审核核对。 */
+    @Test
+    void shouldRequireCategoryOnlyForRegularRestaurants() throws Exception {
+        var submission = valid(); submission.put("clientRequestId", UUID.randomUUID().toString());
+        submission.put("restaurantType", "CANTEEN");
+        perform(post("/api/restaurant-submissions"), other, submission).andExpect(status().isBadRequest());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_change_requests", Long.class)).isZero();
+        submission.put("categoryCode", null);
+        String id = submitted("/api/restaurant-submissions", submission);
+        var approved = valid(); approved.put("restaurantType", "CANTEEN");
+        String endpoint = "/api/admin/restaurant-requests/" + id + "/approve";
+        perform(post(endpoint), admin, approved).andExpect(status().isBadRequest());
+        approved.put("categoryCode", null);
+        var response = perform(post(endpoint), admin, approved).andExpect(status().isOk()).andReturn();
+        String target = json.readTree(response.getResponse().getContentAsString()).at("/data/restaurantId").asString();
+        mvc.perform(get("/api/restaurants/" + target)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.categoryCode").isEmpty()).andExpect(jsonPath("$.data.categoryName").isEmpty());
+        mvc.perform(get("/api/restaurants")).andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1));
+        mvc.perform(get("/api/restaurants").param("category", "OTHER")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+        mvc.perform(get("/api/restaurants/map-points").param("west", "100").param("east", "110")
+                .param("south", "25").param("north", "35")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.matchedCount").value(1));
+        perform(get("/api/admin/restaurant-requests/" + id), admin, null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.current.categoryName").isEmpty());
+        var regular = valid(); regular.put("categoryCode", null);
+        perform(post("/api/restaurants"), admin, regular).andExpect(status().isBadRequest());
+        regular.put("clientRequestId", UUID.randomUUID().toString());
+        perform(post("/api/restaurant-submissions"), other, regular).andExpect(status().isBadRequest());
+        // 食堂直接维护按已有类型校验，不能把一个美食品类重新写回食堂主表。
+        perform(put("/api/restaurants/" + target), admin, valid()).andExpect(status().isBadRequest());
+    }
+
+    /** 老食堂申请与审核快照不随分类规则重写，相同原内容仍可重试，改动内容仍冲突。 */
+    @Test
+    void shouldReplayLegacyCanteenRequestWithoutChangingHistoricalPayload() throws Exception {
+        var legacy = valid(); legacy.put("clientRequestId", UUID.randomUUID().toString());
+        legacy.put("restaurantType", "CANTEEN");
+        // 使用真实DTO序列化得到旧协议摘要，模拟V20之前已经保存的申请。
+        var dto = json.readValue(json.writeValueAsString(legacy), com.ginkgo.foodmap.restaurant.dto.RestaurantChangeRequest.class);
+        String payload = json.writeValueAsString(dto);
+        byte[] hash = java.security.MessageDigest.getInstance("SHA-256").digest(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        jdbc.update("INSERT INTO restaurant_change_requests(request_type,submitted_by,client_request_id,request_hash,proposed_data) VALUES('CREATE',22,?,?,?)",
+                dto.getClientRequestId().toString(), hash, payload);
+        Long id = jdbc.queryForObject("SELECT id FROM restaurant_change_requests", Long.class);
+        perform(post("/api/restaurant-submissions"), other, legacy).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.id").value(id.toString()));
+        String history = jdbc.queryForObject("SELECT proposed_data FROM restaurant_change_requests WHERE id=?", String.class, id);
+        legacy.put("name", "修改内容不能冒充重试");
+        perform(post("/api/restaurant-submissions"), other, legacy).andExpect(status().isConflict());
+        assertThat(jdbc.queryForObject("SELECT proposed_data FROM restaurant_change_requests WHERE id=?", String.class, id)).isEqualTo(history);
+        var approved = valid(); approved.put("restaurantType", "CANTEEN");
+        jdbc.update("INSERT INTO restaurants(id,name,category_code,restaurant_type) VALUES(12345,'旧已通过食堂',NULL,'CANTEEN')");
+        jdbc.update("UPDATE restaurant_change_requests SET status='APPROVED',restaurant_id=12345,reviewed_by=33,reviewed_at=CURRENT_TIMESTAMP(6),approved_data=? WHERE id=?",
+                json.writeValueAsString(json.readValue(json.writeValueAsString(approved), com.ginkgo.foodmap.restaurant.dto.RestaurantApproveRequest.class)), id);
+        perform(post("/api/admin/restaurant-requests/" + id + "/approve"), admin, approved)
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.replayed").value(true));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurants", Long.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT category_code FROM restaurants WHERE id=12345", String.class)).isNull();
     }
 
     /** 带图申请通过或驳回均保留原关联，用户原请求仍可重试，不发布或删除云对象。 */
@@ -765,6 +833,7 @@ class RestaurantWriteApiIntegrationTest {
         edited.put("name", "不同审核内容");
         perform(post(endpoint), admin, edited).andExpect(status().isConflict());
         perform(post("/api/admin/restaurant-requests/" + id + "/reject"), admin, Map.of("reason", "信息不实")).andExpect(status().isConflict());
+        assertThat(projectionVersion(target)).isEqualTo(1);
     }
 
     /** 纠错快照记录事务内最新资料；不做页面过期检测，不覆盖归属或评分。 */
@@ -784,6 +853,7 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT created_by FROM restaurants WHERE id=?", Long.class, target)).isEqualTo(11);
         assertThat(jdbc.queryForObject("SELECT updated_by FROM restaurants WHERE id=?", Long.class, target)).isEqualTo(33);
         assertThat(jdbc.queryForList("SELECT tag FROM restaurant_tags WHERE restaurant_id=?", String.class, target)).containsExactly("新标签");
+        assertThat(projectionVersion(target)).isEqualTo(2);
     }
 
     /** 删除目标不能通过审核复活，但仍允许驳回；原因规范化后可安全重试。 */
@@ -950,6 +1020,7 @@ class RestaurantWriteApiIntegrationTest {
             assertThat(jdbc.queryForObject("SELECT MAX(position)-MIN(position) FROM restaurant_photos WHERE source_request_id=?", Integer.class, request)).isEqualTo(1);
         assertThat(publicAlbum(target, 20, null).get("records").size()).isEqualTo(4);
         verifyNoInteractions(storage);
+        assertThat(projectionVersion(target)).isEqualTo(3);
     }
 
     /** 同一带图新店申请被同时通过，只创建一个商户、一套相册及一份首次回执。 */
@@ -977,7 +1048,7 @@ class RestaurantWriteApiIntegrationTest {
         String fresh = albumRequest(null, albumFile(), albumFile());
         doThrow(new IllegalStateException("test-only second photo failure")).when(photoMapper)
                 .insert(argThat(row -> row.getPosition() == 1));
-        var edited = valid(); edited.put("name", "不可部分发布"); edited.put("restaurantType", "CANTEEN"); edited.put("tags", List.of("新标签"));
+        var edited = valid(); edited.put("name", "不可部分发布"); edited.put("restaurantType", "CANTEEN"); edited.put("categoryCode", null); edited.put("tags", List.of("新标签"));
         for (String id : List.of(update, fresh))
             perform(post("/api/admin/restaurant-requests/" + id + "/approve"), admin, edited).andExpect(status().isInternalServerError());
         assertAlbumRollback(target);
@@ -1062,7 +1133,7 @@ class RestaurantWriteApiIntegrationTest {
     /** 食堂和普通餐厅共用正式相册协议，不依赖餐厅类型或窗口查询是否接入。 */
     @Test
     void shouldExposeCanteenAlbumUsingSamePublicContract() throws Exception {
-        String id = albumRequest(null, albumFile()); var edited = valid(); edited.put("restaurantType", "CANTEEN");
+        String id = albumRequest(null, albumFile()); var edited = valid(); edited.put("restaurantType", "CANTEEN"); edited.put("categoryCode", null);
         var receipt = approveAlbum(id, edited); String target = receipt.get("restaurantId").asString();
         mvc.perform(get("/api/restaurants/" + target)).andExpect(status().isOk()).andExpect(jsonPath("$.data.restaurantType").value("CANTEEN"));
         assertThat(publicAlbum(target, 20, null).get("records").size()).isEqualTo(1);
@@ -1123,6 +1194,7 @@ class RestaurantWriteApiIntegrationTest {
     }
 
     private void assertAlbumRollback(String target) {
+        assertThat(projectionVersion(target)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_photos", Long.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurants", Long.class)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT name FROM restaurants WHERE id=?", String.class, target)).isEqualTo(valid().get("name"));
@@ -1135,6 +1207,27 @@ class RestaurantWriteApiIntegrationTest {
     private String submitted(String endpoint, Map<String, Object> input) throws Exception {
         var response = perform(post(endpoint), other, input).andExpect(status().isCreated()).andReturn();
         return json.readTree(response.getResponse().getContentAsString()).at("/data/id").asString();
+    }
+
+    /** 版本耗尽明确失败，不能溢出成负数或留下已修改资料。 */
+    @Test
+    void shouldRefuseExhaustedSearchProjectionVersion() throws Exception {
+        String id = create(valid()).get("restaurant").get("id").asString();
+        jdbc.update("UPDATE restaurants SET search_projection_version=? WHERE id=?", Long.MAX_VALUE, id);
+        var input = valid(); input.put("name", "不可写入"); input.put("tags", List.of("不可写入"));
+        perform(put("/api/restaurants/" + id), admin, input).andExpect(status().isConflict());
+        perform(delete("/api/restaurants/" + id), admin, null).andExpect(status().isConflict());
+        assertThat(projectionVersion(id)).isEqualTo(Long.MAX_VALUE);
+        assertThat(jdbc.queryForObject("SELECT name FROM restaurants WHERE id=?", String.class, id)).isEqualTo(valid().get("name"));
+        assertThat(jdbc.queryForList("SELECT tag FROM restaurant_tags WHERE restaurant_id=?", String.class, id)).containsExactly("原标签");
+        assertThat(jdbc.queryForObject("SELECT deleted_at FROM restaurants WHERE id=?", java.sql.Timestamp.class, id)).isNull();
+        jdbc.update("UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM' WHERE id=?", id);
+        perform(post("/api/restaurants/" + id + "/restore"), admin, null).andExpect(status().isConflict());
+        assertThat(jdbc.queryForObject("SELECT deleted_at FROM restaurants WHERE id=?", java.sql.Timestamp.class, id)).isNotNull();
+    }
+
+    private long projectionVersion(String id) {
+        return jdbc.queryForObject("SELECT search_projection_version FROM restaurants WHERE id=?", Long.class, id);
     }
 
     private Map<String, Object> valid() {

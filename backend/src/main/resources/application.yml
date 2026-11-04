@@ -67,6 +67,14 @@ management:
       show-details: never
 
 app:
+  search:
+    elasticsearch:
+      # 连接准备不代表已切换搜索；未显式开启时不创建ES客户端。
+      enabled: ${ES_ENABLED:false}
+      # 当前用于本地无认证HTTP服务，填写host:port，不包含http://。
+      address: ${ES_ADDRESS:127.0.0.1:9200}
+      connect-timeout: 2s
+      socket-timeout: 3s
   file:
     oss:
       enabled: ${OSS_ENABLED:false}

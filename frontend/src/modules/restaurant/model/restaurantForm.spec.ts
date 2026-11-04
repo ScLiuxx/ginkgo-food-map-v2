@@ -18,6 +18,12 @@ const valid = () => ({
 
 /** 校验真实业务边界，防止空值、小数金额和未经确认的位置被错误转换后提交。 */
 describe('restaurant editor input rules', () => {
+  it('食堂无分类也可提交，普通餐厅仍须选分类，食堂请求不携带旧草稿分类', () => {
+    const form = { ...valid(), categoryCode: '' }
+    expect(validateRestaurantDraft(form, 'CANTEEN')).toEqual({})
+    expect(validateRestaurantDraft(form, 'REGULAR')).toHaveProperty('categoryCode')
+    expect(restaurantInput(valid(), 'CANTEEN').categoryCode).toBeNull()
+  })
   it('requires explicit location without default campus coordinates', () => {
     const form = restaurantDraft()
     expect(form.latitude).toBe('')

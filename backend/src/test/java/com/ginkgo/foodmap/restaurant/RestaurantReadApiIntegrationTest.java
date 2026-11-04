@@ -118,15 +118,14 @@ class RestaurantReadApiIntegrationTest {
         }
     }
 
-    /** 访客可读取13类字典，停用类仍可阅读，顺序由字典字段确定。 */
+    /** 访客读取含历史停用编码的完整字典，九个主营大类及历史类都按字典顺序返回。 */
     @Test
     void shouldReadAllCategoriesInStableOrder() throws Exception {
         jdbc.update("UPDATE restaurant_categories SET enabled=0 WHERE code='OTHER'");
         mvc.perform(get("/api/restaurant-categories")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.length()").value(13))
-                .andExpect(jsonPath("$.data[0].code").value("HOT_POT"))
-                .andExpect(jsonPath("$.data[12].code").value("OTHER"))
-                .andExpect(jsonPath("$.data[12].enabled").value(false));
+                .andExpect(jsonPath("$.data.length()").value(17))
+                .andExpect(jsonPath("$.data[0].code").value("FAST_FOOD"))
+                .andExpect(jsonPath("$.data[?(@.code == 'OTHER')].enabled").value(org.hamcrest.Matchers.contains(false)));
         mvc.perform(get("/api/restaurants").param("category", "OTHER"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(4));
         verifyNoInteractions(sessions);
@@ -205,29 +204,10 @@ class RestaurantReadApiIntegrationTest {
 
     /** 评分排序在没有评价阶段使用稳定后备次序，不为无评价店铺捏造分数。 */
     @ParameterizedTest
-    @ValueSource(strings = {"score", "taste", "value", "service", "ambience", "reviews"})
+    @ValueSource(strings = {"score", "reviews"})
     void shouldUseStableOrderForEmptyRatingSorts(String sort) throws Exception {
         mvc.perform(get("/api/restaurants").param("sort", sort).param("pageSize", "1"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.records[0].id").value("101"));
-    }
-
-    /** 待评级不会被划入推荐或踩雷，五个有评分杯型在M1都没有命中。 */
-    @ParameterizedTest
-    @ValueSource(strings = {"bucket", "super", "large", "medium", "small"})
-    void shouldExcludeUnratedFromScoredTiers(String tier) throws Exception {
-        mvc.perform(get("/api/restaurants").param("tiers", tier)).andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.total").value(0));
-    }
-
-    /** 杯型为并集，视图与杯型为交集；待评级并入组合仍不能变成推荐。 */
-    @Test
-    void shouldApplyViewsAndTierUnionConsistently() throws Exception {
-        mvc.perform(get("/api/restaurants").param("tiers", "none", "small"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(7));
-        for (String view : new String[]{"recommended", "pitfall"}) {
-            mvc.perform(get("/api/restaurants").param("view", view).param("tiers", "none"))
-                    .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(0));
-        }
     }
 
     /** 列表和详情均不泄露删除店铺，标签残留不让其通过搜索重新出现。 */
@@ -265,7 +245,7 @@ class RestaurantReadApiIntegrationTest {
         }
         assertThat(data.get("reviewCount").asLong()).isZero();
         assertThat(data.get("participantCount").asLong()).isZero();
-        assertThat(data.get("tier").asString()).isEqualTo("none");
+        assertThat(data.has("tier")).isFalse();
         for (String field : new String[]{"createdBy", "updatedBy", "deletedBy", "deletedAt", "rowVersion", "deleteReasonCode"}) {
             assertThat(data.has(field)).as(field).isFalse();
         }
@@ -335,7 +315,7 @@ class RestaurantReadApiIntegrationTest {
                 .andExpect(jsonPath("$.data.participantCount").value(2))
                 .andExpect(jsonPath("$.data.score").value(7.5))
                 .andExpect(jsonPath("$.data.recommendRate").value(0.5))
-                .andExpect(jsonPath("$.data.tier").value("super"))
+                .andExpect(jsonPath("$.data.tier").doesNotExist())
                 .andExpect(jsonPath("$.data.dimensions.taste").value(8))
                 .andExpect(jsonPath("$.data.dimensions.value").value(7.5))
                 .andExpect(jsonPath("$.data.dimensions.service").value(6))
@@ -349,16 +329,16 @@ class RestaurantReadApiIntegrationTest {
         for (long id : new long[]{102, 103}) {
             mvc.perform(get("/api/restaurants/" + id)).andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.participantCount").value(0))
-                    .andExpect(jsonPath("$.data.tier").value("none"))
+                    .andExpect(jsonPath("$.data.tier").doesNotExist())
                     .andExpect(jsonPath("$.data.score").isEmpty());
         }
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_review_statistics", Long.class)).isEqualTo(2);
         verifyNoInteractions(sessions);
     }
 
-    /** 所有真实评分维度与总条数先在完整集合排序，再分页；同分仍按名称和ID稳定返回。 */
+    /** 综合分与总条数先在完整集合排序，再分页；同分仍按名称和ID稳定返回。 */
     @ParameterizedTest
-    @ValueSource(strings = {"score", "taste", "value", "service", "ambience", "reviews"})
+    @ValueSource(strings = {"score", "reviews"})
     void shouldSortRealStatisticsGloballyBeforePaging(String sort) throws Exception {
         statistics(101, 1, 1, 1, "7", "7", "7", "7", "7");
         statistics(102, 1, 1, 0, "7", "7", "7", "7", "7");
@@ -371,22 +351,7 @@ class RestaurantReadApiIntegrationTest {
         }
     }
 
-    /** 所有杯型临界点比较精确累计值，展示成8.6的8.599仍属超大杯。 */
-    @ParameterizedTest
-    @CsvSource({"8599,super", "8600,bucket", "7399,large", "7400,super", "6199,medium",
-            "6200,large", "4999,small", "5000,medium", "0,small", "10000,bucket"})
-    void shouldClassifyBeforeRoundingAndFilterUsingTheSameTier(String sum, String tier) throws Exception {
-        statistics(101, 1000, 1000, 0, sum, sum, sum, sum, sum);
-        mvc.perform(get("/api/restaurants/101")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.tier").value(tier));
-        mvc.perform(get("/api/restaurants").param("tiers", tier).param("pageSize", "1"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1))
-                .andExpect(jsonPath("$.data.records[0].id").value("101"));
-        mvc.perform(get("/api/restaurants").param("tiers", "none"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(6));
-    }
-
-    /** 真实0分先于未知分；视图按杯型而非推荐率，组合筛选和总数使用相同口径。 */
+    /** 真实0分先于未知分，推荐率独立于综合分，不再产生评分分档。 */
     @Test
     void shouldDistinguishZeroUnknownAndIndependentRecommendationChoice() throws Exception {
         statistics(105, 1, 1, 1, "0", "0", "0", "0", "0");
@@ -394,20 +359,13 @@ class RestaurantReadApiIntegrationTest {
         mvc.perform(get("/api/restaurants/105")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.score").value(0))
                 .andExpect(jsonPath("$.data.recommendRate").value(1))
-                .andExpect(jsonPath("$.data.tier").value("small"));
+                .andExpect(jsonPath("$.data.tier").doesNotExist());
         mvc.perform(get("/api/restaurants").param("pageSize", "1").param("page", "2"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.records[0].id").value("105"));
-        mvc.perform(get("/api/restaurants").param("view", "recommended").param("tiers", "large", "none"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1))
-                .andExpect(jsonPath("$.data.records[0].id").value("104"));
-        mvc.perform(get("/api/restaurants").param("view", "pitfall").param("tiers", "small", "none"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1))
-                .andExpect(jsonPath("$.data.records[0].id").value("105"));
-        mvc.perform(get("/api/restaurants").param("view", "recommended").param("tiers", "small"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(0));
+
     }
 
-    /** 接近INT UNSIGNED人数上限仍保留除法差异，不因MySQL默认除法精度而错序或跨杯型。 */
+    /** 接近INT UNSIGNED人数上限仍保留除法差异，不因MySQL默认除法精度而错序。 */
     @Test
     void shouldPreserveSubMicroScoreDifferences() throws Exception {
         statistics(101, 4_000_000_000L, 4_000_000_000L, 0, "34399999999.99", "0", "0", "0", "0");
@@ -415,12 +373,10 @@ class RestaurantReadApiIntegrationTest {
         mvc.perform(get("/api/restaurants").param("pageSize", "1"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.records[0].id").value("102"));
         mvc.perform(get("/api/restaurants/101")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.tier").value("super"));
-        mvc.perform(get("/api/restaurants").param("tiers", "bucket"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1));
+                .andExpect(jsonPath("$.data.tier").doesNotExist());
     }
 
-    /** COUNT后并发发布改变人数和杯型，本次响应仍保持同一只读快照，下次请求才看到新值。 */
+    /** COUNT后并发发布改变人数和评分，本次响应仍保持同一只读快照，下次请求才看到新值。 */
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void shouldReadStatisticsAndFilterWithinOneSnapshot() throws Exception {
@@ -437,12 +393,13 @@ class RestaurantReadApiIntegrationTest {
             }
             return total;
         }).when(mapper).countVisible(any(RestaurantListQuery.class));
-        mvc.perform(get("/api/restaurants").param("view", "recommended"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1))
+        mvc.perform(get("/api/restaurants").param("keyword", "A"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(2))
                 .andExpect(jsonPath("$.data.records[0].score").value(8))
                 .andExpect(jsonPath("$.data.records[0].participantCount").value(1));
-        mvc.perform(get("/api/restaurants").param("view", "recommended"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(0));
+        mvc.perform(get("/api/restaurants").param("keyword", "A"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(2))
+                .andExpect(jsonPath("$.data.records[0].score").value(4.5));
         mvc.perform(get("/api/restaurants/101")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.score").value(4.5));
     }

@@ -24,6 +24,16 @@ afterEach(() => {
 
 /** 使用真实Axios配置验证查询白名单、路径和模型转换，防止前后端协议漂移。 */
 describe('restaurant HTTP API', () => {
+  it('食堂允许空分类，页面模型不会补造美食品类', () => {
+    const model = toRestaurantModel({
+      ...responseFixture,
+      restaurantType: 'CANTEEN',
+      categoryCode: null,
+      categoryName: null,
+    })
+    expect(model.restaurantType).toBe('CANTEEN')
+    expect(model.category).toBe('')
+  })
   it('将随目录返回的正式封面转换为本站地址，无封面保持null', () => {
     const result = toRestaurantModel({
       ...responseFixture,

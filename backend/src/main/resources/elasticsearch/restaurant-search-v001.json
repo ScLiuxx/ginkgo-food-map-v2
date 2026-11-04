@@ -1,0 +1,62 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "refresh_interval": "1s",
+    "analysis": {
+      "normalizer": {
+        "restaurant_name_exact": {
+          "type": "custom",
+          "char_filter": [],
+          "filter": ["lowercase", "asciifolding"]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "_meta": {
+      "schema": "ginkgo.restaurant-search",
+      "schema_version": "001",
+      "description": "商户搜索投影：普通餐厅与食堂，每商户一文档；MySQL仍为正式资料来源",
+      "coordinate_system": "GCJ02",
+      "rating_scale": "0-10"
+    },
+    "properties": {
+      "id": { "type": "long", "coerce": false },
+      "name": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart",
+        "fields": {
+          "exact": { "type": "keyword", "normalizer": "restaurant_name_exact" }
+        }
+      },
+      "categoryName": { "type": "text", "analyzer": "ik_max_word", "search_analyzer": "ik_smart" },
+      "tags": { "type": "text", "analyzer": "ik_max_word", "search_analyzer": "ik_smart" },
+      "address": { "type": "text", "analyzer": "ik_max_word", "search_analyzer": "ik_smart" },
+      "categoryCode": { "type": "keyword" },
+      "restaurantType": { "type": "keyword" },
+      "supportsDineIn": { "type": "boolean" },
+      "supportsDelivery": { "type": "boolean" },
+      "pricePerPerson": { "type": "integer", "coerce": false },
+      "priceKind": { "type": "keyword" },
+      "businessStatus": { "type": "keyword" },
+      "location": { "type": "geo_point", "ignore_malformed": false, "ignore_z_value": false },
+      "needsLocation": { "type": "boolean" },
+      "ratingScore": { "type": "double", "coerce": false },
+      "recommendRate": { "type": "double", "coerce": false },
+      "participantCount": { "type": "long", "coerce": false },
+      "reviewCount": { "type": "long", "coerce": false },
+      "tasteScore": { "type": "double", "coerce": false },
+      "valueScore": { "type": "double", "coerce": false },
+      "serviceScore": { "type": "double", "coerce": false },
+      "ambienceScore": { "type": "double", "coerce": false },
+      "deleted": { "type": "boolean" },
+      "projectionVersion": { "type": "long", "coerce": false }
+    }
+  },
+  "aliases": {
+    "restaurant-search": { "is_write_index": true }
+  }
+}

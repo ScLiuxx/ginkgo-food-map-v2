@@ -91,6 +91,12 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
+        <!-- 版本沿用Boot BOM；连接由餐厅模块显式开启，避免未部署ES时自动注册客户端与健康检查。 -->
+        <dependency>
+            <groupId>org.springframework.data</groupId>
+            <artifactId>spring-data-elasticsearch</artifactId>
+        </dependency>
+
         <!-- Spring Boot 4 将迁移自动配置拆入独立 Starter，启动时由其执行并校验 Flyway 脚本。 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

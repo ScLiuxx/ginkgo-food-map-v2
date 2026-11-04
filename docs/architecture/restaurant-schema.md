@@ -21,13 +21,22 @@
 
 分类编码唯一；停用分类保留给已有餐厅使用。
 
+V19将正式商户和窗口归并为九个一级分类，不新增层级字段。启用编码按顺序为FAST_FOOD（小吃快餐）、CHINESE（中餐地方菜）、HOT_POT（火锅串串）、BARBECUE（烧烤烤肉）、DRY_POT_FISH（香锅烤鱼）、INTERNATIONAL（国际美食）、DESSERT（甜品烘焙）、DRINK（饮品）、OTHER（其他美食）。旧SICHUAN合并至CHINESE；SNACK、MAO_CAI、NOODLE、MALA_TANG、PORRIDGE_NOODLE、LIGHT_MEAL合并至FAST_FOOD。旧CANTEEN分类改为OTHER，restaurant_type独立保留。停用旧编码而非删除，申请原始JSON、摘要及审核快照不重写；旧待审申请首次通过时需核对并选择当前启用分类。
+
+本地导入数据的首次补充分流独立于通用V19迁移：只处理仍为OTHER、未人工维护或审核且名称/地址/坐标与原始导入记录一致的普通商户。该轮只采用原始POI首个主营类型；分类变更使用条件更新，保留库外备份及逐条审计。其他环境不能在缺少同一来源与身份核对时照搬本地补充分流结果。
+
+后续经用户授权进行全量店名复核：九类结构不变，允许根据明确主营品类词或品牌前缀修正任意现类，而非仅处理OTHER。名称规则在backend/tools/restaurant_name_category.py，忽略分店括号中的位置/品牌，处理火锅冒菜、烤肉拌饭等组合词，名称冲突/疑似非餐饮/含义不明时保留待核；人工维护、已审核发布和食堂记录不自动覆盖。更新带旧分类、名称、更新时间及当前审核状态条件，整批事务写入；库外保存规则哈希、全量扫描结果、修改证据和完整备份。该维护不改schema，不重写V19或申请快照，也不新增经营核实标识。
+
+V21增加每店搜索投影版本：新建及存量基线1，资料保存、软删除、恢复、评价统计修改与版本同一事务；父行锁串行化同店写入，失败回滚，耗尽正Long范围时拒绝更新。审核通过的资料与相册共用一次推进；幂等重试/驳回/回复不推进，评价修改不改变资料审计时间。组装器从同一RR快照读取资料和版本。旁路SQL/维护脚本及未来分类名称或相册修改也需显式推进版本。ES外部版本写入和Outbox尚未实现。详细边界见[ES结构](elasticsearch-schema.md)。
+
 ## `restaurants`：餐厅
 
 | 字段 | 类型 | 可空 | 说明 |
 | --- | --- | --- | --- |
 | `id` | `bigint unsigned` | 否 | 主键；自增 |
 | `name` | `varchar(40)` | 否 | 名称 |
-| `category_code` | `varchar(32)` | 否 | 分类编码 |
+| `search_projection_version` | `bigint` | 否 | V21新增，每店搜索投影版本，默认1且必须大于0；同业务事务递增，不作为HTTP字段 |
+| `category_code` | `varchar(32)` | 是 | 普通餐厅分类必填；食堂固定NULL，不适用美食品类 |
 | `restaurant_type` | `varchar(16)` | 否 | REGULAR普通餐厅 / CANTEEN食堂；默认REGULAR |
 | `price_per_person` | `smallint unsigned` | 是 | 整数元人均，未知为NULL，不使用0代替 |
 | `price_kind` | `varchar(16)` | 否 | UNKNOWN未知、EXACT填报金额、ESTIMATE估值；填报不代表已核实；默认UNKNOWN |
@@ -51,6 +60,8 @@
 价格未知时金额为NULL；有效金额为1–5000元。坐标必须成对存在，待定位记录的经纬度均为NULL。经营状态OPERATING/CLOSED。软删除时保留记录及关联资料。
 
 外键：`category_code` → `restaurant_categories.code`。
+
+V20允许category_code为空，并通过chk_restaurants_type_category约束联合校验：CANTEEN必须无分类，REGULAR必须有分类；分类非空时继续受字典外键约束。迁移清空所有食堂（含软删除记录）的分类，保留更新时间、维护人、窗口分类、原投稿摘要及审核快照。公开目录、详情、管理读取和地图均使用分类左连接，避免空分类食堂被内连接过滤；指定美食分类时排除食堂。
 
 ## `restaurant_tags`：餐厅标签
 

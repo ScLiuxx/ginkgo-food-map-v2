@@ -31,7 +31,6 @@ public class ReviewPageVo {
         private String id;
         private Scores scores;
         private BigDecimal overallScore;
-        private String tier;
         private boolean recommended;
         private String body;
         private Instant createdAt;

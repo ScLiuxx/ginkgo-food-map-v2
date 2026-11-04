@@ -112,6 +112,27 @@ describe('restaurant maintenance form', () => {
     )
     expect(fetchRestaurantManagement).not.toHaveBeenCalled()
   })
+  it('直接维护已有食堂时隐藏分类，并按现有类型提交空分类', async () => {
+    vi.mocked(fetchRestaurantManagement).mockResolvedValue({
+      ...snapshot,
+      restaurant: {
+        ...snapshot.restaurant,
+        restaurantType: 'CANTEEN',
+        categoryCode: null,
+        categoryName: null,
+      },
+    })
+    await mount('/restaurants/19/edit')
+    expect(host.querySelector('#restaurant-category')).toBeNull()
+    await field('location-confirmed', true)
+    await submit()
+    expect(updateRestaurant).toHaveBeenCalledWith(
+      '19',
+      expect.objectContaining({ categoryCode: null }),
+      'owner-session',
+    )
+  })
+
   it('validates location and required fields before making requests', async () => {
     await mount()
     await submit()

@@ -1,4 +1,4 @@
-/** 页面只读模型，由餐厅API显式转换；旧快照仅用于测试与开发数据准备。 */
+/** 页面只读模型，由餐厅API显式转换；示例数据仅用于独立预览与测试。 */
 export interface RestaurantReadModel {
   /** 当前目录页随响应返回的正式相册封面，不再逐卡片读取点评或相册。 */
   coverPhoto?: { id: string; url: string } | null
@@ -30,15 +30,14 @@ export interface RestaurantReadModel {
 }
 
 export type RatingDimension = 'taste' | 'value' | 'service' | 'ambience'
-export type RestaurantSort =
-  'score' | RatingDimension | 'reviews' | 'price' | 'distance' | 'recommend'
+/** 四维评分保留详情展示，列表暂不提供按四维排序。 */
+export type RestaurantSort = 'score' | 'reviews' | 'price' | 'distance' | 'recommend'
 
 /** 分类使用服务端稳定编码，所有条件随分页请求提交，不在当前页二次筛选。 */
 export interface CatalogFilters {
   /** GCJ-02用户位置：仅在授权成功后随查询发送，不持久化。 */
   latitude?: number
   longitude?: number
-  /** 校区与距离基准同步提交给服务端，缺省供旧调用兼容。 */
   /** 前端过渡筛选；后端未支持时须读取完整分页再筛选，不能只筛当前页。 */
   restaurantType?: '' | 'REGULAR' | 'CANTEEN'
   diningMode?: '' | 'dineIn' | 'delivery'

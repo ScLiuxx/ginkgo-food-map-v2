@@ -87,11 +87,11 @@ class ReviewReadApiIntegrationTest {
             .andExpect(jsonPath("$.data.records[0].author.id").value("22"))
             .andExpect(jsonPath("$.data.records[0].currentReview.id").value("103"))
             .andExpect(jsonPath("$.data.records[0].currentReview.overallScore").value(9))
-            .andExpect(jsonPath("$.data.records[0].currentReview.tier").value("bucket"));
+            .andExpect(jsonPath("$.data.records[0].currentReview.tier").doesNotExist());
         mvc.perform(get("/api/restaurants/1/reviews").param("pageSize","1").param("page","2"))
             .andExpect(status().isOk()).andExpect(jsonPath("$.data.records[0].currentReview.id").value("102"))
             .andExpect(jsonPath("$.data.records[0].currentReview.scores.taste").value(6))
-            .andExpect(jsonPath("$.data.records[0].currentReview.tier").value("medium"))
+            .andExpect(jsonPath("$.data.records[0].currentReview.tier").doesNotExist())
             .andExpect(jsonPath("$.data.records[0].historyCount").value(1))
             .andExpect(jsonPath("$.data.records[0].currentReview.scoringStatus").value("current"));
         mvc.perform(get("/api/restaurants/1/reviews").param("page","2147483647").param("pageSize","50"))
@@ -105,7 +105,7 @@ class ReviewReadApiIntegrationTest {
         mvc.perform(get("/api/restaurants/1/reviews"))
             .andExpect(status().isOk()).andExpect(jsonPath("$.data.records[0].currentReview.id").value("102"))
             .andExpect(jsonPath("$.data.records[0].currentReview.overallScore").value(0))
-            .andExpect(jsonPath("$.data.records[0].currentReview.tier").value("small"))
+            .andExpect(jsonPath("$.data.records[0].currentReview.tier").doesNotExist())
             .andExpect(jsonPath("$.data.records[0].currentReview.createdAt").value("2026-10-29T01:00:00.123456Z"))
             .andExpect(jsonPath("$.data.records[0].historyCount").value(1));
     }

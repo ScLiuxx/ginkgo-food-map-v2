@@ -112,8 +112,9 @@ public class RestaurantRequestReadService {
         Map<String, Object> raw = json.readValue(source, new TypeReference<Map<String, Object>>() { });
         var result = new LinkedHashMap<String, Object>();
         FIELDS.forEach(field -> result.put(field, raw.get(field)));
-        String code = Objects.toString(raw.get("categoryCode"), "");
-        result.put("categoryName", categories.getOrDefault(code, code));
+        // 保留历史快照原值；新规则下食堂分类及展示名称均为NULL，不能转换成字符串"null"。
+        String code = (String) raw.get("categoryCode");
+        result.put("categoryName", code == null ? null : categories.getOrDefault(code, code));
         return result;
     }
 

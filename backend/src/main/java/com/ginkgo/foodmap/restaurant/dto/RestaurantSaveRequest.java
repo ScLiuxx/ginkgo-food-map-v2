@@ -21,7 +21,7 @@ public class RestaurantSaveRequest {
     @NotBlank(message = "请输入餐厅名称")
     private String name;
 
-    @NotNull
+    /** 是否必填由实际商户类型决定：普通餐厅必填，食堂必须为空。 */
     @Pattern(regexp = "[A-Z][A-Z0-9_]{0,31}", message = "分类编码格式错误")
     private String categoryCode;
 

@@ -29,4 +29,11 @@ public interface RestaurantReviewStatisticsMapper {
         WHERE restaurant_id=#{id}
         """)
     int applyDelta(@Param("id") long id, @Param("delta") RestaurantReviewDelta delta);
+
+    /** 已持有商户行锁时调用；只推进搜索版本，显式保留资料审计时间。耗尽时回滚整个评价事务。 */
+    @Update("""
+        UPDATE restaurants SET search_projection_version=search_projection_version+1, updated_at=updated_at
+        WHERE id=#{id} AND search_projection_version < 9223372036854775807
+        """)
+    int advanceSearchProjectionVersion(@Param("id") long id);
 }

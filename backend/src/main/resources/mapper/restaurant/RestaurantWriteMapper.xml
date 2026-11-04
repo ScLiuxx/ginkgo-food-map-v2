@@ -10,7 +10,7 @@
     </select>
 
     <select id="lockById" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantManagementEntity">
-        SELECT id, category_code, created_by, deleted_at FROM restaurants WHERE id = #{id} FOR UPDATE
+        SELECT id, category_code, restaurant_type, created_by, deleted_at FROM restaurants WHERE id = #{id} FOR UPDATE
     </select>
 
     <select id="lockCategory" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantCategoryEntity">
@@ -38,7 +38,9 @@
     </insert>
 
     <update id="updateCurrent">
-        UPDATE restaurants SET name=#{row.name}, category_code=#{row.categoryCode},
+        <!-- 资料、标签和版本在同一事务中提交；父行锁使同店修改串行，版本耗尽按冲突处理。 -->
+        UPDATE restaurants SET search_projection_version=search_projection_version+1,
+            name=#{row.name}, category_code=#{row.categoryCode},
             <if test="row.restaurantType != null">
                 restaurant_type=#{row.restaurantType}, supports_dine_in=#{row.supportsDineIn}, supports_delivery=#{row.supportsDelivery},
             </if>
@@ -47,20 +49,25 @@
             needs_location=FALSE, business_status=#{row.businessStatus}, updated_by=#{actor},
             updated_at=CURRENT_TIMESTAMP(6)
         WHERE id=#{row.id} AND deleted_at IS NULL
+            AND search_projection_version &lt; 9223372036854775807
             AND (#{admin} OR created_by=#{actor})
     </update>
 
     <update id="softDeleteCurrent">
-        UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6), deleted_by=#{actor},
+        UPDATE restaurants SET search_projection_version=search_projection_version+1,
+            deleted_at=CURRENT_TIMESTAMP(6), deleted_by=#{actor},
             delete_reason_code=CASE WHEN #{admin} THEN 'ADMIN_REMOVAL' ELSE 'OWNER_REQUEST' END,
             updated_by=#{actor}, updated_at=CURRENT_TIMESTAMP(6)
         WHERE id=#{id} AND deleted_at IS NULL AND (#{admin} OR created_by=#{actor})
+            AND search_projection_version &lt; 9223372036854775807
     </update>
 
     <update id="restoreCurrent">
-        UPDATE restaurants SET deleted_at=NULL, deleted_by=NULL, delete_reason_code=NULL,
+        UPDATE restaurants SET search_projection_version=search_projection_version+1,
+            deleted_at=NULL, deleted_by=NULL, delete_reason_code=NULL,
             updated_by=#{actor}, updated_at=CURRENT_TIMESTAMP(6)
         WHERE id=#{id} AND deleted_at IS NOT NULL
+            AND search_projection_version &lt; 9223372036854775807
     </update>
 
     <delete id="deleteTags">DELETE FROM restaurant_tags WHERE restaurant_id=#{id}</delete>

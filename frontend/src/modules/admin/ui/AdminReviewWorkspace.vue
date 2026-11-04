@@ -318,7 +318,10 @@ onBeforeUnmount(() => photoDialog.value?.close())
                             :value="draft[row.key]"
                             :text="row.after"
                             :categories="categories"
-                            :disabled="submitting"
+                            :disabled="
+                              submitting ||
+                              (row.key === 'categoryCode' && draft.restaurantType === 'CANTEEN')
+                            "
                             @change="editField(row.key, $event)"
                           />
                         </template>

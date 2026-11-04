@@ -114,7 +114,6 @@ public class ReviewReadService {
         scores.setService(row.getServiceScore()); scores.setAmbience(row.getAmbienceScore());
         review.setScores(scores);
         review.setOverallScore(row.getOverallScore());
-        review.setTier(ReviewReadPolicy.tier(row.getOverallScore()));
         review.setRecommended(row.isRecommended()); review.setBody(row.getBody()); review.setCreatedAt(row.getCreatedAt());
         review.setPhotos(references.stream().map(ref -> {
             var photo = new ReviewPageVo.Photo();

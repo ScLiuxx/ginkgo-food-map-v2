@@ -50,7 +50,7 @@ public class RestaurantWriteService {
     public RestaurantManagementVo create(RestaurantSaveRequest request) {
         var actor = requireAdministrator();
         var row = normalize(request);
-        requireCategory(row.getCategoryCode(), null);
+        requireCategory(row.getCategoryCode(), null, row.getRestaurantType());
         var tags = normalizeTags(request.getTags());
         row.setCreatedBy(actor.getUserId());
         row.setUpdatedBy(actor.getUserId());
@@ -66,7 +66,9 @@ public class RestaurantWriteService {
         var replacement = normalize(request);
         var current = lockAccessible(RestaurantIdentifiers.id(id), actor);
         requireActive(current);
-        requireCategory(replacement.getCategoryCode(), current.getCategoryCode());
+        // 直接维护协议不修改类型，须使用锁定主行中的实际类型，不能默认把食堂当作普通餐厅。
+        requireCategory(replacement.getCategoryCode(), current.getCategoryCode(),
+                replacement.getRestaurantType() == null ? current.getRestaurantType() : replacement.getRestaurantType());
         var tags = normalizeTags(request.getTags());
         replacement.setId(current.getId());
         if (mapper.updateCurrent(replacement, actor.getUserId(), actor.isAdministrator()) != 1) conflict();
@@ -100,7 +102,7 @@ public class RestaurantWriteService {
     /** 纠错共用现有字段、分类及标签校验，只规范化申请数据，不修改正式商户。 */
     public void validateChange(RestaurantSaveRequest request, String currentCategory) {
         normalizeChange(request);
-        requireCategory(request.getCategoryCode(), currentCategory);
+        requireCategory(request.getCategoryCode(), currentCategory, inputType(request));
     }
 
     /** 审核重试仅规范化业务输入，不重新判断后来可能被停用的分类；不赋予任何正式写权限。 */
@@ -138,12 +140,26 @@ public class RestaurantWriteService {
         if (row.getDeletedAt() != null) throw new BusinessException(RestaurantErrorCode.STATE_CONFLICT);
     }
 
-    /** 同一已停用分类可以保持不变；新建/切换必须选启用分类，绝不静默改成“其他”。 */
-    private void requireCategory(String code, String currentCode) {
+    /** 食堂不设分类；普通餐厅可保留已停用旧类，新建/切换必须选启用分类。 */
+    private void requireCategory(String code, String currentCode, String type) {
+        if ("CANTEEN".equals(type)) {
+            if (code != null) invalid("食堂不设置美食分类，请使用null");
+            return;
+        }
+        if (code == null) invalid("普通餐厅必须选择美食分类");
         var category = mapper.lockCategory(code);
         if (category == null || (!category.isEnabled() && !code.equals(currentCode))) {
             throw new BusinessException(RestaurantErrorCode.CATEGORY_UNAVAILABLE);
         }
+    }
+
+    /** 投稿和审核携带显式类型；旧直接维护协议仅能新建普通餐厅。 */
+    private String inputType(RestaurantSaveRequest request) {
+        if (request instanceof com.ginkgo.foodmap.restaurant.dto.RestaurantApproveRequest approved)
+            return approved.getRestaurantType();
+        if (request instanceof com.ginkgo.foodmap.restaurant.dto.RestaurantChangeRequest changed)
+            return changed.getRestaurantType();
+        return "REGULAR";
     }
 
     private RestaurantManagementVo managementVo(RestaurantManagementEntity row) {

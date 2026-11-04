@@ -32,5 +32,8 @@ public class RestaurantReviewApplicationService {
     /** 仅在当前事务持有该店锁时使用；更新异常交给外层整体回滚。 */
     public void applyDelta(long id, RestaurantReviewDelta delta) {
         if (mapper.applyDelta(id, delta) != 1) throw new IllegalStateException("Missing restaurant statistics");
+        // 与评价及统计一起提交/回滚；调用方此前已锁父行，保证每店版本按提交顺序递增。
+        if (mapper.advanceSearchProjectionVersion(id) != 1)
+            throw new IllegalStateException("Restaurant search projection version unavailable or exhausted");
     }
 }

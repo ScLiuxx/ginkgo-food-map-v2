@@ -22,6 +22,10 @@ public interface RestaurantChangeMapper {
     @Select("SELECT * FROM restaurant_change_requests WHERE submitted_by=#{actor} AND client_request_id=#{request} FOR UPDATE")
     RestaurantChangeEntity findRequest(@Param("actor") long actor, @Param("request") String request);
 
+    /** 仅提示旧协议回执是否存在；最终仍由插入唯一键及锁定读核验摘要，避免新请求先锁空隙。 */
+    @Select("SELECT * FROM restaurant_change_requests WHERE submitted_by=#{actor} AND client_request_id=#{request}")
+    RestaurantChangeEntity existingRequest(@Param("actor") long actor, @Param("request") String request);
+
     @Insert("""
         INSERT INTO restaurant_change_requests(restaurant_id,request_type,submitted_by,client_request_id,request_hash,proposed_data)
         VALUES(#{restaurantId},#{requestType},#{submittedBy},#{clientRequestId},#{requestHash},#{proposedData})
