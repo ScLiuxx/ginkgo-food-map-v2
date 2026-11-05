@@ -34,6 +34,7 @@ public class RestaurantWriteService {
     private final CurrentActorService actors;
     private final Validator validator;
     private final RestaurantPhotoService albums;
+    private final RestaurantSearchOutboxService searchOutbox;
 
     /** 仅管理员可获取管理资料，含删除记录；公开详情仍隐藏已删除商户。 */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -56,6 +57,8 @@ public class RestaurantWriteService {
         row.setUpdatedBy(actor.getUserId());
         mapper.insert(row);
         if (!tags.isEmpty()) mapper.insertTags(row.getId(), tags);
+        // 插入商户取得版本1后，在当前事务记录任务；后续审核/相册失败也会撤销任务。
+        searchOutbox.record(row.getId());
         return managementVo(mapper.selectManagementById(row.getId()));
     }
 
@@ -66,7 +69,11 @@ public class RestaurantWriteService {
         var replacement = normalize(request);
         var current = lockAccessible(RestaurantIdentifiers.id(id), actor);
         requireActive(current);
-        // 直接维护协议不修改类型，须使用锁定主行中的实际类型，不能默认把食堂当作普通餐厅。
+        // 旧客户端省略类型则保持原值；显式类型切换须在父行锁内检查全部窗口关联。
+        if ("CANTEEN".equals(current.getRestaurantType()) && "REGULAR".equals(replacement.getRestaurantType())
+                && mapper.hasWindows(current.getId())) {
+            throw new BusinessException(RestaurantErrorCode.STATE_CONFLICT, "存在窗口关联的食堂不能改为普通餐厅");
+        }
         requireCategory(replacement.getCategoryCode(), current.getCategoryCode(),
                 replacement.getRestaurantType() == null ? current.getRestaurantType() : replacement.getRestaurantType());
         var tags = normalizeTags(request.getTags());
@@ -74,6 +81,7 @@ public class RestaurantWriteService {
         if (mapper.updateCurrent(replacement, actor.getUserId(), actor.isAdministrator()) != 1) conflict();
         mapper.deleteTags(current.getId());
         if (!tags.isEmpty()) mapper.insertTags(current.getId(), tags);
+        searchOutbox.record(current.getId());
         return managementVo(mapper.selectManagementById(current.getId()));
     }
 
@@ -84,6 +92,7 @@ public class RestaurantWriteService {
         var current = lockAccessible(RestaurantIdentifiers.id(id), actor);
         requireActive(current);
         if (mapper.softDeleteCurrent(current.getId(), actor.getUserId(), actor.isAdministrator()) != 1) conflict();
+        searchOutbox.record(current.getId());
         return managementVo(mapper.selectManagementById(current.getId()));
     }
 
@@ -96,6 +105,7 @@ public class RestaurantWriteService {
         var current = lockAccessible(RestaurantIdentifiers.id(id), actor);
         if (current.getDeletedAt() == null) throw new BusinessException(RestaurantErrorCode.STATE_CONFLICT);
         if (mapper.restoreCurrent(current.getId(), actor.getUserId()) != 1) conflict();
+        searchOutbox.record(current.getId());
         return managementVo(mapper.selectManagementById(current.getId()));
     }
 
@@ -153,8 +163,10 @@ public class RestaurantWriteService {
         }
     }
 
-    /** 投稿和审核携带显式类型；旧直接维护协议仅能新建普通餐厅。 */
+    /** 不同请求各自保留序列化契约；旧直接输入省略类型时按普通餐厅校验新建。 */
     private String inputType(RestaurantSaveRequest request) {
+        if (request instanceof com.ginkgo.foodmap.restaurant.dto.RestaurantDirectSaveRequest direct)
+            return direct.getRestaurantType() == null ? "REGULAR" : direct.getRestaurantType();
         if (request instanceof com.ginkgo.foodmap.restaurant.dto.RestaurantApproveRequest approved)
             return approved.getRestaurantType();
         if (request instanceof com.ginkgo.foodmap.restaurant.dto.RestaurantChangeRequest changed)
@@ -174,7 +186,12 @@ public class RestaurantWriteService {
     private RestaurantManagementEntity normalize(RestaurantSaveRequest request) {
         if (request == null || !validator.validate(request).isEmpty()) invalid("请检查必填项、编码、位置确认和标签数量");
         var row = new RestaurantManagementEntity();
-        // 审核协议额外包含类型/用餐方式；直接维护旧协议不带这些字段时仍保留已有值。
+        // 显式类型的直接维护与审核都完整写入三态；旧请求省略类型时由更新SQL保留已有值。
+        if (request instanceof com.ginkgo.foodmap.restaurant.dto.RestaurantDirectSaveRequest direct) {
+            row.setRestaurantType(direct.getRestaurantType());
+            row.setSupportsDineIn(direct.getSupportsDineIn());
+            row.setSupportsDelivery(direct.getSupportsDelivery());
+        }
         if (request instanceof com.ginkgo.foodmap.restaurant.dto.RestaurantApproveRequest approved) {
             row.setRestaurantType(approved.getRestaurantType());
             row.setSupportsDineIn(approved.getSupportsDineIn());

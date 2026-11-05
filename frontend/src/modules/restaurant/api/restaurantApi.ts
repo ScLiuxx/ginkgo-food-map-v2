@@ -1,7 +1,6 @@
 import type { ApiResponse } from '@/shared/api/api.types'
 import { httpClient } from '@/shared/api/httpClient'
 import type { CatalogFilters, RestaurantReadModel } from '../model/restaurant.types'
-import { matchesDiningFilters } from '../model/diningFilters'
 import { restaurantPhotoUrl, type RestaurantAlbumPhoto } from './restaurantAlbumApi'
 
 /** API字段独立于页面模型，保留字符串ID和所有空值，不将未知价格或评分转换为0。 */
@@ -48,6 +47,10 @@ export interface RestaurantManagement {
 
 /** PUT为完整替换，显式提交全部可编辑字段；身份、来源、评分及版本均不属于输入。 */
 export interface RestaurantSaveInput {
+  /** 管理页面始终传显式类型，用餐方式null明确保存为未知。 */
+  restaurantType?: 'REGULAR' | 'CANTEEN'
+  supportsDineIn?: boolean | null
+  supportsDelivery?: boolean | null
   name: string
   categoryCode: string | null
   priceKind: RestaurantResponse['priceKind']
@@ -61,6 +64,8 @@ export interface RestaurantSaveInput {
 }
 
 export interface RestaurantPage<T = RestaurantReadModel> {
+  search?: RestaurantSearchStatus
+  accessiblePages?: number
   page: number
   pageSize: number
   total: number
@@ -68,11 +73,23 @@ export interface RestaurantPage<T = RestaurantReadModel> {
   records: T[]
 }
 
+/** 服务端实际查询能力；页面仅展示用户能理解的基础匹配提示。 */
+export interface RestaurantSearchStatus {
+  engine: 'ES' | 'MYSQL'
+  degraded: boolean
+  reason: string
+  effectiveSort: string
+  resultWindow: number | null
+}
+
 /** 枚举在边界转换，页面不依赖数据库列名；地址空值仅在显示层转为空串。 */
 export function toRestaurantModel(value: RestaurantResponse): RestaurantReadModel {
   return {
     coverPhoto: value.coverPhoto
-      ? { id: value.coverPhoto.id, url: restaurantPhotoUrl(value.id, value.coverPhoto.id) }
+      ? {
+          id: value.coverPhoto.id,
+          url: restaurantPhotoUrl(value.id, value.coverPhoto.id),
+        }
       : null,
     restaurantType: value.restaurantType,
     supportsDineIn: value.supportsDineIn ?? null,
@@ -119,24 +136,6 @@ export async function fetchRestaurants(
   signal?: AbortSignal,
   bounds?: { west: number; south: number; east: number; north: number },
 ): Promise<RestaurantPage> {
-  // 新条件尚无服务端协议，仅选中时遍历旧接口完整分页后过滤、计数、再分页。
-  // 共用取消信号；任一批次失败均抛错，不用不完整结果冒充全部商家。未来由服务端取代此过渡逻辑。
-  if (filters.restaurantType || filters.diningMode) {
-    const original = { ...filters, restaurantType: '' as const, diningMode: '' as const }
-    const records: RestaurantReadModel[] = []
-    for (let batch = 1; ; batch++) {
-      const result = await fetchRestaurants(original, batch, 100, signal, bounds)
-      records.push(...result.records.filter((record) => matchesDiningFilters(record, filters)))
-      if (batch >= result.totalPages) break
-    }
-    return {
-      page,
-      pageSize,
-      total: records.length,
-      totalPages: Math.ceil(records.length / pageSize),
-      records: records.slice((page - 1) * pageSize, page * pageSize),
-    }
-  }
   const response = await httpClient.get<ApiResponse<RestaurantPage<RestaurantResponse>>>(
     '/api/restaurants',
     {
@@ -145,6 +144,8 @@ export async function fetchRestaurants(
         latitude: filters.latitude,
         longitude: filters.longitude,
         keyword: filters.keyword,
+        restaurantType: filters.restaurantType || undefined,
+        diningMode: filters.diningMode || undefined,
         category: filters.category,
         sort: filters.sort,
         hideClosed: filters.hideClosed,
@@ -157,7 +158,10 @@ export async function fetchRestaurants(
       signal,
     },
   )
-  return { ...response.data.data, records: response.data.data.records.map(toRestaurantModel) }
+  return {
+    ...response.data.data,
+    records: response.data.data.records.map(toRestaurantModel),
+  }
 }
 
 /** 详情独立读取，刷新或直接打开链接无需先加载目录。 */
@@ -214,6 +218,16 @@ export async function updateRestaurant(id: string, input: RestaurantSaveInput, t
 export async function deleteRestaurant(id: string, token: string) {
   const response = await httpClient.delete<ApiResponse<RestaurantManagement>>(
     `/api/restaurants/${encodeURIComponent(id)}`,
+    authenticated(token),
+  )
+  return response.data.data
+}
+
+/** 管理员恢复软删除商户；由服务端再次验证权限，不在客户端伪造成功状态。 */
+export async function restoreRestaurant(id: string, token: string) {
+  const response = await httpClient.post<ApiResponse<RestaurantManagement>>(
+    `/api/restaurants/${encodeURIComponent(id)}/restore`,
+    null,
     authenticated(token),
   )
   return response.data.data

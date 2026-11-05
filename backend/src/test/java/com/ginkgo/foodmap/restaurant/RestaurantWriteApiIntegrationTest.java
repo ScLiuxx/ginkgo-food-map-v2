@@ -62,6 +62,8 @@ class RestaurantWriteApiIntegrationTest {
     @MockitoBean private LoginSessionService sessions;
     @MockitoBean private com.ginkgo.foodmap.file.storage.OssStorageClient storage;
     @MockitoSpyBean private RestaurantWriteMapper mapper;
+    @MockitoSpyBean private com.ginkgo.foodmap.restaurant.mapper.RestaurantSearchOutboxMapper outboxMapper;
+    @Autowired private com.ginkgo.foodmap.restaurant.service.RestaurantSearchOutboxService outboxService;
     @MockitoSpyBean private com.ginkgo.foodmap.restaurant.mapper.RestaurantRequestReviewMapper reviewMapper;
     @MockitoSpyBean private com.ginkgo.foodmap.restaurant.mapper.RestaurantPhotoMapper photoMapper;
     private String owner;
@@ -85,7 +87,8 @@ class RestaurantWriteApiIntegrationTest {
     /** 测试夹具只放入测试账号，真实认证转换器仍从数据库读取当前状态与角色。 */
     @BeforeEach
     void prepare() {
-        reset(mapper, reviewMapper, photoMapper, sessions, storage);
+        reset(mapper, outboxMapper, reviewMapper, photoMapper, sessions, storage);
+        jdbc.update("DELETE FROM restaurant_search_outbox");
         albumFileSequence = 1000;
         jdbc.update("DELETE FROM restaurant_photos");
         jdbc.update("DELETE FROM restaurant_change_photos");
@@ -1194,6 +1197,7 @@ class RestaurantWriteApiIntegrationTest {
     }
 
     private void assertAlbumRollback(String target) {
+        assertThat(outboxVersions(target)).containsExactly(1L);
         assertThat(projectionVersion(target)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_photos", Long.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurants", Long.class)).isEqualTo(1);
@@ -1224,6 +1228,166 @@ class RestaurantWriteApiIntegrationTest {
         jdbc.update("UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM' WHERE id=?", id);
         perform(post("/api/restaurants/" + id + "/restore"), admin, null).andExpect(status().isConflict());
         assertThat(jdbc.queryForObject("SELECT deleted_at FROM restaurants WHERE id=?", java.sql.Timestamp.class, id)).isNotNull();
+    }
+
+    /** 管理员直接创建/编辑三态，类型切换、公开读取及版本推进属于同一持久化链路。 */
+    @Test
+    void shouldDirectlyMaintainTypeAndDiningModes() throws Exception {
+        var input = valid(); input.put("restaurantType", "CANTEEN"); input.put("categoryCode", null);
+        input.put("supportsDineIn", true); input.put("supportsDelivery", false);
+        String id = create(input).at("/restaurant/id").asString();
+        assertThat(projectionVersion(id)).isEqualTo(1);
+        mvc.perform(get("/api/restaurants/" + id)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.restaurantType").value("CANTEEN"))
+                .andExpect(jsonPath("$.data.categoryCode").isEmpty())
+                .andExpect(jsonPath("$.data.supportsDineIn").value(true))
+                .andExpect(jsonPath("$.data.supportsDelivery").value(false));
+        input.put("restaurantType", "REGULAR"); input.put("categoryCode", "OTHER");
+        input.put("supportsDineIn", false); input.put("supportsDelivery", true);
+        perform(put("/api/restaurants/" + id), admin, input).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.restaurant.supportsDineIn").value(false))
+                .andExpect(jsonPath("$.data.restaurant.supportsDelivery").value(true));
+        input.put("supportsDineIn", null); input.put("supportsDelivery", null);
+        perform(put("/api/restaurants/" + id), admin, input).andExpect(status().isOk());
+        mvc.perform(get("/api/restaurants/" + id)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.restaurantType").value("REGULAR"))
+                .andExpect(jsonPath("$.data.supportsDineIn").isEmpty())
+                .andExpect(jsonPath("$.data.supportsDelivery").isEmpty());
+        assertThat(projectionVersion(id)).isEqualTo(3);
+    }
+
+    /** 省略扩展字段的旧客户端仍可维护食堂；显式提交新字段必须使用一致类型。 */
+    @Test
+    void shouldPreserveLegacyDirectInputAndRejectInconsistentTypes() throws Exception {
+        var input = valid(); input.put("restaurantType", "CANTEEN"); input.put("categoryCode", null);
+        input.put("supportsDineIn", true); input.put("supportsDelivery", false);
+        String id = create(input).at("/restaurant/id").asString();
+        var legacy = valid(); legacy.put("categoryCode", null);
+        perform(put("/api/restaurants/" + id), admin, legacy).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.restaurant.restaurantType").value("CANTEEN"))
+                .andExpect(jsonPath("$.data.restaurant.supportsDineIn").value(true))
+                .andExpect(jsonPath("$.data.restaurant.supportsDelivery").value(false));
+        long before = projectionVersion(id);
+        input.put("categoryCode", "OTHER");
+        perform(put("/api/restaurants/" + id), admin, input).andExpect(status().isBadRequest());
+        input.put("restaurantType", "REGULAR"); input.put("categoryCode", null);
+        perform(put("/api/restaurants/" + id), admin, input).andExpect(status().isBadRequest());
+        input.put("restaurantType", "INVALID");
+        perform(put("/api/restaurants/" + id), admin, input).andExpect(status().isBadRequest());
+        input.remove("restaurantType"); input.put("supportsDelivery", true);
+        perform(put("/api/restaurants/" + id), admin, input).andExpect(status().isBadRequest());
+        assertThat(projectionVersion(id)).isEqualTo(before);
+        perform(put("/api/restaurants/" + id), other, legacy).andExpect(status().isForbidden());
+    }
+
+    /** 包括软删除窗口在内的关联阻止类型转换，冲突不推进版本或替换标签。 */
+    @Test
+    void shouldProtectWindowReferencesDuringDirectUpdate() throws Exception {
+        var input = valid(); input.put("restaurantType", "CANTEEN"); input.put("categoryCode", null);
+        String id = create(input).at("/restaurant/id").asString();
+        jdbc.update("INSERT INTO canteen_windows(canteen_id,name,floor_number,created_by,deleted_at,deleted_by) VALUES(?,'direct-window',1,33,CURRENT_TIMESTAMP(6),33)", id);
+        try {
+            var regular = valid(); regular.put("restaurantType", "REGULAR"); regular.put("tags", List.of("不能覆盖"));
+            perform(put("/api/restaurants/" + id), admin, regular).andExpect(status().isConflict());
+            assertThat(projectionVersion(id)).isEqualTo(1);
+            assertThat(jdbc.queryForList("SELECT tag FROM restaurant_tags WHERE restaurant_id=?", String.class, id)).containsExactly("原标签");
+        } finally { jdbc.update("DELETE FROM canteen_windows WHERE canteen_id=?", id); }
+    }
+
+    /** 类型/三态已更新后标签失败，整份资料和投影版本都必须撤销。 */
+    @Test
+    void shouldRollbackDirectTypeAndDiningChangesWithTags() throws Exception {
+        String id = create(valid()).at("/restaurant/id").asString();
+        var input = valid(); input.put("restaurantType", "CANTEEN"); input.put("categoryCode", null);
+        input.put("supportsDineIn", true); input.put("supportsDelivery", false);
+        doThrow(new IllegalStateException("injected tags failure")).when(mapper).deleteTags(Long.parseLong(id));
+        perform(put("/api/restaurants/" + id), admin, input).andExpect(status().is5xxServerError());
+        assertThat(projectionVersion(id)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT restaurant_type FROM restaurants WHERE id=?", String.class, id)).isEqualTo("REGULAR");
+        assertThat(jdbc.queryForObject("SELECT supports_dine_in FROM restaurants WHERE id=?", Boolean.class, id)).isNull();
+    }
+
+    /** 一次成功资料变动对应一个版本任务，重复删除及读取不产生多余任务。 */
+    @Test
+    void shouldRecordOutboxForCrudAndRestore() throws Exception {
+        String id = create(valid()).at("/restaurant/id").asString();
+        perform(get("/api/restaurants/" + id + "/management"), admin, null).andExpect(status().isOk());
+        assertThat(outboxVersions(id)).containsExactly(1L);
+        perform(put("/api/restaurants/" + id), admin, valid()).andExpect(status().isOk());
+        perform(delete("/api/restaurants/" + id), admin, null).andExpect(status().isOk());
+        perform(delete("/api/restaurants/" + id), admin, null).andExpect(status().isConflict());
+        perform(post("/api/restaurants/" + id + "/restore"), admin, null).andExpect(status().isOk());
+        assertThat(outboxVersions(id)).containsExactly(1L, 2L, 3L, 4L);
+        assertThat(jdbc.queryForList("SELECT DISTINCT status FROM restaurant_search_outbox", String.class)).containsExactly("PENDING");
+    }
+
+    /** 审核附图在写服务记录任务后发布，只有整个审核提交成功才出现任务；重试及驳回不新增。 */
+    @Test
+    void shouldRecordOnlyCommittedApprovalNotSubmissionRejectionOrReplay() throws Exception {
+        String request = albumRequest(null, albumFile());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_search_outbox", Long.class)).isZero();
+        JsonNode approved = approveAlbum(request, valid());
+        String id = approved.get("restaurantId").asString();
+        assertThat(outboxVersions(id)).containsExactly(1L);
+        assertThat(publicAlbum(id, 20, null).get("records").size()).isEqualTo(1);
+        approveAlbum(request, valid());
+        String correction = albumRequest(id);
+        approveAlbum(correction, valid());
+        approveAlbum(correction, valid());
+        assertThat(outboxVersions(id)).containsExactly(1L, 2L);
+        String rejected = albumRequest(id);
+        perform(post("/api/admin/restaurant-requests/" + rejected + "/reject"), admin, Map.of("reason", "资料不完整"))
+                .andExpect(status().isOk());
+        assertThat(outboxVersions(id)).containsExactly(1L, 2L);
+    }
+
+    /** Outbox不可写时业务不能假成功，涵盖创建、资料替换、删除及恢复。 */
+    @Test
+    void shouldRollbackBusinessWhenOutboxInsertFails() throws Exception {
+        doThrow(new IllegalStateException("injected outbox failure")).when(outboxMapper).insertCurrentVersion(anyLong());
+        perform(post("/api/restaurants"), admin, valid()).andExpect(status().is5xxServerError());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurants", Long.class)).isZero();
+        reset(outboxMapper);
+        String id = create(valid()).at("/restaurant/id").asString();
+        var edited = valid(); edited.put("name", "不能提交");
+        doThrow(new IllegalStateException("injected outbox failure")).when(outboxMapper).insertCurrentVersion(anyLong());
+        perform(put("/api/restaurants/" + id), admin, edited).andExpect(status().is5xxServerError());
+        perform(delete("/api/restaurants/" + id), admin, null).andExpect(status().is5xxServerError());
+        assertThat(projectionVersion(id)).isEqualTo(1);
+        assertThat(outboxVersions(id)).containsExactly(1L);
+        assertThat(jdbc.queryForObject("SELECT name FROM restaurants WHERE id=?", String.class, id)).isEqualTo(valid().get("name"));
+        reset(outboxMapper);
+        perform(delete("/api/restaurants/" + id), admin, null).andExpect(status().isOk());
+        doThrow(new IllegalStateException("injected outbox failure")).when(outboxMapper).insertCurrentVersion(anyLong());
+        perform(post("/api/restaurants/" + id + "/restore"), admin, null).andExpect(status().is5xxServerError());
+        assertThat(projectionVersion(id)).isEqualTo(2);
+        assertThat(outboxVersions(id)).containsExactly(1L, 2L);
+        mvc.perform(get("/api/restaurants/" + id)).andExpect(status().isNotFound());
+    }
+
+    /** 并发同店资料更新各自持父锁，任务版本与已提交业务版本一一对应。 */
+    @Test
+    void shouldSerializeConcurrentOutboxVersions() throws Exception {
+        String id = create(valid()).at("/restaurant/id").asString();
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            var first = pool.submit(() -> perform(put("/api/restaurants/" + id), admin, valid()).andExpect(status().isOk()));
+            var second = pool.submit(() -> perform(put("/api/restaurants/" + id), admin, valid()).andExpect(status().isOk()));
+            first.get(15, TimeUnit.SECONDS); second.get(15, TimeUnit.SECONDS);
+            assertThat(outboxVersions(id)).containsExactly(1L, 2L, 3L);
+            assertThat(projectionVersion(id)).isEqualTo(3);
+        } finally { pool.shutdownNow(); }
+    }
+
+    /** 没有外层事务时拒绝记录，不能先提交业务再独立补写任务。 */
+    @Test
+    void shouldRequireBusinessTransactionForOutbox() {
+        org.junit.jupiter.api.Assertions.assertThrows(org.springframework.transaction.IllegalTransactionStateException.class,
+                () -> outboxService.record(1));
+    }
+
+    private List<Long> outboxVersions(String id) {
+        return jdbc.queryForList("SELECT projection_version FROM restaurant_search_outbox WHERE restaurant_id=? ORDER BY projection_version", Long.class, id);
     }
 
     private long projectionVersion(String id) {

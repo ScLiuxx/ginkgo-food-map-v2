@@ -29,14 +29,14 @@
 
     <!-- 显式列白名单不加载创建者和删除信息；公开distanceKm字段继续使用公里，保持原契约。 -->
     <sql id="publicColumns">
-        r.id, r.name, r.category_code, r.restaurant_type, r.supports_dine_in, r.supports_delivery, c.name AS category_name, r.price_per_person, r.price_kind,
+        r.id, r.search_projection_version, r.name, r.category_code, r.restaurant_type, r.supports_dine_in, r.supports_delivery, c.name AS category_name, r.price_per_person, r.price_kind,
         r.address, r.latitude, r.longitude, r.needs_location,
         r.business_status, r.created_at, r.updated_at,
         COALESCE(s.review_count, 0) AS review_count,
         COALESCE(s.participant_count, 0) AS participant_count,
-        <!-- 扩展十进制精度再除法，避免MySQL默认6位小数丢失排序差异；不做展示舍入。 -->
-        CAST(s.overall_score_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0) AS score,
-        CAST(s.recommend_count AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0) AS recommend_rate,
+        <!-- 综合分按0–10的一位小数；好评率比例保留三位，即百分数的一位小数。原始累计值不变。 -->
+        ROUND(CAST(s.overall_score_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0), 1) AS score,
+        ROUND(CAST(s.recommend_count AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0), 3) AS recommend_rate,
         CAST(s.taste_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0) AS taste,
         CAST(s.value_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0) AS value,
         CAST(s.service_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0) AS service,
@@ -54,6 +54,10 @@
             AND r.latitude BETWEEN #{query.south} AND #{query.north}
         </if>
         <if test="query.category != ''">AND r.category_code = #{query.category}</if>
+        <!-- 列表总数、分页及地图共用，先在全局可见集合过滤；未知用餐方式不补true或false。 -->
+        <if test="query.restaurantType != ''">AND r.restaurant_type = #{query.restaurantType}</if>
+        <if test="query.diningMode == 'dineIn'">AND r.supports_dine_in = TRUE</if>
+        <if test="query.diningMode == 'delivery'">AND r.supports_delivery = TRUE</if>
         <if test="query.hideClosed">AND r.business_status = 'OPERATING'</if>
         <!-- 两项均在COUNT与LIMIT之前执行；NULL不能通过上限比较，未知值不会当作0。 -->
         <if test="query.maxPrice != null">
@@ -89,20 +93,34 @@
     <sql id="catalogOrder">
         ORDER BY
         <choose>
-            <when test="query.sort == 'price'">r.price_per_person IS NULL, r.price_per_person,</when>
-            <when test="query.sort == 'distance'">distance_km IS NULL, distance_km,</when>
-            <when test="query.sort == 'score'">score IS NULL, score DESC,</when>
-            <when test="query.sort == 'recommend'">recommend_rate IS NULL, recommend_rate DESC, participant_count DESC,</when>
-            <when test="query.sort == 'reviews'">review_count DESC,</when>
+            <when test="query.effectiveSort == 'price'">r.price_per_person IS NULL, r.price_per_person,</when>
+            <when test="query.effectiveSort == 'distance'">distance_km IS NULL, distance_km,</when>
+            <when test="query.effectiveSort == 'recommend'">recommend_rate IS NULL, recommend_rate DESC,</when>
+            <when test="query.effectiveSort == 'reviews'">review_count DESC,</when>
+            <otherwise>score IS NULL, score DESC,</otherwise>
         </choose>
-        r.name, r.id
+        <!-- 评分/好评率含默认综合分均以ID破同分，人数及未舍入尾数不再影响顺序。 -->
+        <if test="!query.searchOrderById and (query.effectiveSort == 'price' or query.effectiveSort == 'distance' or query.effectiveSort == 'reviews')">r.name,</if> r.id
     </sql>
+
+    <!-- 身份有界且保留全部非关键词条件；排序由ES身份顺序决定，不能在SQL里重排当前页。 -->
+    <select id="selectSearchPage" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantEntity">
+        SELECT <include refid="publicColumns"/> <include refid="catalogFrom"/>
+        <include refid="visibleConditions"/>
+        AND r.id IN <foreach collection="ids" item="id" open="(" close=")" separator=",">#{id}</foreach>
+    </select>
+
+    <select id="hasUnsyncedSearchChanges" resultType="boolean">
+        SELECT EXISTS(SELECT 1 FROM restaurant_search_outbox o JOIN restaurants r
+            ON r.id=o.restaurant_id AND r.search_projection_version=o.projection_version
+            WHERE o.status IN ('PENDING','FAILED') LIMIT 1)
+    </select>
 
     <select id="selectVisiblePage" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantEntity">
         SELECT <include refid="publicColumns"/>
         <include refid="catalogFrom"/>
         <include refid="visibleConditions"/>
-        <!-- 白名单排序在LIMIT前执行；评分降序且null末尾，同分沿用名称及ID稳定次序。 -->
+        <!-- 白名单排序在LIMIT前执行；评分降序且null末尾，舍入后同分按ID稳定返回。 -->
         <include refid="catalogOrder"/>
         LIMIT #{query.pageSize} OFFSET #{query.offset}
     </select>

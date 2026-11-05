@@ -365,13 +365,13 @@ class RestaurantReadApiIntegrationTest {
 
     }
 
-    /** 接近INT UNSIGNED人数上限仍保留除法差异，不因MySQL默认除法精度而错序。 */
+    /** 极小尾数在一位小数规则下归为同分，按ID排序，不再保留无业务意义的微小差异。 */
     @Test
-    void shouldPreserveSubMicroScoreDifferences() throws Exception {
+    void shouldTieSubMicroScoreDifferencesAtOneDecimal() throws Exception {
         statistics(101, 4_000_000_000L, 4_000_000_000L, 0, "34399999999.99", "0", "0", "0", "0");
         statistics(102, 4_000_000_000L, 4_000_000_000L, 0, "34400000000", "0", "0", "0", "0");
         mvc.perform(get("/api/restaurants").param("pageSize", "1"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.records[0].id").value("102"));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.records[0].id").value("101"));
         mvc.perform(get("/api/restaurants/101")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.tier").doesNotExist());
     }
@@ -592,6 +592,72 @@ class RestaurantReadApiIntegrationTest {
         jdbc.update("INSERT INTO restaurants(id,name,category_code,price_per_person,price_kind,address,latitude,longitude,"
                         + "needs_location,business_status) VALUES (?,?,?,?,?,?,?,?,?,?)",
                 id, name, category, price, kind, address, latitude, longitude, latitude == null, businessStatus);
+    }
+
+    /** 类型按正式字段识别，true/false/null区分；COUNT和分页在数据库过滤后执行。 */
+    @Test
+    void shouldFilterTypesAndDiningBeforePagination() throws Exception {
+        diningFixtures();
+        mvc.perform(get("/api/restaurants").param("restaurantType","CANTEEN"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(2));
+        mvc.perform(get("/api/restaurants").param("restaurantType","CANTEEN").param("hideClosed","true"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.records[0].id").value("102"));
+        mvc.perform(get("/api/restaurants").param("diningMode","dineIn"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(2));
+        mvc.perform(get("/api/restaurants").param("diningMode","delivery").param("pageSize","1").param("page","2"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(2))
+                .andExpect(jsonPath("$.data.totalPages").value(2)).andExpect(jsonPath("$.data.records[0].id").value("104"));
+        mvc.perform(get("/api/restaurants").param("restaurantType","REGULAR").param("diningMode","delivery"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.records[0].id").value("104"));
+    }
+
+    /** 食堂与美食分类是交集；新条件可与金额、距离、关键词等现有条件组合。 */
+    @Test
+    void shouldCombineDiningWithExistingFiltersAndMapBounds() throws Exception {
+        diningFixtures();
+        mvc.perform(get("/api/restaurants").param("restaurantType","CANTEEN").param("category","OTHER"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(0));
+        mvc.perform(get("/api/restaurants").param("restaurantType","CANTEEN").param("diningMode","delivery")
+                        .param("keyword","同名").param("maxPrice","20").param("maxDistanceMeters","2000")
+                        .param("latitude","30.7544").param("longitude","103.9312").param("hideClosed","true"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.records[0].id").value("102"));
+        for(String path:java.util.List.of("/api/restaurants","/api/restaurants/map-points")) {
+            var request=get(path).param("diningMode","delivery").param("west","100").param("east","110")
+                    .param("south","30").param("north","32");
+            var result=mvc.perform(request).andExpect(status().isOk());
+            if(path.endsWith("map-points")) result.andExpect(jsonPath("$.data.matchedCount").value(1))
+                    .andExpect(jsonPath("$.data.points[0].id").value("102"));
+            else result.andExpect(jsonPath("$.data.total").value(1)).andExpect(jsonPath("$.data.records[0].id").value("102"));
+        }
+    }
+
+    /** 超过一百条的匹配集合仍正确计数、翻页；地图只限制返回点位，不截断匹配总数。 */
+    @Test
+    void shouldPageAndTruncateOnlyAfterDiningFiltering() throws Exception {
+        for(int i=0;i<110;i++) {
+            insert(1000+i,"分页用餐"+i,"OTHER",20,"EXACT",null,30.75,103.93,"OPERATING");
+            jdbc.update("UPDATE restaurants SET supports_dine_in=? WHERE id=?",i<105,1000+i);
+        }
+        mvc.perform(get("/api/restaurants").param("keyword","分页用餐").param("diningMode","dineIn")
+                        .param("pageSize","100").param("page","2"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(105))
+                .andExpect(jsonPath("$.data.totalPages").value(2)).andExpect(jsonPath("$.data.records.length()").value(5));
+        mvc.perform(get("/api/restaurants/map-points").param("keyword","分页用餐").param("diningMode","dineIn")
+                        .param("west","100").param("east","110").param("south","30").param("north","32"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.matchedCount").value(105))
+                .andExpect(jsonPath("$.data.returnedCount").value(100)).andExpect(jsonPath("$.data.truncated").value(true));
+    }
+
+    private void diningFixtures() {
+        jdbc.update("UPDATE restaurants SET restaurant_type='CANTEEN',category_code=NULL WHERE id IN (102,103,106)");
+        jdbc.update("UPDATE restaurants SET supports_dine_in=TRUE,supports_delivery=FALSE WHERE id=101");
+        jdbc.update("UPDATE restaurants SET supports_dine_in=TRUE,supports_delivery=TRUE WHERE id IN (102,106)");
+        jdbc.update("UPDATE restaurants SET supports_dine_in=FALSE,supports_delivery=NULL WHERE id=103");
+        jdbc.update("UPDATE restaurants SET supports_dine_in=NULL,supports_delivery=TRUE WHERE id=104");
+        jdbc.update("UPDATE restaurants SET supports_dine_in=FALSE,supports_delivery=FALSE WHERE id=105");
     }
 
     /** 必须显式指定回环端口，不能误用业务URL或从开发配置读取数据库凭据。 */

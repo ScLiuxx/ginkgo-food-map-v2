@@ -1,0 +1,181 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "refresh_interval": "1s",
+    "analysis": {
+      "normalizer": {
+        "restaurant_name_exact": {
+          "type": "custom",
+          "char_filter": [],
+          "filter": [
+            "lowercase",
+            "asciifolding"
+          ]
+        }
+      },
+      "tokenizer": {
+        "single_character": {
+          "type": "ngram",
+          "min_gram": "1",
+          "max_gram": "1"
+        }
+      },
+      "analyzer": {
+        "single_character": {
+          "type": "custom",
+          "tokenizer": "single_character",
+          "char_filter": [
+            "single_han_only"
+          ]
+        }
+      },
+      "char_filter": {
+        "single_han_only": {
+          "type": "pattern_replace",
+          "pattern": "[^\\p{IsHan}]",
+          "replacement": ""
+        }
+      }
+    }
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "_meta": {
+      "schema": "ginkgo.restaurant-search",
+      "schema_version": "003",
+      "description": "商户搜索投影：保留IK与21字段正文，四个单字子字段支持包含检索",
+      "coordinate_system": "GCJ02",
+      "rating_scale": "0-10"
+    },
+    "properties": {
+      "id": {
+        "type": "long",
+        "coerce": false
+      },
+      "name": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart",
+        "fields": {
+          "exact": {
+            "type": "keyword",
+            "normalizer": "restaurant_name_exact"
+          },
+          "chars": {
+            "type": "text",
+            "analyzer": "single_character",
+            "search_analyzer": "keyword",
+            "index_options": "docs",
+            "norms": false
+          }
+        }
+      },
+      "categoryName": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart",
+        "fields": {
+          "chars": {
+            "type": "text",
+            "analyzer": "single_character",
+            "search_analyzer": "keyword",
+            "index_options": "docs",
+            "norms": false
+          }
+        }
+      },
+      "tags": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart",
+        "fields": {
+          "chars": {
+            "type": "text",
+            "analyzer": "single_character",
+            "search_analyzer": "keyword",
+            "index_options": "docs",
+            "norms": false
+          }
+        }
+      },
+      "address": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart",
+        "fields": {
+          "chars": {
+            "type": "text",
+            "analyzer": "single_character",
+            "search_analyzer": "keyword",
+            "index_options": "docs",
+            "norms": false
+          }
+        }
+      },
+      "categoryCode": {
+        "type": "keyword"
+      },
+      "restaurantType": {
+        "type": "keyword"
+      },
+      "supportsDineIn": {
+        "type": "boolean"
+      },
+      "supportsDelivery": {
+        "type": "boolean"
+      },
+      "pricePerPerson": {
+        "type": "integer",
+        "coerce": false
+      },
+      "priceKind": {
+        "type": "keyword"
+      },
+      "businessStatus": {
+        "type": "keyword"
+      },
+      "location": {
+        "type": "geo_point",
+        "ignore_malformed": false,
+        "ignore_z_value": false
+      },
+      "needsLocation": {
+        "type": "boolean"
+      },
+      "ratingScore": {
+        "type": "double",
+        "coerce": false
+      },
+      "recommendRate": {
+        "type": "double",
+        "coerce": false
+      },
+      "participantCount": {
+        "type": "long",
+        "coerce": false
+      },
+      "reviewCount": {
+        "type": "long",
+        "coerce": false
+      },
+      "deleted": {
+        "type": "boolean"
+      },
+      "projectionVersion": {
+        "type": "long",
+        "coerce": false
+      },
+      "coverPhotoId": {
+        "type": "keyword",
+        "index": false,
+        "doc_values": false
+      }
+    }
+  },
+  "aliases": {
+    "restaurant-search": {
+      "is_write_index": true
+    }
+  }
+}

@@ -57,8 +57,18 @@ describe('restaurant maintenance form', () => {
     router = createRouter({
       history: createMemoryHistory(),
       routes: [
+        {
+          path: '/admin/restaurants/new',
+          component: RestaurantEditor,
+          props: { admin: true },
+        },
+        { path: '/admin/restaurants', component: { template: '<div />' } },
         { path: '/restaurants/new', component: RestaurantEditor },
-        { path: '/restaurants/:id/edit', component: RestaurantEditor, props: true },
+        {
+          path: '/restaurants/:id/edit',
+          component: RestaurantEditor,
+          props: true,
+        },
         ...['/', '/restaurants/:id', '/login'].map((path) => ({
           path,
           component: { template: '<div />' },
@@ -140,6 +150,16 @@ describe('restaurant maintenance form', () => {
     expect(host.querySelector('#error-location')?.textContent).toContain('确认')
   })
 
+  it('管理端直接新建成功后返回商户管理并保留新店ID', async () => {
+    await mount('/admin/restaurants/new')
+    expect(host.textContent).toContain('保存后直接公开生效')
+    await fill()
+    await submit()
+    expect(createRestaurant).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/admin/restaurants'))
+    expect(router.currentRoute.value.query.saved).toBe(snapshot.restaurant.id)
+  })
+
   it('removes stale field feedback when the user corrects the input', async () => {
     await mount()
     await submit()
@@ -219,7 +239,10 @@ describe('restaurant maintenance form', () => {
   })
   it('retains inputs and maps server field errors for manual retry', async () => {
     vi.mocked(createRestaurant).mockRejectedValue(
-      failure(400, { message: '输入无效', data: [{ field: 'name', message: '名称不符合规则' }] }),
+      failure(400, {
+        message: '输入无效',
+        data: [{ field: 'name', message: '名称不符合规则' }],
+      }),
     )
     await mount()
     await fill()

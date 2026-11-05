@@ -68,6 +68,25 @@ management:
 
 app:
   search:
+    query:
+      # 仅显式开启读入口；本阶段不默认切换网站搜索，不影响原Outbox消费。
+      enabled: ${ES_QUERY_ENABLED:false}
+      index-alias: ${ES_QUERY_INDEX_ALIAS:restaurant-search}
+      # 列表/地图共用进程内熔断器；只统计ES调用，MySQL回查及Outbox同步不在统计范围。
+      circuit-breaker:
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 1
+    sync:
+      # 初版只允许一个实例消费；同时开启ES_ENABLED，目标别名及当前版本结构须提前创建。
+      enabled: ${ES_SYNC_ENABLED:false}
+      index-alias: ${ES_SYNC_INDEX_ALIAS:restaurant-search}
+      batch-size: 20
+      delay-ms: 5000
+      retry-delay-ms: 30000
+      max-attempts: 5
     elasticsearch:
       # 连接准备不代表已切换搜索；未显式开启时不创建ES客户端。
       enabled: ${ES_ENABLED:false}

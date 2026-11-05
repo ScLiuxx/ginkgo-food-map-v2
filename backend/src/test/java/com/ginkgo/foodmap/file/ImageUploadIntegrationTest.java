@@ -68,6 +68,7 @@ class ImageUploadIntegrationTest {
     }
     @BeforeEach void setup() {
         reset(sessions,storage);
+        jdbc.update("DELETE FROM restaurant_search_outbox");
         jdbc.update("DELETE FROM review_request_receipts");
         jdbc.update("DELETE FROM review_photos");
         jdbc.update("DELETE FROM restaurant_change_photos");

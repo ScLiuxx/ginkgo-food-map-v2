@@ -7,9 +7,14 @@ import {
 } from '../model/useRestaurantRequests'
 import type { RequestStatus } from '../api/restaurantRequestsApi'
 import ReviewInlineField from './ReviewInlineField.vue'
+import AdminSidebar from './AdminSidebar.vue'
 
 // 身份由页面编排传入；真实查询只在管理会话校验通过后挂载，不跨模块读取认证Store。
-defineProps<{ username: string; loggingOut: boolean; sessionError: string | null }>()
+defineProps<{
+  username: string
+  loggingOut: boolean
+  sessionError: string | null
+}>()
 defineEmits<{ logout: [] }>()
 const {
   draft,
@@ -64,33 +69,6 @@ onBeforeUnmount(() => photoDialog.value?.close())
 
 <template>
   <div class="admin-review-preview">
-    <!-- 图标使用本地 SVG，保留设计稿形状，无外部资源或真实图片请求。 -->
-    <svg style="display: none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <defs>
-        <symbol id="admin-list" viewBox="0 0 24 24">
-          <rect x="5" y="4" width="14" height="17" rx="2" />
-          <path d="M9 4V2h6v2M9 10h6M9 14h6M9 18h4" />
-        </symbol>
-        <symbol id="admin-shop" viewBox="0 0 24 24">
-          <path
-            d="M4 10v10h16V10M3 10l2-6h14l2 6M3 10c0 4 5 4 5 0 0 4 8 4 8 0 0 4 5 4 5 0M9 20v-6h6v6"
-          />
-        </symbol>
-        <symbol id="admin-chat" viewBox="0 0 24 24">
-          <path
-            d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 3v-3H3V6a2 2 0 0 1 2-2Z M7 9h10M7 13h7"
-          />
-        </symbol>
-        <symbol id="admin-history" viewBox="0 0 24 24">
-          <path d="M4 7a9 9 0 1 1-1 9M3 3v5h5M12 7v6l4 2" />
-        </symbol>
-        <symbol id="admin-photo" viewBox="0 0 24 24">
-          <rect x="3" y="4" width="18" height="16" rx="2" />
-          <circle cx="8" cy="9" r="1.5" />
-          <path d="m4 18 6-6 4 4 3-3 4 4" />
-        </symbol>
-      </defs>
-    </svg>
     <header class="topbar">
       <RouterLink class="brand" to="/admin/reviews"
         ><em>泥电</em>美食地图<span class="brand-label">管理工作台</span></RouterLink
@@ -109,27 +87,7 @@ onBeforeUnmount(() => photoDialog.value?.close())
       {{ sessionError }}，可重新点击退出登录重试。
     </p>
     <div class="shell">
-      <aside class="sidebar" aria-label="管理导航">
-        <p class="nav-label">内容管理</p>
-        <RouterLink class="nav-item active" to="/admin/reviews" aria-current="page"
-          ><svg fill="none" stroke="currentColor" aria-hidden="true"><use href="#admin-list" /></svg
-          >商户审核<span class="count">{{ loadingList ? '…' : counts.PENDING }}</span></RouterLink
-        >
-        <button class="nav-item" disabled>
-          <svg fill="none" stroke="currentColor" aria-hidden="true"><use href="#admin-shop" /></svg
-          >商户管理<span class="later">后续</span>
-        </button>
-        <button class="nav-item" disabled>
-          <svg fill="none" stroke="currentColor" aria-hidden="true"><use href="#admin-chat" /></svg
-          >点评管理<span class="later">后续</span>
-        </button>
-        <button class="nav-item" disabled>
-          <svg fill="none" stroke="currentColor" aria-hidden="true">
-            <use href="#admin-history" /></svg
-          >操作记录<span class="later">后续</span>
-        </button>
-        <div class="sidebar-bottom">一起维护校园美食地图<br />让每一份分享都有据可循。</div>
-      </aside>
+      <AdminSidebar :pending-count="loadingList ? '…' : counts.PENDING" />
       <main>
         <div class="breadcrumb">管理工作台<span>/</span>商户审核</div>
         <div class="page-head">
@@ -262,7 +220,8 @@ onBeforeUnmount(() => photoDialog.value?.close())
                   >
                 </div>
                 <div v-if="detail.reviewedAt" class="meta">
-                  审核人 #{{ detail.reviewedBy }} · {{ formatRequestTime(detail.reviewedAt) }}
+                  审核人 #{{ detail.reviewedBy }} ·
+                  {{ formatRequestTime(detail.reviewedAt) }}
                 </div>
                 <div class="section-head">
                   <h3>资料核对</h3>
@@ -289,7 +248,11 @@ onBeforeUnmount(() => photoDialog.value?.close())
                   <tbody>
                     <tr v-for="row in comparison" :key="row.label">
                       <td>{{ row.label }}</td>
-                      <td :class="{ 'old-value': row.changed && detail.current !== null }">
+                      <td
+                        :class="{
+                          'old-value': row.changed && detail.current !== null,
+                        }"
+                      >
                         {{ row.before }}
                       </td>
                       <td :class="{ changed: row.changed }">
@@ -337,7 +300,8 @@ onBeforeUnmount(() => photoDialog.value?.close())
                 <section class="photos-section">
                   <div class="section-head">
                     <h3>
-                      提交的图片 <span class="muted small">/ {{ photos.length }} 张</span>
+                      提交的图片
+                      <span class="muted small">/ {{ photos.length }} 张</span>
                     </h3>
                     <span v-if="photos.length">{{
                       selected.status === 'PENDING'
@@ -414,7 +378,9 @@ onBeforeUnmount(() => photoDialog.value?.close())
                     :disabled="submitting"
                   />审核后自动加载下一条</label
                 >
-                <p v-if="decisionError" class="decision-error" role="alert">{{ decisionError }}</p>
+                <p v-if="decisionError" class="decision-error" role="alert">
+                  {{ decisionError }}
+                </p>
                 <div class="buttons">
                   <div class="reject-control">
                     <button
@@ -495,7 +461,9 @@ onBeforeUnmount(() => photoDialog.value?.close())
     <dialog ref="photoDialog" class="photo-viewer" aria-labelledby="admin-photo-title">
       <h2 id="admin-photo-title">{{ previewTitle }}</h2>
       <img v-if="previewSrc" :src="previewSrc" :alt="previewTitle" />
-      <div class="buttons"><button class="btn" @click="photoDialog?.close()">关闭</button></div>
+      <div class="buttons">
+        <button class="btn" @click="photoDialog?.close()">关闭</button>
+      </div>
     </dialog>
   </div>
 </template>

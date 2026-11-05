@@ -4,6 +4,7 @@ import com.ginkgo.foodmap.common.exception.GlobalExceptionHandler;
 import com.ginkgo.foodmap.restaurant.controller.RestaurantReadController;
 import com.ginkgo.foodmap.restaurant.dto.RestaurantListQuery;
 import com.ginkgo.foodmap.restaurant.service.RestaurantReadService;
+import com.ginkgo.foodmap.restaurant.service.RestaurantQueryService;
 import com.ginkgo.foodmap.restaurant.vo.RestaurantPageVo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,7 +29,11 @@ class RestaurantReadControllerTest {
     @BeforeEach
     void prepare() {
         service = mock(RestaurantReadService.class);
-        mvc = MockMvcBuilders.standaloneSetup(new RestaurantReadController(service))
+        mvc = MockMvcBuilders.standaloneSetup(new RestaurantReadController(service, new RestaurantQueryService(service,
+                mock(org.springframework.beans.factory.ObjectProvider.class),
+                new com.ginkgo.foodmap.restaurant.config.RestaurantSearchQueryProperties(),
+                io.github.resilience4j.circuitbreaker.CircuitBreaker.ofDefaults("controller-test"),
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry())))
                 .setControllerAdvice(new GlobalExceptionHandler()).build();
     }
 
@@ -61,11 +66,27 @@ class RestaurantReadControllerTest {
     @Test
     void shouldBindSearchWithoutOverflow() throws Exception {
         mvc.perform(get("/api/restaurants")
-                        .param("keyword", "  火锅  ").param("page", "2147483647").param("pageSize", "100"))
+                        .param("page", "2147483647").param("pageSize", "100"))
                 .andExpect(status().isOk());
         var query = ArgumentCaptor.forClass(RestaurantListQuery.class);
         verify(service).list(query.capture());
         assertThat(query.getValue().getOffset()).isEqualTo(214748364600L);
+    }
+
+    /** 相关度可显式请求，实际SQL能力与分页上限可观察；内部排序属性不能由HTTP覆盖。 */
+    @Test
+    void shouldAcceptRelevanceAndRejectSearchWindowOverflowBeforeSql() throws Exception {
+        when(service.list(any())).thenReturn(new RestaurantPageVo());
+        mvc.perform(get("/api/restaurants").param("keyword","清水河咖啡").param("sort","relevance")
+                        .param("searchOrderById","true").param("effectiveSort","price"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.search.effectiveSort").value("score"))
+                .andExpect(jsonPath("$.data.search.reason").value("DISABLED"));
+        var query=ArgumentCaptor.forClass(RestaurantListQuery.class);verify(service).list(query.capture());
+        assertThat(query.getValue().isSearchOrderById()).isFalse();
+        clearInvocations(service);
+        mvc.perform(get("/api/restaurants").param("keyword","咖啡").param("page","1251"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("RESTAURANT_INVALID_INPUT"));
+        verifyNoInteractions(service);
     }
 
     /** 已移除的参数明确报错，不能被悄悄忽略后返回全部商户。 */
@@ -75,6 +96,32 @@ class RestaurantReadControllerTest {
         mvc.perform(get("/api/restaurants").param(field, "none"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("RESTAURANT_INVALID_INPUT"));
+        verifyNoInteractions(service);
+    }
+
+    /** 两个公开入口都绑定新条件并经过统一查询服务，不影响字典及详情路由。 */
+    @Test
+    void shouldBindDiningFiltersForBothListAndMap() throws Exception {
+        mvc.perform(get("/api/restaurants").param("restaurantType","CANTEEN").param("diningMode","dineIn"))
+                .andExpect(status().isOk());
+        var query=ArgumentCaptor.forClass(RestaurantListQuery.class);verify(service).list(query.capture());
+        assertThat(query.getValue().getRestaurantType()).isEqualTo("CANTEEN");
+        assertThat(query.getValue().getDiningMode()).isEqualTo("dineIn");
+        mvc.perform(get("/api/restaurants/map-points").param("restaurantType","REGULAR").param("diningMode","delivery")
+                        .param("west","103").param("east","105").param("south","30").param("north","32"))
+                .andExpect(status().isOk());
+        verify(service).mapPoints(query.capture());
+        assertThat(query.getValue().getRestaurantType()).isEqualTo("REGULAR");
+        assertThat(query.getValue().getDiningMode()).isEqualTo("delivery");
+    }
+
+    /** 不合法类型/用餐方式不能被忽略后返回全部，两个公开入口使用相同校验。 */
+    @ParameterizedTest
+    @CsvSource({"restaurantType,ALL","restaurantType,regular","restaurantType,CANTEEN_",
+            "diningMode,DINE_IN","diningMode,true","diningMode,unknown","diningMode,dinein"})
+    void shouldRejectInvalidDiningFilters(String field,String value) throws Exception {
+        for(String path:java.util.List.of("/api/restaurants","/api/restaurants/map-points"))
+            mvc.perform(get(path).param(field,value)).andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }
 

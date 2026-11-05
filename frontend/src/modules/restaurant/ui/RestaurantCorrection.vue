@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
-import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { authToken, getAccessToken } from '@/shared/api/authSession'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 import { MerchantPlacePicker } from '@/modules/map'
@@ -12,6 +12,9 @@ import {
   fetchRestaurantCategories,
   submitRestaurantCorrection,
   submitNewRestaurant,
+  fetchRestaurantManagement,
+  createRestaurant,
+  updateRestaurant,
 } from '../api/restaurantApi'
 import type { RestaurantCategory, RestaurantCorrectionInput } from '../api/restaurantApi'
 import {
@@ -27,13 +30,23 @@ import {
   type MerchantSubmissionPlace,
 } from '../model/merchantSubmissionDraft'
 
-/** 新店投稿与资料纠错共用表单，只提交待审核申请；归属管理沿用独立页面。 */
-const props = withDefaults(defineProps<{ id?: string; submission?: boolean }>(), {
+/** 用户投稿与管理员直接维护共用门店搜索和表单，写入路径按显式模式区分。 */
+const props = withDefaults(defineProps<{ id?: string; submission?: boolean; admin?: boolean }>(), {
   id: '',
   submission: false,
+  admin: false,
 })
 const route = useRoute()
-const pageTitle = computed(() => (props.submission ? '提交店铺' : '补充 / 纠错'))
+const router = useRouter()
+const pageTitle = computed(() =>
+  props.admin
+    ? props.submission
+      ? '新增店铺'
+      : '修改店铺'
+    : props.submission
+      ? '提交店铺'
+      : '补充 / 纠错',
+)
 const token = getAccessToken()
 const sessionChanged = ref(false)
 const photoInput = ref<globalThis.HTMLInputElement>()
@@ -81,10 +94,18 @@ let controller: globalThis.AbortController | undefined
 let generation = 0,
   disposed = false
 const path = computed(() =>
-  props.submission ? route.fullPath : `/restaurants/${encodeURIComponent(props.id)}/correction`,
+  props.admin
+    ? route.fullPath
+    : props.submission
+      ? route.fullPath
+      : `/restaurants/${encodeURIComponent(props.id)}/correction`,
 )
 const detailPath = computed(() =>
-  props.submission ? '/' : `/restaurants/${encodeURIComponent(props.id)}`,
+  props.admin
+    ? '/admin/restaurants'
+    : props.submission
+      ? '/'
+      : `/restaurants/${encodeURIComponent(props.id)}`,
 )
 const visibleCategories = computed(() =>
   categories.value.filter((c) => c.enabled || c.code === originalCategory.value),
@@ -128,7 +149,12 @@ async function load() {
     const [row, dictionary] = await Promise.all([
       props.submission
         ? Promise.resolve(undefined)
-        : fetchCorrectionSource(props.id, controller.signal),
+        : props.admin
+          ? fetchRestaurantManagement(props.id, token, controller.signal).then((snapshot) => {
+              if (snapshot.deleted) throw new Error('店铺已删除，请先在商户管理中恢复。')
+              return snapshot.restaurant
+            })
+          : fetchCorrectionSource(props.id, controller.signal),
       fetchRestaurantCategories(controller.signal),
     ])
     if (disposed || ticket !== generation) return
@@ -198,6 +224,23 @@ async function submit() {
   saving.value = true
   saveError.value = ''
   try {
+    // 管理员直接保存完整业务资料，三态显式提交；不附带投稿UUID或未支持的图片ID。
+    if (props.admin) {
+      const input = {
+        ...restaurantInput(form, extra.restaurantType),
+        restaurantType: extra.restaurantType,
+        supportsDineIn: extra.dineIn === '' ? null : extra.dineIn === 'true',
+        supportsDelivery: extra.delivery === '' ? null : extra.delivery === 'true',
+      }
+      const result = props.submission
+        ? await createRestaurant(input, token)
+        : await updateRestaurant(props.id, input, token)
+      if (!disposed && getAccessToken() === token && !sessionChanged.value) {
+        receipt.value = result.restaurant.id
+        await router.replace({ path: '/admin/restaurants', query: { saved: result.restaurant.id } })
+      }
+      return
+    }
     const input: RestaurantCorrectionInput = {
       ...restaurantInput(form, extra.restaurantType),
       clientRequestId,
@@ -214,7 +257,10 @@ async function submit() {
       photoDraft.clear(true)
     }
   } catch (error) {
-    if (!disposed) saveError.value = toErrorMessage(error)
+    if (!disposed && getAccessToken() === token)
+      saveError.value = props.admin
+        ? `${toErrorMessage(error)}。若请求超时，请先返回商户管理核对保存结果，避免重复新增。`
+        : toErrorMessage(error)
   } finally {
     saving.value = false
   }
@@ -269,7 +315,9 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="correction-page">
-    <RouterLink :to="detailPath">{{ submission ? '← 返回首页' : '← 返回商户详情' }}</RouterLink>
+    <RouterLink :to="detailPath">{{
+      admin ? '← 返回商户管理' : submission ? '← 返回首页' : '← 返回商户详情'
+    }}</RouterLink>
     <h1>{{ pageTitle }}</h1>
     <section v-if="!token || sessionChanged" class="notice" role="alert">
       <p>
@@ -289,16 +337,18 @@ onBeforeUnmount(() => {
       <button @click="load">重新加载</button>
     </section>
     <section v-else-if="receipt" class="notice success" role="status">
-      <h2>已提交，等待管理员审核</h2>
-      <p>申请编号：{{ receipt }}。审核通过后更新公开资料。</p>
+      <h2>{{ admin ? '店铺资料已保存' : '已提交，等待管理员审核' }}</h2>
+      <p>{{ admin ? `店铺 ID：${receipt}` : `申请编号：${receipt}。审核通过后更新公开资料。` }}</p>
       <RouterLink :to="detailPath">{{ submission ? '返回首页' : '返回商户详情' }}</RouterLink>
     </section>
     <form v-else novalidate :aria-busy="saving" @submit.prevent="submit">
       <p class="intro">
         {{
-          submission
-            ? '请搜索并选择门店，补充资料后提交审核。'
-            : '已填入当前商户资料，只需修改有误或缺失的内容。'
+          admin
+            ? '搜索并选择高德门店，核对资料后直接保存。'
+            : submission
+              ? '请搜索并选择门店，补充资料后提交审核。'
+              : '已填入当前商户资料，只需修改有误或缺失的内容。'
         }}
       </p>
       <fieldset :disabled="saving">
@@ -389,12 +439,16 @@ onBeforeUnmount(() => {
       <fieldset v-if="!submission" class="existing-merchant-photos">
         <legend>当前商户照片</legend>
         <p class="intro">
-          以下为已公开的商户照片，可点击查看大图。已有照片无需重复上传；本次新增照片审核通过后追加到相册。
+          {{
+            admin
+              ? '以下为已公开的商户照片，可点击查看大图。'
+              : '以下为已公开的商户照片，可点击查看大图。已有照片无需重复上传；本次新增照片审核通过后追加到相册。'
+          }}
         </p>
         <RestaurantAlbum :key="id" :restaurant-id="id" :name="sourceName" />
       </fieldset>
       <!-- 新图片使用本地Object URL预览；上传文件在申请通过审核前保持私有。 -->
-      <fieldset :disabled="saving">
+      <fieldset v-if="!admin" :disabled="saving">
         <legend>{{ submission ? '商户图片' : '本次新增图片' }}</legend>
         <input
           ref="photoInput"
@@ -480,15 +534,33 @@ onBeforeUnmount(() => {
           errors.tags || `最多8项、总计80字；当前${draftTags(form.tags).length}项`
         }}</small>
       </fieldset>
-      <p class="notice">审核通过后更新公开资料。</p>
+      <p class="notice">
+        {{
+          admin
+            ? '保存后立即更新公开资料。食堂不设置美食品类；已有窗口的食堂不能直接改为普通餐厅。'
+            : '审核通过后更新公开资料。'
+        }}
+      </p>
       <p v-if="Object.keys(errors).length" role="alert" class="error">请修改标记的字段后再提交。</p>
-      <p v-if="saveError" role="alert" class="error">{{ saveError }}，资料已保留，可重试提交。</p>
+      <p v-if="saveError" role="alert" class="error">
+        {{ saveError }}{{ admin ? '' : '，资料已保留，可重试提交。' }}
+      </p>
       <div class="actions">
         <button
           type="submit"
           :disabled="saving || processingPhotos || uploadingPhotos || failedPhotos"
         >
-          {{ saving ? '正在提交…' : '提交审核' }}</button
+          {{
+            saving
+              ? admin
+                ? '正在保存…'
+                : '正在提交…'
+              : admin
+                ? submission
+                  ? '创建店铺'
+                  : '保存修改'
+                : '提交审核'
+          }}</button
         ><RouterLink :to="detailPath">取消</RouterLink>
       </div>
     </form>

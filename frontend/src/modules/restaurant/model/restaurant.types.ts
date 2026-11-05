@@ -31,14 +31,14 @@ export interface RestaurantReadModel {
 
 export type RatingDimension = 'taste' | 'value' | 'service' | 'ambience'
 /** 四维评分保留详情展示，列表暂不提供按四维排序。 */
-export type RestaurantSort = 'score' | 'reviews' | 'price' | 'distance' | 'recommend'
+export type RestaurantSort = 'auto' | 'relevance' | 'score' | 'reviews' | 'price' | 'distance' | 'recommend'
 
 /** 分类使用服务端稳定编码，所有条件随分页请求提交，不在当前页二次筛选。 */
 export interface CatalogFilters {
   /** GCJ-02用户位置：仅在授权成功后随查询发送，不持久化。 */
   latitude?: number
   longitude?: number
-  /** 前端过渡筛选；后端未支持时须读取完整分页再筛选，不能只筛当前页。 */
+  /** 由后端在COUNT和分页前过滤，类型与分类独立，用餐方式只匹配明确支持。 */
   restaurantType?: '' | 'REGULAR' | 'CANTEEN'
   diningMode?: '' | 'dineIn' | 'delivery'
   keyword: string

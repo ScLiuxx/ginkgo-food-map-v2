@@ -7,6 +7,11 @@ import type { CatalogFilters } from '../model/restaurant.types'
 const props = withDefaults(defineProps<{ filters?: CatalogFilters }>(), { filters: undefined })
 const catalog = useRestaurantCatalog()
 const filters = computed(() => props.filters ?? catalog.filters)
+// 单个汉字使用ES字符包含搜索，保留综合分默认值，不将其标为相关度。
+const relevanceDefault = computed(() => {
+  const keyword = filters.value.keyword.trim()
+  return Boolean(keyword) && !/^\p{Script=Han}$/u.test(keyword)
+})
 const location = useUserLocation()
 
 /** 点击即选择排序；已有位置直接排序，不让重新定位把选中态重置。 */
@@ -25,10 +30,10 @@ function nearest() {
     <div class="sort-pills" role="group" aria-label="餐厅排序">
       <button
         type="button"
-        :aria-pressed="filters.sort === 'score'"
-        @click="filters.sort = 'score'"
+        :aria-pressed="filters.sort === 'auto' || filters.sort === 'relevance' || (!filters.keyword.trim() && filters.sort === 'score')"
+        @click="filters.sort = 'auto'"
       >
-        综合排序
+        {{ relevanceDefault ? '相关度' : '综合排序' }}
       </button>
       <button type="button" :aria-pressed="filters.sort === 'distance'" @click="nearest">
         {{ location.preparing || location.locating ? '定位中…' : '距离最近' }}
@@ -40,6 +45,12 @@ function nearest() {
       >
         好评优先
       </button>
+      <button
+        v-if="relevanceDefault"
+        type="button"
+        :aria-pressed="filters.sort === 'score'"
+        @click="filters.sort = 'score'"
+      >综合评分</button>
     </div>
     <p v-if="location.message && !location.location" role="status">{{ location.message }}</p>
   </div>

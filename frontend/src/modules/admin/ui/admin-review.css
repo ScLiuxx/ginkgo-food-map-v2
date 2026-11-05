@@ -127,58 +127,6 @@ a {
   grid-template-columns: 204px minmax(0, 1fr);
   min-height: calc(100vh - 84px);
 }
-.sidebar {
-  border-right: 1px solid #eceef0;
-  padding: 36px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.nav-label {
-  font-size: 10px;
-  color: #929aa3;
-  letter-spacing: 2px;
-  margin: 0 16px 12px;
-}
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 13px 15px;
-  border-radius: 6px;
-  font-size: 13px;
-  text-align: left;
-}
-.nav-item svg {
-  width: 18px;
-  height: 18px;
-  stroke-width: 1.5;
-}
-.nav-item.active {
-  background: #fcf4e8;
-  color: #bd6816;
-  font-weight: 600;
-}
-.nav-item .count {
-  margin-left: auto;
-  font-size: 11px;
-}
-.nav-item:disabled {
-  cursor: default;
-  color: #a1a8af;
-}
-.later {
-  font-size: 9px;
-  margin-left: auto;
-  color: #a8aeb4;
-}
-.sidebar-bottom {
-  margin-top: auto;
-  padding: 28px 15px 0;
-  font-size: 11px;
-  line-height: 1.9;
-  color: #959ca4;
-}
 main {
   padding: 32px 38px 26px;
   min-width: 0;
@@ -654,10 +602,7 @@ dialog .buttons {
 /* 小屏改为上下阅读，保留对比列与按钮；示意交互不依赖管理接口。 */
 @media (max-width: 1100px) {
   .shell {
-    grid-template-columns: 165px minmax(0, 1fr);
-  }
-  .sidebar {
-    padding: 30px 10px;
+    grid-template-columns: 204px minmax(0, 1fr);
   }
   main {
     padding: 28px 24px;
@@ -703,31 +648,6 @@ dialog .buttons {
   }
   .shell {
     display: block;
-  }
-  .sidebar {
-    padding: 9px 16px;
-    border-right: 0;
-    border-bottom: 1px solid #eceef0;
-    flex-direction: row;
-    overflow: auto;
-    gap: 0;
-  }
-  .sidebar .nav-label,
-  .sidebar-bottom,
-  .later {
-    display: none;
-  }
-  .nav-item {
-    white-space: nowrap;
-    padding: 10px;
-    font-size: 11px;
-    gap: 5px;
-  }
-  .nav-item svg {
-    display: none;
-  }
-  .nav-item .count {
-    margin-left: 5px;
   }
   main {
     padding: 24px 18px;
@@ -1152,5 +1072,12 @@ td.old-value {
   .detail-loading {
     left: 0;
     background: #ffffffa8;
+  }
+}
+
+/* 两个管理页面在同一断点将共用导航切换为横排。 */
+@media (max-width: 800px) {
+  .shell {
+    display: block;
   }
 }

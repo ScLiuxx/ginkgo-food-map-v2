@@ -2,61 +2,46 @@
 
 之前的开发记录见[开发记录03](history/development-03.md)，更早记录见[文档导航](README.md#历史追溯)。
 
-## 2026-11-04：搜索投影版本落库
+## 2026-11-05：文档去重规则与最终版本评测
 
-- V21新增restaurants.search_projection_version，有符号BIGINT、正数约束、默认1，保留存量含删除记录的资料、标签及审计时间。新建版本1；资料保存、删除/恢复在原SQL递增，评价发布/删除在同一业务事务递增且显式保持资料updated_at。复用既有商户父行锁按店串行，失败回滚，Long.MAX_VALUE时拒绝修改。
-- 审核通过通过既有写服务推进一次，相册及审核结果在同一事务提交；幂等审核/评价重试、驳回及回复不推进。成功的完整资料保存即使相同内容仍推进。组装器改为assemble(List<Long>)，只传ID并保序去重，从同一RR快照读取版本与数据，消除调用方误配版本的入口。没有改公开API。
-- 真实MySQL回归覆盖V20→V21存量保留/重复迁移、创建/修改/删除/恢复、标签及相册失败回滚、并发资料和评价修改、幂等重试、评分审计时间不变、版本耗尽回滚及并发提交时版本/资料同快照。默认测试388项：执行168、环境项跳过220，零失败/错误。真实MySQL 8.0.34隔离库显式执行148项全部通过、无跳过；补强的两项“统计及版本更新后注入失败”再次验证通过。初轮两项新增测试受PowerShell管道中文编码损坏影响，修正UTF-8后回归通过。
-- 修改文件：V21__restaurant_search_projection_version.sql负责DDL；RestaurantWriteMapper.xml负责资料及删除/恢复原子递增；RestaurantReviewStatisticsMapper.java和RestaurantReviewApplicationService.java负责评价事务推进；RestaurantSearchSource.java、RestaurantSearchProjectionMapper.java和RestaurantSearchProjectionService.java负责版本及资料同快照读取。RestaurantSearchProjectionServiceTest/IntegrationTest、RestaurantSchemaIntegrationTest、RestaurantWriteApiIntegrationTest及ReviewWriteApiIntegrationTest更新对应回归；docs/README.md、features.md、architecture/restaurant-schema.md、architecture/elasticsearch-schema.md、plans/elasticsearch-search.md及本记录同步现状。
-- verify打包通过，临时同目录POM只增加finalName，避免覆盖Windows正在使用的原JAR，已清理临时POM。产物backend/target/ginkgo-food-map-backend-projection-version.jar；git diff --check通过。
-- 日志：D:/eat/.codex-backups/projection-version-default.log、projection-version-mysql-final.log、projection-version-rollback.log；构建结果见projection-version-build.log。未运行无关前端测试，未提交或推送。
-- 尚未对业务MySQL运行V21，未重启后端或写正式ES；没有Outbox、消费者、ES external version写入器，版本字段本身不自动防止ES覆盖。直接SQL/维护脚本及未来分类改名、独立相册维护需显式推进受影响店版本。下一步设计导入和可靠同步。
+- 将文档分工、单一主要来源、历史时间边界、证据集中存放及测试数量口径写入[AGENTS.md](../AGENTS.md#文档信息分工与去重)。合并搜索计划、功能状态和开发阶段记录中的重复内容；按用户要求删除旧检索报告，仅保留最终评测并清理引用，同时修正已删除文档的导航入口；非搜索阶段原文保留，整理前快照及差异记录位于D:/eat/.codex-backups/es-final-report-20261105/。
+- 完成当前v003＋熔断构建的[最终查询评测](history/elasticsearch-final-benchmark-2026-11-05.md)，原始目标/样本及独立核验结果集中在同目录measurement/。工具17项测试通过；生产代码及前端未修改，不重复既有应用构建。
+- 评测全程只读，未清缓存、注入故障或执行降级后的SQL承载测试；商户资料、索引文档/版本及别名前后指纹一致，仅创建并停止本轮临时实例，当前网站保留运行。未提交、推送或部署。
 
-## 2026-11-04：商户搜索投影组装器
+## 2026-11-05：ES第一版完成与人工验收
 
-- 实现内部有界批量投影读取：每批最多100店，独立REQUIRES_NEW/REPEATABLE_READ只读事务，读取restaurant模块自己的商户、分类、原始计分统计、有序标签，并复用RestaurantPhotoService.covers的正式相册可见性规则。没有跨模块Mapper、ES/OSS调用、公开HTTP接口、定时任务或自动导入。
-- 新增RestaurantSearchSource读取模型、RestaurantSearchProjectionMapper批量SQL、RestaurantSearchDocument白名单正文、RestaurantSearchProjectionPolicy纯校验/计算规则、RestaurantSearchProjectionService组装流程。正文字段与v002 mapping核对；id为数字Long，封面为正Long字符串，location明确lat/lon，GCJ-02中国范围校验，标签有序复制。评分使用原始累计值/人数后转double，不先按页面两位舍入；无评分为null，真实0保留，空标签为[]。普通餐厅分类须有效读取、食堂分类为空，未知价格和三态布尔不补0/false。
-- 删除记录只输出id/deleted/projectionVersion三字段墓碑，不读删除商户标签/封面；物理缺失整批失败，不猜测为删除。本阶段最初由调用方显式提供正版本；同日后续V21已改为从MySQL同一快照读取持久版本，详见上方版本落库记录。尚无同步消费者，不能据此直接上线写ES。独立事务仅读已提交数据，不应在业务写事务中调用。
-- 验证：新增25项纯规则/序列化测试、3项批次服务测试、4项显式真实MySQL测试均通过。真实测试仅创建清理本次UUID库并执行Flyway V1–V20，验证食堂空分类、标签顺序、原始统计比例、无统计行不补写、大整数正式封面ID、待审/目标不一致图片排除、墓碑和物理缺失；独立连接在首个读取后提交修改，验证本次文档保持旧快照、下次读取看到新状态。媒体文件服务无交互。
-- 后端默认测试385项：执行168、环境项跳过217，无失败/错误；4项新增真实MySQL另行显式执行且无跳过。首次测试编译泛型断言和MyBatis代理测试调用问题已修正；一次Mockito自附加失败后在测试启动参数显式提供既有Mockito agent完成验证，未修改仓库全局测试配置。构建使用仅临时更改finalName的相同pom避免Windows原JAR占用，verify打包通过，产物backend/target/ginkgo-food-map-backend-projection.jar，临时pom已清理。
-- 同步ES结构文档、搜索计划、功能说明及导航；API未新增/修改，无需调整api.md。日志在D:/eat/.codex-backups/projection-default.log、projection-mysql.log、projection-build.log。未运行无关前端测试、未重启业务后端、未修改正式MySQL或写入正式ES，未提交或推送。当时下一步为可靠版本存储；同日后续已完成该项，接下来是导入/同步方案，再接入正式搜索。
+- v003单字/组合搜索、统一列表地图、当前资料/版本回查、增量Outbox及整次SQL降级已接通，用户已确认核心功能人工验收通过。结构、查询和同步规则分别由[ES结构](architecture/elasticsearch-schema.md)、[API](api.md#621-正式搜索与简单降级契约2026-11-05)、[Outbox](architecture/restaurant-search-outbox.md)维护，后续事项见[搜索计划](plans/elasticsearch-search.md)。
+- 本地9562条投影已受控升级并全量核对；单字采用原字包含，〇与SQL数字0的等价差异保留并有回归。结构与升级规则见[ES结构](architecture/elasticsearch-schema.md)，当前测量见[最终评测](history/elasticsearch-final-benchmark-2026-11-05.md)。
+- 查询熔断按已确认参数实现，列表/地图共享，仅包ES调用。8项专项及真实MySQL/ES查询集成13项通过；最终构建执行208项、环境跳过254项，失败/错误0。证据：D:/eat/.codex-backups/es-circuit-verify-final.log及es-circuit-integration-final.log。早期阶段复跑数量不累加。
+- 本地前端5173及后端8080已显式开启ES查询/同步，实际列表、地图及健康检查通过；默认共享开关保持关闭，未部署线上。运行证据目录为D:/eat/.codex-backups/restart-es-circuit-20261105-160917/。
 
-## 2026-11-04：本地IK三词扩展词典加载与实际搜索回归
+## 2026-11-04：统一管理端导航
 
-- 按用户授权正式启用“冒菜、螺蛳粉、天街”。新增deploy/elasticsearch/ik/ginkgo-food.dic及IKAnalyzer.cfg.xml，UTF-8、一行一词，通过ext_dict登记；不追加品牌大词库、停用词、拼音或同义扩展。新增维护说明，记录实际挂载、后续加词、索引重建和恢复边界。
-- 本地ES由D:/healthy-agent/compose.yml管理，原本仅持久化数据卷，IK插件/词典在容器可写层。先备份Compose、完整插件及词典目录、所有现有索引计数和别名，再将现有IK 9.5.4插件与基础词典迁入两个外部持久卷，在原ES服务上增加两个仓库文件只读挂载，保留原数据卷、镜像、端口、环境与其他服务配置。只重建elasticsearch服务，启动后集群green，IK可用；现有索引文档数和别名定义保留。
-- 使用相同44条查询、相同9562家公开商户、相同DSL重建随机实验索引；快照与冻结相关集SHA-256均与原评测一致。smart_and实际目标覆盖：冒菜179/192→192/192，螺蛳粉31/32→32/32，龙湖天街蜜雪冰城3/4→4/4。44条未出现预期目标总覆盖或前5目标数量下降；完整店名仍8/8排第一，普通词法Hit@5仍35/35，宏平均全量目标覆盖96.47%→97.47%。8条查询的前5顺序变化，不声称排名完全不变或完成了所有人工相关性验收；单字“茶”仍为410/1049，未引入批量品牌词的26家损失。
-- 验证：新词的实际_analyze及上下文分词已核验，ES字段/初始化安全测试11项、评测工具6项全部通过，Compose配置检查通过。正式别名仍指向restaurant-search-v002、文档数0，随机实验索引已清理。未修改Java业务接口、前端或MySQL资料，无需重复无关构建；网站仍走MySQL，不支持语义搜索。
-- 更新搜索评测报告，保留原词典44条详细结果作为基线，新增实际补词后的ES回归结论；同步架构、搜索计划、功能说明及导航。原始回归结果位于D:/eat/.codex-backups/search-evaluation-20261104-with-dictionary/；部署备份、所有44条的前后计数及前5结果、加载/哈希核验位于D:/eat/.codex-backups/ik-install-20261104/。
-- 边界：本次只对实验索引重新分析，不替其他应用重建既有索引。词库变化不会自动更新旧文档词项，真实业务导入/增量同步和正式查询接入仍待实施；当前词表只登记在本地部署，其他环境需按维护文档显式安排插件、词典与索引重建。未提交或推送。
+- 将商户审核与商户管理侧栏提取为AdminSidebar，复用同一组内联SVG及样式。选中态按路由识别，新增/编辑仍选中商户管理；统一204px桌面栏宽和800px横向导航断点，移除页面各自的旧导航定义。审核页传入现有待审统计，管理页读取有界一条申请取得真实统计，失败不伪造计数且卸载取消读取。
+- 样式按用户参考图统一图标尺寸、间距、浅橙选中背景及禁用项，功能说明同步。浏览器隔离验证切换两页SVG完全相同、当前项正确、手机无横向溢出，截图D:/eat/.codex-backups/admin-sidebar-review.png及admin-sidebar-management.png。不新增后端或修改业务资料。
 
-## 2026-11-04：真实商户分词、查询与扩展词库评测
+## 2026-11-04：管理员直接维护类型及用餐方式
 
-- 按用户要求完成一次可复查的搜索效果实验：固定44条查询和名称/地址/分类相关集规则，在同一MySQL只读一致性快照读取9562家公开商户与现行LIKE/综合分排序基线；ES复用v002结构，导入随机UUID实验索引，比较ik_smart OR、cross_fields ik_smart AND与ik_max_word AND。不创建正式投影版本、不读账号或私有审核资料、不切换业务入口。
-- 普通词法查询35条有预期目标，MySQL Hit@5为30/35，smart AND为35/35；完整店名排第一从7/8变为8/8，5条有目标的组合查询从0/5变为5/5。OR会给无结果查询返回大量候选；max AND在本组查询的命中集合/前5顺序与smart AND相同。指标仅反映这组字段规则标注的探索样本，不是完整人工语义相关性或性能提升。
-- 发现真实词边界漏召回：冒菜为179/192、螺蛳粉31/32、龙湖天街蜜雪冰城3/4；保存漏召回字段_analyze，并对每类首个目标保存matched=false的真实_explain。独立JVM使用现有IK/Lucene jar及词典，只在该进程内增加“冒菜、螺蛳粉、天街”，词项覆盖恢复到192/192、32/32、4/4。查询88项及漏召回字段45项共133项分词基线与真实ES一致。补词后数字仅为词项覆盖，未声称新词库下ES实际排名或召回已验证。
-- 第二批10个品牌/校园/道路整词没有增加8条品牌查询的既定目标覆盖，且单字“茶”覆盖从410降到384；建议先维护小业务词表，不引入大型第三方词库或全部店名。简称/称呼、拼音和错字探针仍缺独立策略；单字子串不等价于词检索，需单独确定需求。
-- 环境与限制：本次实际MySQL为8.0.34（项目目标基线为8.4），ES/IK为9.5.4；商户标签为0、仅2家有评分，未评价标签能力或性能。44条虽预先分dev/holdout，本轮统一查看诊断，不能声称独立盲测；需新的查询与人工标注再验收。
-- 新增本地评测脚本、固定用例、独立JVM补词诊断和[完整报告](plans/restaurant-search-evaluation.md)，报告包含全部44条的分词、SQL/ES前5条与命中数，更新架构、计划、功能说明和导航。工具安全/查询测试6项通过；真实评测及补词诊断完成。无Java业务/前端变更，无需重复无关构建。
-- 安全与证据：MySQL仅执行只读事务；bulk逐项核验结果，仅写随机实验索引并在finally精确清理；Docker内独立JVM限384MB堆/1处理器，仅清理本次UUID的4个/tmp文件，不改词典文件、不重启服务。正式别名仍指向v002、文档数0。原始快照/冻结用例、全量结果、DSL、词项、解释及清理记录位于D:/eat/.codex-backups/search-evaluation-20261104-final/，不提交完整商户快照。初次选题发现“清水河火锅”字段无正例后，在首次ES结果读取前显式允许空目标；后续两次冻结相关集与公开投影哈希一致。未提交或推送。
+- 新增RestaurantDirectSaveRequest独立DTO并接入现有POST/PUT，避免扩展基础DTO改变历史用户投稿或审核的序列化/幂等摘要。直接维护支持显式类型和堂食/外卖三态；旧输入省略类型且未提交非null用餐方式时保持既有兼容行为，不静默丢弃非null字段。
+- RestaurantWriteService规范化新字段并在商户父行锁内拒绝有关联窗口的食堂转普通餐厅（含软删除窗口）；复用既有updateCurrent原子写类型/用餐方式及推进搜索投影版本，标签或后续处理失败整体回滚。创建/管理资料/公开详情继续统一返回真实三态，普通用户无直接维护权限。已有表列满足需求，无新Flyway迁移或ES写入。
+- 共享RestaurantCorrection表单开放三个选择框，直接保存明确发送类型及两项boolean/null，不附带申请UUID、待审图片ID。食堂清分类、切回普通餐厅重新选类、高德搜索和确认位置保持现有规则。
+- 新增真实MySQL集成回归覆盖直接新建食堂、无窗口类型转换、true/false/null互转、旧客户端保留、非法类型/分类、越权、窗口冲突及标签失败回滚；前端管理员高德创建测试验证显式类型与三态请求。默认后端392项（执行168、环境项跳过224）无失败，显式真实MySQL商户写入及搜索投影74项全部通过无跳过；前端49文件322项、类型检查及构建通过，ESLint零错误/2条既有警告。浏览器隔离API验证选择框可编辑、食堂清分类及直接保存请求，无真实业务写入。首轮软删除窗口测试漏填deleted_by触发数据库CHECK，补全夹具后全套回归通过。
+- 用临时POM仅指定新finalName打包成功，未覆盖运行中的旧JAR，临时POM已清理。产物backend/target/ginkgo-food-map-backend-admin-direct.jar，本地后端切换新包，前端热更新。测试及运行日志位于D:/eat/.codex-backups/admin-direct-*，本次不提交或推送。
 
-## 2026-11-04：恢复中断的旧评分规则与搜索结构清理
+## 2026-11-04：管理端复用用户纠错表单与增强分页
 
-- 按历史会话最后两项要求完成收尾：移除商户与点评的杯型派生计算、tier响应、tiers/view筛选SQL和四维排序；旧分档请求明确返回400，现行综合分、好评、点评数、价格与距离排序保留。MySQL从未持久化杯型列，无需删除业务评分或新增清库迁移；四维原始点评及统计仍供详情展示，MySQL审计时间保留。
-- 核实现行restaurant-search-v002为21个主字段与name.exact子字段，移除四维评分投影，不新增创建/更新时间；新增coverPhotoId，仅保存正式相册首张图片的关联ID，关闭索引和doc_values，保留大整数精度。restaurant-search别名指向v002，正式文档数为0；v001定义与空索引保留版本追溯。
-- 清除无正式调用方的旧项目25家商户预览快照catalog.preview.ts，将其唯一测试调用改为独立API夹具，并删除只验证旧快照内容的测试。坐标测试显式区分用户原点计算与服务端返回距离。保留仍被预览页使用的地图样例、食堂历史点评、登录会话与审核重试兼容，不改动旧项目目录、数据库业务资料、历史迁移及归档记录。
-- 同步ES架构文档和搜索计划中的v002、字段数及分档移除状态，清除点评计划仍声称返回杯型的描述；API文档补充旧筛选/四维排序的400行为并修正稳定排序说明，功能文档记录当前能力。
-- 验证：后端默认测试353项，140项执行、213项环境测试跳过，失败/错误为0；显式真实MySQL迁移、商户读写和点评读写207项全部通过，无跳过；ES初始化安全及真实字段语义11项全部通过，正式别名只读检查通过、文档数仍为0。前端48文件/314项全部通过，typecheck、build通过，ESLint为0错误、2条既有可选prop警告。首次默认并发因本机内存不足失败，限制Vitest为2个worker、Maven及测试JVM内存后完成验证，没有修改仓库并发配置。
-- 打包：默认verify测试通过后，Windows占用原JAR导致repackage无法重命名；使用与当前pom相同、仅临时改构建名称的配置完成可执行JAR验证，产物为backend/target/ginkgo-food-map-backend-cleanup.jar，临时配置已清理。未重启运行中的旧后端、未发布或提交推送；测试日志保存在D:/eat/.codex-backups/cleanup-*.log。
-- 剩余ES工作：真实商户投影/全量导入、可靠增量同步、正式查询和地图入口接入、相关性评测及故障回退；本轮只收尾已授权的结构与遗留清理，网站查询仍使用MySQL。
+- 按用户反馈，将AdminRestaurantPage的新增/编辑切换到RestaurantCorrection共用组件，增加显式admin模式。直接维护复用MerchantPlacePicker及现有高德SDK搜索、名称/地址/GCJ-02位置回填、原位置确认、分类/价格/标签校验、未保存保护和已公开相册。编辑读取management授权快照并拒绝已删除目标，新建/修改分别调用现有POST/PUT，成功回管理列表，不进入投稿/纠错审核链路。普通用户原流程保留。
+- 当前直接保存协议仍不支持类型、堂食/外卖和photoIds：admin模式将类型与用餐方式设为只读，隐藏新增图片上传，保留已有公开相册，防止填写后未保存。未新增后端接口或更改数据库。
+- 商户管理增加数字页码、首页/末页、每页10/20/50/100条及整数范围校验跳页。page/pageSize交给后端，调整页大小回第一页，查询草稿只有点击查询才应用，分页沿用已应用条件。
+- 新增高德搜索选择后管理员直接创建、授权编辑直接保存及分页参数/草稿/越界测试；前端49文件322项全部通过，类型检查与构建通过，ESLint零错误及2条既有可选prop警告。浏览器隔离API验证管理列表、手机无溢出、删除/恢复与编辑页高德搜索入口，并检查桌面截图；高德结果回填由SDK模拟测试验证，本轮未对真实商户写入。更新功能说明；浏览器截图和隔离验证脚本仍位于D:/eat/.codex-backups/admin-restaurants-*。
 
-## 2026-11-04：Elasticsearch商户索引结构
+## 2026-11-04：管理端商户直接维护页面
 
-- 按已确认字段范围建立restaurant-search-v001空索引及restaurant-search写别名，每家普通餐厅/食堂一文档。版本化JSON放入后端资源目录，包含24个主字段与name.exact子字段；IK建索引ik_max_word、查询ik_smart，完整店名采用lowercase/asciifolding规范化。价格为整数元、业务评分为ratingScore、食堂分类为空、位置沿用GCJ-02。
-- 初始化工具显式创建结构及别名，重复运行只核对；拒绝远端/凭据、别名冲突、字段或设置漂移，不自动删除、修改或重绑。dynamic=strict拒绝未声明字段，数值关闭coerce，避免字符串数字或小数金额被静默转换。保留业务边界：ES mapping不替代必填、枚举、数值范围和字段组合校验，当时projectionVersion尚无MySQL版本存储；同日后续V21已完成版本落库，同步仍未实现。
-- 新增architecture/elasticsearch-schema.md，维护字段类型、MySQL来源、空值/食堂规则、分词、别名、版本边界、初始化与真实测试方式；同步文档导航、功能状态和搜索计划，纠正旧计划中的SmartCN、价格类型及地图500点表述。API契约、MySQL结构和前端未改动。
-- 验证：4项初始化安全测试及6项真实ES字段语义测试通过，使用UUID隔离索引后清理，覆盖IK、店名精确规范化、分类/堂食空值、价格范围、数字ID排序、有效0分、地理范围、未知字段与数值转换拒绝。Spring Data连接配置3项默认测试通过，后端资源处理成功；正式索引重复初始化和只读检查均通过，文档数保持0。其他索引及既有别名元数据核验记录、日志保存在D:/eat/.codex-backups/es-schema-20261104/。
-- 本阶段仅完成索引结构和文档，未导入真实商户、切换搜索、创建Outbox或实现增量同步；下一步为投影组装及全量导入。未提交或推送。
+- 仅改前端，沿用现有管理员授权与商户维护API。新增/admin/restaurants列表、/admin/restaurants/new及/admin/restaurants/:id/edit路由，开放审核页“商户管理”入口。列表使用真实服务端关键词/分类查询、20条分页，包含停业商户；新增及编辑复用现有完整表单，保存/取消返回管理端，保存后显示店铺ID。
+- 新增管理查询模型和工作台，管理快照按ID授权读取，删除/恢复二次确认、写入禁重、不自动重试、失败不伪造状态；成功刷新列表及目录缓存。删除快照保留ID，允许按ID恢复。查询代际隔离，凭证改变清空快照并禁止旧身份写入，写入期间阻止路由切换。
+- 修复DefaultLayout首次懒加载路由尚未就绪时误将管理员直达链接跳转审核的问题。复用现有管理会话验证，不增加认证绕过。
+- 边界：后端没有删除列表，当前不提供分页回收站；直接保存协议不接受restaurantType/supportsDineIn/supportsDelivery，新建保持普通餐厅，编辑保持已有类型及用餐方式。未改后端、数据库或ES，不扩展相册维护。
+- 验证：前端49文件319项全部通过，包含新增4项管理模型边界测试与1项管理新增返回测试；浏览器隔离API验证管理身份、列表、超安全整数ID、编辑及确认删除/恢复、手机布局，无真实业务写入。类型检查和构建通过，ESLint零错误、2条既有RestaurantDetail.spec.ts可选prop警告。浏览器脚本和截图保存在D:/eat/.codex-backups/admin-restaurants-*，不纳入仓库。首次新增跳转测试等待时机不足，改为等待真实路由完成后通过。
 
 ## 2026-11-04：食堂不设置美食分类
 
@@ -91,13 +76,6 @@
 - 只对仍为OTHER、未人工维护/审核、身份字段与原始导入记录完全匹配的普通商户，按源POI首个主营类型条件更新5631条：中餐地方菜3927、饮品1554、国际美食150；没有根据店名猜测，未确认类型及受保护记录保留OTHER。映射规则及独立测试位于backend/tools/restaurant_category_mapping.py和test_restaurant_category_mapping.py。
 - 本地9562家总量不变：小吃快餐552、中餐地方菜4179、火锅串串609、烧烤烤肉0、香锅烤鱼0、国际美食150、甜品烘焙323、饮品1554、其他美食2195。烧烤/香锅等源类型不明确的记录不硬分；其余商户字段、窗口非分类字段、完整申请及相册关联前后哈希一致。
 - 验证：显式真实MySQL迁移/审核API123项全部通过；后端mvn verify共358项，执行145、跳过213，无失败；前端310项、类型检查、构建通过，ESLint无错误（2条既有可选prop警告）；源类型映射3项通过。实际分类API确认9启用/8停用，逐类目录总数正确；真实浏览器确认首页仅九类，点击饮品返回1554家，后端health为UP。
-
-## 2026-11-04：可选 ES 客户端连接
-
-- 餐厅模块新增显式开关的Spring Data Elasticsearch连接配置，默认关闭；连接地址与有限超时可配置，当前仅支持本地无认证HTTP。沿用Boot BOM解析的Spring Data Elasticsearch 6.0.8、Java Client 9.2.9。
-- 本地真实ES 9.5.4连接验证通过：客户端ping、版本读取、Spring Data只读查询已有练习索引4条资料；默认关闭、显式关闭与非法零超时检查通过，共4项测试，无失败。
-- 后端mvn verify通过：357项中执行145项、跳过212项，无失败或错误；其中本地ES验证默认跳过，已另行显式开启并通过。构建及差异空白检查通过。
-- 未替换目录、地图或详情查询，未增加公开接口、Repository、自动建索引、真实商户同步或故障回退。后续接入前仍需验证实际搜索与排序契约，当前搜索继续使用MySQL。
 
 ## 2026-11-03：审核阶段收尾与后续安排
 

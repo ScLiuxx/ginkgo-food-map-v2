@@ -121,7 +121,7 @@ function apply() {
     // 已移除距离入口，确认筛选时清除旧会话残留的距离限制。
     maxDistanceMeters: null,
   })
-  // 仅首页开放新条件；保持旧消费者的字段集合，不把占位条件泄漏到地图筛选。
+  // 首页与地图显式启用后提交同一组服务端条件；未启用的独立预览保留原字段集合。
   if (props.campusFilters) {
     if (draft.restaurantType || filters.value.restaurantType !== undefined)
       filters.value.restaurantType = draft.restaurantType
@@ -229,7 +229,7 @@ onUnmounted(cleanup)
               </div>
               <p>包含所选金额；已填报金额和估值均可筛选，价格未知的餐厅将排除。</p>
             </fieldset>
-            <!-- 首页启用兼容筛选；地图暂保留原占位，避免列表与点位使用不同口径。 -->
+            <!-- 首页与地图共用已接通的服务端筛选，列表和点位使用相同语义。 -->
             <template v-if="campusFilters">
               <fieldset data-group="venue">
                 <legend>餐厅类型</legend>

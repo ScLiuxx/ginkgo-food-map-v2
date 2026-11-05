@@ -8,9 +8,9 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import ProxyHandler, Request, build_opener
 
-INDEX = "restaurant-search-v002"
+INDEX = "restaurant-search-v003"
 ALIAS = "restaurant-search"
-SPEC_PATH = Path(__file__).resolve().parents[1] / "src/main/resources/elasticsearch/restaurant-search-v002.json"
+SPEC_PATH = Path(__file__).resolve().parents[1] / "src/main/resources/elasticsearch/restaurant-search-v003.json"
 
 
 class ElasticsearchRequestError(RuntimeError):
@@ -65,9 +65,12 @@ class LocalElasticsearch:
             raise
 
 
-def load_spec() -> dict:
-    """版本化JSON是mapping与settings的唯一来源，供运维及后续Java接入复用。"""
-    return json.loads(SPEC_PATH.read_text(encoding="utf-8"))
+def load_spec(version: str = "003") -> dict:
+    """当前默认v003；历史实验显式读取旧版本，不因正式升级悄悄改变A/B基线。"""
+    if version not in ("001", "002", "003"):
+        raise ValueError("Unsupported explicit search schema version")
+    path = SPEC_PATH.with_name("restaurant-search-v" + version + ".json")
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def verify_definition(client: LocalElasticsearch, spec: dict) -> None:

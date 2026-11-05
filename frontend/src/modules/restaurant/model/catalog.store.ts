@@ -11,7 +11,7 @@ export const useRestaurantCatalog = defineStore('restaurant-catalog', () => {
   const filters = reactive<CatalogFilters>({
     keyword: '',
     category: '',
-    sort: 'score',
+    sort: 'auto',
     hideClosed: false,
     maxPrice: null,
     maxDistanceMeters: null,
@@ -38,6 +38,7 @@ export const useRestaurantCatalog = defineStore('restaurant-catalog', () => {
   const resultsCurrent = computed(() => loadedFilters.value === JSON.stringify(filters))
   let active = true
   const error = ref<string | null>(null)
+  const searchNotice = ref('')
   let generation = 0
   let controller: AbortController | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -91,7 +92,12 @@ export const useRestaurantCatalog = defineStore('restaurant-catalog', () => {
       if (requestGeneration !== generation) return
       categories.value = dictionary
       total.value = result.total
-      pages.value = Math.max(1, result.totalPages)
+      pages.value = Math.max(1, result.accessiblePages ?? result.totalPages)
+      searchNotice.value = result.search && result.search.engine === 'MYSQL' && snapshot.keyword.trim()
+        ? '当前使用基础关键词匹配。' + (result.search.effectiveSort === 'score' ? '按综合评分排序。' : '')
+        : ''
+      if (result.accessiblePages !== undefined && result.accessiblePages < result.totalPages)
+        searchNotice.value += '结果较多，仅开放前10000条的分页，请缩小筛选范围。'
       // 删除等操作使最后一页消失时回到新末页，再请求，避免显示假空结果。
       if (page.value > pages.value) {
         page.value = pages.value
@@ -126,6 +132,7 @@ export const useRestaurantCatalog = defineStore('restaurant-catalog', () => {
       visibleRestaurants.value = []
       total.value = 0
       error.value = null
+      searchNotice.value = ''
       loading.value = true
       const keywordChanged =
         JSON.parse(String(current[0])).keyword !== JSON.parse(String(previous[0])).keyword
@@ -147,7 +154,7 @@ export const useRestaurantCatalog = defineStore('restaurant-catalog', () => {
       ...(filters.diningMode !== undefined ? { diningMode: '' } : {}),
       keyword: '',
       category: '',
-      sort: 'score',
+      sort: 'auto',
       hideClosed: false,
       maxPrice: null,
       maxDistanceMeters: null,
@@ -186,6 +193,7 @@ export const useRestaurantCatalog = defineStore('restaurant-catalog', () => {
     loading,
     resultsCurrent,
     error,
+    searchNotice,
     pageNumbers,
     load,
     cancelPending,

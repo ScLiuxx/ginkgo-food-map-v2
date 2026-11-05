@@ -391,6 +391,45 @@ describe('restaurant catalog API integration', () => {
     expect(host.querySelectorAll('.restaurant-card')).toHaveLength(0)
   })
 
+  it('uses contextual defaults and preserves explicit sorting when keywords change', async () => {
+    const store = useRestaurantCatalog(pinia)
+    expect(store.filters.sort).toBe('auto')
+    store.filters.keyword = '茶'
+    await settle()
+    expect(host.querySelector('.sort-pills button')?.textContent?.trim()).toBe('综合排序')
+    store.filters.keyword = '清水河咖啡'
+    await settle()
+    await store.load()
+    await settle()
+    const buttons = [...host.querySelectorAll<HTMLButtonElement>('.sort-pills button')]
+    expect(buttons[0]?.textContent?.trim()).toBe('相关度')
+    expect(buttons[0]?.getAttribute('aria-pressed')).toBe('true')
+    buttons.find((button) => button.textContent?.trim() === '综合评分')!.click()
+    await settle()
+    store.filters.keyword = '蜜雪冰城'
+    await settle()
+    await store.load()
+    expect(store.filters.sort).toBe('score')
+    expect(fetchRestaurants).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'score', keyword: '蜜雪冰城' }), 1, 8, expect.any(AbortSignal))
+  })
+
+  it('keeps exact totals but limits navigation and announces basic matching after fallback', async () => {
+    vi.mocked(fetchRestaurants).mockResolvedValue(pageFixture({
+      total: 12000, totalPages: 1500, accessiblePages: 1250,
+      search: { engine: 'MYSQL', degraded: true, reason: 'ES_UNAVAILABLE', effectiveSort: 'score', resultWindow: 10000 },
+    }))
+    const store = useRestaurantCatalog(pinia)
+    store.filters.keyword = '咖啡'
+    await settle()
+    await store.load()
+    await settle()
+    expect(store.total).toBe(12000)
+    expect(store.pages).toBe(1250)
+    expect(host.textContent).toContain('当前使用基础关键词匹配')
+    expect(host.textContent).toContain('按综合评分排序')
+    expect(host.textContent).toContain('请缩小筛选范围')
+  })
+
   it('shows failure and retries instead of displaying preview restaurants', async () => {
     vi.mocked(fetchRestaurants).mockRejectedValueOnce(new Error('联调网络故障'))
     await useRestaurantCatalog(pinia).load()

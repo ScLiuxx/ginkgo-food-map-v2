@@ -7,6 +7,9 @@ import {
   fetchRestaurantCategories,
   submitRestaurantCorrection,
   submitNewRestaurant,
+  createRestaurant,
+  updateRestaurant,
+  fetchRestaurantManagement,
 } from '../api/restaurantApi'
 import { categoryFixtures, responseFixture } from '../api/restaurant.test-data'
 import { prepareMerchantSubmission } from '../model/merchantSubmissionDraft'
@@ -31,6 +34,9 @@ vi.mock('../api/restaurantApi', () => ({
   fetchRestaurantCategories: vi.fn(),
   submitRestaurantCorrection: vi.fn(),
   submitNewRestaurant: vi.fn(),
+  createRestaurant: vi.fn(),
+  updateRestaurant: vi.fn(),
+  fetchRestaurantManagement: vi.fn(),
 }))
 
 describe('商户资料补充与纠错', () => {
@@ -100,6 +106,17 @@ describe('商户资料补充与纠错', () => {
       history: createMemoryHistory(),
       routes: [
         {
+          path: '/admin/restaurants/new',
+          component: RestaurantCorrection,
+          props: { admin: true, submission: true },
+        },
+        {
+          path: '/admin/restaurants/:id/edit',
+          component: RestaurantCorrection,
+          props: (route) => ({ id: route.params.id, admin: true }),
+        },
+        { path: '/admin/restaurants', component: { template: '<div />' } },
+        {
           path: '/restaurants/submit',
           component: RestaurantCorrection,
           props: { submission: true },
@@ -117,6 +134,7 @@ describe('商户资料补充与纠错', () => {
     app = createApp(RouterView).use(router)
     app.mount(host)
     await settle()
+    return router
   }
   async function field(name: string, value: string | boolean) {
     const label = [...host.querySelectorAll('label')].find((l) =>
@@ -147,6 +165,56 @@ describe('商户资料补充与纠错', () => {
     input.dispatchEvent(new Event('change', { bubbles: true }))
     await settle()
   }
+  it('管理员新建复用高德搜索，选择门店后直接创建而非提交审核', async () => {
+    vi.mocked(createRestaurant).mockResolvedValue({ restaurant: responseFixture, deleted: false })
+    const router = await mount('/admin/restaurants/new')
+    await field('商户名称', '搜索测试店')
+    ;[...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === '搜索门店')!.click()
+    await settle()
+    ;[...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === '选择这家')!.click()
+    await settle()
+    await field('美食品类', 'OTHER')
+    await field('餐厅类型', 'CANTEEN')
+    await field('支持堂食', 'true')
+    await field('支持外卖', 'false')
+    expect(host.querySelector('input[inputmode="decimal"]')).toBeNull()
+    expect(host.querySelector('input[type="file"]')).toBeNull()
+    await submit()
+    expect(createRestaurant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: '高德分店',
+        address: '新的商户地址',
+        latitude: 30.675789,
+        longitude: 104.099671,
+        locationConfirmed: true,
+        restaurantType: 'CANTEEN',
+        categoryCode: null,
+        supportsDineIn: true,
+        supportsDelivery: false,
+      }),
+      'correction-user',
+    )
+    expect(submitNewRestaurant).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/admin/restaurants'))
+  })
+  it('管理员编辑从授权快照回填，直接保存不创建纠错申请', async () => {
+    vi.mocked(fetchRestaurantManagement).mockResolvedValue({
+      restaurant: { ...responseFixture, latitude: 30.75, longitude: 103.93 },
+      deleted: false,
+    })
+    vi.mocked(updateRestaurant).mockResolvedValue({ restaurant: responseFixture, deleted: false })
+    const router = await mount('/admin/restaurants/19/edit')
+    expect(fetchCorrectionSource).not.toHaveBeenCalled()
+    await field('我已核对', true)
+    await submit()
+    expect(updateRestaurant).toHaveBeenCalledWith(
+      '19',
+      expect.objectContaining({ name: responseFixture.name }),
+      'correction-user',
+    )
+    expect(submitRestaurantCorrection).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/admin/restaurants'))
+  })
   it('食堂回显无分类，切换为普通餐厅后必须重新选择分类', async () => {
     vi.mocked(fetchCorrectionSource).mockResolvedValue({
       ...responseFixture,

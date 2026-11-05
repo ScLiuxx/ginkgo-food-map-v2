@@ -17,6 +17,7 @@ export function useViewport(filters: CatalogFilters, enabled = true) {
     points = ref<MapPoint[]>([])
   // 只有当前筛选成功完成后，空结果才可用于展示新店投稿入口。
   const successfulFilters = ref('')
+  const searchNotice = ref('')
   const loading = ref(false),
     error = ref<string | null>(null),
     truncated = ref(false)
@@ -38,9 +39,7 @@ export function useViewport(filters: CatalogFilters, enabled = true) {
       snapshot = { ...filters },
       searching = Boolean(snapshot.keyword.trim()),
       area = !searching && bounds.value ? { ...bounds.value } : undefined
-    // 此轮新条件仅用于首页；地图点位接口尚无对应能力，排除共享状态中的新字段，避免点位与列表口径不同。
-    delete snapshot.restaurantType
-    delete snapshot.diningMode
+    // 类型及用餐方式由后端统一过滤，列表与点位使用同一份条件快照。
     // 无用户位置时等待授权，清掉旧点位，避免继续呈现其他排序的结果。
     if (snapshot.sort === 'distance' && (snapshot.latitude == null || snapshot.longitude == null)) {
       rows.value = []
@@ -56,20 +55,26 @@ export function useViewport(filters: CatalogFilters, enabled = true) {
     const signal = controller.signal
     loading.value = true
     error.value = null
+    searchNotice.value = ''
     try {
       const [result, markers] = await Promise.all([
         fetchRestaurants(snapshot, page.value, 8, signal, area),
         area && reloadPoints ? fetchMapPoints(snapshot, area, signal) : Promise.resolve(null),
       ])
       if (ticket !== sequence || signal.aborted) return
-      if (page.value > Math.max(1, result.totalPages)) {
-        page.value = Math.max(1, result.totalPages)
+      if (page.value > Math.max(1, result.accessiblePages ?? result.totalPages)) {
+        page.value = Math.max(1, result.accessiblePages ?? result.totalPages)
         void load()
         return
       }
       rows.value = result.records
       total.value = result.total
-      pages.value = Math.max(1, result.totalPages)
+      pages.value = Math.max(1, result.accessiblePages ?? result.totalPages)
+      searchNotice.value = result.search && result.search.engine === 'MYSQL' && searching
+        ? '当前使用基础关键词匹配。' + (result.search.effectiveSort === 'score' ? '按综合评分排序。' : '')
+        : ''
+      if (result.accessiblePages !== undefined && result.accessiblePages < result.totalPages)
+        searchNotice.value += '结果较多，仅开放前10000条的分页，请缩小筛选范围。'
       if (searching) {
         // 全站搜索只画当前页的真实结果，不把当前地图框作为搜索条件。
         points.value = result.records.flatMap((row) =>
@@ -141,6 +146,7 @@ export function useViewport(filters: CatalogFilters, enabled = true) {
     points,
     loading,
     error,
+    searchNotice,
     truncated,
     move,
     load,

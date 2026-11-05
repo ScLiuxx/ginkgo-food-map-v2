@@ -33,7 +33,9 @@ public class RestaurantVo {
     private Instant updatedAt;
     private Double distanceKm;
     private List<String> tags;
+    /** 商户聚合综合分，0–10，四舍五入一位小数；原始累计统计不变。 */
     private BigDecimal score;
+    /** 仍为0–1比例，三位小数对应百分数一位小数，如0.923表示92.3%。 */
     private BigDecimal recommendRate;
     private long reviewCount;
     /** 有效计分账号数；同人历史点评不增加该人数，也不重复贡献分数。 */

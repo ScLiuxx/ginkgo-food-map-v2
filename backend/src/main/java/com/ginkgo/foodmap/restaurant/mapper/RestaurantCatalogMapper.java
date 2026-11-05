@@ -27,6 +27,12 @@ public interface RestaurantCatalogMapper {
     /** 全局筛选与白名单排序在 LIMIT 之前执行，offset 使用 long。 */
     List<RestaurantEntity> selectVisiblePage(@Param("query") RestaurantListQuery query);
 
+    /** 有界回查当前页；复用全部非关键词筛选，不能拿LIKE再次过滤ES的分词命中。 */
+    List<RestaurantEntity> selectSearchPage(@Param("query") RestaurantListQuery query, @Param("ids") List<Long> ids);
+
+    /** 当前版本仍有未完成任务时保守走SQL，防止新增/恢复商户因尚未入索引而漏召回。 */
+    boolean hasUnsyncedSearchChanges();
+
     /** 独立于目录分页读取视口点位；最多100条，避免点位过密且不接受客户端扩大限额。 */
     List<RestaurantEntity> selectMapPoints(@Param("query") RestaurantListQuery query);
 

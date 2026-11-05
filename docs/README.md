@@ -7,7 +7,6 @@
 ```text
 docs/
 ├── README.md             文档入口与维护约定
-├── requirements.md       当前产品规则与验收条件
 ├── features.md           当前可用功能与使用方法
 ├── api.md                已实现接口契约
 ├── development.md        当前阶段开发记录
@@ -22,10 +21,8 @@ docs/
 | 想了解什么 | 阅读入口 |
 | --- | --- |
 | 现在能用哪些功能 | [功能说明](features.md) |
-| 产品应该怎样工作 | [需求与验收](requirements.md) |
+| 产品使用规则与接口边界 | [功能说明](features.md)、[接口契约](api.md) |
 | 哪些接口已实现、如何调用 | [接口文档](api.md) |
-| 下一步写点评后端如何做 | [后端实施计划](plans/review-backend.md) |
-| 整个评价阶段还缺哪些能力 | [评价范围与进度](plans/review-roadmap.md) |
 | 地图浏览、本站/高德统一搜索及提交占位如何工作 | [地图实施计划](plans/map-foundation.md)、[功能说明](features.md) |
 | 最近改了什么、验证了什么 | [当前开发记录](development.md) |
 
@@ -36,23 +33,24 @@ docs/
 - 分类：V19将商户与窗口归并为九个一级美食分类，旧编码停用保留；编码及历史兼容见[分类结构](architecture/restaurant-schema.md#restaurant_categories餐厅分类)，本地数据整理结果见[开发记录](development.md)。
 - 审核存储：[商户申请表V17](architecture/restaurant-schema.md#restaurant_change_requests商户资料待审核申请)，采用request_type和单个restaurant_id，记录审核结果与资料快照；通过/驳回及正式相册发布已实现，新增[正式相册V18](architecture/restaurant-schema.md#restaurant_photos正式商户相册)，餐厅/食堂详情相册及管理端发布记录已接入，首页/地图卡片封面也已接入。
 - 页面：[找店界面方案](plans/discovery-ui.md)。
-- 管理端：[商户审核示意图](plans/admin-review-mockup.html)为设计依据；`/admin/reviews`已接入真实申请查询、就地编辑、通过/驳回及连续审核，见[功能说明](features.md)及[API文档](api.md#5-管理员商户审核)。
+- 管理端：`/admin/reviews`已接入真实申请查询、就地编辑、通过/驳回及连续审核，见[功能说明](features.md)及[API文档](api.md#5-管理员商户审核)。
 - 统一登录：`/login`按服务端角色分流前台/工作台，`/admin/login`仅兼容跳转；管理身份由后端`/api/admin/me`校验。身份与查询边界见[前端架构](architecture/frontend.md)。
-- 搜索：[Elasticsearch结构](architecture/elasticsearch-schema.md)及[实施方案](plans/elasticsearch-search.md)；本地现行v002空索引与别名已建立，包含21个主字段和IK配置。[真实商户分词与词库评测](plans/restaurant-search-evaluation.md)已完成9562家商户、44条查询的隔离实验；正式数据导入、公开搜索与同步仍待实现。
-- 词库：[IK配置与维护](../deploy/elasticsearch/README.md)；本地已启用“冒菜、螺蛳粉、天街”，完成持久挂载和相同数据上的真实ES索引重建回归，网站查询仍使用MySQL。
-- 搜索投影：已实现[内部批量组装服务](../backend/src/main/java/com/ginkgo/foodmap/restaurant/service/RestaurantSearchProjectionService.java)及字段校验，支持完整文档和删除墓碑；V21已实现MySQL版本存储及业务事务递增，版本与数据同快照读取，正式导入及同步仍待实现，契约见[ES结构](architecture/elasticsearch-schema.md)。
+- 搜索：[实施进度与待办](plans/elasticsearch-search.md)、[索引结构](architecture/elasticsearch-schema.md)、[同步机制](architecture/restaurant-search-outbox.md)；现行查询契约见[API](api.md#621-正式搜索与简单降级契约2026-11-05)。
+- 词库：[IK配置与维护](../deploy/elasticsearch/README.md)，包含持久化、词表加载与重建边界。
+- 搜索投影：[内部组装服务](../backend/src/main/java/com/ginkgo/foodmap/restaurant/service/RestaurantSearchProjectionService.java)，设计和版本规则见[ES结构](architecture/elasticsearch-schema.md)。
 - 地图：[高德地图基础闭环](plans/map-foundation.md)，包含导航、点位接口、页面联动及分步验收。
-- 迁移：[旧系统迁移计划](plans/legacy-migration.md)。
 - 运维：[自动部署与排障](operations/deployment.md)。
 - 高德：[环境配置与真实底图验收](operations/amap-setup.md)。
 
 ## 历史追溯
 
+- [v003＋查询熔断最终评测（2026-11-05）](history/elasticsearch-final-benchmark-2026-11-05.md)：当前构建的准确度、串行接口耗时、独立一致性核验及适用限制；当前版本测量优先查阅此报告。
+
+搜索当前进度统一见[实施计划](plans/elasticsearch-search.md)，不在本导航重复维护阶段状态。
+
 - [开发记录01](history/development-01.md)：初始工程、账号与基础认证阶段。
 - [开发记录02](history/development-02.md)：部署、餐厅、评价结构和前端阶段。
 - [开发记录03](history/development-03.md)：地图、商户投稿与图片、统一管理员登录及V17审核存储结构；后续开发记录见当前入口development.md。
-- [原站评价核对与旧规划](history/reviews-development-2026-10-29.md)：已归档，仅用于核对来源与历史决定。
-- [需求依据与餐厅阶段过程](history/requirements-history-2026-10-29.md)：原站差异和已完成阶段记录。
 
 ## 维护约定
 
@@ -62,3 +60,5 @@ docs/
 - 当前日志始终使用development.md；过长时轮转到history/development-NN.md，并更新本页索引。
 - 原站考察和已替代方案放入history，开头说明归档日期与现行文档入口。
 - 不为每次讨论新建一个目录或文件；确需新增时按职责归类，并在本页补入口。移动文件同时修复相对链接。
+
+文档信息分工与去重执行[AGENTS.md](../AGENTS.md#文档信息分工与去重)。

@@ -15,6 +15,8 @@ import java.time.Instant;
 @TableName("restaurants")
 public class RestaurantEntity {
     private Long id;
+    /** 仅内部回查校验，不映射到公开VO。 */
+    private Long searchProjectionVersion;
     private String name;
     private String categoryCode;
     private String restaurantType;

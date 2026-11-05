@@ -19,6 +19,23 @@ const router = createRouter({
       meta: { title: '商户审核 · 管理工作台', layout: 'admin' },
     },
     {
+      path: '/admin/restaurants',
+      component: () => import('@/pages/admin/AdminRestaurantPage.vue'),
+      meta: { title: '商户管理 · 管理工作台', layout: 'admin' },
+    },
+    {
+      path: '/admin/restaurants/new',
+      component: () => import('@/pages/admin/AdminRestaurantPage.vue'),
+      props: { editing: true },
+      meta: { title: '新增店铺 · 管理工作台', layout: 'admin' },
+    },
+    {
+      path: '/admin/restaurants/:id/edit',
+      component: () => import('@/pages/admin/AdminRestaurantPage.vue'),
+      props: (route) => ({ editing: true, id: route.params.id }),
+      meta: { title: '编辑店铺 · 管理工作台', layout: 'admin' },
+    },
+    {
       path: '/previews/review-history',
       component: () => import('@/pages/review/ReviewHistoryPreviewPage.vue'),
       meta: { title: '多次点评展示预览' },

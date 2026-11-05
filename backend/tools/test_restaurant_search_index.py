@@ -44,6 +44,16 @@ class IndexInitializationSafetyTest(unittest.TestCase):
             setup(client)
         self.assertTrue(all(call.args[0] == "GET" for call in client.request.call_args_list))
 
+    def test_current_schema_adds_only_four_character_subfields_and_preserves_source_contract(self):
+        current, previous = load_spec(), load_spec("002")
+        self.assertEqual(current['mappings']['_meta']['schema_version'], '003')
+        self.assertEqual(set(current['mappings']['properties']), set(previous['mappings']['properties']))
+        for name in ('name', 'address', 'categoryName', 'tags'):
+            field = current['mappings']['properties'][name]['fields']['chars']
+            self.assertEqual(field['index_options'], 'docs')
+            self.assertFalse(field['norms'])
+        with self.assertRaises(ValueError):load_spec('../../other')
+
 
 @unittest.skipUnless(os.environ.get("GINKGO_ES_SCHEMA_IT") == "true", "显式设置GINKGO_ES_SCHEMA_IT=true才创建隔离ES测试索引")
 class ElasticsearchSchemaIntegrationTest(unittest.TestCase):
@@ -153,6 +163,15 @@ class ElasticsearchSchemaIntegrationTest(unittest.TestCase):
             with self.subTest(field=field), self.assertRaises(ElasticsearchRequestError) as caught:
                 self.client.request("PUT", "/" + self.index + "/_doc/900", {"id": 900, field: "unexpected"})
             self.assertEqual(caught.exception.status, 400)
+
+    def test_character_subfields_cover_all_four_sources_and_single_codepoint_unicode(self):
+        for field, word in [('name.chars','锅'),('address.chars','河'),('categoryName.chars','串'),('tags.chars','聚')]:
+            with self.subTest(field=field):self.assertIn(1, self.ids({'term': {field: word}}))
+        # 〇属于Han脚本的数字类，不能被letter/digit白名单误删；补充平面字不能被拆成代理项。
+        result=self.client.request('POST','/'+self.index+'/_analyze',{'field':'name.chars','text':'A茶𠀀〇々〻1'})
+        self.assertEqual([token['token'] for token in result['tokens']],list('茶𠀀〇々〻'))
+        source=self.client.request('GET','/'+self.index+'/_doc/1')['_source']
+        self.assertNotIn('name.chars',source)
 
 
 if __name__ == "__main__":

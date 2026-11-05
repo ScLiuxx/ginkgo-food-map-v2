@@ -10,11 +10,12 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+import com.ginkgo.foodmap.restaurant.policy.RestaurantSearchQueryPolicy;
 
 import java.math.BigDecimal;
 
 /**
- * 公开目录的查询参数，仅开放综合分、点评数、价格、距离及推荐率排序。
+ * 公开目录的查询参数，自动选择默认意图，显式业务排序不被相关度覆盖。
  *
  * <p>分页在数据库执行；每页上限用于限制单次读取成本。派生属性没有 Setter，不能由 HTTP
  * 输入覆盖 SQL 条件；LIKE 使用 ! 转义，用户输入的百分号、下划线和反斜杠都按字面量搜索。</p>
@@ -29,6 +30,16 @@ public class RestaurantListQuery {
     @Pattern(regexp = "(?:[A-Z][A-Z0-9_]{0,31})?", message = "分类编码格式错误")
     private String category = "";
 
+    /** 类型独立于美食分类，空值不限；食堂不依赖旧CANTEEN分类编码识别。 */
+    @NotNull
+    @Pattern(regexp = "(?:REGULAR|CANTEEN)?", message = "餐厅类型错误")
+    private String restaurantType = "";
+
+    /** 用餐方式只匹配明确支持，未知及false均不满足；空值不限。 */
+    @NotNull
+    @Pattern(regexp = "(?:dineIn|delivery)?", message = "用餐方式错误")
+    private String diningMode = "";
+
     /** 用户单次授权取得的GCJ-02位置，仅用于本次查询，不写入数据库。 */
     @DecimalMin("-90") @DecimalMax("90")
     private BigDecimal latitude;
@@ -41,8 +52,18 @@ public class RestaurantListQuery {
     }
 
     @NotNull
-    @Pattern(regexp = "score|reviews|price|distance|recommend", message = "排序方式错误")
-    private String sort = "score";
+    @Pattern(regexp = "auto|relevance|score|reviews|price|distance|recommend", message = "排序方式错误")
+    private String sort = "auto";
+
+    /** 仅内部引擎编排设置；HTTP白名单不允许绑定，用于受支持搜索的并列ID次序。 */
+    private boolean searchOrderById;
+
+    /** 单字及普通目录默认综合分，多字默认相关度；显式排序不受默认意图影响。 */
+    public String getEffectiveSort() {
+        return "auto".equals(sort)
+                ? (keyword.strip().isEmpty() || RestaurantSearchQueryPolicy.isSingleHan(keyword) ? "score" : "relevance")
+                : sort;
+    }
 
     @NotNull
     private Boolean hideClosed = false;

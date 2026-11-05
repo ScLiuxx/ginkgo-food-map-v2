@@ -1,7 +1,7 @@
 package com.ginkgo.foodmap.restaurant.controller;
 
 import com.ginkgo.foodmap.common.api.ApiResponse;
-import com.ginkgo.foodmap.restaurant.dto.RestaurantSaveRequest;
+import com.ginkgo.foodmap.restaurant.dto.RestaurantDirectSaveRequest;
 import com.ginkgo.foodmap.restaurant.service.RestaurantWriteService;
 import com.ginkgo.foodmap.restaurant.vo.RestaurantManagementVo;
 import jakarta.validation.Valid;
@@ -27,7 +27,7 @@ public class RestaurantWriteController {
 
     /** 创建成功返回201及详情地址；不接受客户端指定ID或创建者。 */
     @PostMapping
-    public ResponseEntity<ApiResponse<RestaurantManagementVo>> create(@Valid @RequestBody RestaurantSaveRequest request) {
+    public ResponseEntity<ApiResponse<RestaurantManagementVo>> create(@Valid @RequestBody RestaurantDirectSaveRequest request) {
         var result = service.create(request);
         return ResponseEntity.created(URI.create("/api/restaurants/" + result.getRestaurant().getId()))
                 .cacheControl(CacheControl.noStore()).body(ApiResponse.ok(result));
@@ -36,7 +36,7 @@ public class RestaurantWriteController {
     /** 完整保存，标签缺省为空数组并整体替换；并发保存以最后成功写入的完整内容为准。 */
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<RestaurantManagementVo>> update(@PathVariable String id,
-            @Valid @RequestBody RestaurantSaveRequest request) {
+            @Valid @RequestBody RestaurantDirectSaveRequest request) {
         return ok(service.update(id, request));
     }
 

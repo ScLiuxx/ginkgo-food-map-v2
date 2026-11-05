@@ -21,6 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import com.ginkgo.foodmap.restaurant.dto.RestaurantSearchResult;
+import com.ginkgo.foodmap.restaurant.exception.RestaurantSearchStaleException;
+import org.springframework.beans.BeanUtils;
 
 /**
  * 公开餐厅读取应用服务，只读取本模块的餐厅、字典、标签及评价统计读模型。
@@ -66,7 +69,56 @@ public class RestaurantReadService {
         page.setPage(query.getPage());
         page.setPageSize(query.getPageSize());
         page.setTotalPages(total / query.getPageSize() + (total % query.getPageSize() == 0 ? 0 : 1));
+        page.setAccessiblePages(page.getTotalPages());
         return page;
+    }
+
+    /** 查询前保守检查当前版本积压；仅访问已有Outbox，不引入后台健康检查或熔断状态。 */
+    public boolean hasUnsyncedSearchChanges() { return mapper.hasUnsyncedSearchChanges(); }
+
+    /** ES只确定候选顺序；当前页可见性、全部硬条件、版本、标签及封面在一个RR快照内读取。 */
+    public RestaurantPageVo searchList(RestaurantListQuery query, RestaurantSearchResult result) {
+        var rows = currentSearchRows(query, result);
+        var tags = tagsFor(rows);
+        var covers = albums.covers(rows.stream().map(RestaurantEntity::getId).toList());
+        var page = new RestaurantPageVo();
+        page.setRecords(rows.stream().map(row -> {
+            var vo = toVo(row, tags.getOrDefault(row.getId(), List.of()));
+            vo.setCoverPhoto(covers.get(row.getId()));return vo;
+        }).toList());
+        page.setTotal(result.getTotal());page.setPage(query.getPage());page.setPageSize(query.getPageSize());
+        page.setTotalPages(result.getTotal() / query.getPageSize() + (result.getTotal() % query.getPageSize() == 0 ? 0 : 1));
+        page.setAccessiblePages(page.getTotalPages());return page;
+    }
+
+    /** 地图也回查同一版本及硬条件，保留100点限制；不复用分页列表的前8条冒充地图集合。 */
+    public RestaurantMapPointsVo searchMap(RestaurantListQuery query, RestaurantSearchResult result) {
+        var rows = currentSearchRows(query, result);
+        var points = rows.stream().map(row -> {
+            var point = new RestaurantMapPointVo();point.setId(row.getId().toString());point.setName(row.getName());
+            point.setLatitude(row.getLatitude());point.setLongitude(row.getLongitude());point.setScore(row.getScore());
+            point.setPricePerPerson(row.getPricePerPerson());point.setBusinessStatus(row.getBusinessStatus());return point;
+        }).toList();
+        var response = new RestaurantMapPointsVo();response.setPoints(points);response.setMatchedCount(result.getTotal());
+        response.setReturnedCount(points.size());response.setLimit(100);response.setTruncated(result.getTotal() > points.size());
+        return response;
+    }
+
+    private List<RestaurantEntity> currentSearchRows(RestaurantListQuery query, RestaurantSearchResult result) {
+        // 再次检查覆盖ES请求期间提交的新建/恢复；确认成功到refresh可见仍存在最终一致性窗口。
+        if (mapper.hasUnsyncedSearchChanges()) throw new RestaurantSearchStaleException();
+        if (result.getHits().isEmpty()) return List.of();
+        var current = new RestaurantListQuery();BeanUtils.copyProperties(query, current);current.setKeyword("");
+        var ids = result.getHits().stream().map(RestaurantSearchResult.Hit::getId).toList();
+        var rows = mapper.selectSearchPage(current, ids).stream()
+                .collect(Collectors.toMap(RestaurantEntity::getId, row -> row));
+        if (rows.size() != ids.size()) throw new RestaurantSearchStaleException();
+        return result.getHits().stream().map(hit -> {
+            var row = rows.get(hit.getId());
+            if (row == null || row.getSearchProjectionVersion() == null
+                    || row.getSearchProjectionVersion() != hit.getProjectionVersion()) throw new RestaurantSearchStaleException();
+            return row;
+        }).toList();
     }
 
     /** 地图必须显式指定完整视口，COUNT与点位保持同一事务快照，不加载无用标签。 */

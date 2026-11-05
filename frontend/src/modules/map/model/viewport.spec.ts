@@ -1,7 +1,7 @@
 import { createApp, reactive, nextTick } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useViewport } from './viewport'
-import { fetchRestaurants } from '@/modules/restaurant'
+import { fetchRestaurants, type CatalogFilters } from '@/modules/restaurant'
 import { fetchMapPoints } from '../api/mapApi'
 
 vi.mock('@/modules/restaurant', () => ({ fetchRestaurants: vi.fn() }))
@@ -17,7 +17,7 @@ describe('地图自动查询', () => {
   })
   function setup() {
     vi.useFakeTimers()
-    const filters = reactive({
+    const filters = reactive<CatalogFilters>({
       keyword: '',
       category: '',
       sort: 'score' as const,
@@ -52,6 +52,23 @@ describe('地图自动查询', () => {
     return { state, filters }
   }
   const area = { west: 104, east: 104.2, south: 30.6, north: 30.8 }
+  it('列表与点位保留相同的类型及用餐方式筛选，不再丢弃条件', async () => {
+    const { state, filters } = setup()
+    filters.restaurantType = 'CANTEEN'
+    filters.diningMode = 'dineIn'
+    state.move(area)
+    await vi.advanceTimersByTimeAsync(300)
+    expect(fetchRestaurants).toHaveBeenCalledTimes(1)
+    expect(fetchMapPoints).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(fetchRestaurants).mock.calls[0]?.[0]).toMatchObject({
+      restaurantType: 'CANTEEN',
+      diningMode: 'dineIn',
+    })
+    expect(vi.mocked(fetchMapPoints).mock.calls[0]?.[0]).toMatchObject({
+      restaurantType: 'CANTEEN',
+      diningMode: 'dineIn',
+    })
+  })
   it('连续移动及重复事件只请求最终范围，300ms前不请求', async () => {
     const { state } = setup()
     state.move(area)

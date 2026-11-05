@@ -9,7 +9,7 @@ import org.springframework.data.elasticsearch.client.elc.ElasticsearchConfigurat
 
 /**
  * 显式开启才注册Spring Data提供的ES客户端和ElasticsearchOperations。
- * 不启用Repository扫描，不建索引、不导入数据；连接仅用于本地接入验证。
+ * 不启用Repository扫描，不建索引、不导入数据；查询和Outbox同步分别由独立开关控制。
  */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(prefix = "app.search.elasticsearch", name = "enabled", havingValue = "true")

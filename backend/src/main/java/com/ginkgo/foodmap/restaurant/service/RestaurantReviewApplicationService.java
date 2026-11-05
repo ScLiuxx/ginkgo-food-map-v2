@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(propagation = Propagation.MANDATORY)
 public class RestaurantReviewApplicationService {
     private final RestaurantReviewStatisticsMapper mapper;
+    private final RestaurantSearchOutboxService searchOutbox;
 
     /** 与既有餐厅编辑/删除共用父行锁，锁内核验状态，不能仅依赖表单打开时检查。 */
     public void lockVisible(long id) {
@@ -35,5 +36,7 @@ public class RestaurantReviewApplicationService {
         // 与评价及统计一起提交/回滚；调用方此前已锁父行，保证每店版本按提交顺序递增。
         if (mapper.advanceSearchProjectionVersion(id) != 1)
             throw new IllegalStateException("Restaurant search projection version unavailable or exhausted");
+        // review只调用本模块公开服务；评价、统计、版本与任务共用外层事务，失败一并回滚。
+        searchOutbox.record(id);
     }
 }

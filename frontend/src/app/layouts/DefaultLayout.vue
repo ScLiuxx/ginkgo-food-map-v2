@@ -5,14 +5,19 @@ import BottomNavigation from '@/shared/ui/layout/BottomNavigation.vue'
 import { useLoginStore } from '@/modules/auth'
 
 import { useRoute, useRouter } from 'vue-router'
-import { computed, watchEffect } from 'vue'
+import { computed, ref, watchEffect } from 'vue'
 const route = useRoute()
 const router = useRouter()
 const auth = useLoginStore()
+// 初次懒加载路由完成前meta仍为空，不能把管理端直达链接误判为前台并跳去审核。
+const routeReady = ref(false)
+void router.isReady().then(() => {
+  routeReady.value = true
+})
 const resolvingIdentity = computed(() => auth.hasSession && (auth.restoring || !auth.authenticated))
 // 管理账号仅显示工作台；刷新或跨标签页切换身份时先验证，防止短暂挂载普通页面。
 watchEffect(() => {
-  if (auth.isAdministrator && !auth.restoring && route.meta.layout !== 'admin')
+  if (routeReady.value && auth.isAdministrator && !auth.restoring && route.meta.layout !== 'admin')
     void router.replace('/admin/reviews')
 })
 // 详情沿用首页品牌排版；编辑/新增保留原布局，首页与地图的判断和内容不变。

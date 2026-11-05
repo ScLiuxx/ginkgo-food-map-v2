@@ -27,6 +27,7 @@ async function changePage(page: number): Promise<void> {
   <section id="restaurant-directory" class="restaurant-directory" aria-labelledby="directory-title">
     <h2 id="directory-title" class="catalog-sr-only">餐厅与食堂目录</h2>
     <RestaurantFilters />
+    <p v-if="catalog.searchNotice && !catalog.loading" role="status">{{ catalog.searchNotice }}</p>
     <div
       ref="resultsHeading"
       class="results-toolbar catalog-sr-only"
@@ -90,7 +91,7 @@ async function changePage(page: number): Promise<void> {
           catalog.filters.hideClosed ||
           catalog.filters.maxPrice !== null ||
           catalog.filters.maxDistanceMeters !== null ||
-          catalog.filters.sort !== 'score'
+          catalog.filters.sort !== 'auto'
         "
         type="button"
         class="primary-action"

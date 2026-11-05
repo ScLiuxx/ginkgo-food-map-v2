@@ -3,6 +3,7 @@ package com.ginkgo.foodmap.restaurant.controller;
 import com.ginkgo.foodmap.common.api.ApiResponse;
 import com.ginkgo.foodmap.restaurant.dto.RestaurantListQuery;
 import com.ginkgo.foodmap.restaurant.service.RestaurantReadService;
+import com.ginkgo.foodmap.restaurant.service.RestaurantQueryService;
 import com.ginkgo.foodmap.restaurant.vo.RestaurantCategoryVo;
 import com.ginkgo.foodmap.restaurant.vo.RestaurantPageVo;
 import com.ginkgo.foodmap.restaurant.vo.RestaurantVo;
@@ -28,6 +29,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class RestaurantReadController {
     private final RestaurantReadService service;
+    private final RestaurantQueryService queries;
 
     /** 只绑定公开字段；已移除的杯型/分档视图明确拒绝，避免静默忽略后返回误导结果。 */
     @InitBinder("restaurantListQuery")
@@ -36,7 +38,7 @@ public class RestaurantReadController {
                 .anyMatch(key -> key.equals("view") || key.equals("tiers") || key.startsWith("tiers["))) {
             throw new BusinessException(RestaurantErrorCode.INVALID_INPUT, "已不支持杯型或评分分档视图筛选");
         }
-        binder.setAllowedFields("keyword", "category", "sort", "hideClosed",
+        binder.setAllowedFields("keyword", "category", "restaurantType", "diningMode", "sort", "hideClosed",
                 "latitude", "longitude", "maxPrice", "maxDistanceMeters", "page", "pageSize", "west", "south", "east", "north");
     }
 
@@ -49,13 +51,13 @@ public class RestaurantReadController {
     /** 非法类型和约束错误由统一校验处理器转换为400，不回显SQL或内部异常。 */
     @GetMapping("/restaurants")
     public ApiResponse<RestaurantPageVo> list(@Valid @ModelAttribute RestaurantListQuery query) {
-        return ApiResponse.ok(service.list(query));
+        return ApiResponse.ok(queries.list(query));
     }
 
     /** 固定子路径优先于详情ID匹配，仅公开只读点位接口。 */
     @GetMapping("/restaurants/map-points")
     public ApiResponse<RestaurantMapPointsVo> mapPoints(@Valid @ModelAttribute RestaurantListQuery query) {
-        return ApiResponse.ok(service.mapPoints(query));
+        return ApiResponse.ok(queries.mapPoints(query));
     }
 
     /** 详情没有评价明细、图片或管理字段，后续能力单独定义接口。 */

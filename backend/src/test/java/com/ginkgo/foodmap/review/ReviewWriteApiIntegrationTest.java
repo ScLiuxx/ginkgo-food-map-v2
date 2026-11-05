@@ -49,6 +49,7 @@ class ReviewWriteApiIntegrationTest {
     @Autowired AuthenticationProperties authentication;
     @MockitoBean LoginSessionService sessions;
     @MockitoSpyBean RestaurantReviewApplicationService statistics;
+    @MockitoSpyBean com.ginkgo.foodmap.restaurant.mapper.RestaurantSearchOutboxMapper outboxMapper;
     private String owner,other,admin;
     private RestaurantReviewApplicationService statisticsTarget;
 
@@ -65,6 +66,8 @@ class ReviewWriteApiIntegrationTest {
     @BeforeEach void setup() {
         statisticsTarget=org.springframework.test.util.AopTestUtils.getUltimateTargetObject(statistics);
         reset(sessions,statisticsTarget);
+        reset(outboxMapper);
+        jdbc.update("DELETE FROM restaurant_search_outbox");
         jdbc.update("DELETE FROM review_replies");jdbc.update("DELETE FROM review_photos");
         jdbc.update("DELETE FROM media_files");jdbc.update("DELETE FROM review_request_receipts");
         jdbc.update("DELETE FROM reviews");jdbc.update("DELETE FROM restaurant_review_statistics");
@@ -118,6 +121,45 @@ class ReviewWriteApiIntegrationTest {
         long id = jdbc.queryForObject("SELECT id FROM reviews",Long.class);
         removeReview(owner,id).andExpect(status().isInternalServerError());
         assertThat(count("reviews")).isEqualTo(1);assertStats(1,1,1,"8");
+    }
+
+    /** 发布/删除（含历史代表回退）记录任务；相同UUID和删除重试不制造重复事件。 */
+    @Test void recordsOutboxForReviewChangesWithoutDuplicateRetries() throws Exception {
+        var data = input(8,true,UUID.randomUUID().toString());
+        publish(owner,1,data).andExpect(status().isCreated());
+        publish(owner,1,data).andExpect(status().isOk());
+        long first = jdbc.queryForObject("SELECT id FROM reviews", Long.class);
+        long second = publishId(owner,6,false);
+        removeReview(owner,second).andExpect(status().isNoContent());
+        removeReview(owner,second).andExpect(status().isNoContent());
+        assertThat(outboxVersions()).containsExactly(2L,3L,4L);
+        assertStats(1,1,1,"8");
+        removeReview(owner,first).andExpect(status().isNoContent());
+        assertThat(outboxVersions()).containsExactly(2L,3L,4L,5L);
+    }
+
+    /** 任务写入故障必须撤销评价/统计/回执及版本，失败后原UUID仍能正常重试。 */
+    @Test void rollsBackReviewWhenOutboxInsertFails() throws Exception {
+        var data = input(8,true,UUID.randomUUID().toString());
+        doThrow(new IllegalStateException("injected outbox failure")).when(outboxMapper).insertCurrentVersion(anyLong());
+        publish(owner,1,data).andExpect(status().is5xxServerError());
+        assertThat(count("reviews")).isZero();
+        assertThat(count("review_request_receipts")).isZero();
+        assertThat(projectionVersion()).isEqualTo(1);
+        assertThat(outboxVersions()).isEmpty();
+        reset(outboxMapper);
+        publish(owner,1,data).andExpect(status().isCreated());
+        long id = jdbc.queryForObject("SELECT id FROM reviews",Long.class);
+        doThrow(new IllegalStateException("injected outbox failure")).when(outboxMapper).insertCurrentVersion(anyLong());
+        removeReview(owner,id).andExpect(status().is5xxServerError());
+        assertThat(count("reviews")).isEqualTo(1);
+        assertStats(1,1,1,"8");
+        assertThat(projectionVersion()).isEqualTo(2);
+        assertThat(outboxVersions()).containsExactly(2L);
+    }
+
+    private List<Long> outboxVersions() {
+        return jdbc.queryForList("SELECT projection_version FROM restaurant_search_outbox WHERE restaurant_id=1 ORDER BY projection_version",Long.class);
     }
 
     private long projectionVersion() {
@@ -190,7 +232,9 @@ class ReviewWriteApiIntegrationTest {
         }).when(statisticsTarget).applyDelta(anyLong(),any());
         var data=input(7,true,UUID.randomUUID().toString());publish(owner,1,data).andExpect(status().isConflict());
         assertThat(count("reviews")).isZero();assertThat(count("restaurant_review_statistics")).isZero();assertThat(projectionVersion()).isEqualTo(1);
+        assertThat(outboxVersions()).isEmpty();
         reset(statisticsTarget);publish(owner,1,data).andExpect(status().isCreated());assertStats(1,1,1,"7");
+        assertThat(outboxVersions()).containsExactly(2L);
     }
     @Test void concurrentReplayAndAuthorUpdatesRemainConsistent() throws Exception {
         try(var pool=Executors.newFixedThreadPool(6)) {
@@ -204,6 +248,7 @@ class ReviewWriteApiIntegrationTest {
             long recommended=Boolean.TRUE.equals(latest.get("is_recommended"))?1:0;
             assertStats(7,1,recommended,latest.get("overall_score").toString());
             assertThat(projectionVersion()).isEqualTo(8);
+            assertThat(outboxVersions()).containsExactly(2L,3L,4L,5L,6L,7L,8L);
         }
     }
     @Test void concurrentCrossRestaurantUuidHasOneWinner() throws Exception {

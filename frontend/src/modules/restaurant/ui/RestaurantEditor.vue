@@ -21,7 +21,7 @@ import {
 import type { RestaurantErrors, RestaurantField } from '../model/restaurantForm'
 import { useRestaurantCatalog } from '../model/catalog.store'
 
-const props = defineProps<{ id?: string }>()
+const props = defineProps<{ id?: string; admin?: boolean }>()
 const router = useRouter()
 const catalog = useRestaurantCatalog()
 const form = reactive(restaurantDraft())
@@ -41,9 +41,26 @@ const baseline = ref(JSON.stringify(form))
 const dirty = computed(() => JSON.stringify(form) !== baseline.value)
 const editor = ref<globalThis.HTMLFormElement>()
 const path = computed(() =>
-  props.id ? `/restaurants/${encodeURIComponent(props.id)}/edit` : '/restaurants/new',
+  props.admin
+    ? props.id
+      ? `/admin/restaurants/${encodeURIComponent(props.id)}/edit`
+      : '/admin/restaurants/new'
+    : props.id
+      ? `/restaurants/${encodeURIComponent(props.id)}/edit`
+      : '/restaurants/new',
 )
-const loginTarget = computed(() => ({ path: '/login', query: { redirect: path.value } }))
+// 管理员保存和取消都回到管理端，避免被前台身份守卫重定向到审核页。
+const returnPath = computed(() =>
+  props.admin
+    ? '/admin/restaurants'
+    : props.id
+      ? `/restaurants/${encodeURIComponent(props.id)}`
+      : '/',
+)
+const loginTarget = computed(() => ({
+  path: '/login',
+  query: { redirect: path.value },
+}))
 const visibleCategories = computed(() =>
   categories.value.filter((c) => c.enabled || c.code === originalCategory.value),
 )
@@ -187,7 +204,11 @@ async function submit(): Promise<void> {
     if (disposed || getAccessToken() !== boundToken || sessionChanged.value) return
     saved.value = true
     catalog.invalidate()
-    await router.replace(`/restaurants/${encodeURIComponent(result.restaurant.id)}`)
+    await router.replace(
+      props.admin
+        ? { path: '/admin/restaurants', query: { saved: result.restaurant.id } }
+        : `/restaurants/${encodeURIComponent(result.restaurant.id)}`,
+    )
   } catch (reason) {
     if (disposed || getAccessToken() !== boundToken) return
     serverErrors(reason)
@@ -239,10 +260,10 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="restaurant-editor" aria-labelledby="editor-title">
-    <RouterLink :to="id ? `/restaurants/${encodeURIComponent(id)}` : '/'"
-      >← {{ id ? '返回餐厅详情' : '返回餐厅目录' }}</RouterLink
+    <RouterLink :to="returnPath"
+      >← {{ admin ? '返回商户管理' : id ? '返回餐厅详情' : '返回餐厅目录' }}</RouterLink
     >
-    <p class="eyebrow">SHARE A PLACE</p>
+    <p class="eyebrow">{{ admin ? '商户管理 · 直接维护' : 'SHARE A PLACE' }}</p>
     <h1 id="editor-title">{{ id ? '编辑餐厅' : '新增餐厅' }}</h1>
     <section v-if="!boundToken || sessionChanged" class="editor-notice" role="alert">
       <p>
@@ -268,6 +289,9 @@ onBeforeUnmount(() => {
             : '记录你发现的店铺。请填写真实信息，并核对餐厅位置。'
         }}
       </p>
+      <p v-if="admin" class="field-hint">
+        保存后直接公开生效，无需审核。当前可维护名称、分类、人均、地址、坐标、经营状态和标签；已有店铺的餐厅类型及堂食／外卖资料保持原值，新建为普通餐厅。
+      </p>
       <fieldset :disabled="saving">
         <legend>基本资料</legend>
         <div class="editor-grid">
@@ -282,7 +306,9 @@ onBeforeUnmount(() => {
               aria-describedby="error-name"
               autocomplete="off"
             />
-            <p v-if="errors.name" id="error-name" class="field-error">{{ errors.name }}</p>
+            <p v-if="errors.name" id="error-name" class="field-error">
+              {{ errors.name }}
+            </p>
           </div>
           <div v-if="restaurantType === 'REGULAR'" class="editor-field">
             <label for="restaurant-category">分类 <span>必填</span></label>
@@ -324,7 +350,9 @@ onBeforeUnmount(() => {
               aria-describedby="error-price"
               placeholder="1–5000，整数元"
             />
-            <p v-if="errors.price" id="error-price" class="field-error">{{ errors.price }}</p>
+            <p v-if="errors.price" id="error-price" class="field-error">
+              {{ errors.price }}
+            </p>
           </div>
         </div>
         <div class="price-shortcuts" aria-label="快捷填写人均估值">
@@ -349,7 +377,9 @@ onBeforeUnmount(() => {
             aria-describedby="error-address"
             autocomplete="off"
           />
-          <p v-if="errors.address" id="error-address" class="field-error">{{ errors.address }}</p>
+          <p v-if="errors.address" id="error-address" class="field-error">
+            {{ errors.address }}
+          </p>
         </div>
         <div class="editor-field">
           <label for="restaurant-status">经营状态</label>
@@ -429,22 +459,22 @@ onBeforeUnmount(() => {
           <p id="tags-hint" class="field-hint">
             空行忽略，重复标签由服务端合并并保留首项顺序。清空后保存会移除原标签。
           </p>
-          <p v-if="errors.tags" id="error-tags" class="field-error">{{ errors.tags }}</p>
+          <p v-if="errors.tags" id="error-tags" class="field-error">
+            {{ errors.tags }}
+          </p>
         </div>
       </fieldset>
       <div v-if="saveError || Object.keys(errors).length" class="editor-notice" role="alert">
         <p>{{ saveError || '请修改上方标记的内容后再保存。' }}</p>
-        <RouterLink v-if="saveError" to="/">到目录核对保存结果</RouterLink>
+        <RouterLink v-if="saveError" :to="admin ? '/admin/restaurants' : '/'"
+          >到目录核对保存结果</RouterLink
+        >
       </div>
       <div class="editor-actions">
         <button type="submit" class="primary-action" :disabled="saving">
           {{ saving ? '正在保存…' : id ? '保存修改' : '创建餐厅' }}
         </button>
-        <RouterLink
-          :to="id ? `/restaurants/${encodeURIComponent(id)}` : '/'"
-          :aria-disabled="saving"
-          >取消</RouterLink
-        >
+        <RouterLink :to="returnPath" :aria-disabled="saving">取消</RouterLink>
       </div>
     </form>
   </section>

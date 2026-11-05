@@ -1,0 +1,25 @@
+{
+  "description": "正式入口新增20条回归查询；在本轮首次ES结果读取前冻结，不用于调词或改权重。相关集仍是公开字段规则，不是用户语义金标准。",
+  "cases": [
+    {"query":"清水河瑞幸","kind":"combined","allowEmpty":true,"all":[{"anyNameOrAddress":"清水河"},{"name":"瑞幸"}]},
+    {"query":"清水河库迪","kind":"combined","allowEmpty":true,"all":[{"anyNameOrAddress":"清水河"},{"name":"库迪"}]},
+    {"query":"沙河咖啡","kind":"combined","allowEmpty":true,"all":[{"anyNameOrAddress":"沙河"},{"name":"咖啡"}]},
+    {"query":"合信路蜜雪冰城","kind":"combined","allowEmpty":true,"all":[{"anyNameOrAddress":"合信路"},{"name":"蜜雪冰城"}]},
+    {"query":"天街塔斯汀","kind":"combined","allowEmpty":true,"all":[{"anyNameOrAddress":"天街"},{"name":"塔斯汀"}]},
+    {"query":"建设路咖啡","kind":"combined","allowEmpty":true,"all":[{"anyNameOrAddress":"建设路"},{"name":"咖啡"}]},
+    {"query":"清水河银桦","kind":"combined","allowEmpty":true,"all":[{"anyNameOrAddress":"清水河"},{"name":"银桦"}]},
+    {"query":"清水河西北餐厅","kind":"combined","allowEmpty":true,"all":[{"anyNameOrAddress":"清水河"},{"name":"西北餐厅"}]},
+    {"query":"富士康蜜雪冰城","kind":"combined","allowEmpty":true,"all":[{"anyNameOrAddress":"富士康"},{"name":"蜜雪冰城"}]},
+    {"query":"螺蛳粉建设路","kind":"combined","allowEmpty":true,"all":[{"anyNameOrAddress":"建设路"},{"name":"螺蛳粉"}]},
+    {"query":"科创","kind":"fragment","name":"科创"},
+    {"query":"阳光餐厅","kind":"fragment","name":"阳光餐厅"},
+    {"query":"桂苑餐厅","kind":"fragment","name":"桂苑餐厅"},
+    {"query":"烧烤","kind":"category","anyNameOrCategory":"烧烤"},
+    {"query":"汉堡","kind":"category","name":"汉堡"},
+    {"query":"奶茶","kind":"category","name":"奶茶"},
+    {"query":"粉","kind":"single","name":"粉"},
+    {"query":"饭","kind":"single","name":"饭"},
+    {"query":"不存在的时空火锅店7654321","kind":"negative","none":true},
+    {"query":"清水河星际寿司店7654321","kind":"negative","none":true}
+  ]
+}

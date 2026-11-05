@@ -281,9 +281,11 @@ reason必填，DTO最多200个UTF-16单元，去Unicode首尾空白后不能为�
 
 | 参数 | 默认值 | 规则 |
 | --- | --- | --- |
-| `keyword` | 空 | 最长100字符，搜索名称/地址/标签；通配符按字面量处理 |
+| `keyword` | 空 | 最长100字符；ES多字跨名称/分类/标签/地址AND分词匹配，单个汉字查四字段单字索引；SQL降级使用原有包含匹配；输入不作为查询语法 |
 | `category` | 空 | 大写分类编码；空表示不限 |
-| `sort` | score | score/reviews/price/distance/recommend；taste/value/service/ambience暂不支持，返回400 |
+| `restaurantType` | 空 | REGULAR普通餐厅 / CANTEEN食堂；空或省略不限，大小写严格匹配 |
+| `diningMode` | 空 | dineIn支持堂食 / delivery支持外卖；空或省略不限，只匹配明确true，false及null不命中 |
+| `sort` | auto | auto/relevance/score/reviews/price/distance/recommend；auto在多字关键词时请求相关度，空关键词或单个汉字使用综合分；显式排序保持有效；四维排序仍返回400 |
 | `hideClosed` | false | true时隐藏停业商户 |
 | `maxPrice` | 无 | 大于0，最多8位整数和2位小数；未知价格不符合上限筛选 |
 | `latitude` / `longitude` | 无 | 用户GCJ-02原点，范围[-90,90]/[-180,180]，必须成对提供 |
@@ -292,12 +294,14 @@ reason必填，DTO最多200个UTF-16单元，去Unicode首尾空白后不能为�
 | `page` | 1 | 正整数，最多2147483647 |
 | `pageSize` | 8 | 1–100 |
 
-条件取交集，在完整可见集合上排序、计数后分页，同值按名称/ID提供稳定次序。评分类与推荐率排序未知值排后，人均升序；好评率并列时先按计分人数降序，再按名称/ID排序。距离按请求用户原点升序，缺原点时距离为null且按名称/ID稳定排序。视口不支持跨日期变更线，边界包含，提供视口时排除待定位记录。用户坐标不保存。
+条件取交集，在完整可见集合上排序、计数后分页。关键词价格/点评数/距离排序同值按数字ID升序，ES与SQL采用相同规则；综合分和好评率在目录及搜索中均先四舍五入，同值按数字ID升序。评分类与推荐率排序未知值排后，人均升序；好评率按百分数的一位小数比较，不再按计分人数或原始尾数破同分。距离按请求用户原点升序，缺原点时距离为null且按名称/ID稳定排序。视口不支持跨日期变更线，边界包含，提供视口时排除待定位记录。用户坐标不保存。
+
+餐厅类型读取正式restaurant_type，独立于美食品类；食堂本身无美食分类，因此CANTEEN与具体美食品类组合时返回空集合，不自动忽略任一条件。类型及用餐方式过滤同时作用于COUNT、排序分页和地图点位。非法restaurantType/diningMode返回400 `COMMON_VALIDATION_FAILED`，不静默忽略。公开列表和地图共用RestaurantQueryService引擎策略；字典及详情始终读取MySQL。ES查询需同时显式开启ES_ENABLED及ES_QUERY_ENABLED，默认不启用。无关键词、单个汉字（按Unicode码点识别）或地理条件缺原点时，完整查询走SQL。综合分/好评率/价格/点评数/有原点距离排序及默认相关度均可走ES；未知价格和距离排后。
 
 杯型计算与响应字段tier已移除；目录和地图请求若携带view、tiers或tiers数组参数，返回400 `RESTAURANT_INVALID_INPUT`，不静默忽略旧筛选。详情与点评保留四维评分展示。
 
 
-成功200，data为`{records,total,page,pageSize,totalPages}`；空或越界页不返回404。单条餐厅结构：
+成功200，data为`{records,total,page,pageSize,totalPages,accessiblePages,search}`。非空关键词统一要求`(page-1)*pageSize+pageSize <= 10000`，超过返回400 `RESTAURANT_INVALID_INPUT`（不会因ES开关或降级而改变）；窗口内越界页为空、200。`total`/`totalPages`是真实总量，`accessiblePages=min(totalPages,floor(10000/pageSize))`；无关键词不限制窗口。单条餐厅结构：
 
 ```json
 {
@@ -310,17 +314,33 @@ reason必填，DTO最多200个UTF-16单元，去Unicode首尾空白后不能为�
 }
 ```
 
-无人计分的分数/推荐率/四维为null，真实0分保持0。reviewCount计全部有效点评，participantCount计每人最新有效代表。score为代表点评综合分累计值/人数，recommendRate为推荐人数/人数（0–1），历史点评不重复贡献评分。地址、价格和位置未知保持null，不用模拟值补齐。列表/详情不返回创建者、删除元数据或数据库版本。
+无人计分的分数/推荐率/四维为null，真实0分保持0。reviewCount计全部有效点评，participantCount计每人最新有效代表。score为代表点评综合分累计值/人数，四舍五入保留一位小数；recommendRate为推荐人数/人数（0–1），四舍五入保留三位小数，对应百分比一位小数（0.923表示92.3%）。历史点评不重复贡献评分，原始累计值不变。地址、价格和位置未知保持null，不用模拟值补齐。列表/详情不返回创建者、删除元数据或数据库版本。
 
 食堂响应使用`"restaurantType":"CANTEEN","categoryCode":null,"categoryName":null`。不传category时目录及地图包含食堂；指定美食品类时不包含食堂。餐厅类型通过现有前端独立筛选选择，不把CANTEEN作为美食分类参数。
 
 目录、详情及管理回执的restaurant新增coverPhoto：无正式相册首图为null，否则为`{id,position:0,cover:true,url}`，例如`{"id":"801","position":0,"cover":true,"url":"/api/restaurants/101/photos/801"}`。首页/地图卡片直接使用此正式封面；目录在分页完成后按当前页商户ID集合一次批量补齐元数据，不逐卡片读取相册/点评，不在列表查询中访问OSS。查询要求商户未删除、来源申请已通过且目标一致；仅有待审照片或点评照片不会产生封面。
 
+### 6.2.1 正式搜索与简单降级契约（2026-11-05）
+
+- 查询与建索引分别使用ik_smart和ik_max_word。所有查询词必须在名称、分类名称、标签及地址的并集中满足；短语命中加权。完整规范化店名以独立排序层保证优先，其余按相关度及数字ID排序。显式业务排序不夹带相关度或页内重排。
+- 单个汉字按Unicode码点和Han脚本判断，包含补充平面汉字；直接term查询name.chars/address.chars/categoryName.chars/tags.chars，任一字段包含即满足。auto保持原有score默认排序，显式relevance及业务排序照常执行。列表与地图共用此路径，不再因单字预定走SQL。查询前核对四字段可检索并固定本次物理索引，旧结构未就绪时整次SQL降级，避免未映射字段返回假空集合。
+- 单字ES匹配采用原字语义，不继承MySQL排序规则的字符等价扩展，例如〇不会命中ASCII数字0。真实库中〇的ES字面命中为1家，旧SQL为3748家；SQL降级仍可能受数据库排序规则影响，因此基础匹配提示保留。
+- score/recommend不再强制走SQL；ES在现有double字段上计算整数排序键：Math.round(ratingScore*10)、Math.round(recommendRate*1000)，同键按数字ID升序，未知末尾、真实零保留。SQL公开读取分别ROUND到一位/三位并使用相同排序；实际排序按此精度比较，不只是页面格式化，无需改mapping或重新导入。
+- SQL路径保持原LIKE包含匹配；请求相关度但实际走SQL时，实际排序为score。首版不做无结果放宽、拼音、简称、错字或全局同义扩展。
+- 所有硬筛选在ES计数及分页之前执行，MySQL只回查本页正式资料及同快照投影版本，不以LIKE再次过滤ES分词命中。不拿ES前100条交给SQL筛选后当作全量。
+- ES不可达、客户端不存在、索引不存在、超时、部分分片失败、非精确总数或不完整结果，均整次执行原SQL；ES本身返回空集合不触发降级。查询前或回查快照存在当前版本PENDING/FAILED任务时保守走SQL；回查有删除、缺失、版本或硬条件变化时丢弃整页ES结果和total，完整重查SQL。
+- ES查询接入Resilience4j进程内熔断，列表/地图共享：统计最近20次调用，至少10次后失败率达到50%打开，等待10秒后由首个符合ES入口条件的真实请求触发半开，只允许1次探测，其余直接走SQL；探测成功关闭、失败重新等待10秒。只包ES字段检查/分析/搜索，不把SQL回查或降级成功算ES成功，也不将同步积压或资料变化计为ES故障。空结果仍是成功。半开及熔断状态随进程重启清空，不跨实例共享。
+- 不新增后台探活、查询自动重试或全量恢复工具；独立慢调用比例熔断本轮不启用。原ES执行超时800ms及客户端连接2s/响应3s保持不变；这不是整个多阶段ES流程或接口总时限，熔断不会取消已在执行的请求，SQL降级另需时间。
+- `search`示例：`{"engine":"ES","degraded":false,"reason":"SEARCH","effectiveSort":"relevance","resultWindow":10000}`。降级示例：`{"engine":"MYSQL","degraded":true,"reason":"ES_UNAVAILABLE","effectiveSort":"score","resultWindow":10000}`。reason枚举：CATALOG、NO_LOCATION、DISABLED、SEARCH、ES_UNAVAILABLE、ES_CIRCUIT_OPEN、SYNC_PENDING、DATA_CHANGED；前三项是预定SQL路径，不标记degraded。ES_CIRCUIT_OPEN表示熔断打开或半开探测名额已用尽，响应仍200、engine=MYSQL、degraded=true；触发熔断的失败请求本身仍为ES_UNAVAILABLE。不再返回SINGLE_HAN。无关键词时resultWindow为null。
+- 页面基于accessiblePages导航，保留真实total，并在需要时提示基础关键词匹配。切换关键词不会覆盖用户已选业务排序，auto按空关键词、单汉字、多字选择默认意图。
+- 地理runtime字段从_source原始GCJ-02坐标计算，视口含边界，距离沿用SQL的6371000米半径和haversine公式；不使用geo_point量化坐标或不同地球半径改变既有规则。该方式有读取原文与计算成本，尚未做性能收益评测。
+- 正常ES搜索为最终一致性；任务已成功到refresh可见之间仍有窗口。回查只能检查本页命中，不能发现所有未命中的资料变化；直接SQL绕过Outbox仍需补同步。独立翻页与列表/地图请求不承诺跨请求快照固定。
+
 ### 6.3 详情与地图点位
 
 `GET /api/restaurants/{id}`成功200，data为上述单条餐厅；不存在/已删除404 `RESTAURANT_NOT_FOUND`，停业可读。详情没有用户查询原点，distanceKm为null。
 
-`GET /api/restaurants/map-points`必须提供四个视口边界，其他筛选及排序与目录相同。page/pageSize不扩大点位数量，固定最多100条。data为`{points,matchedCount,returnedCount,limit:100,truncated}`，points包含id/name/latitude/longitude/score/pricePerPerson/businessStatus；matchedCount为完整符合条件数量，truncated表示未全部返回。恰好100条且无更多结果时为false。
+`GET /api/restaurants/map-points`必须提供四个视口边界，其他筛选及排序与目录相同。page/pageSize不扩大点位数量，固定最多100条。data为`{points,matchedCount,returnedCount,limit:100,truncated,search}`，points包含id/name/latitude/longitude/score/pricePerPerson/businessStatus；matchedCount为完整符合条件数量，truncated表示未全部返回。恰好100条且无更多结果时为false。
 
 无视口400 `RESTAURANT_INVALID_INPUT`；缺边、非法范围/参数400 `COMMON_VALIDATION_FAILED`。查询不会访问高德或写入资料。
 
@@ -384,18 +404,30 @@ reason必填，DTO最多200个UTF-16单元，去Unicode首尾空白后不能为�
 | 接口 | 规则与响应 |
 | --- | --- |
 | `GET /api/restaurants/{id}/management` | 仅管理员可读，包含已删除记录；成功data为`{restaurant,deleted}` |
-| `POST /api/restaurants` | 请求为第7节name/categoryCode/priceKind/pricePerPerson/address/latitude/longitude/locationConfirmed/businessStatus/tags；不含申请UUID、类型、堂食/外卖或照片字段；201及Location，data为管理资料 |
+| `POST /api/restaurants` | 基础字段加restaurantType、supportsDineIn、supportsDelivery；不含申请UUID或照片字段；201及Location，data为管理资料 |
 | `PUT /api/restaurants/{id}` | 与直接新建相同字段，完整替换，成功200及管理资料；省略可选项按默认值处理，不能当PATCH |
 | `DELETE /api/restaurants/{id}` | 无请求体/版本；软删除，成功200、deleted=true，不删除标签与统计，公开入口隐藏 |
 | `POST /api/restaurants/{id}/restore` | 仅管理员，无请求体/版本；200及deleted=false，保持原创建者、经营状态和标签 |
 
 管理资料中的restaurant字段与公开餐厅结构相同，响应禁止缓存。编辑不要求版本号，最后成功保存的整份资料及标签生效；事务锁住同一商户主行，不能部分保存或混合两次标签。新分类必须启用，当前停用分类可保持原值。删除不会把停业改为营业，恢复不会创建新归属。
 
-直接维护协议不接收restaurantType、supportsDineIn、supportsDelivery；新建采用REGULAR/未知且分类必填，更新保留原有这三个字段。更新已有食堂时categoryCode必须为空，普通餐厅则必须有分类。类型和用餐方式的申请发布由5.5审核协议处理，不能将两个请求DTO混用。
+直接维护接收restaurantType（REGULAR/CANTEEN）及supportsDineIn、supportsDelivery（true支持、false不支持、null未知）。管理页面始终显式提交类型及两个三态字段；提供类型时这三个字段完整替换，省略用餐方式等价于null，可将已有支持/不支持清为未知。食堂categoryCode必须为null，普通餐厅必须有有效分类；切换类型及分类在同一事务中保存。有关联窗口（包括软删除窗口）的食堂不能改为普通餐厅，409 `RESTAURANT_STATE_CONFLICT`，原资料、标签和搜索版本均保留。成功保存推进一次搜索投影版本，任何失败整体回滚。
+
+兼容旧客户端：restaurantType省略或null且两个用餐方式均为null/省略时，新建为普通餐厅/用餐方式未知，更新保持已有这三个字段；省略类型却提交非null用餐方式返回400。非法类型400；未知、身份、申请UUID或图片字段仍不接受。不改变用户投稿和审核的独立DTO及历史幂等摘要。
+
+管理员直接新建食堂的示例（PUT同样支持）：
+
+```json
+{"name":"校内餐厅","restaurantType":"CANTEEN","categoryCode":null,"supportsDineIn":true,"supportsDelivery":false,"priceKind":"UNKNOWN","pricePerPerson":null,"address":"校内地址","latitude":30.7544,"longitude":103.9312,"locationConfirmed":true,"businessStatus":"OPERATING","tags":[]}
+```
 
 不存在404 `RESTAURANT_NOT_FOUND`；普通账号403 `AUTH_FORBIDDEN`；服务内部身份防线可返回403 `RESTAURANT_FORBIDDEN`。已删除编辑、重复删除、重复恢复409 `RESTAURANT_STATE_CONFLICT`。未知、内部或版本字段400 `COMMON_MALFORMED_REQUEST`。直接新建无请求幂等键，超时须先核对结果。
 
 ## 9. 图片上传、绑定与读取
+
+V23消费更新：Outbox现支持可选单实例定时消费，默认关闭；成功写入ES后确认任务，失败延迟重试至上限后保留FAILED。接口成功仍仅代表MySQL及任务提交，不承诺已可在ES搜索到；无新增HTTP接口或失败重放入口，网站查询继续使用MySQL。
+
+搜索同步副作用（V22）：商户新建、编辑、删除、恢复及审核通过在原业务事务内记录Outbox，点评统计更新同样记录；任务插入失败时原业务一起回滚。没有新增HTTP接口，成功只表示MySQL资料和任务已保存，不表示ES已同步。待审申请、驳回、回复及幂等重试不重复生成任务；V23消费者按上述独立开关启用。详见[Outbox说明](architecture/restaurant-search-outbox.md)。
 
 ### 9.1 临时图片
 

@@ -204,7 +204,7 @@ def run(output: Path):
     client = LocalElasticsearch()
     before = setup(client, check_only=True)
     index = PREFIX + uuid.uuid4().hex
-    spec = load_spec()
+    spec = load_spec("002")
     spec["aliases"] = {}  # 禁止继承正式业务别名；实验只访问随机物理索引。
     created = False
     results = []

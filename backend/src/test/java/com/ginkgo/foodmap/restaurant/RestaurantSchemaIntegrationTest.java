@@ -648,6 +648,46 @@ class RestaurantSchemaIntegrationTest {
         }
     }
 
+    /** V23为已有任务补失败次数和执行时间，不丢失原任务、状态、业务版本。 */
+    @Test
+    void shouldAddRetryFieldsWithoutChangingExistingTasks() throws SQLException {
+        String target=createDatabase();migration(target,"22").migrate();
+        try(Connection current=connect(target)) {
+            update(current,"INSERT INTO restaurant_search_outbox(restaurant_id,projection_version) VALUES(101,7)");
+            String metadata="SELECT CONCAT_WS('|',id,restaurant_id,projection_version,status,created_at) FROM restaurant_search_outbox";
+            var before=strings(current,metadata);var upgrade=migration(target,"23");
+            assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(upgrade.migrate().migrationsExecuted).isZero();upgrade.validate();
+            assertThat(strings(current,metadata)).isEqualTo(before);
+            assertThat(number(current,"SELECT COUNT(*) FROM restaurant_search_outbox WHERE attempts=0 AND next_attempt_at IS NOT NULL AND completed_at IS NULL AND last_error IS NULL")).isEqualTo(1);
+            assertThrows(SQLException.class,()->update(current,"UPDATE restaurant_search_outbox SET attempts=-1"));
+        }
+    }
+
+    /** V22只加空任务表，不为历史资料偷偷补任务；版本唯一性、正数和状态由数据库兜底。 */
+    @Test
+    void shouldAddEmptyOutboxWithoutChangingExistingRestaurants() throws SQLException {
+        String target = createDatabase();
+        migration(target, "21").migrate();
+        try (Connection current = connect(target)) {
+            update(current, "INSERT INTO restaurants(id,name,category_code) VALUES(101,'保留商户','OTHER')");
+            String metadata = "SELECT CONCAT_WS('|',id,name,updated_at,search_projection_version) FROM restaurants";
+            var before = strings(current, metadata);
+            var upgrade = migration(target, "22");
+            assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(upgrade.migrate().migrationsExecuted).isZero();
+            upgrade.validate();
+            assertThat(strings(current, metadata)).isEqualTo(before);
+            assertThat(number(current, "SELECT COUNT(*) FROM restaurant_search_outbox")).isZero();
+            update(current, "INSERT INTO restaurant_search_outbox(restaurant_id,projection_version) VALUES(101,1)");
+            assertThat(strings(current, "SELECT status FROM restaurant_search_outbox")).containsExactly("PENDING");
+            assertThrows(SQLException.class, () -> update(current, "INSERT INTO restaurant_search_outbox(restaurant_id,projection_version) VALUES(101,1)"));
+            assertThrows(SQLException.class, () -> update(current, "INSERT INTO restaurant_search_outbox(restaurant_id,projection_version) VALUES(101,0)"));
+            assertThrows(SQLException.class, () -> update(current, "INSERT INTO restaurant_search_outbox(restaurant_id,projection_version) VALUES(0,2)"));
+            assertThrows(SQLException.class, () -> update(current, "INSERT INTO restaurant_search_outbox(restaurant_id,projection_version,status) VALUES(101,2,'UNKNOWN')"));
+        }
+    }
+
     /** V21给存量（含删除）和新建商户版本1，不修改资料、标签或审计时间，重复迁移无副作用。 */
     @Test
     void shouldInitializeSearchVersionsWithoutChangingBusinessData() throws SQLException {
