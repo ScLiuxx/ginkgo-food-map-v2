@@ -1,11 +1,17 @@
 package com.ginkgo.foodmap.user.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.ginkgo.foodmap.security.service.LoginProtectionService;
 import com.ginkgo.foodmap.user.domain.VerificationCodePurpose;
 import com.ginkgo.foodmap.user.dto.VerificationCodeReservation;
 import com.ginkgo.foodmap.user.service.VerificationCodeService;
-import com.ginkgo.foodmap.security.service.LoginProtectionService;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import tools.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -18,6 +24,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -25,25 +32,19 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import tools.jackson.databind.ObjectMapper;
+
 import java.sql.DriverManager;
-import java.util.Set;
-import java.util.UUID;
 import java.util.ArrayList;
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * 注册、登录与密码重置的完整接口集成测试，使用真实 MySQL、Flyway、Mapper、事务、BCrypt 和 Redis Lua。
  *
- * <p>显式传入 {@code -Dauth.integration=true} 并通过 {@code AUTH_TEST_DB_PASSWORD} 提供本机
- * MySQL 密码后运行。每次运行创建随机命名的临时数据库，绝不连接业务数据库；Redis 使用4号库的
- * 独立随机前缀，仅精确清理测试自有键。验证码由真实服务预留并激活，邮件发送器被替换，避免发信。</p>
+ * <p>显式传入 {@code -Dauth.integration=true} 并通过 {@code AUTH_TEST_DB_PASSWORD} 提供本机 MySQL
+ * 密码后运行。每次运行创建随机命名的临时数据库，绝不连接业务数据库；Redis 使用4号库的 独立随机前缀，仅精确清理测试自有键。验证码由真实服务预留并激活，邮件发送器被替换，避免发信。
  */
 @EnabledIfSystemProperty(named = "auth.integration", matches = "true")
 @ActiveProfiles("test")
@@ -56,23 +57,19 @@ class RegistrationApiIntegrationTest {
     private static final String RUN_ID = UUID.randomUUID().toString().replace("-", "");
     private static final String DATABASE = "ginkgo_auth_it_" + RUN_ID;
     private static final String MYSQL_SERVER = mysqlServer();
-    private static final String REDIS_PREFIX = "test:auth:registration:{verification-code}:" + RUN_ID;
+    private static final String REDIS_PREFIX =
+            "test:auth:registration:{verification-code}:" + RUN_ID;
     private static boolean databaseCreated;
 
-    @Autowired
-    private MockMvc mockMvc;
+    @Autowired private MockMvc mockMvc;
 
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
+    @Autowired private JdbcTemplate jdbcTemplate;
 
-    @Autowired
-    private VerificationCodeService verificationCodeService;
+    @Autowired private VerificationCodeService verificationCodeService;
 
-    @Autowired
-    private StringRedisTemplate redisTemplate;
+    @Autowired private StringRedisTemplate redisTemplate;
 
-    @Autowired
-    private PasswordEncoder passwordEncoder;
+    @Autowired private PasswordEncoder passwordEncoder;
 
     @Autowired private ObjectMapper json;
     @Autowired private JwtDecoder jwtDecoder;
@@ -80,23 +77,30 @@ class RegistrationApiIntegrationTest {
     private final List<String> authKeys = new ArrayList<>();
 
     /** 显式阻止真实邮件发送，测试只验证注册及验证码消费能力。 */
-    @MockitoBean
-    private JavaMailSender mailSender;
+    @MockitoBean private JavaMailSender mailSender;
 
     /** 创建测试专属空库，交给应用自己的 Flyway 脚本初始化，避免手工复制建表 SQL。 */
     @DynamicPropertySource
     static void configureInfrastructure(DynamicPropertyRegistry registry) throws Exception {
-        try (var connection = DriverManager.getConnection(MYSQL_SERVER, "root", databasePassword());
-             var statement = connection.createStatement()) {
-            statement.executeUpdate("CREATE DATABASE `" + DATABASE
-                    + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci");
+        try (var connection =
+                        DriverManager.getConnection(MYSQL_SERVER, "root", databasePassword());
+                var statement = connection.createStatement()) {
+            statement.executeUpdate(
+                    "CREATE DATABASE `"
+                            + DATABASE
+                            + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci");
             databaseCreated = true;
         }
-        registry.add("spring.datasource.url", () -> MYSQL_SERVER + DATABASE
-                + "?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai"
-                + "&useSSL=false&allowPublicKeyRetrieval=true");
+        registry.add(
+                "spring.datasource.url",
+                () ->
+                        MYSQL_SERVER
+                                + DATABASE
+                                + "?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai"
+                                + "&useSSL=false&allowPublicKeyRetrieval=true");
         registry.add("spring.datasource.username", () -> "root");
-        registry.add("spring.datasource.password", RegistrationApiIntegrationTest::databasePassword);
+        registry.add(
+                "spring.datasource.password", RegistrationApiIntegrationTest::databasePassword);
         registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
         registry.add("spring.flyway.enabled", () -> true);
         registry.add("spring.data.redis.host", () -> "127.0.0.1");
@@ -114,7 +118,9 @@ class RegistrationApiIntegrationTest {
         if (keys != null && !keys.isEmpty()) {
             redisTemplate.delete(keys);
         }
-        if (!authKeys.isEmpty()) redisTemplate.delete(authKeys);
+        if (!authKeys.isEmpty()) {
+            redisTemplate.delete(authKeys);
+        }
         verifyNoInteractions(mailSender);
     }
 
@@ -122,8 +128,9 @@ class RegistrationApiIntegrationTest {
     @AfterAll
     static void cleanDatabase() throws Exception {
         if (databaseCreated && DATABASE.matches("ginkgo_auth_it_[a-f0-9]{32}")) {
-            try (var connection = DriverManager.getConnection(MYSQL_SERVER, "root", databasePassword());
-                 var statement = connection.createStatement()) {
+            try (var connection =
+                            DriverManager.getConnection(MYSQL_SERVER, "root", databasePassword());
+                    var statement = connection.createStatement()) {
                 statement.executeUpdate("DROP DATABASE `" + DATABASE + "`");
             }
         }
@@ -138,15 +145,21 @@ class RegistrationApiIntegrationTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data").doesNotExist());
 
-        String hash = jdbcTemplate.queryForObject(
-                "SELECT password_hash FROM users WHERE email = ?", String.class, email);
+        String hash =
+                jdbcTemplate.queryForObject(
+                        "SELECT password_hash FROM users WHERE email = ?", String.class, email);
         assertThat(passwordEncoder.matches("Ginkgo2026", hash)).isTrue();
-        assertThat(jdbcTemplate.queryForObject("""
+        assertThat(
+                        jdbcTemplate.queryForObject(
+                                """
                 SELECT COUNT(*) FROM user_roles ur
                 JOIN users u ON u.id = ur.user_id
                 JOIN roles r ON r.id = ur.role_id
                 WHERE u.email = ? AND r.code = 'ROLE_USER'
-                """, Integer.class, email)).isEqualTo(1);
+                """,
+                                Integer.class,
+                                email))
+                .isEqualTo(1);
     }
 
     /** 错误验证码返回400且不创建账号；未达错误上限时，随后正确验证码仍可注册。 */
@@ -172,18 +185,25 @@ class RegistrationApiIntegrationTest {
         String email = "duplicateemail@std.uestc.edu.cn";
         postRegistration(email, "original_email_user", activeCode(email), "Ginkgo2026")
                 .andExpect(status().isCreated());
-        String hashBefore = jdbcTemplate.queryForObject(
-                "SELECT password_hash FROM users WHERE email = ?", String.class, email);
+        String hashBefore =
+                jdbcTemplate.queryForObject(
+                        "SELECT password_hash FROM users WHERE email = ?", String.class, email);
 
         postRegistration(email, "different_user", "123456", "OtherPassword2026")
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("USER_EMAIL_ALREADY_REGISTERED"))
                 .andExpect(jsonPath("$.message").value("该邮箱已注册"));
 
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM users WHERE email = ?", Integer.class, email)).isEqualTo(1);
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT password_hash FROM users WHERE email = ?", String.class, email)).isEqualTo(hashBefore);
+        assertThat(
+                        jdbcTemplate.queryForObject(
+                                "SELECT COUNT(*) FROM users WHERE email = ?", Integer.class, email))
+                .isEqualTo(1);
+        assertThat(
+                        jdbcTemplate.queryForObject(
+                                "SELECT password_hash FROM users WHERE email = ?",
+                                String.class,
+                                email))
+                .isEqualTo(hashBefore);
     }
 
     /** 重复用户名返回409，不能创建另一个账号，也不能提前消费第二位用户的有效验证码。 */
@@ -245,12 +265,18 @@ class RegistrationApiIntegrationTest {
         String first = loginToken("LOGIN_FLOW_USER");
         String second = loginToken("login_flow_user");
         mockMvc.perform(get("/auth/me").header("Authorization", "Bearer " + first))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.username").value("login_flow_user"));
-        mockMvc.perform(post("/auth/logout").header("Authorization", "Bearer " + first)).andExpect(status().isOk());
-        mockMvc.perform(get("/auth/me").header("Authorization", "Bearer " + first)).andExpect(status().isUnauthorized());
-        mockMvc.perform(get("/auth/me").header("Authorization", "Bearer " + second)).andExpect(status().isOk());
-        assertThat(redisTemplate.hasKey("auth:session:" + jwtDecoder.decode(first).getId())).isFalse();
-        assertThat(redisTemplate.getExpire("auth:session:" + jwtDecoder.decode(second).getId())).isBetween(1L, 300L);
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.username").value("login_flow_user"));
+        mockMvc.perform(post("/auth/logout").header("Authorization", "Bearer " + first))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/auth/me").header("Authorization", "Bearer " + first))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/auth/me").header("Authorization", "Bearer " + second))
+                .andExpect(status().isOk());
+        assertThat(redisTemplate.hasKey("auth:session:" + jwtDecoder.decode(first).getId()))
+                .isFalse();
+        assertThat(redisTemplate.getExpire("auth:session:" + jwtDecoder.decode(second).getId()))
+                .isBetween(1L, 300L);
     }
 
     /** MySQL 大小写和重音不敏感的用户名变体共享同一个账号限流键，不能更换写法绕过锁定。 */
@@ -263,9 +289,11 @@ class RegistrationApiIntegrationTest {
         String[] aliases = {"limited_login_user", "LIMITED_LOGIN_USER", "límited_login_user"};
         for (int index = 0; index < 5; index++) {
             postLogin(aliases[index % aliases.length], "wrongPassword1")
-                    .andExpect(index < 4 ? status().isUnauthorized() : status().isTooManyRequests());
+                    .andExpect(
+                            index < 4 ? status().isUnauthorized() : status().isTooManyRequests());
         }
-        postLogin("limited_login_user", "Ginkgo2026").andExpect(status().isTooManyRequests())
+        postLogin("limited_login_user", "Ginkgo2026")
+                .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.code").value("AUTH_LOGIN_LOCKED"));
     }
 
@@ -278,23 +306,35 @@ class RegistrationApiIntegrationTest {
         String first = loginToken("reset_flow_user");
         String second = loginToken("reset_flow_user");
         String code = activeCode(VerificationCodePurpose.PASSWORD_RESET, email);
-        postPasswordReset(email, code, "NewPassword2026").andExpect(status().isOk())
+        postPasswordReset(email, code, "NewPassword2026")
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").doesNotExist());
-        assertThat(jdbcTemplate.queryForObject("SELECT credential_version FROM users WHERE email = ?",
-                Long.class, email)).isEqualTo(1L);
-        assertThat(jdbcTemplate.queryForObject("SELECT row_version FROM users WHERE email = ?",
-                Long.class, email)).isEqualTo(1L);
+        assertThat(
+                        jdbcTemplate.queryForObject(
+                                "SELECT credential_version FROM users WHERE email = ?",
+                                Long.class,
+                                email))
+                .isEqualTo(1L);
+        assertThat(
+                        jdbcTemplate.queryForObject(
+                                "SELECT row_version FROM users WHERE email = ?", Long.class, email))
+                .isEqualTo(1L);
         for (String token : List.of(first, second)) {
-            assertThat(redisTemplate.hasKey("auth:session:" + jwtDecoder.decode(token).getId())).isTrue();
+            assertThat(redisTemplate.hasKey("auth:session:" + jwtDecoder.decode(token).getId()))
+                    .isTrue();
             mockMvc.perform(get("/auth/me").header("Authorization", "Bearer " + token))
                     .andExpect(status().isUnauthorized());
         }
-        postPasswordReset(email, code, "ReplayPassword2026").andExpect(status().isBadRequest())
+        postPasswordReset(email, code, "ReplayPassword2026")
+                .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("AUTH_CODE_INVALID_OR_EXPIRED"));
         postLogin("reset_flow_user", "Ginkgo2026").andExpect(status().isUnauthorized());
         String fresh = loginToken("reset_flow_user", "NewPassword2026");
-        mockMvc.perform(get("/auth/me").header("Authorization", "Bearer " + fresh)).andExpect(status().isOk());
-        String hash = jdbcTemplate.queryForObject("SELECT password_hash FROM users WHERE email = ?", String.class, email);
+        mockMvc.perform(get("/auth/me").header("Authorization", "Bearer " + fresh))
+                .andExpect(status().isOk());
+        String hash =
+                jdbcTemplate.queryForObject(
+                        "SELECT password_hash FROM users WHERE email = ?", String.class, email);
         assertThat(passwordEncoder.matches("NewPassword2026", hash)).isTrue();
         assertThat(passwordEncoder.matches("ReplayPassword2026", hash)).isFalse();
     }
@@ -305,11 +345,18 @@ class RegistrationApiIntegrationTest {
         String email = "resetpurpose@std.uestc.edu.cn";
         createResetAccount(email, "reset_purpose_user");
         String code = activeCode(email);
-        postPasswordReset(email, code, "NewPassword2026").andExpect(status().isBadRequest())
+        postPasswordReset(email, code, "NewPassword2026")
+                .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("AUTH_CODE_INVALID_OR_EXPIRED"));
-        assertThat(jdbcTemplate.queryForObject("SELECT credential_version FROM users WHERE email = ?",
-                Long.class, email)).isZero();
-        String hash = jdbcTemplate.queryForObject("SELECT password_hash FROM users WHERE email = ?", String.class, email);
+        assertThat(
+                        jdbcTemplate.queryForObject(
+                                "SELECT credential_version FROM users WHERE email = ?",
+                                Long.class,
+                                email))
+                .isZero();
+        String hash =
+                jdbcTemplate.queryForObject(
+                        "SELECT password_hash FROM users WHERE email = ?", String.class, email);
         assertThat(passwordEncoder.matches("Ginkgo2026", hash)).isTrue();
     }
 
@@ -319,14 +366,23 @@ class RegistrationApiIntegrationTest {
         String email = "resetalias@std.uestc.edu.cn";
         String alias = "résétalias@std.uestc.edu.cn";
         createResetAccount(email, "reset_alias_user");
-        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM users WHERE email = ?",
-                Integer.class, alias)).isEqualTo(1);
+        assertThat(
+                        jdbcTemplate.queryForObject(
+                                "SELECT COUNT(*) FROM users WHERE email = ?", Integer.class, alias))
+                .isEqualTo(1);
         String code = activeCode(VerificationCodePurpose.PASSWORD_RESET, alias);
-        postPasswordReset(alias, code, "NewPassword2026").andExpect(status().isBadRequest())
+        postPasswordReset(alias, code, "NewPassword2026")
+                .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("AUTH_CODE_INVALID_OR_EXPIRED"));
-        assertThat(jdbcTemplate.queryForObject("SELECT credential_version FROM users WHERE email = ?",
-                Long.class, email)).isZero();
-        String hash = jdbcTemplate.queryForObject("SELECT password_hash FROM users WHERE email = ?", String.class, email);
+        assertThat(
+                        jdbcTemplate.queryForObject(
+                                "SELECT credential_version FROM users WHERE email = ?",
+                                Long.class,
+                                email))
+                .isZero();
+        String hash =
+                jdbcTemplate.queryForObject(
+                        "SELECT password_hash FROM users WHERE email = ?", String.class, email);
         assertThat(passwordEncoder.matches("Ginkgo2026", hash)).isTrue();
     }
 
@@ -338,45 +394,84 @@ class RegistrationApiIntegrationTest {
         String code = activeCode(VerificationCodePurpose.PASSWORD_RESET, email);
         var start = new java.util.concurrent.CountDownLatch(1);
         try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
-            var first = executor.submit(() -> {
-                start.await();
-                return postPasswordReset(email, code, "FirstPassword2026").andReturn().getResponse().getStatus();
-            });
-            var second = executor.submit(() -> {
-                start.await();
-                return postPasswordReset(email, code, "SecondPassword2026").andReturn().getResponse().getStatus();
-            });
+            var first =
+                    executor.submit(
+                            () -> {
+                                start.await();
+                                return postPasswordReset(email, code, "FirstPassword2026")
+                                        .andReturn()
+                                        .getResponse()
+                                        .getStatus();
+                            });
+            var second =
+                    executor.submit(
+                            () -> {
+                                start.await();
+                                return postPasswordReset(email, code, "SecondPassword2026")
+                                        .andReturn()
+                                        .getResponse()
+                                        .getStatus();
+                            });
             start.countDown();
-            assertThat(List.of(first.get(15, java.util.concurrent.TimeUnit.SECONDS),
-                    second.get(15, java.util.concurrent.TimeUnit.SECONDS))).containsExactlyInAnyOrder(200, 400);
+            assertThat(
+                            List.of(
+                                    first.get(15, java.util.concurrent.TimeUnit.SECONDS),
+                                    second.get(15, java.util.concurrent.TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(200, 400);
         }
-        assertThat(jdbcTemplate.queryForObject("SELECT credential_version FROM users WHERE email = ?",
-                Long.class, email)).isEqualTo(1L);
-        String hash = jdbcTemplate.queryForObject("SELECT password_hash FROM users WHERE email = ?", String.class, email);
-        assertThat(passwordEncoder.matches("FirstPassword2026", hash)
-                ^ passwordEncoder.matches("SecondPassword2026", hash)).isTrue();
+        assertThat(
+                        jdbcTemplate.queryForObject(
+                                "SELECT credential_version FROM users WHERE email = ?",
+                                Long.class,
+                                email))
+                .isEqualTo(1L);
+        String hash =
+                jdbcTemplate.queryForObject(
+                        "SELECT password_hash FROM users WHERE email = ?", String.class, email);
+        assertThat(
+                        passwordEncoder.matches("FirstPassword2026", hash)
+                                ^ passwordEncoder.matches("SecondPassword2026", hash))
+                .isTrue();
     }
 
     /** 直接建立受控测试账号，避免注册发码冷却影响后续重置发码，不修改任何验证码限制。 */
     private void createResetAccount(String email, String username) {
-        jdbcTemplate.update("""
+        jdbcTemplate.update(
+                """
                 INSERT INTO users(username, email, password_hash, email_verified, email_verified_at)
                 VALUES (?, ?, ?, TRUE, CURRENT_TIMESTAMP(6))
-                """, username, email, passwordEncoder.encode("Ginkgo2026"));
-        jdbcTemplate.update("""
+                """,
+                username,
+                email,
+                passwordEncoder.encode("Ginkgo2026"));
+        jdbcTemplate.update(
+                """
                 INSERT INTO user_roles(user_id, role_id)
                 SELECT u.id, r.id FROM users u CROSS JOIN roles r WHERE u.email = ? AND r.code = 'ROLE_USER'
-                """, email);
+                """,
+                email);
     }
 
-    private ResultActions postPasswordReset(String email, String code, String password) throws Exception {
-        return mockMvc.perform(post("/auth/password-reset").contentType(MediaType.APPLICATION_JSON)
-                .content(json.writeValueAsString(java.util.Map.of("email", email,
-                        "verificationCode", code, "newPassword", password))));
+    private ResultActions postPasswordReset(String email, String code, String password)
+            throws Exception {
+        return mockMvc.perform(
+                post("/auth/password-reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                                json.writeValueAsString(
+                                        java.util.Map.of(
+                                                "email",
+                                                email,
+                                                "verificationCode",
+                                                code,
+                                                "newPassword",
+                                                password))));
     }
 
     private void rememberLoginKeys(String username) {
-        Long userId = jdbcTemplate.queryForObject("SELECT id FROM users WHERE username = ?", Long.class, username);
+        Long userId =
+                jdbcTemplate.queryForObject(
+                        "SELECT id FROM users WHERE username = ?", Long.class, username);
         String key = loginProtection.key(userId, username);
         authKeys.addAll(List.of(key + ":failures", key + ":lock"));
     }
@@ -386,16 +481,25 @@ class RegistrationApiIntegrationTest {
     }
 
     private String loginToken(String username, String password) throws Exception {
-        String body = postLogin(username, password).andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString();
+        String body =
+                postLogin(username, password)
+                        .andExpect(status().isOk())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
         String token = json.readTree(body).path("data").path("accessToken").asText();
         authKeys.add("auth:session:" + jwtDecoder.decode(token).getId());
         return token;
     }
 
     private ResultActions postLogin(String username, String password) throws Exception {
-        return mockMvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
-                .content(json.writeValueAsString(java.util.Map.of("username", username, "password", password))));
+        return mockMvc.perform(
+                post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                                json.writeValueAsString(
+                                        java.util.Map.of(
+                                                "username", username, "password", password))));
     }
 
     /** 通过真实 Redis 流程生成测试验证码，不通过 SMTP 发送。 */
@@ -410,33 +514,41 @@ class RegistrationApiIntegrationTest {
     }
 
     private void assertUserAbsent(String email) {
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM users WHERE email = ?", Integer.class, email)).isZero();
+        assertThat(
+                        jdbcTemplate.queryForObject(
+                                "SELECT COUNT(*) FROM users WHERE email = ?", Integer.class, email))
+                .isZero();
     }
 
     /** 所有入参均为本文件内受控的测试常量，不接收外部输入，也不打印敏感请求内容。 */
-    private ResultActions postRegistration(String email, String username, String code, String password)
-            throws Exception {
-        return mockMvc.perform(post("/auth/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
+    private ResultActions postRegistration(
+            String email, String username, String code, String password) throws Exception {
+        return mockMvc.perform(
+                post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                                """
                         {"email":"%s","username":"%s","verificationCode":"%s","password":"%s"}
-                        """.formatted(email, username, code, password)));
+                        """
+                                        .formatted(email, username, code, password)));
     }
 
     private static String databasePassword() {
         String password = System.getenv("AUTH_TEST_DB_PASSWORD");
         if (password == null || password.isBlank()) {
-            throw new IllegalStateException("AUTH_TEST_DB_PASSWORD is required for MySQL integration tests");
+            throw new IllegalStateException(
+                    "AUTH_TEST_DB_PASSWORD is required for MySQL integration tests");
         }
         return password;
     }
 
     /** 完整联调可使用独立回环MySQL实例；不允许URL携带库名、凭据或任意远程参数。 */
     private static String mysqlServer() {
-        String server = System.getenv().getOrDefault("AUTH_TEST_DB_SERVER", "jdbc:mysql://127.0.0.1:3306/");
+        String server =
+                System.getenv().getOrDefault("AUTH_TEST_DB_SERVER", "jdbc:mysql://127.0.0.1:3306/");
         if (!server.matches("jdbc:mysql://(?:127\\.0\\.0\\.1|localhost):[1-9][0-9]{0,4}/")) {
-            throw new IllegalStateException("AUTH_TEST_DB_SERVER must be an explicit loopback MySQL server URL");
+            throw new IllegalStateException(
+                    "AUTH_TEST_DB_SERVER must be an explicit loopback MySQL server URL");
         }
         return server;
     }

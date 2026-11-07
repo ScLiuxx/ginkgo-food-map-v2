@@ -16,6 +16,13 @@ import java.util.List;
 public class MediaFileService {
     private final MediaFileMapper files;
     private final OssStorageClient storage;
+    private final com.ginkgo.foodmap.security.service.CurrentActorService actors;
+
+    /** restaurant服务先核对本人申请/位置；文件侧再以真实身份校验上传者、用途及BOUND状态。 */
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
+    public byte[] readOwnRestaurantBound(long id) {
+        return readRestaurantFile(id, actors.requireActor().getUserId());
+    }
 
     /** 管理员查看已核对申请关联的商户图；拒绝其他用途、其他上传者及未绑定文件。 */
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")

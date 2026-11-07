@@ -7,4 +7,6 @@ import lombok.Data;
 public class PublicAuthor {
     private String id;
     private String username;
+    /** 当前贡献等级，不包含原始经验或奖励明细。 */
+    private Integer level;
 }

@@ -1,8 +1,10 @@
 package com.ginkgo.foodmap.security.service;
 
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+
 import java.time.Duration;
 import java.time.Instant;
 
@@ -14,7 +16,11 @@ public class LoginSessionService {
 
     /** 仅记录用户 ID 与凭证版本，不记录完整 JWT。 */
     public void create(String sessionId, Long userId, long version, Instant expiresAt) {
-        redis.opsForValue().set(key(sessionId), value(userId, version), Duration.between(Instant.now(), expiresAt));
+        redis.opsForValue()
+                .set(
+                        key(sessionId),
+                        value(userId, version),
+                        Duration.between(Instant.now(), expiresAt));
     }
 
     /** JWT 签名正确仍必须找到对应会话，Redis 故障绝不能放行请求。 */
@@ -27,6 +33,11 @@ public class LoginSessionService {
         redis.delete(key(sessionId));
     }
 
-    private String key(String sessionId) { return "auth:session:" + sessionId; }
-    private String value(Long userId, long version) { return userId + ":" + version; }
+    private String key(String sessionId) {
+        return "auth:session:" + sessionId;
+    }
+
+    private String value(Long userId, long version) {
+        return userId + ":" + version;
+    }
 }

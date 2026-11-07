@@ -3,6 +3,7 @@ import { getAccessToken } from '@/shared/api/authSession'
 import type { ApiResponse } from '@/shared/api/api.types'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 import type {
+  ReviewSort,
   ReviewDraft,
   ReviewGateway,
   ReviewPublishReceipt,
@@ -60,7 +61,7 @@ export async function publishTextReview(draft: ReviewDraft): Promise<ReviewPubli
 /** 后端主卡协议；历史不内嵌，管理权限不能从公开作者ID推断。 */
 interface GroupPageDto extends Omit<ReviewPage, 'records'> {
   records: {
-    author: { id: string; username: string }
+    author: { id: string; username: string; level?: number }
     historyCount: number
     nextHistoryCursor?: string | null
     currentReview: {
@@ -81,11 +82,12 @@ export async function fetchReviewPage(
   restaurantId: string,
   signal: AbortSignal,
   page = 1,
+  sort: ReviewSort = 'DEFAULT',
 ): Promise<ReviewPage> {
   try {
     const response = await httpClient.get<ApiResponse<GroupPageDto>>(
       `/api/restaurants/${encodeURIComponent(restaurantId)}/reviews`,
-      { params: { page, pageSize: 8 }, signal },
+      { params: { page, pageSize: 8, sort }, signal },
     )
     const data = response.data.data
     if (
@@ -140,6 +142,7 @@ export async function fetchReviewPage(
           id: review.id,
           authorId: group.author.id,
           username: group.author.username,
+          authorLevel: group.author.level,
           historyCount: group.historyCount,
           nextHistoryCursor: group.nextHistoryCursor,
           scoringStatus: 'current',
@@ -169,7 +172,7 @@ export async function fetchReviewHistory(
 ): Promise<ReviewHistoryPage> {
   const response = await httpClient.get<
     ApiResponse<{
-      author: { id: string; username: string } | null
+      author: { id: string; username: string; level?: number } | null
       currentReviewId: string | null
       records: GroupPageDto['records'][number]['currentReview'][]
       hasMore: boolean
@@ -234,6 +237,7 @@ export async function fetchReviewHistory(
       ...r,
       authorId,
       username: data.author!.username,
+      authorLevel: data.author!.level,
       photos: r.photos.map((p) => ({ id: p.id, url: p.url })),
       canDelete: false,
       replies: [],

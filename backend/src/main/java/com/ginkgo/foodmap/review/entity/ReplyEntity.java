@@ -1,8 +1,9 @@
 package com.ginkgo.foodmap.review.entity;
 
-import java.time.Instant;
 import lombok.Data;
 import lombok.ToString;
+
+import java.time.Instant;
 
 /** 回复持久化投影，UUID和摘要通过SQL转换为规范字符串。 */
 @Data

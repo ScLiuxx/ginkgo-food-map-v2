@@ -1,6 +1,7 @@
 package com.ginkgo.foodmap.review.entity;
 
 import lombok.Data;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 
@@ -8,6 +9,10 @@ import java.time.Instant;
 @Data
 public class ReviewReadEntity {
     private Long id;
+
+    /** 本人跨店分组读取时使用；商户视角查询不需要填充，不改变公开点评字段。 */
+    private Long restaurantId;
+
     private long authorUserId;
     private BigDecimal tasteScore;
     private BigDecimal valueScore;

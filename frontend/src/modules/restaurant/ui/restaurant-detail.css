@@ -14,6 +14,14 @@ button {
   font: inherit;
   cursor: pointer;
 }
+.favorite-entry {
+  margin: 8px 0 0 16px;
+  padding: 7px 0;
+  border: 0;
+  color: #9b8a72;
+  background: transparent;
+  font-size: 12px;
+}
 a:focus-visible,
 button:focus-visible,
 summary:focus-visible {

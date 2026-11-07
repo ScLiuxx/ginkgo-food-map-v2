@@ -1,5 +1,6 @@
 import type { InjectionKey } from 'vue'
 import type { RatingDimension } from '@/modules/restaurant/model/restaurant.types'
+export type ReviewSort = 'DEFAULT' | 'TIME'
 export type Scores = Record<RatingDimension, number>
 /** 与后端发布校验及数据库位置范围同步。 */
 export const MAX_REVIEW_PHOTOS = 5
@@ -10,6 +11,7 @@ export interface ReviewPhoto {
 export interface ReviewItem {
   id: string
   authorId?: string
+  authorLevel?: number
   historyCount?: number
   nextHistoryCursor?: string | null
   /** 正式读取使用服务端单条总分；预览仍可从四维计算。 */
@@ -81,7 +83,12 @@ export interface ReviewGateway {
   supportsReplies?: boolean
   uploadPhoto?(file: File, token: string): Promise<string>
   cancelPhoto?(fileId: string, token: string): Promise<void>
-  list(restaurantId: string, signal: AbortSignal, page?: number): Promise<ReviewPage>
+  list(
+    restaurantId: string,
+    signal: AbortSignal,
+    page?: number,
+    sort?: ReviewSort,
+  ): Promise<ReviewPage>
   history?(
     restaurantId: string,
     authorId: string,

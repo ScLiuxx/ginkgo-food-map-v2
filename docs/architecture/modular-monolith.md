@@ -12,7 +12,9 @@ V2 第一阶段使用模块化单体，而不是立即部署多个微服务。
 
 | 模块 | 职责 | 拥有的数据 |
 | --- | --- | --- |
-| user | 用户、身份、角色 | 用户、角色、用户角色关系 |
+| user | 用户、身份、角色及本人资料/简介维护 | 用户（含简介）、角色、用户角色关系 |
+| growth | 首次点评与审核通过计奖、幂等撤销、等级计算与本人成长查询；获赞奖励待接入 | 经验账户、奖励资格及撤销记录 |
+| notification | 审核结果及点评回复通知、本人分类收件箱及已读状态 | 消息快照、接收人及首次阅读时间，见[通知表结构](mysql-schema.md#notification-inbox) |
 | restaurant | 餐厅/食堂/窗口档案、分类、位置与评分读模型 | 餐厅、分类、标签、窗口、餐厅及窗口统计 |
 | review | 评价、评分、回复与请求幂等 | 餐厅或窗口评价、照片关联、回复、发布及删除回执 |
 | admin | 审核、回收站、管理操作 | 管理操作记录 |
@@ -22,7 +24,7 @@ V2 第一阶段使用模块化单体，而不是立即部署多个微服务。
 
 ## 依赖规则
 
-2026-11-01 结构扩展：V9/V10 新增窗口实体和评价互斥归属。窗口到食堂、窗口统计到窗口是同模块物理外键；评价中的 restaurant_id/window_id、窗口中的账号/文件 ID 是跨模块逻辑引用，不加跨模块外键或触发器。review 后续通过 restaurant 公开服务校验目标、更新统计，禁止直接查询 restaurant Mapper。新食堂评价只允许选择窗口，旧整体评价保留历史；这些业务校验尚待服务接入。本轮只完成迁移结构与隔离验证，业务运行库未升级。详见[餐厅结构](restaurant-schema.md)和[评价结构](review-schema.md)。
+2026-11-01 结构扩展：V9/V10 新增窗口实体和评价互斥归属。窗口到食堂、窗口统计到窗口是同模块物理外键；评价中的 restaurant_id/window_id、窗口中的账号/文件 ID 是跨模块逻辑引用，不加跨模块外键或触发器。review 后续通过 restaurant 公开服务校验目标、更新统计，禁止直接查询 restaurant Mapper。新食堂评价只允许选择窗口，旧整体评价保留历史；这些业务校验尚待服务接入。本轮只完成迁移结构与隔离验证，业务运行库未升级。详见[餐厅结构](mysql-schema.md#restaurant-schema)和[评价结构](mysql-schema.md#review-schema)。
 
 ```text
 user       restaurant
@@ -33,6 +35,8 @@ user       restaurant
       admin
 
 security -> user
+review -> growth / notification
+restaurant -> growth / notification
 file     <- restaurant / review
 ```
 

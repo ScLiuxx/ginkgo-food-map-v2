@@ -6,6 +6,7 @@ import { ratingDimensions } from '@/modules/restaurant/model/catalog.logic'
 import { overall, reviewGatewayKey, unavailableReviewGateway } from '../model/review'
 import type { ReviewItem } from '../model/review'
 import { hasExampleMarker } from '../model/detailPhotos'
+import { UserIdentity, ContentActions } from '@/modules/community'
 const gateway = inject(reviewGatewayKey, unavailableReviewGateway)
 /** 当前点评与历史点评使用同一展示组件，回复、照片和删除始终绑定各自记录ID。 */
 defineProps<{
@@ -33,10 +34,15 @@ defineEmits<{
     :class="{ 'history-review': item.scoringStatus === 'history', 'star-review': starScale }"
   >
     <header>
-      <span class="avatar">{{ Array.from(item.username)[0] }}</span>
       <div>
-        <strong>{{ item.username }}</strong
-        ><time v-if="!starScale" :datetime="item.createdAt">{{
+        <UserIdentity
+          :user-id="item.authorId"
+          :username="item.username"
+          :level="item.authorLevel"
+          :authenticated="authenticated"
+          :preview="preview"
+        />
+        <time v-if="!starScale" :datetime="item.createdAt">{{
           new Date(item.createdAt).toLocaleDateString('zh-CN')
         }}</time>
       </div>
@@ -78,6 +84,14 @@ defineEmits<{
         <img :src="p.url" alt="评价照片" loading="lazy" />
       </button>
     </div>
+    <ContentActions
+      v-if="!preview"
+      kind="review"
+      :target-id="item.id"
+      :viewer-id="viewerId"
+      :authenticated="authenticated"
+      :own="authenticated && !!viewerId && item.authorId === viewerId"
+    />
     <button
       v-if="preview ? item.canDelete : authenticated && !!viewerId && item.authorId === viewerId"
       type="button"
@@ -91,6 +105,7 @@ defineEmits<{
       :key="item.id"
       :review-id="item.id"
       :username="item.username"
+      :level="item.authorLevel"
     >
       <template v-if="$slots.history" #actions><slot name="history" /></template>
     </ReplyThread>

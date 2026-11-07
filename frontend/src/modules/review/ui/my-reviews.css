@@ -1,0 +1,193 @@
+/* 本人列表与商户详情共用点评卡片，店铺分组只增加轻分隔，不引入另一套评分外观。 */
+.my-reviews {
+  min-width: 0;
+}
+.my-reviews-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 0 0 22px;
+  border-bottom: 1px solid #edf0f2;
+  font-size: 12px;
+  color: #919ba5;
+}
+.my-reviews-toolbar p {
+  margin: 0 auto 0 0;
+  line-height: 1.8;
+}
+.my-reviews-toolbar strong {
+  color: #64707b;
+  font-weight: 500;
+}
+.my-reviews-toolbar a {
+  color: #a77933;
+  text-decoration: none;
+}
+.my-reviews button {
+  border: 1px solid #e5e0d7;
+  background: white;
+  color: #8d744d;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.my-reviews button:disabled {
+  cursor: not-allowed;
+}
+.my-review-group {
+  padding-top: 25px;
+  border-bottom: 1px solid #edf0f2;
+}
+.my-review-store {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.my-review-store a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+  text-decoration: none;
+  color: #414e5b;
+}
+.my-review-store h2 {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.my-review-store a > span {
+  color: #a2aab2;
+}
+.closed-store {
+  font-size: 11px;
+  color: #a19380;
+}
+.my-review-group :deep(.review-card) {
+  border-top: 0;
+  padding: 18px 0 26px;
+}
+.my-review-status,
+.my-review-empty,
+.my-review-error {
+  text-align: center;
+  padding: 65px 12px;
+  font-size: 13px;
+  line-height: 1.9;
+  color: #939ca5;
+}
+.my-review-empty h2 {
+  font-weight: 550;
+  font-size: 19px;
+  color: #687580;
+}
+.my-review-empty a {
+  display: inline-block;
+  color: #a77e41;
+  margin-top: 12px;
+}
+.my-review-error p {
+  overflow-wrap: anywhere;
+}
+.my-review-notice {
+  color: #9d7b42;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.my-review-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 26px 0;
+  font-size: 12px;
+  color: #89939e;
+}
+.my-review-confirm {
+  width: min(440px, calc(100% - 32px));
+  border: 1px solid #ece5dc;
+  border-radius: 12px;
+  padding: 24px;
+  color: #47535e;
+}
+.my-review-confirm h2 {
+  font-size: 19px;
+  margin: 0 0 16px;
+}
+.my-review-confirm p {
+  font-size: 13px;
+  line-height: 1.9;
+  color: #89929b;
+}
+.my-review-confirm p[role='alert'] {
+  color: #b16c43;
+}
+.my-review-confirm footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 22px;
+}
+.my-review-confirm button {
+  padding: 10px 16px;
+  border: 1px solid #e4d8c7;
+  border-radius: 6px;
+  background: white;
+  color: #9c7b46;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.my-review-confirm .confirm-remove {
+  background: #fcf4e6;
+}
+.my-review-confirm::backdrop,
+.my-review-lightbox::backdrop {
+  background: #18212c66;
+}
+.my-review-lightbox {
+  max-width: min(1000px, 94vw);
+  max-height: 90vh;
+  padding: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #fff;
+}
+.my-review-lightbox img {
+  display: block;
+  max-width: 100%;
+  max-height: 78vh;
+  object-fit: contain;
+}
+.my-review-lightbox button {
+  display: block;
+  margin: 0 0 12px auto;
+  padding: 8px;
+  border: 0;
+  background: white;
+  color: #67727c;
+  cursor: pointer;
+}
+.my-reviews :is(a, button):focus-visible,
+.my-review-confirm button:focus-visible {
+  outline: 2px solid #cf9f53;
+  outline-offset: 3px;
+}
+@media (max-width: 480px) {
+  .my-reviews-toolbar {
+    gap: 12px;
+  }
+  .my-reviews-toolbar p {
+    flex: 1 0 100%;
+  }
+  .my-review-store h2 {
+    font-size: 16px;
+  }
+}

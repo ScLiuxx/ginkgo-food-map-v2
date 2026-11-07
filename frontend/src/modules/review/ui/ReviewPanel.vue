@@ -7,7 +7,7 @@ import { useLoginStore } from '@/modules/auth/model/login.store'
 import ReviewEntry from './ReviewEntry.vue'
 import ReviewHistory from './ReviewHistory.vue'
 import { reviewGatewayKey, unavailableReviewGateway, validBody } from '../model/review'
-import type { ReviewItem } from '../model/review'
+import type { ReviewItem, ReviewSort } from '../model/review'
 import { detailPhotos, type DetailPhotoUpdate } from '../model/detailPhotos'
 const props = defineProps<{
     restaurantId: string
@@ -40,6 +40,12 @@ const page = ref(1),
   totalReviews = ref(0)
 let requestedPage = 1
 const currentOnly = ref(false)
+const sort = ref<ReviewSort>('DEFAULT')
+// 切换排序回到第一页；load取消旧请求并核验代次，阻止旧排序响应覆盖新选择。
+watch(sort, () => {
+  cancelDelete()
+  void load(1)
+})
 const contentFilter = ref<'all' | 'recommended' | 'photos'>('all')
 watch(contentFilter, () => {
   void load(1)
@@ -79,6 +85,7 @@ async function load(targetPage = page.value) {
         restaurantId,
         signal,
         props.starScale && contentFilter.value !== 'all' ? 1 : targetPage,
+        sort.value,
       )),
     }
     if (ticket !== generation) return
@@ -86,7 +93,7 @@ async function load(targetPage = page.value) {
     if (props.starScale && filter !== 'all') {
       const all = [...result.records]
       for (let next = 2; next <= result.totalPages; next++) {
-        const batch = await gateway.list(restaurantId, signal, next)
+        const batch = await gateway.list(restaurantId, signal, next, sort.value)
         if (ticket !== generation) return
         all.push(...batch.records)
       }
@@ -245,8 +252,19 @@ function view(url: string) {
           有图
         </button>
       </div>
+      <div v-if="!preview" class="content-filters" aria-label="点评排序">
+        <button type="button" :aria-pressed="sort === 'DEFAULT'" @click="sort = 'DEFAULT'">
+          默认排序
+        </button>
+        <button type="button" :aria-pressed="sort === 'TIME'" @click="sort = 'TIME'">
+          时间排序
+        </button>
+      </div>
       <button type="button" :disabled="loading" @click="load(1)">刷新评价</button>
     </header>
+    <p v-if="!preview" class="scoring-rule">
+      {{ sort === 'DEFAULT' ? '点赞数优先，同赞时高等级作者优先。' : '按发布时间从新到旧。' }}
+    </p>
     <p v-if="!preview && !loading && !error" class="scoring-rule">
       <template v-if="starScale">{{
         contentFilter === 'all' ? `${totalGroups} 位同学` : `${totalGroups} 条符合条件`
@@ -451,6 +469,7 @@ function view(url: string) {
 }
 header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   justify-content: space-between;

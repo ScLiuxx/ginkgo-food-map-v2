@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 @Getter
 @RequiredArgsConstructor
 public enum RestaurantErrorCode implements ErrorCode {
+    FAVORITES_PRIVATE("RESTAURANT_FAVORITES_PRIVATE", HttpStatus.FORBIDDEN, "该用户的收藏列表仅本人可见"),
     INVALID_ID("RESTAURANT_INVALID_ID", HttpStatus.BAD_REQUEST, "餐厅ID格式错误"),
     NOT_FOUND("RESTAURANT_NOT_FOUND", HttpStatus.NOT_FOUND, "餐厅不存在或不可访问"),
     REQUEST_NOT_FOUND("RESTAURANT_REQUEST_NOT_FOUND", HttpStatus.NOT_FOUND, "商户申请不存在"),

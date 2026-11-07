@@ -1,8 +1,9 @@
 package com.ginkgo.foodmap.review.dto;
 
+import com.fasterxml.jackson.annotation.JsonAnySetter;
+
 import lombok.Data;
 import lombok.ToString;
-import com.fasterxml.jackson.annotation.JsonAnySetter;
 
 /** 回复仅接收正文和幂等编号，作者由认证上下文确定。 */
 @Data

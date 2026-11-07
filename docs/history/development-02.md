@@ -273,7 +273,7 @@
 | [RestaurantCatalog.vue](../../frontend/src/modules/restaurant/ui/RestaurantCatalog.vue)、[RestaurantDetail.vue](../../frontend/src/modules/restaurant/ui/RestaurantDetail.vue)、[catalog.store.ts](../../frontend/src/modules/restaurant/model/catalog.store.ts) | 目录新增/详情维护入口及成功写入后的缓存失效 |
 | [LoginForm.vue](../../frontend/src/modules/auth/ui/LoginForm.vue)、[LoginForm.spec.ts](../../frontend/src/modules/auth/ui/LoginForm.spec.ts) | 安全回跳原餐厅页面及外部跳转拒绝验证 |
 | [RegistrationApiIntegrationTest.java](../../backend/src/test/java/com/ginkgo/foodmap/user/controller/RegistrationApiIntegrationTest.java) | 认证测试连接独立回环实例，支持完整测试组合 |
-| [README](../../README.md)、需求（原文档已移除）、[功能](../features.md)、[接口](../api.md)、[表结构/测试说明](../architecture/restaurant-schema.md)、本日志 | 同步实际范围、使用方式、协议边界与验证结果 |
+| [README](../../README.md)、需求（原文档已移除）、[功能](../features.md)、[接口](../api.md)、[表结构/测试说明](../architecture/mysql-schema.md#restaurant-schema)、本日志 | 同步实际范围、使用方式、协议边界与验证结果 |
 
 ## 2026-10-28：餐厅阶段提交整理
 
@@ -304,7 +304,7 @@
 
 ## 2026-10-28：评价数据库结构先行评审
 
-- 用户要求先设计数据库并审核想法，本轮仅新增[评价表结构草案](../architecture/review-schema.md)，尚未批准、编写或执行迁移，没有连接数据库、实现接口或修改业务代码。
+- 用户要求先设计数据库并审核想法，本轮仅新增[评价表结构草案](../architecture/mysql-schema.md#review-schema)，尚未批准、编写或执行迁移，没有连接数据库、实现接口或修改业务代码。
 - 建议新增reviews、review_photos、review_replies、media_files和restaurant_review_statistics共5张表；餐厅增加created_nickname展示快照，保留created_by真实归属及餐厅无版本号规则。原站同店多评、停业可评、最多2图、单层回复和昵称贡献均纳入设计，不新增评价编辑或发布审核状态。
 - 草案明确四维DECIMAL半分约束、生成正式总分、账号级同次UUID幂等、评分计数/累计值同事务重建、父子可见性、文件绑定/过期清理竞争和软删除保留图片。24小时临时文件期限及5表方案均为待审核建议；不因本轮设计自动执行物理清理或批准历史真实数据导入。
 - 修改文档及用途：architecture/review-schema.md保存完整待审字段/约束/事务方案；architecture/restaurant-schema.md澄清统计读模型归restaurant、原始评价归review；plans/reviews-development.md标明R1结构待审；README.md增加入口；requirements.md与features.md同步设计状态；development2.md记录本轮边界与验证。保留此前全部未提交规划，不改实际API文档。

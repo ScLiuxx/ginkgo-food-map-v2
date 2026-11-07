@@ -51,12 +51,35 @@ const router = createRouter({
       props: { preview: true },
       meta: { title: '地图界面预览' },
     },
-    ...(['messages', 'account'] as const).map((kind) => ({
-      path: `/${kind}`,
-      component: () => import('@/pages/home/CapabilityPage.vue'),
-      props: { kind },
-      meta: { title: { map: '地图', messages: '消息', account: '我的' }[kind] },
-    })),
+    // 消息分类使用独立地址，直达、刷新及浏览器返回均能恢复对应页面。
+    {
+      path: '/messages/:category(likes|comments|followers|system)?',
+      component: () => import('@/pages/message/MessagePage.vue'),
+      props: true,
+      meta: { title: '消息' },
+    },
+    // 兼容先前界面地址；审核归入系统消息，已暂缓的私信地址返回消息中心。
+    { path: '/messages/reviews', redirect: '/messages/system' },
+    { path: '/messages/private', redirect: '/messages' },
+    {
+      path: '/account/:section(reviews|favorites|contributions|settings|growth|following|followers)?',
+      component: () => import('@/pages/account/AccountPage.vue'),
+      props: true,
+      meta: { title: '我的' },
+    },
+    {
+      path: '/users/:publicUserId([1-9]\\d*)/:section(following|followers)',
+      component: () => import('@/pages/account/PublicProfilePage.vue'),
+      props: true,
+      meta: { title: '关注与粉丝' },
+    },
+    // 公开主页要求登录；页面不以路由参数或本地缓存冒充已授权的用户资料。
+    {
+      path: '/users/:publicUserId([1-9]\\d*)',
+      component: () => import('@/pages/account/PublicProfilePage.vue'),
+      props: true,
+      meta: { title: '个人主页' },
+    },
     {
       path: '/restaurants/submit',
       name: 'restaurant-submit',

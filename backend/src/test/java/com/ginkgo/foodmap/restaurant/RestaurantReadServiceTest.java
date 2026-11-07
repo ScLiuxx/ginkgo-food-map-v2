@@ -1,24 +1,26 @@
 package com.ginkgo.foodmap.restaurant;
 
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
 import com.ginkgo.foodmap.common.exception.BusinessException;
 import com.ginkgo.foodmap.restaurant.dto.RestaurantListQuery;
 import com.ginkgo.foodmap.restaurant.entity.RestaurantEntity;
 import com.ginkgo.foodmap.restaurant.entity.RestaurantTagEntity;
 import com.ginkgo.foodmap.restaurant.mapper.RestaurantCatalogMapper;
 import com.ginkgo.foodmap.restaurant.service.RestaurantReadService;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
 /** 应用服务边界测试：空页不查询标签，ID不截断，公开评分空态保持null。 */
 class RestaurantReadServiceTest {
     private final RestaurantCatalogMapper mapper = mock(RestaurantCatalogMapper.class);
-    private final com.ginkgo.foodmap.restaurant.service.RestaurantPhotoService albums = mock(com.ginkgo.foodmap.restaurant.service.RestaurantPhotoService.class);
+    private final com.ginkgo.foodmap.restaurant.service.RestaurantPhotoService albums =
+            mock(com.ginkgo.foodmap.restaurant.service.RestaurantPhotoService.class);
     private final RestaurantReadService service = new RestaurantReadService(mapper, albums);
 
     /** 无结果与越界页都返回正确元数据，且不执行无效的IN空集合或额外分页SQL。 */
@@ -39,18 +41,35 @@ class RestaurantReadServiceTest {
 
     /** 详情ID必须是可表示的规范正整数，不允许溢出、前导零或非数字格式。 */
     @ParameterizedTest
-    @ValueSource(strings = {"0", "-1", "01", "1.0", "r01", "9223372036854775808", "99999999999999999999"})
+    @ValueSource(
+            strings = {
+                "0",
+                "-1",
+                "01",
+                "1.0",
+                "r01",
+                "9223372036854775808",
+                "99999999999999999999"
+            })
     void shouldRejectInvalidIdBeforeReading(String id) {
-        assertThatThrownBy(() -> service.detail(id)).isInstanceOfSatisfying(BusinessException.class,
-                error -> assertThat(error.getErrorCode().getCode()).isEqualTo("RESTAURANT_INVALID_ID"));
+        assertThatThrownBy(() -> service.detail(id))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        error ->
+                                assertThat(error.getErrorCode().getCode())
+                                        .isEqualTo("RESTAURANT_INVALID_ID"));
         verifyNoInteractions(mapper);
     }
 
     /** 数据库可见查询为空时直接404，不读取任何残留历史标签。 */
     @Test
     void shouldHideMissingAndDeletedRestaurants() {
-        assertThatThrownBy(() -> service.detail("1")).isInstanceOfSatisfying(BusinessException.class,
-                error -> assertThat(error.getErrorCode().getCode()).isEqualTo("RESTAURANT_NOT_FOUND"));
+        assertThatThrownBy(() -> service.detail("1"))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        error ->
+                                assertThat(error.getErrorCode().getCode())
+                                        .isEqualTo("RESTAURANT_NOT_FOUND"));
         verify(mapper).selectVisibleById(1);
         verifyNoMoreInteractions(mapper);
     }
@@ -80,16 +99,25 @@ class RestaurantReadServiceTest {
     @Test
     void shouldBatchCoverMetadataForCurrentPage() {
         var query = new RestaurantListQuery();
-        var first = new RestaurantEntity(); first.setId(1L); first.setName("有图商户");
-        var second = new RestaurantEntity(); second.setId(2L); second.setName("无图商户");
+        var first = new RestaurantEntity();
+        first.setId(1L);
+        first.setName("有图商户");
+        var second = new RestaurantEntity();
+        second.setId(2L);
+        second.setName("无图商户");
         var cover = new com.ginkgo.foodmap.restaurant.vo.RestaurantPhotoViews.Item();
-        cover.setId("801"); cover.setPosition(0); cover.setCover(true); cover.setUrl("/api/restaurants/1/photos/801");
+        cover.setId("801");
+        cover.setPosition(0);
+        cover.setCover(true);
+        cover.setUrl("/api/restaurants/1/photos/801");
         when(mapper.countVisible(query)).thenReturn(2L);
         when(mapper.selectVisiblePage(query)).thenReturn(List.of(first, second));
         when(albums.covers(List.of(1L, 2L))).thenReturn(java.util.Map.of(1L, cover));
         var result = service.list(query);
-        assertThat(result.getRecords().get(0).getCoverPhoto().getUrl()).isEqualTo("/api/restaurants/1/photos/801");
+        assertThat(result.getRecords().get(0).getCoverPhoto().getUrl())
+                .isEqualTo("/api/restaurants/1/photos/801");
         assertThat(result.getRecords().get(1).getCoverPhoto()).isNull();
-        verify(albums, times(1)).covers(List.of(1L, 2L)); verifyNoMoreInteractions(albums);
+        verify(albums, times(1)).covers(List.of(1L, 2L));
+        verifyNoMoreInteractions(albums);
     }
 }

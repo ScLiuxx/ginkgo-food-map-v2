@@ -72,7 +72,7 @@ describe('text review HTTP integration', () => {
     const signal = new AbortController().signal
     const result = await fetchReviewPage('101', signal)
     expect(get).toHaveBeenCalledWith('/api/restaurants/101/reviews', {
-      params: { page: 1, pageSize: 8 },
+      params: { page: 1, pageSize: 8, sort: 'DEFAULT' },
       signal,
     })
     expect(result).toMatchObject({ totalGroups: 1, totalReviews: 2 })
@@ -86,6 +86,17 @@ describe('text review HTTP integration', () => {
       photos: [{ id: '100' }, { id: '99' }, { id: '98' }, { id: '97' }, { id: '96' }],
     })
     expect(result.records[0]).not.toHaveProperty('previousReviews')
+  })
+  it('sends time sorting and pagination to the server', async () => {
+    const get = vi
+      .spyOn(httpClient, 'get')
+      .mockResolvedValue({ data: { success: true, data: readPayload() } })
+    const signal = new AbortController().signal
+    await fetchReviewPage('101', signal, 1, 'TIME')
+    expect(get).toHaveBeenCalledWith('/api/restaurants/101/reviews', {
+      params: { page: 1, pageSize: 8, sort: 'TIME' },
+      signal,
+    })
   })
   it('surfaces failures and rejects malformed groups or foreign photo URLs', async () => {
     const get = vi.spyOn(httpClient, 'get').mockRejectedValueOnce(new Error('网络中断'))

@@ -11,6 +11,12 @@ import org.springframework.http.HttpStatus;
 @Getter
 @RequiredArgsConstructor
 public enum UserErrorCode implements ErrorCode {
+    PUBLIC_PROFILE_NOT_FOUND("USER_PUBLIC_PROFILE_NOT_FOUND", HttpStatus.NOT_FOUND, "用户主页不可用"),
+    PUBLIC_PROFILE_INVALID("USER_PUBLIC_PROFILE_INVALID", HttpStatus.BAD_REQUEST, "用户编号无效"),
+    BIO_INVALID("USER_BIO_INVALID", HttpStatus.BAD_REQUEST, "个人简介包含不支持的字符"),
+    BIO_TOO_LONG("USER_BIO_TOO_LONG", HttpStatus.BAD_REQUEST, "个人简介最多100字"),
+    BIO_CONTACT_NOT_ALLOWED("USER_BIO_CONTACT_NOT_ALLOWED", HttpStatus.BAD_REQUEST, "个人简介不能包含微信、QQ、手机号或网址"),
+    PROFILE_UNAVAILABLE("USER_PROFILE_UNAVAILABLE", HttpStatus.UNAUTHORIZED, "账号不可用，请重新登录"),
     CAMPUS_EMAIL_REQUIRED("USER_CAMPUS_EMAIL_REQUIRED", HttpStatus.BAD_REQUEST, "请使用允许的校园邮箱"),
     EMAIL_ALREADY_REGISTERED("USER_EMAIL_ALREADY_REGISTERED", HttpStatus.CONFLICT, "该邮箱已注册"),
     USERNAME_ALREADY_REGISTERED("USER_USERNAME_ALREADY_REGISTERED", HttpStatus.CONFLICT, "该用户名已被使用"),

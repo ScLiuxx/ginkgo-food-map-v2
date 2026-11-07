@@ -13,3 +13,4 @@ export type { RestaurantManagement, RestaurantCategory } from './api/restaurantA
 export type { CatalogFilters, RestaurantReadModel } from './model/restaurant.types'
 export { default as RestaurantAdvancedFilters } from './ui/RestaurantAdvancedFilters.vue'
 export { default as SubmitRestaurantButton } from './ui/SubmitRestaurantButton.vue'
+export { default as MyContributions } from './ui/MyContributions.vue'

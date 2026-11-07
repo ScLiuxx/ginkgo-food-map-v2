@@ -62,7 +62,7 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.PUT, "/api/restaurants/{id}").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/restaurants/{id}").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/restaurants/{id}/management").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/api/public/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/content-likes", "/actuator/health", "/api/public/**").permitAll()
                         .requestMatchers(HttpMethod.GET,"/api/reviews/{reviewId}/photos/{position}").permitAll()
                         // 正式商户相册仅开放明确GET路径，服务逐次验证公开关联及父商户；申请图片仍仅管理员可读。
                         .requestMatchers(HttpMethod.GET,"/api/restaurants/{id}/photos", "/api/restaurants/{id}/photos/{photoId}").permitAll()

@@ -10,4 +10,4 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @ConditionalOnProperty(name = "app.search.sync.enabled", havingValue = "true")
 @EnableConfigurationProperties(RestaurantSearchSyncProperties.class)
 @EnableScheduling
-public class RestaurantSearchSyncConfiguration { }
+public class RestaurantSearchSyncConfiguration {}

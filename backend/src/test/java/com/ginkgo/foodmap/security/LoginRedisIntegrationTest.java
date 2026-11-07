@@ -1,9 +1,13 @@
 package com.ginkgo.foodmap.security;
 
+import static org.assertj.core.api.Assertions.*;
+import static org.awaitility.Awaitility.await;
+
 import com.ginkgo.foodmap.common.exception.BusinessException;
 import com.ginkgo.foodmap.security.config.AuthenticationProperties;
 import com.ginkgo.foodmap.security.service.LoginProtectionService;
 import com.ginkgo.foodmap.security.service.LoginSessionService;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,6 +15,7 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -18,8 +23,6 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
-import static org.assertj.core.api.Assertions.*;
-import static org.awaitility.Awaitility.await;
 
 /** 显式启用 redis.integration 后验证真实 Lua、会话 TTL 和撤销；只清理随机生成的测试键。 */
 @EnabledIfSystemProperty(named = "redis.integration", matches = "true")
@@ -50,8 +53,12 @@ class LoginRedisIntegrationTest {
     /** 不执行 FLUSHDB 或通配符删除，避免影响本地业务会话和验证码。 */
     @AfterEach
     void clean() {
-        if (redis != null && !ownedKeys.isEmpty()) redis.delete(ownedKeys);
-        if (factory != null) factory.destroy();
+        if (redis != null && !ownedKeys.isEmpty()) {
+            redis.delete(ownedKeys);
+        }
+        if (factory != null) {
+            factory.destroy();
+        }
     }
 
     /** 并发失败不会丢失计数，达到阈值会锁定，锁超时后允许重试。 */
@@ -63,15 +70,23 @@ class LoginRedisIntegrationTest {
         try (var executor = Executors.newFixedThreadPool(8)) {
             var futures = new ArrayList<java.util.concurrent.Future<Boolean>>();
             for (int index = 0; index < 8; index++) {
-                futures.add(executor.submit(() -> { start.await(); return protection.failed(key); }));
+                futures.add(
+                        executor.submit(
+                                () -> {
+                                    start.await();
+                                    return protection.failed(key);
+                                }));
             }
             start.countDown();
-            for (var future : futures) future.get();
+            for (var future : futures) {
+                future.get();
+            }
         }
         assertThat(redis.opsForValue().get(key + ":failures")).isEqualTo("8");
         assertThatThrownBy(() -> protection.check(key)).isInstanceOf(BusinessException.class);
         assertThat(redis.getExpire(key + ":failures")).isBetween(1L, 5L);
-        await().atMost(Duration.ofSeconds(3)).until(() -> !Boolean.TRUE.equals(redis.hasKey(key + ":lock")));
+        await().atMost(Duration.ofSeconds(3))
+                .until(() -> !Boolean.TRUE.equals(redis.hasKey(key + ":lock")));
         assertThatCode(() -> protection.check(key)).doesNotThrowAnyException();
         protection.succeeded(key);
         assertThat(redis.hasKey(key + ":failures")).isFalse();

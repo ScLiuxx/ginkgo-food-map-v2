@@ -10,7 +10,9 @@ import com.ginkgo.foodmap.review.policy.ReplyPolicy;
 import com.ginkgo.foodmap.review.vo.ReplyPageVo;
 import com.ginkgo.foodmap.user.dto.PublicAuthor;
 import com.ginkgo.foodmap.user.service.PublicAuthorService;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.*;
 
@@ -27,26 +29,48 @@ public class ReplyReadService {
     public ReplyPageVo list(String review, ReplyListQuery query) {
         long id = ReplyPolicy.reviewId(review);
         Long restaurant = mapper.restaurant(id);
-        if (restaurant == null) throw new BusinessException(ReplyErrorCode.NOT_FOUND);
+        if (restaurant == null) {
+            throw new BusinessException(ReplyErrorCode.NOT_FOUND);
+        }
         restaurants.requireVisible(restaurant);
         ReplyEntity boundary = null;
         if (query.getCursor() != null) {
             boundary = ReplyPolicy.decode(query.getCursor(), id);
             var anchor = mapper.anchor(id, boundary.getId());
-            if (anchor == null || !anchor.getCreatedAt().equals(boundary.getCreatedAt())) throw new BusinessException(ReplyErrorCode.INVALID_CURSOR);
+            if (anchor == null || !anchor.getCreatedAt().equals(boundary.getCreatedAt())) {
+                throw new BusinessException(ReplyErrorCode.INVALID_CURSOR);
+            }
         }
         var rows = mapper.page(id, boundary, query.getPageSize() + 1);
-        var result = new ReplyPageVo(); result.setHasMore(rows.size() > query.getPageSize());
+        var result = new ReplyPageVo();
+        result.setHasMore(rows.size() > query.getPageSize());
         rows = rows.subList(0, Math.min(rows.size(), query.getPageSize()));
-        if (rows.isEmpty()) return result;
-        var names = authors.find(rows.stream().map(ReplyEntity::getAuthorUserId).distinct().toList());
-        result.setRecords(rows.stream().map(row -> {
-            var name = names.get(Long.toString(row.getAuthorUserId()));
-            if (name == null) { name = new PublicAuthor(); name.setId(Long.toString(row.getAuthorUserId())); name.setUsername("用户不可用"); }
-            var item = new ReplyPageVo.Item(); item.setId(row.getId().toString()); item.setAuthor(name);
-            item.setBody(row.getBody()); item.setCreatedAt(row.getCreatedAt()); return item;
-        }).toList());
-        if (result.isHasMore()) result.setNextCursor(ReplyPolicy.encode(rows.getLast()));
+        if (rows.isEmpty()) {
+            return result;
+        }
+        var names =
+                authors.find(rows.stream().map(ReplyEntity::getAuthorUserId).distinct().toList());
+        result.setRecords(
+                rows.stream()
+                        .map(
+                                row -> {
+                                    var name = names.get(Long.toString(row.getAuthorUserId()));
+                                    if (name == null) {
+                                        name = new PublicAuthor();
+                                        name.setId(Long.toString(row.getAuthorUserId()));
+                                        name.setUsername("用户不可用");
+                                    }
+                                    var item = new ReplyPageVo.Item();
+                                    item.setId(row.getId().toString());
+                                    item.setAuthor(name);
+                                    item.setBody(row.getBody());
+                                    item.setCreatedAt(row.getCreatedAt());
+                                    return item;
+                                })
+                        .toList());
+        if (result.isHasMore()) {
+            result.setNextCursor(ReplyPolicy.encode(rows.getLast()));
+        }
         return result;
     }
 }

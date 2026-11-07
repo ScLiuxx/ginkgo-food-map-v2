@@ -47,4 +47,28 @@ public interface ReviewReadMapper {
     @Select(PAGE_SQL)
     List<ReviewReadEntity> page(@Param("restaurant") long restaurant, @Param("limit") int limit,
                               @Param("offset") long offset);
+    /** 当前店作者逻辑ID交由growth公开服务查询等级，不联查其他模块表。 */
+    @Select("SELECT DISTINCT author_user_id FROM reviews WHERE restaurant_id=#{restaurant}")
+    List<Long> authorIds(long restaurant);
+
+    /** 先选最新代表，再按该点评有效点赞、作者等级、时间及ID排序后分页；全部参数绑定。 */
+    @Select("""
+        <script>
+        SELECT ranked.* FROM (
+            SELECT id,author_user_id,taste_score,value_score,service_score,ambience_score,
+                   overall_score,is_recommended AS recommended,body,created_at,
+                   COUNT(*) OVER (PARTITION BY author_user_id)-1 AS history_count,
+                   ROW_NUMBER() OVER (PARTITION BY author_user_id ORDER BY created_at DESC,id DESC) AS representative
+            FROM reviews WHERE restaurant_id=#{restaurant}
+        ) ranked WHERE representative=1
+        ORDER BY (SELECT COUNT(*) FROM content_likes likes
+                  WHERE likes.target_type='REVIEW' AND likes.target_id=ranked.id AND likes.active=1) DESC,
+                 CASE author_user_id
+                 <foreach collection="levels" index="user" item="level">WHEN #{user} THEN #{level}</foreach>
+                 ELSE 1 END DESC,
+                 created_at DESC,id DESC LIMIT #{limit} OFFSET #{offset}
+        </script>
+        """)
+    List<ReviewReadEntity> rankedPage(@Param("restaurant") long restaurant, @Param("limit") int limit,
+                                    @Param("offset") long offset, @Param("levels") java.util.Map<Long, Integer> levels);
 }

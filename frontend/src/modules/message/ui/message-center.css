@@ -1,0 +1,450 @@
+/* 白色连续页面、暖橙强调色和轻分隔线沿用找店页；桌面收窄阅读宽度，手机保留三等分入口。 */
+.message-center {
+  width: min(840px, calc(100% - 64px));
+  min-height: calc(100vh - 176px);
+  margin: 0 auto;
+  padding: 40px 0 28px;
+  color: #27313c;
+}
+.shortcut-unread {
+  background: #b56b20;
+  color: #fff;
+  border-radius: 12px;
+  padding: 2px 7px;
+  margin-top: 6px;
+  font-size: 11px;
+}
+/* 系统通知保持现有会话页的轻分隔线；长店名/原因允许换行，手机不溢出。 */
+.notification-inbox {
+  margin-top: 28px;
+}
+.notification-toolbar,
+.notification-meta,
+.notification-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.notification-toolbar {
+  margin-bottom: 16px;
+  color: #737a80;
+  font-size: 13px;
+}
+.notification-inbox button,
+.notification-status button {
+  cursor: pointer;
+}
+.notification-list {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.notification-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  padding: 20px 12px;
+  border: 0;
+  border-bottom: 1px solid #f0efec;
+  background: #fff;
+  text-align: left;
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+.notification-card.unread {
+  background: #fffaf3;
+}
+.notification-meta {
+  width: 100%;
+  font-size: 12px;
+  color: #737a80;
+}
+.notification-meta strong {
+  font-size: 14px;
+  color: #27313c;
+}
+.notification-unread {
+  color: #b36b16;
+  flex-shrink: 0;
+}
+.notification-name {
+  font-size: 16px;
+}
+.notification-reason {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #6b737a;
+}
+.notification-toolbar button,
+.notification-pagination button,
+.notification-status button {
+  border: 1px solid #e8e5df;
+  border-radius: 6px;
+  padding: 7px 12px;
+  background: #fff;
+  color: #845a2a;
+}
+.notification-pagination {
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 20px;
+  font-size: 13px;
+}
+.notification-empty,
+.notification-status {
+  padding: 18px 0;
+  color: #737a80;
+  font-size: 14px;
+}
+.mark-all-read:enabled {
+  color: #a36524;
+  cursor: pointer;
+}
+.notification-inbox button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.message-heading,
+.message-title,
+.category-heading,
+.back-link {
+  display: flex;
+  align-items: center;
+}
+.message-heading {
+  justify-content: space-between;
+  gap: 16px;
+}
+.message-title {
+  gap: 12px;
+}
+.mark-all-read {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 10px 0 10px 10px;
+  border: 0;
+  background: none;
+  color: #8d969f;
+  font-size: 12px;
+}
+.message-title h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -0.6px;
+}
+.availability {
+  padding: 4px 8px;
+  border-radius: 5px;
+  background: #f5f5f3;
+  color: #737a80;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.message-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  padding: 40px 0 36px;
+}
+.message-shortcut {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 4px;
+  border-radius: 12px;
+  text-align: center;
+  text-decoration: none;
+}
+.amber {
+  --icon-color: #db901c;
+  --icon-background: #fff2dc;
+  --icon-end: #fff8ed;
+}
+.rose {
+  --icon-color: #e7777e;
+  --icon-background: #ffe9e9;
+  --icon-end: #fff5f4;
+}
+.blue {
+  --icon-color: #4e9ec6;
+  --icon-background: #e6f5fc;
+  --icon-end: #f3faff;
+}
+.shortcut-icon,
+.session-avatar,
+.category-illustration {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--icon-color);
+  background: linear-gradient(140deg, var(--icon-end), var(--icon-background));
+}
+.shortcut-icon {
+  width: 72px;
+  height: 72px;
+  margin-bottom: 16px;
+  border-radius: 50%;
+  transition: transform 160ms ease;
+}
+.message-shortcut strong {
+  font-size: 15px;
+  font-weight: 550;
+}
+.session-list {
+  border-top: 1px solid #f0f0ed;
+}
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 106px;
+  padding: 25px 8px;
+  text-decoration: none;
+}
+.session-row + .session-row {
+  border-top: 1px solid #f4f3f0;
+}
+.session-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+}
+.session-avatar :deep(svg) {
+  width: 29px;
+  height: 29px;
+}
+.session-copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+.session-heading,
+.session-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.session-heading strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-preview {
+  overflow: hidden;
+  color: #8c939b;
+  font-size: 13px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-time {
+  flex-shrink: 0;
+  color: #a4a9ae;
+  font-size: 11px;
+}
+.session-unread {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ed735e;
+  color: #fff;
+  font-size: 11px;
+}
+.session-empty {
+  border-top: 1px solid #f0f0ed;
+}
+.message-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 44px 16px 20px;
+  text-align: center;
+}
+.empty-illustration {
+  display: grid;
+  place-items: center;
+  width: 80px;
+  height: 68px;
+  margin-bottom: 17px;
+  color: #c8b79a;
+  border-radius: 50%;
+  background: #fcf9f2;
+}
+.empty-illustration :deep(svg) {
+  width: 43px;
+  height: 43px;
+  stroke-width: 1.2;
+}
+.message-empty h3,
+.message-empty h2 {
+  margin: 0;
+  color: #68727d;
+  font-size: 15px;
+  font-weight: 500;
+}
+.message-empty p {
+  max-width: 360px;
+  margin: 10px 0 0;
+  color: #8a929b;
+  font-size: 12px;
+  line-height: 1.9;
+}
+.empty-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 42px;
+  margin-top: 22px;
+  padding: 8px 22px;
+  border: 1px solid #efdfc4;
+  border-radius: 7px;
+  color: #a67530;
+  font-size: 12px;
+  text-decoration: none;
+}
+.category-heading {
+  gap: 16px;
+  min-height: 44px;
+}
+.back-link {
+  gap: 3px;
+  min-height: 44px;
+  margin-left: -8px;
+  padding: 8px;
+  color: #7e8790;
+  font-size: 13px;
+  text-decoration: none;
+}
+.back-link svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.category-heading h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+.category-empty {
+  min-height: 480px;
+  justify-content: center;
+}
+.category-illustration {
+  width: 88px;
+  height: 88px;
+  margin-bottom: 26px;
+  border-radius: 50%;
+}
+.category-illustration :deep(svg) {
+  width: 38px;
+  height: 38px;
+}
+.message-center a:focus-visible {
+  outline: 2px solid #ad6f26;
+  outline-offset: 4px;
+}
+@media (hover: hover) {
+  .message-shortcut:hover,
+  .session-row:hover {
+    background: #fcfbf8;
+  }
+  .message-shortcut:hover .shortcut-icon {
+    transform: translateY(-3px);
+  }
+  .empty-action:hover {
+    background: #fff8ed;
+  }
+}
+@media (max-width: 600px) {
+  .message-center {
+    width: calc(100% - 32px);
+    padding-top: 24px;
+  }
+  .message-title {
+    gap: 9px;
+  }
+  .message-title h1 {
+    font-size: 24px;
+  }
+  .message-shortcuts {
+    gap: 8px;
+    padding: 26px 0 28px;
+  }
+  .shortcut-icon {
+    width: 60px;
+    height: 60px;
+    margin-bottom: 13px;
+  }
+  .shortcut-icon :deep(svg) {
+    width: 28px;
+    height: 28px;
+  }
+  .message-shortcut strong {
+    font-size: 14px;
+  }
+  .session-row {
+    min-height: 95px;
+    gap: 13px;
+    padding: 23px 2px;
+  }
+  .session-avatar {
+    width: 49px;
+    height: 49px;
+  }
+  .session-avatar :deep(svg) {
+    width: 27px;
+    height: 27px;
+  }
+  .session-heading strong {
+    font-size: 15px;
+  }
+  .session-preview {
+    font-size: 12px;
+  }
+  .session-time {
+    font-size: 10px;
+  }
+  .message-empty {
+    padding-top: 24px;
+  }
+  .empty-illustration {
+    margin-bottom: 12px;
+  }
+  .empty-action {
+    margin-top: 18px;
+  }
+  .category-heading {
+    gap: 8px;
+  }
+  .category-heading h1 {
+    font-size: 20px;
+  }
+  .category-empty {
+    min-height: 420px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shortcut-icon {
+    transition: none;
+  }
+}

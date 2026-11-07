@@ -37,6 +37,40 @@ describe('review interactions matching the original site', () => {
     canDelete: true,
     replies: [],
   }
+  it('switches sorting from page one and ignores late responses from the old order', async () => {
+    await mount(ReviewPanel, { restaurantId: '1' })
+    const list = vi.mocked(gateway.list)
+    expect(list.mock.calls[0]?.[3]).toBe('DEFAULT')
+    let finishOld!: (page: Awaited<ReturnType<ReviewGateway['list']>>) => void
+    list.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishOld = resolve
+        }),
+    )
+    const button = (text: string) =>
+      [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === text)!
+    button('时间排序').click()
+    await settle()
+    const oldSignal = list.mock.calls.at(-1)![1]
+    expect(list.mock.calls.at(-1)?.slice(2)).toEqual([1, 'TIME'])
+    button('默认排序').click()
+    await settle()
+    expect(oldSignal.aborted).toBe(true)
+    expect(list.mock.calls.at(-1)?.slice(2)).toEqual([1, 'DEFAULT'])
+    finishOld({
+      records: [{ ...review, body: '旧排序结果' }],
+      page: 1,
+      pageSize: 8,
+      totalPages: 1,
+      totalGroups: 1,
+      totalReviews: 1,
+    })
+    await settle()
+    expect(host.textContent).not.toContain('旧排序结果')
+    expect(button('默认排序').getAttribute('aria-pressed')).toBe('true')
+  })
+
   beforeEach(async () => {
     vi.resetAllMocks()
     clearAccessToken()

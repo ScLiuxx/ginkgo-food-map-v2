@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ginkgo.foodmap.restaurant.mapper.MyRestaurantRequestMapper">
+    <!-- 先按认证本人及状态过滤，再分页；相同时间以ID稳定排序，不加载整份快照。 -->
+    <select id="page" resultType="com.ginkgo.foodmap.restaurant.entity.MyRestaurantRequestEntity">
+        SELECT r.id,r.restaurant_id,r.request_type,r.status,r.created_at,r.reviewed_at,
+            JSON_UNQUOTE(JSON_EXTRACT(r.proposed_data,'$.name')) AS request_name,
+            (SELECT COUNT(*) FROM restaurant_change_photos p WHERE p.request_id=r.id) AS photo_count
+        FROM restaurant_change_requests r WHERE r.submitted_by=#{owner}
+        <if test="query.status != 'ALL'">AND r.status=#{query.status}</if>
+        ORDER BY r.created_at DESC,r.id DESC LIMIT #{query.pageSize} OFFSET #{offset}
+    </select>
+</mapper>

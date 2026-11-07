@@ -38,6 +38,13 @@
 | POST | `/auth/password-reset` | 公开 | 200 | 设置新密码 |
 | POST | `/auth/login` | 公开 | 200 | 统一登录 |
 | GET | `/auth/me` | Bearer | 200 | 当前身份 |
+| GET | `/api/me/growth` | Bearer | 200 | 本人经验及数字等级 |
+| GET | `/api/me/reviews` | Bearer | 200 | 本人点评按店铺分组分页 |
+| GET | `/api/me/profile` | Bearer | 200 | 本人资料与脱敏绑定邮箱 |
+| PATCH | `/api/me/profile` | Bearer | 200 | 保存或清空本人简介 |
+| GET | `/api/me/restaurant-requests` | Bearer | 200 | 本人投稿/纠错分页及状态计数 |
+| GET | `/api/me/restaurant-requests/{id}` | Bearer | 200 | 本人申请原内容及审核结果 |
+| GET | `/api/me/restaurant-requests/{id}/photos/{position}` | Bearer | 200 JPEG | 本人申请私有附图 |
 | POST | `/auth/logout` | Bearer | 200 | 撤销当前会话 |
 | GET | `/api/admin/me` | 管理员 | 200 | 工作台身份校验 |
 | GET | `/api/admin/restaurant-requests` | 管理员 | 200 | 商户申请分页 |
@@ -233,7 +240,7 @@
 - 首次通过时，REGULAR必须提供可用的categoryCode；CANTEEN必须使用categoryCode=null或省略。类型与分类不匹配返回400 RESTAURANT_INVALID_INPUT，不自动将食堂归到“其他美食”。旧的已通过食堂按原完整内容重试仍返回首次回执，不重新写入历史分类。
 - CREATE创建正式餐厅和有序标签，created_by/updated_by均为实际审核管理员，新ID回填申请restaurant_id，request_type保持CREATE。投稿人保留在submitted_by，不因此获得直接维护权限。
 - UPDATE更新原ID及餐厅类型、堂食/外卖三态，保留既有创建者、来源及评分；before_data保存事务内更新前的业务字段及标签（含类型、用餐方式），approved_data保存规范化后的最终业务字段。新店before_data为空。存在任意窗口关联的食堂不能改为普通餐厅，返回409 RESTAURANT_STATE_CONFLICT，包括软删除窗口仍有外键引用的情况。
-- 商户、标签、正式相册关联和审核状态在同一个事务提交或回滚。纠错统一先锁商户、再锁申请；新店先锁申请并创建正式商户；文件校验按文件ID升序加锁。审核人取当前认证，时间由数据库生成，不能回退终态。
+- 商户、标签、正式相册关联、审核状态和成长奖励在同一个事务提交或回滚。首次通过按原submitted_by计奖：CREATE默认+20，按申请去重；UPDATE默认+10，按用户和店铺去重，后续纠错可正常通过但不重复领奖。重复通过和历史已通过申请不补发经验，管理员直接维护与驳回不计奖；奖励写入失败整次审核返回500 COMMON_INTERNAL_SERVER_ERROR，不保留已通过结果。纠错统一先锁商户、再锁申请；新店先锁申请并创建正式商户；文件校验按文件ID升序加锁。审核人取当前认证，时间由数据库生成，不能回退终态。
 - 相同规范化完整内容再次通过，返回首次回执且replayed=true，不重复建店、更新商户或覆盖审核人/时间；分类后来被停用不妨碍已成功结果重放。已通过后提交不同内容、已驳回后通过均409。直接维护接口的后续修改不会被通过重试覆盖。
 - 不检测页面打开后商户资料是否变化，成功审核的完整业务资料覆盖当时正式值；已删除目标仍禁止通过，不隐式恢复。
 - 首次通过将原申请附图全部发布到正式相册，不接受另外提交photoIds或逐张选择。新店按投稿顺序写入，纠错追加到现有相册末尾；没有附图保留原相册。position=0为默认封面。原申请关联、原BOUND文件和私有OSS对象保留，不复制、重传、重新绑定或更改文件状态。
@@ -427,7 +434,7 @@ reason必填，DTO最多200个UTF-16单元，去Unicode首尾空白后不能为�
 
 V23消费更新：Outbox现支持可选单实例定时消费，默认关闭；成功写入ES后确认任务，失败延迟重试至上限后保留FAILED。接口成功仍仅代表MySQL及任务提交，不承诺已可在ES搜索到；无新增HTTP接口或失败重放入口，网站查询继续使用MySQL。
 
-搜索同步副作用（V22）：商户新建、编辑、删除、恢复及审核通过在原业务事务内记录Outbox，点评统计更新同样记录；任务插入失败时原业务一起回滚。没有新增HTTP接口，成功只表示MySQL资料和任务已保存，不表示ES已同步。待审申请、驳回、回复及幂等重试不重复生成任务；V23消费者按上述独立开关启用。详见[Outbox说明](architecture/restaurant-search-outbox.md)。
+搜索同步副作用（V22）：商户新建、编辑、删除、恢复及审核通过在原业务事务内记录Outbox，点评统计更新同样记录；任务插入失败时原业务一起回滚。没有新增HTTP接口，成功只表示MySQL资料和任务已保存，不表示ES已同步。待审申请、驳回、回复及幂等重试不重复生成任务；V23消费者按上述独立开关启用。字段定义见[同步任务表](architecture/mysql-schema.md#restaurant-search-outbox)。
 
 ### 9.1 临时图片
 
@@ -467,15 +474,17 @@ UUID必填；四维完整，0–10且步进0.5；recommended为真实布尔值�
 
 点评、图片和计分统计同事务。每次真实发布保留历史；同一作者每店只取最新有效点评计分，不重复增加计分人数。无效输入400 `REVIEW_INVALID_INPUT`或`COMMON_MALFORMED_REQUEST`；并发/锁竞争重试耗尽503 `REVIEW_TEMPORARILY_UNAVAILABLE`，保留原UUID重试。
 
+成长副作用：接入后新提交成功的点评，在同一事务内尝试创建每用户每店唯一的经验奖励，默认5经验，可通过GROWTH_FIRST_REVIEW_EXPERIENCE配置；重复请求、同店再评或删评重发不重复领奖，普通本人删评不扣经验。已存在发布请求的重放分支不补发历史经验。计奖失败与点评、图片绑定、评分统计及搜索任务一起回滚，响应结构保持不变；最新经验与等级通过第14节查询。金额溢出或账目异常返回500，不提交部分结果。
+
 ### 10.2 按作者分组分页
 
-`GET /api/restaurants/{restaurantId}/reviews`公开。page默认1、正整数；pageSize默认8、1–50，按作者组计数。200、禁止缓存，data结构：
+`GET /api/restaurants/{restaurantId}/reviews`公开。page默认1、正整数；pageSize默认8、1–50，按作者组计数。sort默认DEFAULT，仅接受DEFAULT或TIME（大小写精确），非法或空值返回400通用校验错误。200、禁止缓存，data结构：
 
 ```json
 {"records":[{"author":{"id":"22","username":"同学甲"},"currentReview":{"id":"101","scores":{"taste":8,"value":7.5,"service":7,"ambience":8},"overallScore":7.63,"recommended":true,"body":"这次出餐很快，分量也比较足。","createdAt":"2026-11-03T06:00:00Z","scoringStatus":"current","photos":[{"id":"501","position":0,"url":"/api/reviews/101/photos/0"}]},"historyCount":0,"nextHistoryCursor":null}],"totalGroups":1,"totalReviews":1,"page":1,"pageSize":8,"totalPages":1}
 ```
 
-每组只返回作者最新有效点评，历史不内嵌；照片有序最多5张。totalGroups与totalReviews区分人数和条数，空/越界页返回真实总数与空records。父店不可见404，停业可读。ID/分页非法400 `REVIEW_INVALID_QUERY`或通用校验错误。
+每组只返回作者最新有效点评，历史不内嵌；照片有序最多5张。默认排序DEFAULT在完整作者组中按该条最新点评的当前有效点赞数降序、作者当前等级降序，再按createdAt及数字ID降序，之后才分页；历史点评点赞不并入主卡片。TIME仅按createdAt及数字ID降序。没有成长账户按零经验对应等级处理，同等级不继续比较原始经验。每次请求为独立只读快照，点赞、等级或最新点评变化后作者可能跨页移动，跨请求不保证固定排名；切换排序回到第一页。totalGroups与totalReviews区分人数和条数，空/越界页返回真实总数与空records。父店不可见404，停业可读。ID/分页非法400 `REVIEW_INVALID_QUERY`或通用校验错误。
 
 ### 10.3 同作者历史
 
@@ -492,6 +501,22 @@ UUID必填；四维完整，0–10且步进0.5；recommended为真实布尔值�
 删除历史只减少条数；删除最新由上一条接替，删除本人最后一条移除其计分贡献。回复/图片关联删除，媒体登记异步清理意图，不保证204时OSS已物理删除。原发布UUID持续保留删除回执，不允许重放重建点评。
 
 非本人403 `REVIEW_FORBIDDEN`；点评不存在且无本人回执404 `REVIEW_NOT_FOUND`；首次删除时父店隐藏404 `RESTAURANT_NOT_FOUND`；非法ID400 `REVIEW_INVALID_QUERY`；竞争耗尽503 `REVIEW_TEMPORARILY_UNAVAILABLE`。不提供恢复点评接口。
+
+### 10.5 本人点评按店铺分组
+
+`GET /api/me/reviews`需Bearer，仅从当前认证身份确定作者；不允许选择其他用户，额外userId/authorUserId/offset查询字段不参与绑定。page默认1、正整数且不超过Integer.MAX_VALUE；pageSize默认8、范围1–50，分页单位为店铺组。
+
+成功200，`Cache-Control: no-store`，data示例：
+
+```json
+{"author":{"id":"22","username":"同学甲"},"records":[{"restaurant":{"id":"26","name":"校园面馆","businessStatus":"OPERATING"},"currentReview":{"id":"101","scores":{"taste":8,"value":7.5,"service":7,"ambience":8},"overallScore":7.63,"recommended":true,"body":"这次出餐很快，分量也比较足。","createdAt":"2026-11-03T06:00:00Z","scoringStatus":"current","photos":[]},"historyCount":0,"nextHistoryCursor":null}],"totalGroups":1,"totalReviews":1,"page":1,"pageSize":8,"totalPages":1}
+```
+
+每家店只返回该作者的最新有效点评，按createdAt、id倒序确定代表并排序，归组在LIMIT之前完成。totalGroups为当前可见店铺数，totalReviews包括这些店铺中的本人历史点评；空/越界页保留真实计数。restaurant只返回ID、名称和营业状态，不包含管理或删除元数据。当前仅覆盖已有restaurant_id目标（普通餐厅及历史食堂点评），独立window_id尚未接入；停业可见，不存在/已删除店铺整组排除且不计总数，恢复后原点评重新进入查询。
+
+currentReview、照片相对URL及nextHistoryCursor与10.2/10.3一致；历史仍通过现有同店同作者接口按需读取，删除仍使用10.4。接口不改变计分或经验，不创建账户、回执或媒体记录，也不开放公开个人主页的跨店点评列表。
+
+一次响应内作者、目标可见性、计数、页记录和照片来自同一只读RR快照；跨请求不是固定快照，新评/删除可能改变页位置，页面刷新或删除成功后回第一页。查询故障返回500，不降级成空列表；只有实际没有可见记录才返回空records及零计数。分页绑定/校验失败400，认证失效401 `AUTH_UNAUTHENTICATED`，认证依赖故障503 `AUTH_SERVICE_UNAVAILABLE`，已认证但方法不匹配405 `COMMON_METHOD_NOT_ALLOWED`。
 
 ## 11. 单层回复
 
@@ -532,3 +557,333 @@ UUID必填，正文去首尾Unicode空白后1–200码点；作者与时间由�
 其他业务错误码见各接口章节。认证过滤可先于MVC返回401，不能用错误方法探测接口是否存在。限流响应不保证Retry-After、剩余次数或精确解锁时间。
 
 撤回申请、相册图片删除/替换/重排/手动封面、编辑点评及恢复点评没有可调用接口。只有首次通过审核才创建或更新正式商户并发布其附图，待审/驳回申请不能作为公开商户或相册返回，历史已通过申请不自动补发布图片。前端餐厅/食堂详情已接入6.4/6.5：每页20张，公开列表及JPEG读取省略Bearer，按需加载下一页，最多4个图片请求并发，临时Blob在切店/卸载释放；管理员页面使用publishedPhotos显示实际发布记录。首页/地图卡片使用目录或详情返回的coverPhoto，直接匿名加载对应JPEG，不另发逐商户相册/点评查询。
+
+## 14. 本人成长摘要
+
+`GET /api/me/growth`需Bearer，无业务请求参数，仅从当前认证身份确定用户，不能通过额外userId参数查询别人。无发奖、撤销、任意用户成长查询或经验修改HTTP接口。
+
+成功200，`Cache-Control: no-store`，统一响应的data例如：
+
+```json
+{"userId":"11","experience":5,"level":1,"currentLevelThreshold":0,"nextLevelThreshold":100}
+```
+
+| 字段 | 含义 |
+| --- | --- |
+| userId | 当前账号ID，字符串。 |
+| experience | 当前净经验，非负整数；等级升级不消耗经验。 |
+| level | 从1开始的数字等级。 |
+| currentLevelThreshold | 当前等级的累计经验门槛。 |
+| nextLevelThreshold | 下一等级的累计经验门槛，最高级为null。 |
+
+未获奖账号返回零经验、初始等级，GET不创建账户。初始门槛为0/100/400/1000，可通过GROWTH_LEVEL_THRESHOLDS配置，以英文逗号分隔；门槛必须从0开始、严格递增，奖励分值必须为正，否则启动配置校验失败。配置随部署生效，旧奖励保留实际发放经验，不因调参重发或重算；已撤销奖励的恢复未开放。
+
+缺少、过期、会话失效或账号不可用的凭证返回401 `AUTH_UNAUTHENTICATED`；认证依赖暂不可用沿用503 `AUTH_SERVICE_UNAVAILABLE`；已认证但方法不匹配返回405 `COMMON_METHOD_NOT_ALLOWED`；未预期查询故障返回500 `COMMON_INTERNAL_SERVER_ERROR`，不降级成零经验。只有实际无账户记录才按零经验解释。
+
+当前只接入普通餐厅及既有可发布餐厅目标的首次点评奖励；前端个人中心、成长详情及本人主页已使用本接口，退出或换号清理旧资料，错误不降级为零经验。审核通过奖励已接入，新店默认+20、同人同店纠错仅首次+10；点评获赞奖励已接入（规则见18节），点评默认/时间排序及内部批量等级查询已接入，作者数字等级展示及登录可见个人主页已接入。内部幂等撤销能力已提供给未来风控协作，当前没有公开处置入口。其他社区页面的待开放入口未增加后端HTTP接口。
+
+## 15. 本人资料与简介
+
+`GET /api/me/profile`、`PATCH /api/me/profile`均需Bearer，用户归属只取当前认证身份。GET无业务参数；额外userId查询参数不改变查询/修改对象。没有任意用户资料查询、改名、头像上传、换绑邮箱或列表隐私修改接口。
+
+成功均为200、`Cache-Control: no-store`，统一响应的data例如：
+
+```json
+{"userId":"11","username":"校园食客","maskedEmail":"s***@example.edu.cn","bio":"喜欢探索校园美食"}
+```
+
+| 字段 | 含义 |
+| --- | --- |
+| userId | 当前用户ID，字符串。 |
+| username | 当前用户名，只读。 |
+| maskedEmail | 脱敏绑定邮箱，不返回完整邮箱；本地部分超过两个Unicode码点时保留首个码点，否则完全隐藏；保留域名，例如student@example.edu.cn为s***@example.edu.cn，ab@example.edu.cn为***@example.edu.cn，异常格式为***。 |
+| bio | 已保存的纯文本简介；空字符串表示尚未填写或已清空。 |
+
+PATCH只接受必填字符串bio，空字符串可清空；未知JSON字段（含userId、username、email、roles）返回400 `COMMON_MALFORMED_REQUEST`，数字、布尔值、数组或对象不能自动转为字符串；缺少或null返回400 `COMMON_VALIDATION_FAILED`。请求示例：
+
+```json
+{"bio":"喜欢探索校园美食"}
+```
+
+服务端将CRLF/CR统一为LF、移除首尾Unicode空白及FEFF，之后最多100个Unicode码点，表情按实际码点计数；允许内部换行和制表符。其他控制字符、未配对代理项不接受。常见联系方式与网址按下述基础识别规则检查，保存后直接生效，无人工审核流程。
+
+检查副本做NFKC、去空白/Unicode格式字符并转小写；手机号检查还移除数字间常见单个分隔标点。识别大陆手机号及可选86前缀、带微信/wechat/wx/vx标记的账号及wxid_、带QQ/QQ群/企鹅标记的数字、带手机/电话/tel/联系方式标记的数字，以及scheme://、www.、常见联系方式协议、裸域名及裸IPv4。正常提及“微信支付”“QQ糖”及菜品编号允许；这是基础识别，可能误拦或漏过混淆及境外号码，不自动处罚账号。展示原文保留正常emoji连接符，使用纯文本。
+
+仅修改bio及既有row_version、updated_at，不改变邮箱、用户名、密码、角色、账号状态或credential_version，原有效登录凭证可继续使用。规范化后与现值相同则不写入、不递增版本或修改更新时间。更新使用用户行锁；多标签页并发修改按最后提交的完整简介生效，不提供客户端版本/ETag冲突协议。超时或取消不能证明服务器未保存，同值重试安全；客户端必须等待成功回执或重新查询确认。
+
+| HTTP | 错误码 | 含义 |
+| --- | --- | --- |
+| 400 | USER_BIO_TOO_LONG | 规范化后超过100码点。 |
+| 400 | USER_BIO_INVALID | 含不支持的控制字符或无效Unicode。 |
+| 400 | USER_BIO_CONTACT_NOT_ALLOWED | 命中常见微信、QQ、手机号或网址形式。 |
+| 401 | AUTH_UNAUTHENTICATED | 身份缺失、过期、会话失效或账号不可用。 |
+| 401 | USER_PROFILE_UNAVAILABLE | 认证后再次读取/加锁时本人记录已不可用。 |
+| 503 | AUTH_SERVICE_UNAVAILABLE | 认证依赖暂不可用，不能当成退出或空资料。 |
+| 500 | COMMON_INTERNAL_SERVER_ERROR | 未预期查询/保存故障；事务失败回滚，不能伪装成功。 |
+
+已通过认证但方法不匹配返回405 `COMMON_METHOD_NOT_ALLOWED`。资料读取失败不降级为未填写；返回字段为显式白名单，不暴露密码摘要、完整邮箱、权限或凭证版本。
+
+## 16. 本人投稿与纠错记录
+
+本节三个GET均需Bearer，仅查询当前认证身份提交的申请，返回`Cache-Control: no-store`。不复用管理员查询权限，也不接受userId/submittedBy选择其他申请人；额外身份、offset或排序参数不会改变服务端范围。没有新增修改、撤回、重提、审核、经验或通知写接口。
+
+### 16.1 本人列表
+
+`GET /api/me/restaurant-requests`参数：status默认ALL，可选ALL/PENDING/APPROVED/REJECTED；page默认1、范围1–1000000；pageSize默认20、范围1–50。前端每页10条。按createdAt、id依次降序，先按本人和所选状态筛选再分页；同一店铺的不同申请独立展示，不按店铺合并。
+
+成功200，统一封装的data示例：
+
+```json
+{"userId":"11","records":[{"id":"101","restaurantId":null,"requestType":"CREATE","status":"PENDING","name":"新店名","createdAt":"2026-11-07T05:00:00Z","reviewedAt":null,"photoCount":0}],"counts":{"PENDING":1,"APPROVED":0,"REJECTED":0,"ALL":1},"total":1,"totalPages":1,"page":1,"pageSize":20}
+```
+
+userId为本人字符串ID；requestType为CREATE新店或UPDATE纠错，不因新店通过后回填restaurantId而改变。name为原提交店名，photoCount为原申请关联图数；待审reviewedAt为null。counts始终为本人全部申请的状态计数，不受当前status筛选影响；total为所选状态总数。真正无记录返回空records、零计数及totalPages=0；超出末页也可返回空records，但保留实际总数。列表和计数共用一次数据库快照，跨次查询时新增申请或审核状态变化可能改变分页。
+
+### 16.2 本人详情
+
+`GET /api/me/restaurant-requests/{id}`成功200，data为：
+
+```json
+{"userId":"11","application":{"id":"101","restaurantId":null,"requestType":"CREATE","status":"PENDING","name":"新店名","createdAt":"2026-11-07T05:00:00Z","reviewedAt":null,"photoCount":1},"proposed":{"name":"新店名","categoryCode":"OTHER","categoryName":"其他美食","restaurantType":"REGULAR","priceKind":"UNKNOWN","pricePerPerson":null,"address":"学校附近","latitude":30.75,"longitude":103.93,"locationConfirmed":true,"businessStatus":"OPERATING","supportsDineIn":null,"supportsDelivery":null,"tags":[]},"approved":null,"rejectReason":null,"targetAvailable":false,"photoPositions":[0]}
+```
+
+application字段同列表；proposed为原始提交业务快照，approved只在通过后返回实际生效业务快照（可包含管理员修订），否则null。两份快照均只包含示例中的业务字段，不含原始请求UUID、photoIds及旧内部字段；历史缺失字段可为null。rejectReason仅驳回有值；审核时间位于application.reviewedAt。不会返回审核人、纠错前before、管理端current资料、密码、邮箱、请求摘要或存储键。
+
+photoPositions是原申请内0–4的有序位置，不是文件ID；真正无图返回[]。targetAvailable表示关联店铺在本次读取时未删除；停业仍为true，新店尚未通过或关联目标失效为false。目标被删除不删除或隐藏本人申请快照；不可用时前端不提供可用店铺跳转。不存在与其他人的申请均404 `RESTAURANT_REQUEST_NOT_FOUND`，管理员通过本接口也不能读取别人的申请。
+
+### 16.3 本人申请图片与错误
+
+`GET /api/me/restaurant-requests/{id}/photos/{position}`按申请归属、关联位置及文件上传者/RESTAURANT用途/BOUND状态校验。待审、驳回及已通过的本人申请均可读原附图，不因读取而公开图片。成功200为原始JPEG字节，另含`X-Content-Type-Options: nosniff`；前端携带固定Bearer取得Blob，不使用匿名img或OSS签名地址。OSS读取不占数据库事务。
+
+| HTTP | 错误码 | 含义 |
+| --- | --- | --- |
+| 400 | COMMON_VALIDATION_FAILED | 状态或分页不合法。 |
+| 400 | RESTAURANT_INVALID_ID | 申请ID不是无前导零、未溢出的正整数字符串。 |
+| 400 | RESTAURANT_INVALID_INPUT | 图片位置不是0–4的单个数字。 |
+| 401 | AUTH_UNAUTHENTICATED | 缺少/失效凭证、账号不可用或会话失效。 |
+| 404 | RESTAURANT_REQUEST_NOT_FOUND | 申请不存在或不属于本人；图片入口同样先校验申请归属。 |
+| 404 | FILE_NOT_FOUND | 本人申请无对应图片位置，或文件归属、用途、绑定状态不符。 |
+| 503 | FILE_STORAGE_UNAVAILABLE | 图片存储暂不可用，可只重试单图。 |
+| 503 | AUTH_SERVICE_UNAVAILABLE | 认证依赖暂不可用，保留凭证供重试。 |
+| 500 | COMMON_INTERNAL_SERVER_ERROR | 未预期查询错误，不降级为空列表、空详情或成功。 |
+
+已通过认证但方法不匹配返回405 `COMMON_METHOD_NOT_ALLOWED`。所有接口只读，不改变审核状态、已读状态、经验、商户资料或图片绑定状态。
+
+## 17. 本人系统通知
+
+通知列表及已读接口均需有效Bearer，仅以当前身份作为收件人，返回`Cache-Control: no-store`；管理员不扩大收件箱权限。支持ALL（全部）、SYSTEM（审核结果）、COMMENTS（点评回复）、LIKES（获赞），不接受客户端发信或指定收件人。
+
+### 17.1 查询收件箱与未读数
+
+`GET /api/me/notifications?category=SYSTEM&page=1&pageSize=10`。category默认ALL，可选ALL/SYSTEM/COMMENTS/LIKES/FOLLOWERS；page默认1、范围1～1,000,000；pageSize默认20、范围1～50。额外userId、recipientUserId、offset、排序参数不能改变本人范围。按时间、ID倒序分页；列表、所选分类计数、各类未读数、最新系统摘要来自同一只读快照，浏览不标记已读。
+
+成功200，统一响应data示例：
+
+```json
+{"userId":"22","category":"COMMENTS","records":[{"id":"302","category":"COMMENTS","sourceId":"901","reviewId":"101","actorUserId":"33","actorUsername":"校园食友","requestId":null,"requestType":null,"decision":null,"restaurantName":null,"rejectReason":null,"createdAt":"2026-11-07T09:00:00Z","readAt":null}],"total":1,"unreadCount":1,"unreadCounts":{"SYSTEM":1,"COMMENTS":1,"LIKES":0,"FOLLOWERS":0},"latestSystem":{"id":"301","category":"SYSTEM","sourceId":"51","requestId":"51","reviewId":null,"actorUserId":null,"actorUsername":null,"requestType":"UPDATE","decision":"REJECTED","restaurantName":"银杏小馆","rejectReason":"请补充地址","createdAt":"2026-11-07T08:00:00Z","readAt":null},"page":1,"pageSize":10,"totalPages":1}
+```
+
+所有非空ID为字符串。total、unreadCount属于所选category；unreadCounts始终为本人SYSTEM/COMMENTS/LIKES/FOLLOWERS各自未读数，ALL为四者之和。latestSystem为本人最新系统消息，不受当前分类及页码限制，无系统消息为null；首页据此显示系统摘要，避免被最新评论替换。readAt为首次阅读时间，未读为null。无记录或越界页返回records=[]，保留实际计数；真正无消息时total、unreadCount、totalPages为0。故障不降级为空数据，跨次翻页不保证固定快照。
+
+SYSTEM的sourceId=requestId，requestType为CREATE/UPDATE、decision为APPROVED/REJECTED，通过时rejectReason为null；reviewId/actorUserId/actorUsername为空。只保留审核时摘要，点击后固定进入`/account/contributions?requestId=51`，由本人申请详情重新检查归属及可访问性。
+
+COMMENTS的sourceId是回复ID、reviewId是原点评ID、actorUserId是回复者ID，actorUsername批量读取当前公开用户名，缺失时显示“用户不可用”；审核字段为空。通知不保存点评或回复正文，不接受任意跳转URL。点击成功保存单条已读后，由17.5固定目标接口重新读取原文；失效内容保留通知并提示“内容已失效或不可访问”。
+
+### 17.2 单条已读
+
+`POST /api/me/notifications/{id}/read`，无请求体。id为1～Long.MAX_VALUE、无前导零的十进制字符串。仅改变本人这一条消息的readAt，首次时间由数据库生成，重复操作不重写。成功204、无响应体；不存在与他人消息统一404，标记失败不模拟已读。
+
+### 17.3 全部已有消息已读
+
+`POST /api/me/notifications/read-all?category=ALL`，无请求体；category默认ALL，可选ALL/SYSTEM/COMMENTS/LIKES/FOLLOWERS。SYSTEM只标审核消息，COMMENTS只标回复消息，LIKES只标获赞消息，FOLLOWERS只标关注消息，ALL覆盖四类，其他分类400。成功204、无响应体，空收件箱也可调用，不删除消息或改变源业务。
+
+服务端按操作开始时数据库快照可见的对应分类未读消息分批更新，较大新ID和较小但迟提交的消息均保留未读。任一批失败整体回滚，重复操作保留首次阅读时间。
+
+### 17.4 自动发信与错误
+
+管理员审核首次进入终态时发一条SYSTEM通知给原submitted_by；通过取最终店名，驳回取原提交店名及规范化原因。通知与审核、商户/相册/搜索任务及通过经验同事务，失败整体回滚。重复终态回执不重发，历史终态不补发。
+
+首次发布回复时发一条COMMENTS通知给原点评作者，自回复跳过；历史点评上的新回复同样通知。通知与回复同事务，实际写入后失败也整体回滚；原请求UUID重放和完整事务重试不重复发送。V28建空收件箱，V29仅扩展同一张notification_messages，保留旧审核消息及首次已读时间，没有新增表，也不补发历史回复。
+
+| HTTP | 错误码 | 含义 |
+| --- | --- | --- |
+| 400 | COMMON_VALIDATION_FAILED | 分类、分页或消息ID格式/范围不合法。 |
+| 401 | AUTH_UNAUTHENTICATED | 缺少、失效凭证或账号/会话不可用。 |
+| 404 | NOTIFICATION_NOT_FOUND | 消息不存在或不属于当前身份。 |
+| 405 | COMMON_METHOD_NOT_ALLOWED | 已认证请求使用不支持的方法。 |
+| 503 | AUTH_SERVICE_UNAVAILABLE | 认证依赖暂不可用。 |
+| 500 | COMMON_INTERNAL_SERVER_ERROR | 未预期查询/写入失败，不能伪装为空数据或成功已读。 |
+
+公告、关注通知、单条删除和推送刷新尚未接入，待开放入口不调用未实现的接口。
+
+### 17.5 本人收到的回复精确定位
+
+`GET /api/me/review-replies/{id}/target`需Bearer。id为具体回复ID，十进制正整数、无前导零、不超过Long.MAX_VALUE。仅原点评作者可读，管理员不绕过归属，额外userId/reviewId参数不能扩大范围。成功200、`Cache-Control: no-store`。
+
+统一响应data示例：
+
+```json
+{"userId":"22","restaurantId":"26","reviewId":"101","replyId":"901","reviewAuthor":{"id":"22","username":"点评作者"},"review":{"id":"101","scores":{"taste":8,"value":7.5,"service":7,"ambience":8},"overallScore":7.63,"recommended":true,"body":"原点评正文","createdAt":"2026-11-01T06:00:00Z","scoringStatus":"history","photos":[]},"replyAuthor":{"id":"33","username":"校园食友"},"replyBody":"谢谢分享","replyCreatedAt":"2026-11-07T09:00:00Z"}
+```
+
+review沿用10.2的currentReview结构，scoringStatus按读取时实际最新代表判断。直接按ID定位历史点评及任意位置回复，不逐页扫描；回复、点评、父店可见性和作者信息共用RR只读快照，停业店仍可读。接口不依赖通知是否已读，也不更改已读状态；弹窗仅展示当前所需原点评和高亮目标回复。
+
+非法ID400 `REPLY_INVALID_INPUT`；回复/点评不存在或点评不属于本人404 `REPLY_REVIEW_NOT_FOUND`；店铺不存在或已删除404 `RESTAURANT_NOT_FOUND`。前端将404统一显示为“内容已失效或不可访问”。缺少/失效凭证401 `AUTH_UNAUTHENTICATED`，认证依赖故障503 `AUTH_SERVICE_UNAVAILABLE`，未预期读取失败500；已认证但方法不符405。源内容删除不删除通知，也不从消息恢复正文，再次读取重新检查可见性。
+
+
+## 18. 点评与回复点赞
+
+### 18.1 设置点赞状态
+
+`PUT /api/reviews/{id}/like`、`DELETE /api/reviews/{id}/like`分别设置点评为已赞、未赞；回复使用`PUT /api/review-replies/{id}/like`、`DELETE /api/review-replies/{id}/like`。均需Bearer，无请求体，点赞者仅取当前身份。id为无前导零、不超过Long.MAX_VALUE的正整数字符串。
+
+成功200、`Cache-Control: no-store`，统一响应data：
+
+```json
+{"targetId":"101","count":1,"liked":true,"available":true}
+```
+
+count为该内容当前点赞数，liked为本人当前状态。重复PUT不增加计数，重复DELETE不减少额外计数；首次DELETE也不创建关系。禁止自赞，管理员同样不能自赞；父店、点评或回复不存在/已删除时不可操作，停业店铺仍可操作。取消保留首次关系；重新点赞不重复通知和发奖。操作不改变商户评分、点评代表或搜索投影版本。
+
+第一次点赞与作者通知、符合条件的点评获赞经验同事务提交；通知或奖励写入失败整体回滚。死锁/锁超时采用最多三次完整事务尝试，耗尽返回503；网络超时不代表未提交，应重读当前状态再继续操作。
+
+| HTTP | 错误码 | 含义 |
+| --- | --- | --- |
+| 400 | LIKE_INVALID_INPUT | 目标ID、类型或批量ID列表非法。 |
+| 401 | AUTH_UNAUTHENTICATED | 缺少或失效身份。 |
+| 403 | LIKE_SELF_NOT_ALLOWED | 当前用户是被赞内容作者。 |
+| 404 | LIKE_TARGET_NOT_FOUND | 点评或回复失效，或私有获赞目标不属于本人。 |
+| 404 | RESTAURANT_NOT_FOUND | 写入时父店不存在或已删除。 |
+| 503 | LIKE_TEMPORARILY_UNAVAILABLE | 完整事务重试耗尽。 |
+| 503 | AUTH_SERVICE_UNAVAILABLE | 认证依赖故障。 |
+| 500 | COMMON_INTERNAL_SERVER_ERROR | 未预期错误，不模拟点赞成功。 |
+
+### 18.2 批量读取当前计数和本人状态
+
+`GET /api/content-likes?type=REVIEW&ids=101,102`公开，可携带Bearer取得本人状态。type仅REVIEW/REPLY；ids为1～50个逗号分隔的合法ID，最多1000字符，重复ID合并。成功200、no-store，data：
+
+```json
+{"userId":"22","type":"REVIEW","records":[{"targetId":"101","count":1,"liked":true,"available":true},{"targetId":"102","count":0,"liked":false,"available":false}]}
+```
+
+匿名userId为null、liked为false。失效或父店不可见的目标返回available=false、count=0、liked=false，不泄露其实际计数。每批源目标、父店可见性和计数来自同一只读快照；无效Bearer仍401。前端同次挂载的点评和回复按钮按类型/身份合批，不为每张卡单独查询；状态不跨账号缓存。
+
+### 18.3 本人当前获赞总数
+
+`GET /api/me/received-likes`需Bearer，无业务参数，成功200、no-store，data为`{"userId":"11","count":3}`。合计本人仍存在的点评和回复当前有效点赞；取消及内容硬删除后减少，删除点评关联删除的回复同样排除。不是历史累计次数；父店隐藏对个人合计的额外规则未扩展。
+
+### 18.4 获赞通知与精确内容定位
+
+首次点赞给被赞内容作者发送一条LIKES消息。notificationType为REVIEW_LIKED或REPLY_LIKED，sourceId为点赞关系ID，reviewId为所属点评ID，actorUserId/actorUsername为点赞者身份和当前公开用户名，其他审核字段为null。unreadCounts新增LIKES，系统摘要仍独立取最新审核消息；消息按17节规则单条或分类已读。
+
+点击先保存该条已读，再调用`GET /api/me/received-likes/{id}/target`，这里id为点赞关系ID。需Bearer且当前用户必须是被赞内容作者，管理员不扩大权限；取消点赞后仍可读取有效源内容。成功200、no-store，data示例：
+
+```json
+{"userId":"11","likeId":"501","targetType":"REPLY","targetId":"901","reviewId":"101","restaurantId":"26","author":{"id":"11","username":"回复作者"},"body":"被赞的回复正文","createdAt":"2026-11-07T09:00:00Z"}
+```
+
+按固定ID直接定位历史点评或任意分页位置回复，源内容和父店可见性每次重新检查。不存在、归属不符或内容失效404 LIKE_TARGET_NOT_FOUND，前端提示“内容已失效或不可访问”。原通知保留，不保存源正文或任意跳转URL。取消点赞保留通知及首次已读时间；重新点赞不重复通知。
+
+### 18.5 获赞经验
+
+只有本人点评获赞可能计奖，回复获赞不计经验。暂定每次+1、每作者每日最多+5；同一点赞者每天最多为同一作者贡献一次，同一点赞者对同一条点评最多奖励一次。奖励与日额度在作者账户锁内处理，业务日期取首次操作时刻的Asia/Shanghai自然日，完整事务重试沿用同一时刻。
+
+额度不足时点赞及通知正常成功，只跳过经验。取消点赞或普通删除内容不撤销已发经验，取消后重赞不重新计奖。本轮不开放超限后补发、违规撤销后的额度返还或奖励资格恢复。参数可配置GROWTH_LIKE_EXPERIENCE、GROWTH_DAILY_LIKE_EXPERIENCE_LIMIT，均须为正整数；调参不重算旧奖励。
+
+## 19. 登录可见个人主页
+
+两个入口均需有效Bearer、当前可用账号及会话，匿名返回401；成功200并返回Cache-Control: no-store。查看对象来自路径userId，不代表写入身份。主页没有经验、资料或处罚写接口。
+
+### 19.1 公开资料
+
+`GET /api/users/{userId}/profile`，无查询参数。data示例：
+
+```json
+{"userId":"22","username":"同学甲","bio":"喜欢面食","level":3,"receivedLikes":7}
+```
+
+只返回上述5项，不返回原始/脱敏邮箱、经验余额、奖励明细、角色、学生认证/账号状态、投稿或纠错记录。level按当前经验和部署门槛计算，无成长账户按零经验计算，不创建账户。receivedLikes沿用当前有效点评与回复获赞合计，取消赞或源内容删除后相应减少。资料、等级与获赞在同一只读快照查询。
+
+非法或超出正Long范围的userId返回400 `USER_PUBLIC_PROFILE_INVALID`；用户不存在、已删除或未验证邮箱时返回404 `USER_PUBLIC_PROFILE_NOT_FOUND`。停用账号正常历史内容不因此隐藏；本入口不授予被停用账号正常登录权限。
+
+### 19.2 按店铺分组的公开点评
+
+`GET /api/users/{userId}/reviews?page=1&pageSize=8`，page为正整数，pageSize为1～50；只绑定分页，查询参数不能更换作者、目标或派生offset。响应复用[本人按店分组](#105-本人点评按店铺分组)的data结构，author为被查看用户，并新增数字level；不返回投稿或其他隐私记录。
+
+先排除不可见店铺，再按被查看作者的restaurant_id归组，每家店选最新有效点评作为主卡片；按主卡片createdAt、数字ID倒序后分页。返回真实totalGroups/totalReviews、historyCount和nextHistoryCursor，空/越界页仍保留计数；停业可见，独立窗口点评维持现有未接入范围。历史展开沿用[同作者历史接口](#103-同作者历史)，删除仍仅允许内容本人，不能凭主页参数取得他人删除权限。目标用户错误同19.1，分页非法返回400通用校验错误。
+
+公开作者投影`{id,username}`现增加可选数字`level`（用户缺失的占位署名无等级）；店铺点评、本人/公开主页点评及历史响应中的真实作者均通过批量成长查询补全等级，不泄露原始经验。
+
+## 20. 店铺收藏与隐私
+
+本节所有入口均需有效Bearer、可用账号及当前会话；匿名401，成功200且Cache-Control: no-store。收藏仅针对restaurants中的普通餐厅及食堂，不提供窗口或点评收藏。写入用户来自认证上下文，不接受客户端指定其他用户；不生成通知、经验或搜索同步任务，不返回店铺收藏人数或收藏者名单。
+
+### 20.1 本人收藏状态与操作
+
+| 方法与路径 | 行为 |
+| --- | --- |
+| `GET /api/restaurants/{id}/favorite` | 返回本人当前收藏状态；目标必须存在且可见 |
+| `PUT /api/restaurants/{id}/favorite` | 收藏可见店铺；无请求体；重复请求保留原关系ID、收藏时间和排序位置 |
+| `DELETE /api/restaurants/{id}/favorite` | 取消本人收藏；无请求体；允许清理已删除目标，未收藏或重复取消同样成功 |
+
+上述data为`{"restaurantId":"1","favorited":true}`，取消返回false。停业店铺仍可收藏；GET/PUT目标不存在或已软删除返回404 `RESTAURANT_NOT_FOUND`，非法或超正Long范围ID返回400 `RESTAURANT_INVALID_ID`。写入前锁定商户主行，与商户删除/恢复保持顺序；唯一键防止重复关系。取消后重新收藏生成新关系及时间；取消结果不确定时可重发相同DELETE，详情页翻转前需重读状态。
+
+### 20.2 本人与公开收藏列表
+
+- `GET /api/me/favorites?page=1&pageSize=8`：仅本人，包含失效占位。
+- `GET /api/users/{id}/favorites?page=1&pageSize=8`：本人可直接查看；其他登录用户仅当目标收藏已公开时可查看，且不返回失效记录。私密返回403 `RESTAURANT_FAVORITES_PRIVATE`，不返回数量或记录；主体不存在、已删除或未验证邮箱返回404 `USER_PUBLIC_PROFILE_NOT_FOUND`。
+
+page为正整数，pageSize为1～50，只绑定这两个字段；非法分页400通用校验错误。按created_at DESC、数字收藏ID DESC排序，先过滤可见范围，再计数和分页。一次请求在RR快照中核验隐私及读取计数/记录；跨请求数据变化可能移动分页，每次请求重新核验隐私。
+
+```json
+{"userId":"11","records":[{"restaurantId":"1","name":"校园小馆","restaurantType":"REGULAR","businessStatus":"OPERATING","available":true,"createdAt":"2026-11-07T00:00:00Z"}],"total":1,"page":1,"pageSize":8,"totalPages":1}
+```
+
+本人列表失效项仍保留restaurantId、createdAt及available=false，name/restaurantType/businessStatus为null，不继续展示商户历史资料。失效项可取消；未主动取消时店铺恢复后重新可用，已取消的不自动恢复。停业不是失效。空页及越界页保留真实total/totalPages；公开列表total只计入当前可见店铺，不泄露失效项数量。
+
+### 20.3 收藏列表可见性
+
+`GET /api/me/favorites/visibility`读取，`PATCH /api/me/favorites/visibility`保存；PATCH只接受`{"favoritesPublic":true}`或false，必须提供真实JSON布尔值。缺少/null、字符串/数字布尔值及未知字段返回400通用校验错误；不能更换设置所属用户。data为`{"userId":"11","favoritesPublic":false}`。
+
+默认false表示仅本人可见，true表示其他登录用户可查看。真实修改仅更新该字段及row_version，不改变凭证、密码、简介；重复保存同值不推进版本。保存结果不确定时界面先重新读取，不把未确认状态当作成功。公开主页切换到收藏时重新请求列表，退出或切换会话/对象立即清空旧结果；已在其他页面展示的内容不会由后台推送自动撤回。
+
+## 21. 基础关注、名单隐私与关注提醒
+
+本节全部入口要求有效Bearer及当前可用账号，匿名401；成功200并禁止缓存。访问者身份来自认证上下文，查询参数或JSON不能指定actor。首版同步维护关系、计数及首次通知，不提供Feed或异步统计。
+
+### 21.1 人数与关系操作
+
+| 方法与路径 | 行为 |
+| --- | --- |
+| `GET /api/users/{id}/social` | 读取目标用户当前关注数、粉丝数及本人是否关注；人数不受名单私密设置影响 |
+| `PUT /api/users/{id}/follow` | 无请求体，关注目标用户；只有首次创建有向关系才发通知 |
+| `DELETE /api/users/{id}/follow` | 无请求体，取消本人关注；无关系或重复取消同样成功，不创建取消占位 |
+
+返回data：`{"userId":"22","followingCount":2,"followersCount":3,"following":true}`。仅active=1的关系计数，不使用历史累计次数。自己查看自己的following为false；尝试关注或取消自己返回400 `FOLLOW_SELF_FORBIDDEN`。非法/溢出ID返回400 `FOLLOW_INVALID_ID`；读取主体不存在、已删除或未验证邮箱返回404 `USER_PUBLIC_PROFILE_NOT_FOUND`；新关注还要求目标账号ACTIVE，停用目标可取消已有关系。
+
+关系操作按两个用户数字ID升序加锁，再写关系和通知，避免互相关注的反向取锁。首次插入、关注通知在同一READ_COMMITTED事务提交，通知失败整笔回滚；取消和重新关注保留原关系ID、created_at、原通知及首次已读时间，不重复提醒。重复提交同一目标状态不更新关系时间。取消后重关按原关系ID位置显示；并发不同目标状态按数据库实际事务顺序生效。没有收藏、经验、私信、拉黑或Feed副作用。
+
+### 21.2 关注与粉丝名单
+
+- `GET /api/users/{id}/following?page=1&pageSize=8`
+- `GET /api/users/{id}/followers?page=1&pageSize=8`
+
+page为正整数，pageSize为1～50，只绑定分页字段；超出范围400通用校验错误。本人可查看自己的两个名单；其他登录用户分别受following_public/followers_public控制，私密返回403 `FOLLOW_LIST_PRIVATE`，不返回名单数量或记录。每次请求重新校验权限；人数仍可通过21.1查询。
+
+```json
+{"userId":"11","kind":"FOLLOWING","records":[{"userId":"22","username":"食友","level":2,"following":true}],"total":1,"totalPages":1,"page":1,"pageSize":8}
+```
+
+kind为FOLLOWING或FOLLOWERS。只对有效关系按关系ID倒序分页，先计数再LIMIT；本页署名、等级及访问者对各成员的关注状态批量补全。缺失逻辑账号显示“用户不可用”、level为null；不按用户名归并，不返回邮箱、账号权限或经验。空/越界页保留真实total。一次请求采用RR快照，跨请求关系变化可能移动分页，不承诺固定排名。
+
+### 21.3 两种名单的隐私设置
+
+`GET /api/me/follows/privacy`读取本人设置；`PATCH /api/me/follows/privacy`要求完整显式JSON：`{"followingPublic":true,"followersPublic":false}`。两种名单独立，均默认false；缺少/null、非布尔值或未知字段返回400通用校验错误。data为`{"userId":"11","followingPublic":true,"followersPublic":false}`。
+
+只更新两个开关及row_version，保留收藏设置、简介和凭证；同值保存不推进版本。写入失败不伪造成功，客户端先重读设置。多个客户端提交不同完整设置时以最后提交的设置为准。
+
+### 21.4 新增关注消息
+
+V33仅扩展原notification_messages的CHECK约束，新增USER_FOLLOWED组合，无新增表或历史补发。notification_type为USER_FOLLOWED，source_id为首次关注关系ID，actor_user_id为关注者，review_id及审核字段全部为空。
+
+现有[通知接口](#17-本人系统通知)的category新增FOLLOWERS；首页ALL包含该类，unreadCounts新增FOLLOWERS。单条/分类/全部已读与归属规则沿用原收件箱；进入列表不自动已读。提醒逐条显示“某用户关注了你”，先保存已读再打开关注者个人主页。取关不撤销旧通知或重置已读；重新关注不再生成通知。目标主页不可用时页面提示不可访问，不提供私有账号信息。消息删除仍未开放。

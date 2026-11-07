@@ -5,6 +5,7 @@ import PasswordInput from './PasswordInput.vue'
 import './auth-inputs.css'
 import { useLoginStore } from '../model/login.store'
 import { consumeResetLogin } from '../model/loginPrefill'
+import { loginRedirect } from '../model/loginRedirect'
 
 const router = useRouter()
 const route = useRoute()
@@ -43,14 +44,8 @@ async function handleSubmit() {
       await router.replace('/admin/reviews')
       return
     }
-    // 只允许餐厅路径和首页写评标记；外部URL、协议相对地址和其他查询不能成为跳转目标。
-    const target = route.query.redirect
-    const safeTarget =
-      typeof target === 'string' &&
-      /^(?:\/\?writeReview=1|\/restaurants\/(?:new|[1-9]\d*(?:\/edit)?)(?:\?writeReview=1)?)$/.test(
-        target,
-      )
-    await router.replace(safeTarget ? target : '/')
+    // 社区页面和投稿入口也可登录后返回；统一白名单继续拒绝外部地址。
+    await router.replace(loginRedirect(route.query.redirect))
   }
 }
 

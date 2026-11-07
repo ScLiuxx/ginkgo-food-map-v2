@@ -6,6 +6,7 @@ import { useLoginStore } from '@/modules/auth/model/login.store'
 import { reviewGatewayKey, unavailableReviewGateway, validBody } from '../model/review'
 import { activeReplyEditorKey, replyScopeVisibleKey } from '../model/replyEditor'
 import type { ReplyPage } from '../model/review'
+import { UserIdentity, ContentActions } from '@/modules/community'
 
 /** 阅读与编辑独立展开；主卡和历史卡共享编辑焦点，各自保留正文、游标与幂等编号。 */
 const props = defineProps<{ reviewId: string; username: string }>()
@@ -210,17 +211,25 @@ async function send() {
     <div v-show="open" :id="listId" class="thread-content">
       <ol v-if="records.length" class="reply-list">
         <li v-for="answer in records" :key="answer.id">
-          <span class="reply-avatar" aria-hidden="true">{{
-            Array.from(answer.author.username)[0]
-          }}</span>
           <div class="reply-copy">
             <div class="reply-meta">
-              <strong>{{ answer.author.username }}</strong>
+              <UserIdentity
+                :user-id="answer.author.id"
+                :username="answer.author.username"
+                :authenticated="auth.authenticated"
+              />
               <time :datetime="answer.createdAt">{{
                 new Date(answer.createdAt).toLocaleDateString('zh-CN')
               }}</time>
             </div>
             <p class="reply-body">{{ answer.body }}</p>
+            <ContentActions
+              kind="reply"
+              :target-id="answer.id"
+              :viewer-id="auth.user ? String(auth.user.id) : undefined"
+              :authenticated="auth.authenticated"
+              :own="auth.authenticated && answer.author.id === String(auth.user?.id)"
+            />
           </div>
         </li>
       </ol>

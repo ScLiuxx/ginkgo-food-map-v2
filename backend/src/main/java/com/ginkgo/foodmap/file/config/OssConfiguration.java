@@ -1,10 +1,11 @@
 package com.ginkgo.foodmap.file.config;
 
 import com.aliyun.oss.*;
-import com.aliyun.oss.common.auth.EnvironmentVariableCredentialsProvider;
-import com.aliyun.oss.common.auth.DefaultCredentialProvider;
 import com.aliyun.oss.common.auth.CredentialsProvider;
+import com.aliyun.oss.common.auth.DefaultCredentialProvider;
+import com.aliyun.oss.common.auth.EnvironmentVariableCredentialsProvider;
 import com.aliyun.oss.common.comm.SignVersion;
+
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -18,8 +19,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class OssConfiguration {
     /** 强制HTTPS与V4签名；有界网络超时，避免清理或上传无限占用线程。 */
     @Bean(destroyMethod = "shutdown")
-    @ConditionalOnProperty(name="app.file.oss.enabled", havingValue="true")
-    public OSS ossClient(OssProperties p) throws com.aliyun.oss.common.auth.InvalidCredentialsException {
+    @ConditionalOnProperty(name = "app.file.oss.enabled", havingValue = "true")
+    public OSS ossClient(OssProperties p)
+            throws com.aliyun.oss.common.auth.InvalidCredentialsException {
         if (!p.getEndpoint().matches("https://oss-[a-z0-9-]+\\.aliyuncs\\.com")
                 || !p.getBucket().matches("[a-z0-9][a-z0-9-]{1,61}[a-z0-9]")
                 || p.getRegion().isBlank()
@@ -41,11 +43,18 @@ public class OssConfiguration {
         CredentialsProvider credentials;
         boolean hasId = p.getAccessKeyId() != null && !p.getAccessKeyId().isBlank();
         boolean hasSecret = p.getAccessKeySecret() != null && !p.getAccessKeySecret().isBlank();
-        if (hasId != hasSecret) throw new IllegalStateException("OSS本地AccessKey ID和Secret必须同时填写");
-        credentials = hasId ? new DefaultCredentialProvider(p.getAccessKeyId(),p.getAccessKeySecret())
-                : new EnvironmentVariableCredentialsProvider();
-        return OSSClientBuilder.create().endpoint(p.getEndpoint()).region(p.getRegion())
+        if (hasId != hasSecret) {
+            throw new IllegalStateException("OSS本地AccessKey ID和Secret必须同时填写");
+        }
+        credentials =
+                hasId
+                        ? new DefaultCredentialProvider(p.getAccessKeyId(), p.getAccessKeySecret())
+                        : new EnvironmentVariableCredentialsProvider();
+        return OSSClientBuilder.create()
+                .endpoint(p.getEndpoint())
+                .region(p.getRegion())
                 .credentialsProvider(credentials)
-                .clientConfiguration(config).build();
+                .clientConfiguration(config)
+                .build();
     }
 }

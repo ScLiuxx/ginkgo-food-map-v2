@@ -2,6 +2,7 @@
 import axios from 'axios'
 import { ReviewComposer, ReviewPanel } from '@/modules/review'
 import RestaurantAlbum from './RestaurantAlbum.vue'
+import FavoriteButton from './FavoriteButton.vue'
 import { navigationUrl } from '@/modules/map'
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
@@ -255,6 +256,7 @@ function shareRestaurant(): void {
           :to="`/restaurants/${encodeURIComponent(restaurant.id)}/correction`"
           >✎ 补充 / 纠错</RouterLink
         >
+        <FavoriteButton v-if="!isWindow" :restaurant-id="restaurant.id" />
         <div v-if="!isCanteen && publicTags.length" class="detail-tags">
           <span v-for="tag in publicTags.slice(0, 4)" :key="tag">{{ tag }}</span>
         </div>

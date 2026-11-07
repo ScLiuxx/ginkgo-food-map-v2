@@ -24,7 +24,8 @@ httpClient.interceptors.request.use((config) => {
   const path = (config.url ?? '').split('?')[0] ?? ''
   const publicRestaurantRead =
     config.method === 'get' &&
-    (path === '/api/restaurant-categories' ||
+    (path === '/api/content-likes' ||
+      path === '/api/restaurant-categories' ||
       path === '/api/restaurants' ||
       /^\/api\/restaurants\/[^/]+$/.test(path) ||
       /^\/api\/restaurants\/[^/]+\/photos(?:\/[^/]+)?$/.test(path) ||

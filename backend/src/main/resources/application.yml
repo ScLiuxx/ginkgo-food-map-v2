@@ -67,6 +67,12 @@ management:
       show-details: never
 
 app:
+  growth:
+    # 暂定成长参数随部署生效；旧奖励保留实际amount，不因修改配置回算或重新发放。
+    first-review-experience: ${GROWTH_FIRST_REVIEW_EXPERIENCE:5}
+    new-store-experience: ${GROWTH_NEW_STORE_EXPERIENCE:20}
+    correction-experience: ${GROWTH_CORRECTION_EXPERIENCE:10}
+    level-thresholds: ${GROWTH_LEVEL_THRESHOLDS:0,100,400,1000}
   search:
     query:
       # 仅显式开启读入口；本阶段不默认切换网站搜索，不影响原Outbox消费。
