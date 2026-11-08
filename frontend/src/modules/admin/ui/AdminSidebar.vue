@@ -4,7 +4,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import { getAccessToken } from '@/shared/api/authSession'
 import { fetchRequestPage } from '../api/restaurantRequestsApi'
 
-/** 审核与商户维护共用导航；图标、尺寸及活动状态只有一份定义。 */
+/** 所有管理页面共用导航；菜单、图标、字号及活动状态保持一致。 */
 const props = defineProps<{ pendingCount?: number | string }>()
 const route = useRoute()
 const pending = ref<number>()
@@ -29,6 +29,7 @@ onMounted(async () => {
 onBeforeUnmount(() => controller.abort())
 const items = [
   { name: '商户审核', path: '/admin/reviews', icon: 'review' },
+  { name: '公告管理', path: '/admin/announcements', icon: 'announcement' },
   { name: '商户管理', path: '/admin/restaurants', icon: 'shop' },
   { name: '点评管理', icon: 'chat' },
   { name: '操作记录', icon: 'history' },
@@ -67,6 +68,10 @@ const items = [
           <rect x="5" y="4" width="14" height="17" rx="2" />
           <path d="M9 4V2h6v2M9 10h6M9 14h6M9 18h4" />
         </template>
+        <path
+          v-else-if="item.icon === 'announcement'"
+          d="m4 10 15-6v16L4 14ZM4 10H2v4h2M7 15l2 6h3l-2-5"
+        />
         <path
           v-else-if="item.icon === 'shop'"
           d="M4 10v10h16V10M3 10l2-6h14l2 6M3 10c0 4 5 4 5 0 0 4 8 4 8 0 0 4 5 4 5 0M9 20v-6h6v6"

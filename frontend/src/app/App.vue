@@ -4,7 +4,10 @@ import { onMounted, watch } from 'vue'
 import { useLoginStore } from '@/modules/auth'
 import { authToken } from '@/shared/api/authSession'
 
+import { useRealtimeUnread } from '@/modules/message/model/useRealtimeUnread'
+
 const auth = useLoginStore()
+useRealtimeUnread()
 // 启动时向服务端校验凭证，不能仅凭本地存储就展示为已登录。
 onMounted(() => {
   void auth.restore()

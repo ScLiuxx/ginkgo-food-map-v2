@@ -8,6 +8,7 @@ import {
   fetchReviewHistory,
   fetchReplies,
   publishReply,
+  deleteReply,
 } from './reviewApi'
 import type { ReviewDraft } from '../model/review'
 
@@ -55,6 +56,22 @@ afterEach(() => {
 })
 
 describe('text review HTTP integration', () => {
+  it('deletes a reply with a fixed credential and rejects unconfirmed receipts', async () => {
+    const remove = vi.spyOn(httpClient, 'delete').mockResolvedValue({ status: 204 })
+    const controller = new AbortController()
+    await expect(deleteReply('10', controller.signal)).rejects.toThrow('请先登录')
+    expect(remove).not.toHaveBeenCalled()
+    setAccessToken('reply-author-session')
+    await deleteReply('9007199254740993', controller.signal)
+    expect(remove).toHaveBeenCalledWith('/api/review-replies/9007199254740993', {
+      headers: { Authorization: 'Bearer reply-author-session' },
+      signal: controller.signal,
+    })
+    remove.mockResolvedValueOnce({ status: 200 })
+    await expect(deleteReply('10', controller.signal)).rejects.toThrow('删除未确认')
+    remove.mockRejectedValueOnce(new Error('服务繁忙'))
+    await expect(deleteReply('10', controller.signal)).rejects.toThrow('删除未确认')
+  })
   it('deletes the exact review with the current credential and propagates failures', async () => {
     setAccessToken('author-session')
     const remove = vi.spyOn(httpClient, 'delete').mockResolvedValue({ status: 204 })

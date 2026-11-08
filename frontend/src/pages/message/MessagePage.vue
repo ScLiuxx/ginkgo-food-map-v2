@@ -7,6 +7,7 @@ import { useNotificationInbox } from '@/modules/message/model/useNotificationInb
 import type { NotificationItem } from '@/modules/message/api/notificationsApi'
 import { authToken } from '@/shared/api/authSession'
 import LikeNotificationTarget from '@/modules/community/ui/LikeNotificationTarget.vue'
+import { AnnouncementReader } from '@/modules/announcement'
 import ReplyNotificationTarget from '@/modules/review/ui/ReplyNotificationTarget.vue'
 
 // 页面编排真实收件箱和固定站内跳转；摘要绝不提供可执行HTML或任意目标地址。
@@ -14,12 +15,16 @@ const props = defineProps<{ category?: string }>()
 const auth = useLoginStore()
 const router = useRouter()
 const state = useNotificationInbox(() => props.category)
-const { result, loading, error, actionError, busy } = state
+const { result, loading, error, actionError, notice, busy } = state
 const replyTarget = ref<NotificationItem | null>(null)
+const announcementTarget = ref<string | null>(null)
+const pendingDelete = ref<NotificationItem | null>(null)
 watch(
   () => [props.category, auth.user?.id, authToken.value],
   () => {
     replyTarget.value = null
+    announcementTarget.value = null
+    pendingDelete.value = null
   },
   { flush: 'sync' },
 )
@@ -28,19 +33,31 @@ const sessions = computed(() => [
     id: 'system',
     title: '系统通知',
     preview: result.value?.latestSystem
-      ? `${result.value.latestSystem.restaurantName} · ${result.value.latestSystem.decision === 'APPROVED' ? '审核通过' : '审核未通过'}`
+      ? result.value.latestSystem.notificationType === 'ANNOUNCEMENT'
+        ? (result.value.latestSystem.announcementTitle ?? '')
+        : `${result.value.latestSystem.restaurantName} · ${result.value.latestSystem.decision === 'APPROVED' ? '审核通过' : '审核未通过'}`
       : '',
     unreadCount: result.value?.unreadCounts.SYSTEM,
   },
 ])
 async function open(item: NotificationItem) {
   const selected = await state.read(item)
-  if (selected?.category === 'SYSTEM' && selected.requestId)
+  if (selected?.notificationType === 'ANNOUNCEMENT' && selected.announcementId)
+    announcementTarget.value = selected.announcementId
+  else if (selected?.category === 'SYSTEM' && selected.requestId)
     await router.push({ path: '/account/contributions', query: { requestId: selected.requestId } })
   else if (selected?.category === 'FOLLOWERS' && selected.actorUserId)
     await router.push(`/users/${selected.actorUserId}`)
   else if (selected?.category === 'COMMENTS' || selected?.category === 'LIKES')
     replyTarget.value = selected
+}
+
+/** 确认对象只属于当前页面身份；状态层再校验当前列表，迟到结果不能关闭新身份的确认。 */
+async function remove() {
+  const selected = pendingDelete.value
+  if (!selected) return
+  const removed = await state.remove(selected)
+  if (removed && pendingDelete.value === selected) pendingDelete.value = null
 }
 </script>
 
@@ -54,11 +71,21 @@ async function open(item: NotificationItem) {
     :loading="loading"
     :error="error"
     :action-error="actionError"
+    :action-notice="notice"
+    :deleting-id="pendingDelete?.id"
     :busy="busy"
     @refresh="state.load()"
     @page="state.load($event)"
     @read="open"
     @read-all="state.read()"
+    @remove="pendingDelete = $event"
+    @cancel-remove="pendingDelete = null"
+    @confirm-remove="remove"
+  />
+  <AnnouncementReader
+    v-if="announcementTarget"
+    :id="announcementTarget"
+    @close="announcementTarget = null"
   />
   <ReplyNotificationTarget
     v-if="replyTarget?.category === 'COMMENTS' && replyTarget.reviewId"

@@ -1,6 +1,6 @@
 # MySQL 表结构
 
-本文集中维护 MySQL 业务表的当前字段、类型、默认值、枚举、主键、索引、外键与字段约束。覆盖当前迁移定义的 26 张应用表，按下列分组查阅；Flyway 自建的迁移历史表不属于应用表。
+本文集中维护 MySQL 业务表的当前字段、类型、默认值、枚举、主键、索引、外键与字段约束。覆盖当前迁移定义的 29 张应用表，按下列分组查阅；Flyway 自建的迁移历史表不属于应用表。
 
 ## 目录
 
@@ -459,6 +459,18 @@ position范围0–4；media_file_id唯一。
 
 保存发布请求UUID、资源引用及删除时间。餐厅与窗口目标互斥；作者与请求UUID唯一。
 
+### `reply_request_receipts`：回复请求回执
+
+| 字段 | 类型 | 可空 | 默认值及含义 |
+| --- | --- | --- | --- |
+| `author_user_id` | `bigint unsigned` | 否 | 无默认值；回复作者逻辑ID |
+| `client_request_id` | `binary(16)` | 否 | 无默认值；发布请求UUID |
+| `reply_id` | `bigint unsigned` | 否 | 无默认值；回复逻辑ID |
+| `review_id` | `bigint unsigned` | 否 | 无默认值；所属点评逻辑ID |
+| `deleted_at` | `timestamp(6)` | 是 | 默认NULL；回复删除时间 |
+
+主键 `(author_user_id,client_request_id)`；唯一键 `uk_reply_receipt_reply (reply_id)`；普通索引 `idx_reply_receipt_review (review_id)`。无物理外键及额外CHECK约束，不含正文或内容摘要。InnoDB、utf8mb4、utf8mb4_0900_ai_ci。
+
 ### `media_files`：媒体文件
 
 | 字段 | 类型 | 可空 | 说明 |
@@ -612,7 +624,7 @@ growth模块拥有经验账户与奖励记录两张表。存储引擎InnoDB，�
 
 ## 通知表结构
 
-notification模块拥有`notification_messages`表，保存审核结果、点评回复、获赞及首次关注通知。存储引擎InnoDB，字符集utf8mb4，默认排序规则utf8mb4_0900_ai_ci；编码字段使用ascii_bin。
+notification模块拥有`notification_messages`、`notification_announcements`和`notification_announcement_user_states`，分别保存业务通知、全体公告及公告个人状态。存储引擎InnoDB，字符集utf8mb4，默认排序规则utf8mb4_0900_ai_ci；编码字段使用ascii_bin。
 
 ### `notification_messages`：通知消息
 
@@ -631,6 +643,7 @@ notification模块拥有`notification_messages`表，保存审核结果、点评
 | `actor_user_id` | `bigint unsigned` | 是 | 回复者、点赞者或关注者用户逻辑ID。 |
 | `created_at` | `timestamp(6)` | 否 | 默认CURRENT_TIMESTAMP(6)；消息创建时间。 |
 | `read_at` | `timestamp(6)` | 是 | 默认NULL；首次已读时间，NULL表示未读。 |
+| `deleted_at` | `timestamp(6)` | 是 | 默认NULL；收件人删除时间，NULL表示收件箱可见。 |
 
 #### 主键与索引
 
@@ -638,10 +651,10 @@ notification模块拥有`notification_messages`表，保存审核结果、点评
 | --- | --- | --- |
 | PRIMARY | `(id)` | 主键 |
 | uk_notification_source | `(recipient_user_id,notification_type,source_id)` | 唯一键 |
-| idx_notification_recipient_time | `(recipient_user_id,created_at DESC,id DESC)` | 普通索引 |
-| idx_notification_recipient_unread | `(recipient_user_id,read_at,id)` | 普通索引 |
-| idx_notification_recipient_type_time | `(recipient_user_id,notification_type,created_at DESC,id DESC)` | 普通索引 |
-| idx_notification_recipient_type_unread | `(recipient_user_id,notification_type,read_at,id)` | 普通索引 |
+| idx_notification_recipient_time | `(recipient_user_id,deleted_at,created_at DESC,id DESC)` | 普通索引 |
+| idx_notification_recipient_unread | `(recipient_user_id,deleted_at,read_at,id)` | 普通索引 |
+| idx_notification_recipient_type_time | `(recipient_user_id,deleted_at,notification_type,created_at DESC,id DESC)` | 普通索引 |
+| idx_notification_recipient_type_unread | `(recipient_user_id,deleted_at,notification_type,read_at,id)` | 普通索引 |
 
 #### 字段约束与关联
 
@@ -649,5 +662,49 @@ notification模块拥有`notification_messages`表，保存审核结果、点评
 - 审核消息：request_id、request_type、decision、restaurant_name必填，source_id=request_id；review_id、actor_user_id为空。店名长度1～120字符；通过时reject_reason为空，驳回时必填且长度1～200字符。
 - 回复及获赞消息：review_id、actor_user_id必填，操作者不等于收件人；request_id、request_type、decision、restaurant_name、reject_reason为空。
 - 关注消息：actor_user_id必填且不等于收件人；review_id及全部审核字段为空，source_id为关注关系逻辑ID。
-- 类型与状态编码精确匹配；非空read_at不得早于created_at。
+- 类型与状态编码精确匹配；非空read_at不得早于created_at；约束chk_notification_deleted要求非空deleted_at不得早于created_at。
 - 用户、申请、点评、回复、点赞及关注关系均为跨模块逻辑引用，无物理外键。
+
+### `notification_announcements`：全体公告
+
+| 字段 | 类型 | 可空 | 默认值及含义 |
+| --- | --- | --- | --- |
+| `id` | `bigint unsigned` | 否 | 自增主键；公告ID。 |
+| `client_request_id` | `binary(16)` | 否 | 无默认值；发布请求UUID。 |
+| `request_hash` | `binary(32)` | 否 | 无默认值；规范化发布内容的SHA-256摘要。 |
+| `title` | `varchar(120)` | 否 | 无默认值；公告标题。 |
+| `content` | `text` | 否 | 无默认值；公告正文，最多10000字符。 |
+| `status` | `varchar(16)`，ASCII/ascii_bin | 否 | 默认PUBLISHED；PUBLISHED已发布、WITHDRAWN已撤回。 |
+| `published_by` | `bigint unsigned` | 否 | 无默认值；发布管理员用户逻辑ID，1～9223372036854775807。 |
+| `published_at` | `timestamp(6)` | 否 | 默认CURRENT_TIMESTAMP(6)；发布时间。 |
+| `withdrawn_by` | `bigint unsigned` | 是 | 默认NULL；撤回管理员用户逻辑ID，非空时1～9223372036854775807。 |
+| `withdrawn_at` | `timestamp(6)` | 是 | 默认NULL；首次撤回时间。 |
+
+主键`(id)`；唯一键`uk_announcement_publish_request(published_by,client_request_id)`；普通索引`idx_announcement_status_time(status,published_at DESC,id DESC)`；无物理外键，管理员ID为用户模块逻辑引用。无接收范围字段、指定接收人关联或到期字段。
+
+CHECK约束：
+
+- `chk_announcement_publisher`：发布人限定正Long范围。
+- `chk_announcement_title`：TRIM后标题长度1～120。
+- `chk_announcement_content`：TRIM后正文至少1字符，原正文不超过10000字符。
+- `chk_announcement_lifecycle`：状态使用精确大小写枚举；PUBLISHED的撤回人/时间均为空；WITHDRAWN的撤回人/时间均非空、撤回人在正Long范围，撤回时间不早于发布时间。
+
+### `notification_announcement_user_states`：公告个人状态
+
+| 字段 | 类型 | 可空 | 默认值及含义 |
+| --- | --- | --- | --- |
+| `user_id` | `bigint unsigned` | 否 | 无默认值；用户逻辑ID，1～9223372036854775807。 |
+| `announcement_id` | `bigint unsigned` | 否 | 无默认值；公告ID，1～9223372036854775807。 |
+| `read_at` | `timestamp(6)` | 是 | 默认NULL；首次已读时间。 |
+| `deleted_at` | `timestamp(6)` | 是 | 默认NULL；本人删除时间。 |
+| `created_at` | `timestamp(6)` | 否 | 默认CURRENT_TIMESTAMP(6)；首次个人状态写入时间。 |
+
+联合主键`(user_id,announcement_id)`；普通索引`idx_announcement_state_announcement(announcement_id)`；同模块外键`fk_announcement_state_announcement`：announcement_id → notification_announcements.id，ON DELETE/ON UPDATE均为RESTRICT。用户ID无跨模块物理外键。
+
+CHECK约束：
+
+- `chk_announcement_state_ids`：用户ID及公告ID限定正Long范围。
+- `chk_announcement_state_action`：read_at和deleted_at至少一项非空。
+- `chk_announcement_state_read`、`chk_announcement_state_deleted`：非空操作时间不能早于created_at。
+
+无个人状态记录表示未读；read_at非空表示已读，deleted_at非空表示本人删除。删除状态允许read_at为空。

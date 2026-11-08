@@ -97,3 +97,11 @@ HTTP 基础设施只负责当前标签页的 Bearer 凭证读写和401清理；5
 过期旧请求的401不得清除新登录的凭证。密码仅留在表单局部状态，不进入 Pinia 或浏览器存储。
 
 ESLint 已对主要反向依赖进行静态限制。新增 `restaurant`、`review`、`auth` 或 `admin` 功能时，应在 `modules` 下建立独立目录，并保持相同的内部职责划分。
+
+## 公告管理与用户阅读
+
+announcement模块通过公开index导出公告API白名单与AnnouncementReader，admin拥有发布表单及记录状态模型；pages/admin/AdminAnnouncementPage只装配当前身份和工作台。`/admin/announcements`继续由AdminLayout和真实管理接口授权。发布页面遵循确认的单列示意图，不含预览或独立说明区域，固定全体用户，记录页支持状态筛选、分页、重新读取详情及撤回。
+
+useAdminAnnouncements绑定账号/凭证及读取代次，取消旧请求并拒绝迟到结果。一次发布尝试冻结UUID及正文，未知结果保持原请求重试；成功后清空草稿进入记录，列表故障不再次发布。提交中禁止重复写入及离开，身份变化清理草稿、确认和回执，不写浏览器存储。
+
+message的收件箱校验ANNOUNCEMENT与announcement:ID的一致性，标题不冒用审核店名，详情通过用户接口读取。AnnouncementReader采用原生dialog和纯文本插值，退出/换号/卸载取消读取；SSE变化和重连使当前收件箱及打开的公告重新核对，撤回后先清除旧正文，再显示不可访问。写操作期间合并刷新提示，操作结束再重读，避免实时事件打断已读或删除回执。

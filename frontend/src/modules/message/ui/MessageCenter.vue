@@ -18,6 +18,8 @@ const props = withDefaults(
     loading?: boolean
     error?: string
     actionError?: string
+    actionNotice?: string
+    deletingId?: string
     busy?: boolean
   }>(),
   {
@@ -28,10 +30,20 @@ const props = withDefaults(
     loading: false,
     error: '',
     actionError: '',
+    actionNotice: '',
+    deletingId: undefined,
     busy: false,
   },
 )
-defineEmits<{ refresh: []; page: [number]; read: [NotificationItem]; readAll: [] }>()
+defineEmits<{
+  refresh: []
+  page: [number]
+  read: [NotificationItem]
+  readAll: []
+  remove: [NotificationItem]
+  cancelRemove: []
+  confirmRemove: []
+}>()
 const time = (value: string) => new Date(value).toLocaleString('zh-CN', { hour12: false })
 const canReadAll = computed(
   () => props.connected && !!props.inbox?.unreadCount && !props.loading && !props.busy,
@@ -191,13 +203,16 @@ const loginTarget = computed(() => ({
                     }}</strong
                   ><strong v-else-if="item.category === 'FOLLOWERS'"
                     >{{ item.actorUsername }} 关注了你</strong
+                  ><strong v-else-if="item.notificationType === 'ANNOUNCEMENT'">系统公告</strong
                   ><strong v-else
                     >{{ item.requestType === 'CREATE' ? '新店投稿' : '资料纠错'
                     }}{{ item.decision === 'APPROVED' ? '审核通过' : '审核未通过' }}</strong
                   ><span v-if="!item.readAt" class="notification-unread">未读</span></span
                 >
                 <span v-if="item.category === 'SYSTEM'" class="notification-name">{{
-                  item.restaurantName
+                  item.notificationType === 'ANNOUNCEMENT'
+                    ? item.announcementTitle
+                    : item.restaurantName
                 }}</span>
                 <span v-if="item.rejectReason" class="notification-reason"
                   >驳回原因：{{ item.rejectReason }}</span
@@ -212,11 +227,36 @@ const loginTarget = computed(() => ({
                           ? '查看获赞内容'
                           : item.category === 'FOLLOWERS'
                             ? '查看个人主页'
-                            : '查看申请'
+                            : item.notificationType === 'ANNOUNCEMENT'
+                              ? '查看公告'
+                              : '查看申请'
                     }}
                     ›</span
                   ></span
                 >
+              </button>
+              <div
+                v-if="deletingId === item.id"
+                class="notification-delete-confirm"
+                role="group"
+                aria-label="确认删除消息"
+              >
+                <p>确定删除这条消息？原点评、回复或申请不受影响。</p>
+                <button type="button" :disabled="busy" @click="$emit('cancelRemove')">
+                  取消删除
+                </button>
+                <button type="button" :disabled="busy" @click="$emit('confirmRemove')">
+                  {{ busy ? '删除中…' : '确认删除消息' }}
+                </button>
+              </div>
+              <button
+                v-else
+                type="button"
+                class="notification-delete"
+                :disabled="busy"
+                @click="$emit('remove', item)"
+              >
+                删除消息
               </button>
             </li>
           </ul>
@@ -260,6 +300,7 @@ const loginTarget = computed(() => ({
       <button v-if="error" @click="$emit('refresh')">重试加载</button>
     </div>
     <p v-if="actionError" class="notification-status" role="alert">{{ actionError }}</p>
+    <p v-if="actionNotice" class="notification-status" role="status">{{ actionNotice }}</p>
   </section>
 </template>
 

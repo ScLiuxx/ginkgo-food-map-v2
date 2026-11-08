@@ -28,6 +28,7 @@ public class ReviewDeleteService {
     private final ReviewDeleteMapper deletion;
     private final ReviewWriteMapper reviews;
     private final ReviewPhotoMapper photos;
+    private final ReplyDeleteMapper replyReceipts;
     private final MediaFileService media;
     private final RestaurantReviewApplicationService restaurants;
     private final CurrentActorService actors;
@@ -78,6 +79,7 @@ public class ReviewDeleteService {
             throw new IllegalStateException("Missing review request receipt");
         }
         media.releaseBound(fileIds, owner);
+        replyReceipts.tombstoneReview(id);
         deletion.replies(id);
         deletion.photos(id);
         if (deletion.review(id) != 1) {

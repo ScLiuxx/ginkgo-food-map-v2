@@ -1,11 +1,13 @@
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { useLoginStore } from '@/modules/auth'
 import { authToken } from '@/shared/api/authSession'
+import { notificationRevision } from './useRealtimeUnread'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 import {
   fetchNotifications,
   markNotificationRead,
   markAllNotificationsRead,
+  deleteNotification,
   type NotificationCategory,
   type NotificationItem,
   type NotificationPage,
@@ -18,6 +20,7 @@ export function useNotificationInbox(category: () => string | undefined) {
     loading = ref(false),
     error = ref(''),
     actionError = ref(''),
+    notice = ref(''),
     busy = ref(false)
   let context = 0,
     version = 0,
@@ -78,6 +81,7 @@ export function useNotificationInbox(category: () => string | undefined) {
     const owner = context
     busy.value = true
     actionError.value = ''
+    notice.value = ''
     writeAbort = new AbortController()
     try {
       if (item) await markNotificationRead(item.id, actor.token, writeAbort.signal)
@@ -92,6 +96,34 @@ export function useNotificationInbox(category: () => string | undefined) {
       if (owner === context) busy.value = false
     }
   }
+  /** 删除后从第一页重读服务端计数；GET失败与DELETE成功分别呈现，不重复删除。 */
+  async function remove(item: NotificationItem): Promise<boolean> {
+    const actor = identity()
+    if (
+      !actor ||
+      busy.value ||
+      loading.value ||
+      !result.value?.records.some((row) => row.id === item.id)
+    )
+      return false
+    const owner = context
+    busy.value = true
+    actionError.value = notice.value = ''
+    writeAbort = new AbortController()
+    try {
+      await deleteNotification(item.id, actor.token, writeAbort.signal)
+      if (owner !== context) return false
+      notice.value = '消息已删除。'
+      await load(1)
+      return owner === context
+    } catch (reason) {
+      if (owner === context)
+        actionError.value = `${toErrorMessage(reason)}。删除未确认，可刷新核对或重试。`
+      return false
+    } finally {
+      if (owner === context) busy.value = false
+    }
+  }
   function clear() {
     context++
     version++
@@ -102,6 +134,7 @@ export function useNotificationInbox(category: () => string | undefined) {
     busy.value = false
     error.value = ''
     actionError.value = ''
+    notice.value = ''
     requestedPage = 1
   }
   watch(
@@ -112,6 +145,29 @@ export function useNotificationInbox(category: () => string | undefined) {
     },
     { immediate: true, flush: 'sync' },
   )
-  onBeforeUnmount(clear)
-  return { result, loading, error, actionError, busy, load, read }
+  // 合并同一轮提示，写操作结束后再读取，避免SSE打断本人的已读/删除回执。
+  let refreshTimer: ReturnType<typeof setTimeout> | undefined
+  let refreshPending = false
+  watch(notificationRevision, () => {
+    refreshPending = true
+    clearTimeout(refreshTimer)
+    refreshTimer = setTimeout(() => {
+      if (!busy.value && !loading.value && identity()) {
+        refreshPending = false
+        void load()
+      }
+    }, 150)
+  })
+  watch([busy, loading], () => {
+    if (refreshPending && !busy.value && !loading.value && identity()) {
+      refreshPending = false
+      clearTimeout(refreshTimer)
+      refreshTimer = setTimeout(() => void load(), 150)
+    }
+  })
+  onBeforeUnmount(() => {
+    clearTimeout(refreshTimer)
+    clear()
+  })
+  return { result, loading, error, actionError, notice, busy, load, read, remove }
 }

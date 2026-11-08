@@ -340,6 +340,21 @@ export async function deleteReview(reviewId: string): Promise<void> {
   }
 }
 
+/** 固定操作开始时的凭证，取消请求不代表服务端一定未删除，原作者可以安全重试。 */
+export async function deleteReply(replyId: string, signal: AbortSignal): Promise<void> {
+  const token = getAccessToken()
+  if (!token) throw new Error('请先登录后删除自己的回复。')
+  try {
+    const response = await httpClient.delete(`/api/review-replies/${encodeURIComponent(replyId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal,
+    })
+    if (response.status !== 204) throw new Error('删除结果无法确认')
+  } catch (reason) {
+    throw new Error(`${toErrorMessage(reason)}。删除未确认，可重试或刷新核对。`, { cause: reason })
+  }
+}
+
 /** 正式发布、读取、回复和本人删除；预览传输另行注入。 */
 export const textReviewGateway: ReviewGateway = {
   supportsPhotos: true,
@@ -352,4 +367,5 @@ export const textReviewGateway: ReviewGateway = {
   listReplies: fetchReplies,
   reply: publishReply,
   remove: deleteReview,
+  removeReply: deleteReply,
 }

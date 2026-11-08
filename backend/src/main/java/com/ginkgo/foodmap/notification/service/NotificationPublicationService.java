@@ -20,6 +20,7 @@ import java.util.Objects;
 @Transactional(propagation = Propagation.MANDATORY)
 public class NotificationPublicationService {
     private final NotificationMapper messages;
+    private final NotificationChangeService changes;
 
     /** 业务锁先于成长锁和通知唯一键；幂等重入校验原快照，禁止用新内容覆写已发送结果。 */
     public void restaurantDecision(RestaurantDecisionNotification input) {
@@ -45,6 +46,7 @@ public class NotificationPublicationService {
         row.setRestaurantName(input.getRestaurantName());
         row.setRejectReason(input.getRejectReason());
         messages.insert(row);
+        changes.changed(row.getRecipientUserId());
         var saved = messages.byRequest(input.getRecipientUserId(), input.getRequestId());
         if (saved == null
                 || !Objects.equals(saved.getRequestType(), row.getRequestType())
@@ -75,6 +77,7 @@ public class NotificationPublicationService {
         row.setReviewId(input.getReviewId());
         row.setActorUserId(input.getActorUserId());
         messages.insertReply(row);
+        changes.changed(row.getRecipientUserId());
         var saved = messages.byReply(input.getRecipientUserId(), input.getReplyId());
         if (saved == null
                 || !Objects.equals(saved.getReviewId(), row.getReviewId())
@@ -103,6 +106,7 @@ public class NotificationPublicationService {
         row.setNotificationType(
                 "REVIEW".equals(input.getTargetType()) ? "REVIEW_LIKED" : "REPLY_LIKED");
         messages.insertLike(row);
+        changes.changed(row.getRecipientUserId());
         var saved =
                 messages.bySource(
                         row.getRecipientUserId(), row.getNotificationType(), row.getSourceId());
@@ -128,6 +132,7 @@ public class NotificationPublicationService {
         row.setActorUserId(input.getActorUserId());
         row.setSourceId(input.getRelationId());
         messages.insertFollow(row);
+        changes.changed(row.getRecipientUserId());
         var saved =
                 messages.bySource(
                         input.getRecipientUserId(), "USER_FOLLOWED", input.getRelationId());

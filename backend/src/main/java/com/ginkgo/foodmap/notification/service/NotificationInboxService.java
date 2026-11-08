@@ -19,8 +19,18 @@ import org.springframework.transaction.annotation.*;
 @RequiredArgsConstructor
 @PreAuthorize("isAuthenticated()")
 public class NotificationInboxService {
+    /** 服务端从当前身份取收件人，轻量查询仅返回总数。 */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public java.util.Map<String, Object> unread() {
+        long owner = actors.requireActor().getUserId();
+        return java.util.Map.of(
+                "userId", Long.toString(owner), "unreadCount", messages.unread(owner, "ALL"));
+    }
+
     private final CurrentActorService actors;
     private final NotificationMapper messages;
+    private final AnnouncementService announcements;
+    private final NotificationChangeService changes;
     private final com.ginkgo.foodmap.user.service.PublicAuthorService authors;
 
     /** 分类总数、未读数、系统摘要和本页使用同一快照；GET绝不自动标记已读。 */
@@ -82,17 +92,43 @@ public class NotificationInboxService {
     /** 不存在与越权统一404；锁定该条消息后幂等更新，不向调用者泄露其他收件人的记录。 */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public void markRead(String id) {
+        if (id != null && id.startsWith("announcement:")) {
+            announcements.read(id.substring("announcement:".length()));
+            return;
+        }
         long owner = actors.requireActor().getUserId();
+        long key = notificationId(id);
+        if (messages.lock(owner, key) == null) {
+            throw new BusinessException(NotificationErrorCode.NOT_FOUND);
+        }
+        messages.markRead(owner, key);
+        changes.changed(owner);
+    }
+
+    /** 任意已读/未读消息均可删除，原收件人重试204；其他账号与未知编号统一404。 */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void remove(String id) {
+        if (id != null && id.startsWith("announcement:")) {
+            announcements.delete(id.substring("announcement:".length()));
+            return;
+        }
+        long owner = actors.requireActor().getUserId();
+        long key = notificationId(id);
+        // 同一行锁串行化删除与单条已读；保留来源唯一键，不调用源业务服务。
+        if (messages.lockForRemoval(owner, key) == null) {
+            throw new BusinessException(NotificationErrorCode.NOT_FOUND);
+        }
+        messages.remove(owner, key);
+        changes.changed(owner);
+    }
+
+    private long notificationId(String id) {
         if (id == null
                 || !id.matches("[1-9][0-9]{0,18}")
                 || new java.math.BigInteger(id).bitLength() > 63) {
             throw new BusinessException(CommonErrorCode.VALIDATION_FAILED);
         }
-        long key = Long.parseLong(id);
-        if (messages.lock(owner, key) == null) {
-            throw new BusinessException(NotificationErrorCode.NOT_FOUND);
-        }
-        messages.markRead(owner, key);
+        return Long.parseLong(id);
     }
 
     /** 固定RR快照后分批更新当时可见的消息；覆盖较小ID迟提交场景，且不把全部ID一次性载入内存。 */
@@ -106,13 +142,20 @@ public class NotificationInboxService {
                 break;
             }
             messages.markReadBatch(owner, ids);
+            changes.changed(owner);
             after = ids.getLast();
+        }
+        if ("ALL".equals(category) || "SYSTEM".equals(category)) {
+            announcements.readAll(owner);
         }
     }
 
     private NotificationViews.Item item(NotificationEntity row) {
         var item = new NotificationViews.Item();
-        item.setId(row.getId().toString());
+        boolean announcement = "ANNOUNCEMENT".equals(row.getNotificationType());
+        item.setId((announcement ? "announcement:" : "") + row.getId());
+        item.setAnnouncementId(announcement ? row.getId().toString() : null);
+        item.setAnnouncementTitle(row.getAnnouncementTitle());
         item.setRequestId(row.getRequestId() == null ? null : row.getRequestId().toString());
         item.setSourceId(row.getSourceId().toString());
         item.setNotificationType(row.getNotificationType());
@@ -121,7 +164,8 @@ public class NotificationInboxService {
                         ? "FOLLOWERS"
                         : "REVIEW_REPLY".equals(row.getNotificationType())
                                 ? "COMMENTS"
-                                : "RESTAURANT_DECISION".equals(row.getNotificationType())
+                                : ("RESTAURANT_DECISION".equals(row.getNotificationType())
+                                                || announcement)
                                         ? "SYSTEM"
                                         : "LIKES");
         item.setReviewId(row.getReviewId() == null ? null : row.getReviewId().toString());

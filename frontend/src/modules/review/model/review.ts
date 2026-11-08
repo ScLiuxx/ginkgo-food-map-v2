@@ -104,6 +104,8 @@ export interface ReviewGateway {
     signal?: AbortSignal,
   ): Promise<ReplyReceipt | void>
   remove(reviewId: string): Promise<void>
+  /** 本人回复删除独立于整条点评删除；授权由服务端完成。 */
+  removeReply?(replyId: string, signal: AbortSignal): Promise<void>
 }
 export const reviewGatewayKey: InjectionKey<ReviewGateway> = Symbol('review-gateway')
 const unavailable = async (): Promise<never> => {

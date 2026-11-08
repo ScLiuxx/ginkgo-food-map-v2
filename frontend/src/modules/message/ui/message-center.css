@@ -363,6 +363,35 @@
   outline: 2px solid #ad6f26;
   outline-offset: 4px;
 }
+.notification-delete,
+.notification-delete-confirm button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: #9c773e;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.notification-delete-confirm {
+  padding: 8px 12px;
+  border: 1px solid #ece6de;
+  border-radius: 8px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.notification-delete-confirm p {
+  margin: 4px 0;
+}
+.notification-delete-confirm button + button {
+  margin-left: 12px;
+}
+.notification-delete:focus-visible,
+.notification-delete-confirm button:focus-visible {
+  outline: 2px solid #ad6f26;
+  outline-offset: 2px;
+}
 @media (hover: hover) {
   .message-shortcut:hover,
   .session-row:hover {

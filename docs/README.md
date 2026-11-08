@@ -31,7 +31,8 @@ docs/
 - 业务访谈：[社区业务规则讨论记录](plans/community-rules.md)，逐项确认“我的”、消息、互动、风控及相关未完成业务，区分待讨论、暂定、已确认与暂缓，不代表已经实现。
 - 社区页面：[前端接入状态](plans/community-frontend.md)，覆盖个人中心、个人主页、消息、设置及内容互动入口；区分真实可用与等待后端的能力。
 - 点赞数据：[点赞关系表](architecture/mysql-schema.md#content-likes)，字段与唯一关系约束；接口见[API 18](api.md#18-点评与回复点赞)。
-- 通知数据：[通知表结构](architecture/mysql-schema.md#notification-inbox)，包含审核结果、点评回复的字段、枚举、索引及约束。
+- 全体公告：[管理员发布、查询及撤回](api.md#178-管理员全体公告)、[用户详情及系统消息合并](api.md#179-用户公告详情及系统消息合并)；管理端`/admin/announcements`和用户系统消息已接入。
+- 通知数据：[通知表结构](architecture/mysql-schema.md#notification-inbox)，包含业务通知、全体公告及公告个人状态的字段、枚举、索引及约束。
 - 本人点评：[API 10.5](api.md#105-本人点评按店铺分组)、[点评表结构](architecture/mysql-schema.md#review-schema)；私有跨店分页、历史与删除已接通。
 - 基础关注：[关系、名单与首次通知](api.md#21-基础关注名单隐私与关注提醒)，名单默认私密，人数向登录用户展示。
 - 店铺收藏：[收藏与隐私接口](api.md#20-店铺收藏与隐私)，详情收藏、本人/公开列表及默认私密的设置。
@@ -40,10 +41,10 @@ docs/
 - 本人投稿：[API 16](api.md#16-本人投稿与纠错记录)、[申请表结构](architecture/mysql-schema.md#restaurant_change_requests商户资料待审核申请)。
 - 成长等级：[V24经验账户与奖励表结构](architecture/mysql-schema.md#growth-schema)、[事务与后续接入设计](plans/community-growth-v1.md)；首次点评计奖、内部撤销、本人等级查询及本人页面展示已实现，其他奖励与排序待接入，接口见[API](api.md#14-本人成长摘要)，验证与运行状态见开发记录。
 - 架构：[模块化单体](architecture/modular-monolith.md)、[前端分层](architecture/frontend.md)。
-- 数据结构：[MySQL 表结构](architecture/mysql-schema.md)，集中查看全部 26 张应用表，涵盖应用元数据、用户/角色/安全审计、商户、点评、媒体、点赞、成长与通知；[Elasticsearch 索引](architecture/elasticsearch-schema.md)。
+- 数据结构：[MySQL 表结构](architecture/mysql-schema.md)，集中查看全部 29 张应用表，涵盖应用元数据、用户/角色/安全审计、商户、点评、媒体、点赞、成长与通知；[Elasticsearch 索引](architecture/elasticsearch-schema.md)。
 - 分类：[分类表及编码](architecture/mysql-schema.md#restaurant_categories餐厅分类)；数据整理记录见[开发记录](development.md)。
 - 审核存储：[商户申请表V17](architecture/mysql-schema.md#restaurant_change_requests商户资料待审核申请)，采用request_type和单个restaurant_id，记录审核结果与资料快照；通过/驳回及正式相册发布已实现，新增[正式相册V18](architecture/mysql-schema.md#restaurant_photos正式商户相册)，餐厅/食堂详情相册及管理端发布记录已接入，首页/地图卡片封面也已接入。
-- 页面：[找店界面方案](plans/discovery-ui.md)。
+- 页面：[找店界面与前端架构](architecture/frontend.md)。
 - 管理端：`/admin/reviews`已接入真实申请查询、就地编辑、通过/驳回及连续审核，见[功能说明](features.md)及[API文档](api.md#5-管理员商户审核)。
 - 统一登录：`/login`按服务端角色分流前台/工作台，`/admin/login`仅兼容跳转；管理身份由后端`/api/admin/me`校验。身份与查询边界见[前端架构](architecture/frontend.md)。
 - 搜索：[实施进度与待办](plans/elasticsearch-search.md)、[索引结构](architecture/elasticsearch-schema.md)、[同步任务表](architecture/mysql-schema.md#restaurant-search-outbox)；现行查询契约见[API](api.md#621-正式搜索与简单降级契约2026-11-05)。

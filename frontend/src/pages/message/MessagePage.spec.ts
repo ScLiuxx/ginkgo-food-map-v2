@@ -8,6 +8,7 @@ import {
   fetchNotifications,
   markNotificationRead,
   markAllNotificationsRead,
+  deleteNotification,
   type NotificationPage,
 } from '@/modules/message/api/notificationsApi'
 import MessagePage from './MessagePage.vue'
@@ -67,6 +68,7 @@ vi.mock('@/modules/message/api/notificationsApi', () => ({
   fetchNotifications: vi.fn(),
   markNotificationRead: vi.fn(),
   markAllNotificationsRead: vi.fn(),
+  deleteNotification: vi.fn(),
 }))
 const page = (
   userId = '42',
@@ -119,7 +121,14 @@ describe('审核通知页面', () => {
     })
     vi.mocked(markNotificationRead).mockResolvedValue(undefined)
     vi.mocked(markAllNotificationsRead).mockResolvedValue(undefined)
+    vi.mocked(deleteNotification).mockResolvedValue(undefined)
     vi.mocked(fetchReplyTarget).mockResolvedValue(target())
+    Object.defineProperty(HTMLDialogElement.prototype, 'close', {
+      configurable: true,
+      value() {
+        this.open = false
+      },
+    })
     Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
       configurable: true,
       value() {
@@ -135,6 +144,7 @@ describe('审核通知页面', () => {
     host.remove()
     clearAccessToken()
     delete (HTMLDialogElement.prototype as unknown as Record<string, unknown>).showModal
+    delete (HTMLDialogElement.prototype as unknown as Record<string, unknown>).close
   })
   function signIn(id = 42) {
     useLoginStore().acceptSession({
@@ -169,6 +179,105 @@ describe('审核通知页面', () => {
     await settle()
     return router
   }
+
+  async function click(label: string) {
+    const button = [...host.querySelectorAll('button')].find(
+      (value) => value.textContent?.trim() === label,
+    )
+    expect(button, label).toBeDefined()
+    button!.click()
+    await settle()
+  }
+
+  it('删除需要二次确认，取消不写入，成功后回到第一页读取真实计数', async () => {
+    vi.mocked(fetchNotifications).mockImplementation(async (category, current, userId) => ({
+      ...page(userId, category),
+      page: current,
+      total: 11,
+      totalPages: 2,
+    }))
+    await mount()
+    await click('下一页')
+    await click('删除消息')
+    expect(deleteNotification).not.toHaveBeenCalled()
+    expect(markNotificationRead).not.toHaveBeenCalled()
+    await click('取消删除')
+    expect(deleteNotification).not.toHaveBeenCalled()
+    await click('删除消息')
+    vi.mocked(fetchNotifications).mockImplementationOnce(async (category, current, userId) => ({
+      ...page(userId, category),
+      page: current,
+      records: [],
+      total: 0,
+      totalPages: 0,
+      unreadCount: 0,
+      unreadCounts: { SYSTEM: 0, COMMENTS: 0 },
+      latestSystem: null,
+    }))
+    await click('确认删除消息')
+    expect(deleteNotification).toHaveBeenCalledWith(
+      '9007199254740993',
+      'session-42',
+      expect.any(AbortSignal),
+    )
+    expect(vi.mocked(fetchNotifications).mock.calls.at(-1)?.[1]).toBe(1)
+    expect(host.textContent).toContain('消息已删除')
+    expect(host.textContent).toContain('0 条未读')
+    expect(host.textContent).toContain('暂无系统通知')
+    expect(host.querySelector('.notification-card')).toBeNull()
+    expect(markNotificationRead).not.toHaveBeenCalled()
+  })
+
+  it('删除失败保留原通知和确认入口，可安全重试已读消息', async () => {
+    const data = page()
+    data.records[0]!.readAt = '2026-11-07T09:00:00Z'
+    data.unreadCount = 0
+    vi.mocked(fetchNotifications).mockResolvedValue(data)
+    await mount()
+    vi.mocked(deleteNotification).mockRejectedValueOnce(new Error('暂时不可用'))
+    await click('删除消息')
+    await click('确认删除消息')
+    expect(host.textContent).toContain('删除未确认')
+    expect(host.querySelector('.notification-card')).not.toBeNull()
+    expect(host.querySelector('[aria-label="确认删除消息"]')).not.toBeNull()
+    await click('确认删除消息')
+    expect(deleteNotification).toHaveBeenCalledTimes(2)
+  })
+
+  it('删除成功但读取失败时隐藏旧消息，重试读取不重发DELETE', async () => {
+    await mount()
+    await click('删除消息')
+    vi.mocked(fetchNotifications).mockRejectedValueOnce(new Error('读取失败'))
+    await click('确认删除消息')
+    expect(host.textContent).toContain('消息已删除')
+    expect(host.textContent).toContain('读取失败')
+    expect(host.querySelector('.notification-card')).toBeNull()
+    await click('重试加载')
+    expect(deleteNotification).toHaveBeenCalledTimes(1)
+  })
+
+  it('换号取消在途删除并丢弃旧身份回执', async () => {
+    await mount()
+    let resolveDelete!: () => void
+    vi.mocked(deleteNotification).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveDelete = resolve
+        }),
+    )
+    await click('删除消息')
+    await click('确认删除消息')
+    const signal = vi.mocked(deleteNotification).mock.calls[0]![2]
+    signIn(43)
+    await settle()
+    expect(signal.aborted).toBe(true)
+    const reads = vi.mocked(fetchNotifications).mock.calls.length
+    resolveDelete()
+    await settle()
+    expect(fetchNotifications).toHaveBeenCalledTimes(reads)
+    expect(host.textContent).not.toContain('消息已删除')
+    expect(host.querySelector('[aria-label="确认删除消息"]')).toBeNull()
+  })
   it('游客不读取私有消息，登录后新增关注分类读取真实空状态', async () => {
     const router = await mount('/messages/system', false)
     expect(fetchNotifications).not.toHaveBeenCalled()
@@ -481,5 +590,54 @@ describe('审核通知页面', () => {
     await settle()
     expect(document.querySelector('.reply-notification-dialog')).toBeNull()
     expect(document.body.textContent).not.toContain('历史点评原文')
+  })
+  it('公告标题与正文按纯文本展示，已读使用带类型ID而不跳转申请', async () => {
+    const source = page()
+    const announcement = {
+      ...source.records[0]!,
+      id: 'announcement:12',
+      sourceId: '12',
+      notificationType: 'ANNOUNCEMENT',
+      announcementId: '12',
+      announcementTitle: '校园公告',
+      requestId: null,
+      requestType: null,
+      decision: null,
+      restaurantName: null,
+      rejectReason: null,
+    }
+    source.records = [announcement]
+    source.latestSystem = announcement
+    vi.mocked(fetchNotifications).mockResolvedValue(source)
+    vi.spyOn(httpClient, 'get').mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          id: '12',
+          title: '校园公告',
+          content: '正文 <img src=x onerror=alert(1)>',
+          status: 'PUBLISHED',
+          publishedBy: '22',
+          publishedAt: '2026-11-07T08:00:00Z',
+          withdrawnBy: null,
+          withdrawnAt: null,
+          replayed: false,
+        },
+      },
+    })
+    const router = await mount()
+    host.querySelector<HTMLButtonElement>('.notification-card')!.click()
+    await settle()
+    expect(markNotificationRead).toHaveBeenCalledWith(
+      'announcement:12',
+      'session-42',
+      expect.any(AbortSignal),
+    )
+    expect(router.currentRoute.value.path).toBe('/messages/system')
+    expect(document.querySelector('.reader-content')?.textContent).toContain('<img src=x')
+    expect(document.querySelector('.reader-content img')).toBeNull()
+    clearAccessToken()
+    await settle()
+    expect(document.querySelector('.announcement-reader')).toBeNull()
   })
 })

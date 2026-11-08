@@ -5,6 +5,7 @@ import com.ginkgo.foodmap.restaurant.service.RestaurantReviewApplicationService;
 import com.ginkgo.foodmap.review.dto.ReplyPublishRequest;
 import com.ginkgo.foodmap.review.entity.ReplyEntity;
 import com.ginkgo.foodmap.review.exception.ReplyErrorCode;
+import com.ginkgo.foodmap.review.mapper.ReplyDeleteMapper;
 import com.ginkgo.foodmap.review.mapper.ReplyMapper;
 import com.ginkgo.foodmap.review.policy.ReplyPolicy;
 import com.ginkgo.foodmap.review.vo.ReplyPublishVo;
@@ -25,6 +26,7 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class ReplyWriteService {
     private final ReplyMapper mapper;
+    private final ReplyDeleteMapper receipts;
     private final RestaurantReviewApplicationService restaurants;
     private final CurrentActorService actors;
     private final PlatformTransactionManager transactions;
@@ -63,6 +65,9 @@ public class ReplyWriteService {
         if (!restaurant.equals(mapper.lockReview(row.getReviewId()))) {
             throw new BusinessException(ReplyErrorCode.NOT_FOUND);
         }
+        if (receipts.deletedRequest(row.getAuthorUserId(), row.getClientRequestId()) != 0) {
+            throw new BusinessException(ReplyErrorCode.DELETED);
+        }
         var existing = mapper.request(row.getAuthorUserId(), row.getClientRequestId());
         if (existing != null) {
             if (existing.getReviewId() != row.getReviewId()
@@ -76,6 +81,8 @@ public class ReplyWriteService {
         row.setId(null);
         row.setCreatedAt(latest == null ? null : latest.getCreatedAt());
         mapper.insert(row);
+        // 回执唯一键独立于正文，防止删除后跨点评重放同一发布编号。
+        receipts.record(row);
         // 父店与点评锁仍在本次READ_COMMITTED事务内；通知失败整笔回滚，重放分支不补发。
         var notice = new com.ginkgo.foodmap.notification.dto.ReviewReplyNotification();
         Long recipient = mapper.reviewAuthor(row.getReviewId());

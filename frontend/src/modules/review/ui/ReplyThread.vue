@@ -27,6 +27,10 @@ const draft = ref(''),
   sendError = ref(''),
   notice = ref('')
 const input = ref<globalThis.HTMLTextAreaElement>()
+const pendingDelete = ref<string | null>(null)
+const deleting = ref(false)
+const deleteError = ref('')
+let deleteController: globalThis.AbortController | undefined
 const replyAction = ref<globalThis.HTMLButtonElement>()
 const uniqueId = useId(),
   listId = 'reply-list-' + uniqueId,
@@ -50,6 +54,10 @@ function reset() {
   context++
   cancelRead()
   postController?.abort()
+  deleteController?.abort()
+  pendingDelete.value = null
+  deleting.value = false
+  deleteError.value = ''
   if (editing.value) activeEditor.value = null
   sending.value = false
   draft.value = readError.value = sendError.value = notice.value = ''
@@ -77,6 +85,7 @@ onUnmounted(() => {
   context++
   cancelRead()
   postController?.abort()
+  deleteController?.abort()
   if (editing.value) activeEditor.value = null
 })
 
@@ -101,6 +110,47 @@ function cancelEditing() {
   if (sending.value) return
   activeEditor.value = null
   replyAction.value?.focus({ preventScroll: true })
+}
+
+/** 只显示当前账号自己的入口；后端仍独立校验，点评作者不获得代删权限。 */
+function ownsReply(authorId: string) {
+  return auth.authenticated && !auth.restoring && authorId === String(auth.user?.id)
+}
+
+function requestDelete(replyId: string) {
+  if (deleting.value) return
+  pendingDelete.value = replyId
+  deleteError.value = ''
+}
+
+/** 成功后丢弃旧游标，从头读取，避免删除分页锚点后继续使用失效边界。 */
+async function removeReply() {
+  const replyId = pendingDelete.value
+  const answer = records.value.find((row) => row.id === replyId)
+  if (!replyId || !answer || !ownsReply(answer.author.id) || !gateway.removeReply || deleting.value)
+    return
+  const owner = context
+  deleteController = new globalThis.AbortController()
+  deleting.value = true
+  deleteError.value = ''
+  notice.value = ''
+  try {
+    await gateway.removeReply(replyId, deleteController.signal)
+    if (owner !== context) return
+    pendingDelete.value = null
+    notice.value = '回复已删除。'
+    cancelRead()
+    records.value = []
+    cursor = undefined
+    loaded.value = hasMore.value = false
+    if (open.value && scopeVisible.value) await load(true)
+  } catch (reason) {
+    if (owner === context)
+      deleteError.value =
+        reason instanceof Error ? reason.message : '删除未确认，可重试或刷新核对。'
+  } finally {
+    if (owner === context) deleting.value = false
+  }
 }
 
 /** 失败保留已读内容和原游标；只有失效游标时用户才需要从头重载。 */
@@ -230,13 +280,44 @@ async function send() {
               :authenticated="auth.authenticated"
               :own="auth.authenticated && answer.author.id === String(auth.user?.id)"
             />
+            <template v-if="gateway.removeReply && ownsReply(answer.author.id)">
+              <div
+                v-if="pendingDelete === answer.id"
+                class="delete-confirmation"
+                role="group"
+                aria-label="确认删除回复"
+              >
+                <p>确定删除这条回复？删除后无法恢复。</p>
+                <p v-if="deleteError" role="alert" class="reply-error">{{ deleteError }}</p>
+                <button
+                  type="button"
+                  class="text-action"
+                  :disabled="deleting"
+                  @click="pendingDelete = null"
+                >
+                  取消删除
+                </button>
+                <button type="button" class="text-action" :disabled="deleting" @click="removeReply">
+                  {{ deleting ? '删除中…' : '确认删除回复' }}
+                </button>
+              </div>
+              <button
+                v-else
+                type="button"
+                class="text-action"
+                :disabled="deleting"
+                @click="requestDelete(answer.id)"
+              >
+                删除回复
+              </button>
+            </template>
           </div>
         </li>
       </ol>
       <p v-else-if="loaded && !loading && !readError" class="empty-replies">还没有回复</p>
       <p v-if="loading" role="status" class="muted">正在加载回复…</p>
       <div v-if="readError" role="alert" class="reply-error">
-        <p>{{ notice ? '回复已发送，但列表刷新失败：' : '' }}{{ readError }}</p>
+        <p>{{ notice ? notice.replace('。', '，但列表刷新失败：') : '' }}{{ readError }}</p>
         <button type="button" class="text-action" @click="load()">重试加载回复</button>
         <button type="button" class="text-action" @click="load(true)">从头加载</button>
       </div>
@@ -448,6 +529,17 @@ textarea:focus-visible {
 .reply-notice {
   color: #68804b;
   font-size: 12px;
+}
+.delete-confirmation {
+  padding: 8px 12px;
+  border: 1px solid #e8dfd0;
+  border-radius: 8px;
+}
+.delete-confirmation p {
+  margin: 4px 0;
+}
+.delete-confirmation button + button {
+  margin-left: 20px;
 }
 .invalid {
   color: #a53c2e;

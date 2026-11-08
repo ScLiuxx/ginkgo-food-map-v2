@@ -17,6 +17,17 @@ server {
         return 200 "ok\n";
     }
 
+    # 消息流关闭代理缓冲，心跳维持连接。
+    location = /api/me/notifications/events {
+        proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 90s;
+    }
+
     location /api/ {
         proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
         proxy_http_version 1.1;

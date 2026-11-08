@@ -11,6 +11,7 @@ import { overall, validBody, reviewGatewayKey, unavailableReviewGateway } from '
 import type { ReviewGateway, ReviewItem } from './model/review'
 import ReviewComposer from './ui/ReviewComposer.vue'
 import ReviewPanel from './ui/ReviewPanel.vue'
+import ReplyThread from './ui/ReplyThread.vue'
 import type { RestaurantReadModel } from '@/modules/restaurant/model/restaurant.types'
 
 vi.mock('@/modules/restaurant/api/restaurantApi', () => ({ fetchRestaurants: vi.fn() }))
@@ -130,6 +131,99 @@ describe('review interactions matching the original site', () => {
     setAccessToken('test-session')
     useLoginStore(pinia).user = { id: 1, username: '测试社员', roles: ['USER'] }
   }
+  /** 同一点评含本人和他人回复，用真实身份差异验证删除入口及确认流程。 */
+  async function mountReplies() {
+    login()
+    gateway.listReplies = vi.fn().mockResolvedValue({
+      records: [
+        {
+          id: '51',
+          author: { id: '1', username: '本人' },
+          body: '本人回复正文',
+          createdAt: review.createdAt,
+        },
+        {
+          id: '52',
+          author: { id: '2', username: '其他人' },
+          body: '他人回复正文',
+          createdAt: review.createdAt,
+        },
+      ],
+      hasMore: true,
+      nextCursor: 'old-anchor',
+    })
+    gateway.removeReply = vi.fn().mockResolvedValue(undefined)
+    await mount(ReplyThread, { reviewId: '10', username: '点评作者' })
+    await clickReplyAction('查看回复')
+  }
+  async function clickReplyAction(label: string) {
+    const button = [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === label)
+    expect(button, label).toBeDefined()
+    button!.click()
+    await settle()
+  }
+
+  it('shows delete only for own replies, confirms, and refreshes without the old cursor', async () => {
+    await mountReplies()
+    expect(
+      [...host.querySelectorAll('button')].filter((b) => b.textContent?.trim() === '删除回复'),
+    ).toHaveLength(1)
+    await clickReplyAction('删除回复')
+    expect(gateway.removeReply).not.toHaveBeenCalled()
+    await clickReplyAction('取消删除')
+    expect(gateway.removeReply).not.toHaveBeenCalled()
+    await clickReplyAction('删除回复')
+    vi.mocked(gateway.listReplies!).mockResolvedValueOnce({
+      records: [],
+      hasMore: false,
+      nextCursor: null,
+    })
+    await clickReplyAction('确认删除回复')
+    expect(gateway.removeReply).toHaveBeenCalledWith('51', expect.any(AbortSignal))
+    expect(vi.mocked(gateway.listReplies!).mock.calls.at(-1)?.[2]).toBeUndefined()
+    expect(host.textContent).toContain('回复已删除')
+    expect(host.textContent).not.toContain('本人回复正文')
+    expect(host.textContent).toContain('还没有回复')
+  })
+
+  it('retains confirmation on delete failure and retries reading without resending a successful delete', async () => {
+    await mountReplies()
+    vi.mocked(gateway.removeReply!).mockRejectedValueOnce(new Error('删除未确认'))
+    await clickReplyAction('删除回复')
+    await clickReplyAction('确认删除回复')
+    expect(host.textContent).toContain('删除未确认')
+    expect(host.textContent).toContain('本人回复正文')
+    vi.mocked(gateway.listReplies!).mockRejectedValueOnce(new Error('刷新失败'))
+    await clickReplyAction('确认删除回复')
+    expect(host.textContent).toContain('回复已删除，但列表刷新失败')
+    expect(host.textContent).not.toContain('本人回复正文')
+    await clickReplyAction('重试加载回复')
+    expect(gateway.removeReply).toHaveBeenCalledTimes(2)
+  })
+
+  it('aborts deletion on account change and ignores the old account receipt', async () => {
+    await mountReplies()
+    let resolveDelete!: () => void
+    vi.mocked(gateway.removeReply!).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveDelete = resolve
+        }),
+    )
+    await clickReplyAction('删除回复')
+    await clickReplyAction('确认删除回复')
+    const signal = vi.mocked(gateway.removeReply!).mock.calls[0]![1]
+    useLoginStore(pinia).user = { id: 2, username: '另一个账号', roles: ['USER'] }
+    setAccessToken('another-session')
+    await settle()
+    expect(signal.aborted).toBe(true)
+    expect(host.textContent).not.toContain('确认删除回复')
+    const reads = vi.mocked(gateway.listReplies!).mock.calls.length
+    resolveDelete()
+    await settle()
+    expect(host.textContent).not.toContain('回复已删除')
+    expect(gateway.listReplies).toHaveBeenCalledTimes(reads)
+  })
   async function mount(component: Component, props = {}) {
     app = createApp({ render: () => h(component, props) })
       .use(pinia)

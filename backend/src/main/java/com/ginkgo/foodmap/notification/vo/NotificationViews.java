@@ -1,14 +1,20 @@
 package com.ginkgo.foodmap.notification.vo;
 
+import lombok.Data;
+
 import java.time.Instant;
 import java.util.List;
-import lombok.Data;
 
 /** 私有收件箱响应；所有ID使用字符串，避免浏览器丢失BIGINT精度。 */
 public final class NotificationViews {
-    private NotificationViews() { }
+    private NotificationViews() {}
+
     @Data
     public static class Item {
+        /** 公告使用announcement:前缀隔离编号，标题不包含正文。 */
+        private String announcementId;
+
+        private String announcementTitle;
         private String id;
         private String requestId;
         private String notificationType;
@@ -24,6 +30,7 @@ public final class NotificationViews {
         private Instant createdAt;
         private Instant readAt;
     }
+
     @Data
     public static class Page {
         private String userId;
@@ -31,7 +38,7 @@ public final class NotificationViews {
         private List<Item> records;
         private long total;
         private long unreadCount;
-        private java.util.Map<String,Long> unreadCounts;
+        private java.util.Map<String, Long> unreadCounts;
         private Item latestSystem;
         private int page;
         private int pageSize;

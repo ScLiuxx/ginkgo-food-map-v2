@@ -47,7 +47,6 @@ async function openReport() {
     <button v-if="!own" class="report-entry" title="举报功能即将开放" @click="openReport">
       举报
     </button>
-    <button v-else-if="kind === 'reply'" disabled title="单独删除回复即将开放">删除</button>
     <Teleport to="body">
       <dialog
         v-if="reportOpen"

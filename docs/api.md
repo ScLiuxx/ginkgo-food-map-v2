@@ -520,6 +520,8 @@ currentReview、照片相对URL及nextHistoryCursor与10.2/10.3一致；历史�
 
 ## 11. 单层回复
 
+### 11.1 发布与读取
+
 `POST /api/reviews/{reviewId}/replies`需Bearer：
 
 ```json
@@ -531,6 +533,29 @@ UUID必填，正文去首尾Unicode空白后1–200码点；作者与时间由�
 `GET /api/reviews/{reviewId}/replies`公开；pageSize默认10、1–50；cursor可省略或原样使用nextCursor，最长200字符。200，data为`{records:[{id,author:{id,username},body,createdAt}],hasMore,nextCursor}`，按createdAt/id升序排除游标锚点。空结果为[]/false/null。作者缺失显示“用户不可用”，不返回邮箱或请求摘要。
 
 两者禁止缓存，支持最新和历史点评，父店或点评不存在/已删除不可访问。非法字段400 `REPLY_INVALID_INPUT`或通用错误；游标错误400 `REPLY_INVALID_CURSOR`；点评不存在404 `REPLY_REVIEW_NOT_FOUND`；父店隐藏404 `RESTAURANT_NOT_FOUND`；竞争/超时耗尽503 `REPLY_TEMPORARILY_UNAVAILABLE`。游标不是授权令牌，跨段不保证固定快照。
+
+发布请求的作者和UUID独立保存在回复回执中；删除后的原请求返回409 `REPLY_REQUEST_DELETED`，不能在原点评或其他点评重放重建。正常发布新回复仍使用新UUID。删除分页锚点后继续使用旧cursor会返回400 `REPLY_INVALID_CURSOR`，需从头读取。
+
+### 11.2 删除本人回复
+
+`DELETE /api/review-replies/{replyId}`需有效Bearer，路径为无前导零、范围1～Long.MAX_VALUE的回复ID，无业务查询参数及请求体。仅原回复作者可操作，点评作者和管理员均不能代删。首次成功及原作者重复删除均返回204，无响应体，`Cache-Control: no-store`；不提供恢复接口。
+
+回复正文硬删除，回执仅保留作者、UUID、回复/点评ID和删除时间。原回复通知及点赞通知保留、首次已读时间不变，点击按17.5/18.4返回内容失效，不再读取原正文；对应点赞从回复作者当前获赞总数中扣除。其余回复、点评、商户计分及成长经验不变。删除整条点评也标记关联回复回执，禁止旧回复请求复活。
+
+| 状态码 | 错误码 | 场景 |
+| --- | --- | --- |
+| 400 | `REPLY_INVALID_INPUT` | 非法回复ID |
+| 401 | `AUTH_UNAUTHENTICATED` | 凭证缺失、过期或账号不可用 |
+| 403 | `REPLY_FORBIDDEN` | 当前账号不是原回复作者，包括查询他人的已删除回执 |
+| 404 | `REPLY_NOT_FOUND` | 回复不存在且无删除回执 |
+| 404 | `RESTAURANT_NOT_FOUND` | 首次删除时父店已删除或不可访问；停业仍可删除 |
+| 503 | `REPLY_TEMPORARILY_UNAVAILABLE` | 锁竞争或超时，最多三次整笔事务重试耗尽 |
+| 503 | `AUTH_SERVICE_UNAVAILABLE` | 认证依赖故障 |
+| 500 | 通用内部错误 | 未预期失败，正文与回执一并回滚 |
+
+前端二次确认后调用；失败保留重试入口，204之后列表刷新失败仅重试读取。成功后丢弃旧分页游标，从头刷新。切换账号、点评或卸载会取消请求并丢弃旧身份回执；取消传输不能证明服务端尚未删除，可重新读取核对。
+
+举报及管理员证据副本尚未接入，本次不提供举报处理或证据留存能力。
 
 ## 12. 状态、部署与开发代理
 
@@ -671,11 +696,11 @@ photoPositions是原申请内0–4的有序位置，不是文件ID；真正无�
 
 ## 17. 本人系统通知
 
-通知列表及已读接口均需有效Bearer，仅以当前身份作为收件人，返回`Cache-Control: no-store`；管理员不扩大收件箱权限。支持ALL（全部）、SYSTEM（审核结果）、COMMENTS（点评回复）、LIKES（获赞），不接受客户端发信或指定收件人。
+通知列表、已读及删除接口均需有效Bearer，仅以当前身份作为收件人，返回`Cache-Control: no-store`；管理员不扩大收件箱权限。支持ALL（全部）、SYSTEM（审核结果及全体公告）、COMMENTS（点评回复）、LIKES（获赞）、FOLLOWERS（新增关注），普通用户不接受客户端发信或指定收件人；管理员全体公告入口见17.8。
 
 ### 17.1 查询收件箱与未读数
 
-`GET /api/me/notifications?category=SYSTEM&page=1&pageSize=10`。category默认ALL，可选ALL/SYSTEM/COMMENTS/LIKES/FOLLOWERS；page默认1、范围1～1,000,000；pageSize默认20、范围1～50。额外userId、recipientUserId、offset、排序参数不能改变本人范围。按时间、ID倒序分页；列表、所选分类计数、各类未读数、最新系统摘要来自同一只读快照，浏览不标记已读。
+`GET /api/me/notifications?category=SYSTEM&page=1&pageSize=10`。category默认ALL，可选ALL/SYSTEM/COMMENTS/LIKES/FOLLOWERS；page默认1、范围1～1,000,000；pageSize默认20、范围1～50。额外userId、recipientUserId、offset、排序参数不能改变本人范围。按时间、来源内ID、消息类型倒序分页；列表、所选分类计数、各类未读数、最新系统摘要来自同一只读快照，浏览不标记已读。
 
 成功200，统一响应data示例：
 
@@ -685,17 +710,17 @@ photoPositions是原申请内0–4的有序位置，不是文件ID；真正无�
 
 所有非空ID为字符串。total、unreadCount属于所选category；unreadCounts始终为本人SYSTEM/COMMENTS/LIKES/FOLLOWERS各自未读数，ALL为四者之和。latestSystem为本人最新系统消息，不受当前分类及页码限制，无系统消息为null；首页据此显示系统摘要，避免被最新评论替换。readAt为首次阅读时间，未读为null。无记录或越界页返回records=[]，保留实际计数；真正无消息时total、unreadCount、totalPages为0。故障不降级为空数据，跨次翻页不保证固定快照。
 
-SYSTEM的sourceId=requestId，requestType为CREATE/UPDATE、decision为APPROVED/REJECTED，通过时rejectReason为null；reviewId/actorUserId/actorUsername为空。只保留审核时摘要，点击后固定进入`/account/contributions?requestId=51`，由本人申请详情重新检查归属及可访问性。
+SYSTEM中审核结果的sourceId=requestId，requestType为CREATE/UPDATE、decision为APPROVED/REJECTED，通过时rejectReason为null；reviewId/actorUserId/actorUsername为空。只保留审核时摘要，点击后固定进入`/account/contributions?requestId=51`，由本人申请详情重新检查归属及可访问性。
 
 COMMENTS的sourceId是回复ID、reviewId是原点评ID、actorUserId是回复者ID，actorUsername批量读取当前公开用户名，缺失时显示“用户不可用”；审核字段为空。通知不保存点评或回复正文，不接受任意跳转URL。点击成功保存单条已读后，由17.5固定目标接口重新读取原文；失效内容保留通知并提示“内容已失效或不可访问”。
 
 ### 17.2 单条已读
 
-`POST /api/me/notifications/{id}/read`，无请求体。id为1～Long.MAX_VALUE、无前导零的十进制字符串。仅改变本人这一条消息的readAt，首次时间由数据库生成，重复操作不重写。成功204、无响应体；不存在与他人消息统一404，标记失败不模拟已读。
+`POST /api/me/notifications/{id}/read`，无请求体。普通通知id为1～Long.MAX_VALUE、无前导零的十进制字符串；公告使用`announcement:{公告ID}`（例如`announcement:12`），公告ID同样为正Long十进制。仅改变本人这一条消息的readAt，首次时间由数据库生成，重复操作不重写。成功204、无响应体；不存在与他人消息统一404，标记失败不模拟已读。
 
 ### 17.3 全部已有消息已读
 
-`POST /api/me/notifications/read-all?category=ALL`，无请求体；category默认ALL，可选ALL/SYSTEM/COMMENTS/LIKES/FOLLOWERS。SYSTEM只标审核消息，COMMENTS只标回复消息，LIKES只标获赞消息，FOLLOWERS只标关注消息，ALL覆盖四类，其他分类400。成功204、无响应体，空收件箱也可调用，不删除消息或改变源业务。
+`POST /api/me/notifications/read-all?category=ALL`，无请求体；category默认ALL，可选ALL/SYSTEM/COMMENTS/LIKES/FOLLOWERS。SYSTEM处理审核消息及有效全体公告，COMMENTS只标回复消息，LIKES只标获赞消息，FOLLOWERS只标关注消息，ALL覆盖四类，其他分类400。成功204、无响应体，空收件箱也可调用，不删除消息或改变源业务。
 
 服务端按操作开始时数据库快照可见的对应分类未读消息分批更新，较大新ID和较小但迟提交的消息均保留未读。任一批失败整体回滚，重复操作保留首次阅读时间。
 
@@ -714,7 +739,7 @@ COMMENTS的sourceId是回复ID、reviewId是原点评ID、actorUserId是回复�
 | 503 | AUTH_SERVICE_UNAVAILABLE | 认证依赖暂不可用。 |
 | 500 | COMMON_INTERNAL_SERVER_ERROR | 未预期查询/写入失败，不能伪装为空数据或成功已读。 |
 
-公告、关注通知、单条删除和推送刷新尚未接入，待开放入口不调用未实现的接口。
+消息删除见17.6；关注通知见21.4。全体公告后端见17.8～17.9，实时刷新见17.7；管理端公告页及用户系统消息已接入。
 
 ### 17.5 本人收到的回复精确定位
 
@@ -730,6 +755,90 @@ review沿用10.2的currentReview结构，scoringStatus按读取时实际最新�
 
 非法ID400 `REPLY_INVALID_INPUT`；回复/点评不存在或点评不属于本人404 `REPLY_REVIEW_NOT_FOUND`；店铺不存在或已删除404 `RESTAURANT_NOT_FOUND`。前端将404统一显示为“内容已失效或不可访问”。缺少/失效凭证401 `AUTH_UNAUTHENTICATED`，认证依赖故障503 `AUTH_SERVICE_UNAVAILABLE`，未预期读取失败500；已认证但方法不符405。源内容删除不删除通知，也不从消息恢复正文，再次读取重新检查可见性。
 
+
+### 17.6 删除本人单条消息
+
+`DELETE /api/me/notifications/{id}`，有效Bearer，无业务请求参数及请求体。普通通知id为1～Long.MAX_VALUE、无前导零的十进制字符串；公告传`announcement:{公告ID}`，详见17.9。只能删除本人收件箱的任意单条已读或未读消息，管理员无代删权限。
+
+首次成功及原收件人重复删除均204，无响应体，`Cache-Control: no-store`。非法ID400 `COMMON_VALIDATION_FAILED`；无有效身份401 `AUTH_UNAUTHENTICATED`；未知或他人消息（包含他人的已删除消息）统一404 `NOTIFICATION_NOT_FOUND`；认证依赖故障503 `AUTH_SERVICE_UNAVAILABLE`；未预期数据库失败500 `COMMON_INTERNAL_SERVER_ERROR`并整体回滚，不伪装成功。其他错误沿用17.4。
+
+删除后该消息不再出现在本人列表、总数、未读数及系统最新摘要中；最后一条系统消息删除后latestSystem为null。删除不等于已读，原readAt保持不变；对已删除消息单条已读返回404，全部已读也跳过它。查询响应契约不增加deletedAt，跨次查询仍不保证固定分页快照。
+
+内部保留来源唯一键及原通知记录防重放，不提供恢复或重新投递接口；同一审核、回复、点赞或关注来源重试不会让消息重新出现。删除不操作原申请、点评、回复、点赞、关注或经验记录，原业务内容仍按自身权限可访问。
+
+前端各分类列表提供二次确认；确认后只发一次DELETE。失败保留原通知和重试入口，删除成功后回第一页读取最新列表、未读数及摘要；读取失败仅重试GET。退出、换号、分类切换或卸载会取消在途请求并拒绝旧身份回执。传输取消或超时不保证服务器未提交，可刷新核对或安全重试。
+
+### 17.7 实时未读红点
+
+`GET /api/me/notifications/unread`：必须登录，仅查询当前用户。无参数；200响应示例：
+
+```json
+{"success":true,"data":{"userId":"11","unreadCount":2}}
+```
+
+`GET /api/me/notifications/events`：必须通过Authorization Bearer请求头认证，不接受URL令牌或收件人参数。200为`text/event-stream`，禁止缓存和代理缓冲。事件`notifications-changed`表示事务已提交，请重新查询未读数；`sync`为首次握手/15秒心跳补齐提示。两者data均为`{}`，不含正文。回滚不发送；同一事务同一收件人合并。来源幂等重试可能产生无害刷新，不会重建通知。
+
+连接最长5分钟，客户端退避重连并重新查询；每用户最多5连接、单实例最多1000连接，超额拒绝。每次发送前复核JWT到期、会话及当前账号，失败关闭。未登录/失效凭证401；基础设施认证异常503。连接期间异常表现为断流。仅当前实例广播，无事件存档或Last-Event-ID补发，数据库未读查询用于恢复最终状态。进入消息列表不自动已读。
+
+
+### 17.8 管理员全体公告
+
+以下接口均要求有效Bearer及当前数据库ROLE_ADMIN；返回`Cache-Control: no-store`。不提供定向接收、编辑、草稿、定时发布或到期接口，正文按纯文本保存，客户端不得将其作为HTML执行。
+
+| 方法 | 路径 | 参数及结果 |
+| --- | --- | --- |
+| POST | `/api/admin/announcements` | JSON包含clientRequestId（UUID）、title、content；发布或同内容重试均200，返回Detail。 |
+| GET | `/api/admin/announcements` | status默认ALL，可选ALL/PUBLISHED/WITHDRAWN；page默认1、范围1～1000000；pageSize默认20、范围1～50。200返回records、total、page、pageSize、totalPages。 |
+| GET | `/api/admin/announcements/{id}` | 正Long十进制ID。200返回Detail，允许核对撤回历史。 |
+| POST | `/api/admin/announcements/{id}/withdraw` | 无请求体。首次与重复撤回均200返回Detail，重复时保留首次撤回人及时间。 |
+
+发布请求示例：
+
+```json
+{"clientRequestId":"12345678-1234-4234-8234-123456789abc","title":"校园服务通知","content":"本周服务安排如下。"}
+```
+
+Detail为统一响应的data：
+
+```json
+{"id":"12","title":"校园服务通知","content":"本周服务安排如下。","status":"PUBLISHED","publishedBy":"22","publishedAt":"2026-11-08T05:00:00Z","withdrawnBy":null,"withdrawnAt":null,"replayed":false}
+```
+
+标题/正文先统一CRLF/CR换行为LF并去除两端空白；按Unicode码点限制标题1～120、正文1～10000，禁止空白内容。发布身份及时间由服务端确定。按发布人+UUID去重，摘要覆盖规范化标题与正文：相同内容返回首次公告且replayed=true，不重复插入或广播；不同内容409。公告已撤回后的相同发布请求仍返回原撤回记录，不重新发布。不同管理员的同一UUID互不冲突。replayed只表示本次发布/撤回是否重放，GET返回false。
+
+管理员列表按publishedAt/id倒序，计数与记录同一快照，越界返回空records及真实总数。撤回与个人已读/删除共用公告主行锁；任意管理员可撤回，首次撤回人/时间不可被重试覆盖。公告及用户状态保留，用户侧不显示撤回占位。发布和撤回事务提交后向本实例所有在线连接发送刷新提示；失败回滚不广播，不创建逐用户通知。
+
+前端管理入口为`/admin/announcements`：单列表单填写标题和正文，确认后发布，成功进入公告记录。记录支持状态筛选、分页、详情及撤回确认。未知发布结果保留原UUID和正文再重试，写入成功但记录读取失败只重试GET；退出、换号或卸载清理私有草稿与迟到回执，不保存到浏览器存储。
+
+### 17.9 用户公告详情及系统消息合并
+
+`GET /api/me/announcements/{id}`：有效Bearer，id为正Long无前导零十进制。200返回17.8的Detail结构，仅允许仍发布且本人未删除的公告；GET不标记已读。撤回、本人删除或不存在统一404。管理员访问此用户接口同样受本人删除状态限制；管理员历史核对使用17.8管理接口。
+
+17.1列表中的公告示例：
+
+```json
+{"id":"announcement:12","notificationType":"ANNOUNCEMENT","category":"SYSTEM","sourceId":"12","announcementId":"12","announcementTitle":"校园服务通知","requestId":null,"requestType":null,"decision":null,"restaurantName":null,"rejectReason":null,"reviewId":null,"actorUserId":null,"actorUsername":null,"createdAt":"2026-11-08T05:00:00Z","readAt":null}
+```
+
+普通通知ID保持原十进制字符串，新增announcementId/announcementTitle为null。公告标题不冒用店名或审核字段；列表不携带正文，详情按announcementId读取。前端需按notificationType分支及带前缀id作为列表键，不能将公告交给申请/回复定位接口。前端已识别ANNOUNCEMENT类型及带类型ID，用户在系统消息中打开纯文本公告详情。
+
+有效全体公告对所有当前及后来注册用户可见，未生成个人状态时初始未读；系统/全部列表、分类总数、未读数、latestSystem及轻量未读查询统一包含公告。已撤回或本人删除后全部排除。列表只查询标题，不读取公告正文；未读查询只做来源计数。
+
+公告已读和删除复用17.2/17.6，将id传为`announcement:12`。首次及重复已读204，保留首次readAt；已删除或已撤回则404。首次及本人重复删除204，可直接删除未读公告而不生成readAt；已删除公告即使后来撤回仍可重试204，未删过的撤回公告404。删除回执长期保留，无恢复接口。其他用户的个人状态不受影响。
+
+17.3的SYSTEM/ALL全部已读在同一RR快照中按500条分页选择初始可见未读公告；锁定后复核当前撤回和删除状态，不能恢复并发删除，也不能标记快照之后才提交的公告。整笔失败全部回滚。COMMENTS/LIKES/FOLLOWERS不处理公告。个人状态操作提交后只刷新当前用户的多标签页红点。
+
+| HTTP | 错误码 | 场景 |
+| --- | --- | --- |
+| 400 | COMMON_VALIDATION_FAILED | 字段、长度、ID、状态或分页非法。 |
+| 400 | COMMON_MALFORMED_REQUEST | JSON或UUID解析失败。 |
+| 401 | AUTH_UNAUTHENTICATED | 缺失或无效凭证。 |
+| 403 | AUTH_FORBIDDEN | 普通用户访问公告管理或管理员角色已撤销。 |
+| 404 | NOTIFICATION_NOT_FOUND | 公告不存在，或用户侧已删除/撤回。 |
+| 409 | COMMON_DATA_CONFLICT | 同一发布人UUID被不同内容复用。 |
+| 405 | COMMON_METHOD_NOT_ALLOWED | 已认证请求使用未提供的编辑等方法。 |
+| 503 | AUTH_SERVICE_UNAVAILABLE | 认证基础设施暂时不可用。 |
+| 500 | COMMON_INTERNAL_SERVER_ERROR | 其他读写失败，事务回滚，不伪装成成功。 |
 
 ## 18. 点评与回复点赞
 
@@ -886,4 +995,4 @@ kind为FOLLOWING或FOLLOWERS。只对有效关系按关系ID倒序分页，先�
 
 V33仅扩展原notification_messages的CHECK约束，新增USER_FOLLOWED组合，无新增表或历史补发。notification_type为USER_FOLLOWED，source_id为首次关注关系ID，actor_user_id为关注者，review_id及审核字段全部为空。
 
-现有[通知接口](#17-本人系统通知)的category新增FOLLOWERS；首页ALL包含该类，unreadCounts新增FOLLOWERS。单条/分类/全部已读与归属规则沿用原收件箱；进入列表不自动已读。提醒逐条显示“某用户关注了你”，先保存已读再打开关注者个人主页。取关不撤销旧通知或重置已读；重新关注不再生成通知。目标主页不可用时页面提示不可访问，不提供私有账号信息。消息删除仍未开放。
+现有[通知接口](#17-本人系统通知)的category新增FOLLOWERS；首页ALL包含该类，unreadCounts新增FOLLOWERS。单条/分类/全部已读与归属规则沿用原收件箱；进入列表不自动已读。提醒逐条显示“某用户关注了你”，先保存已读再打开关注者个人主页。取关不撤销旧通知或重置已读；重新关注不再生成通知。目标主页不可用时页面提示不可访问，不提供私有账号信息。本人可按17.6删除单条提醒。

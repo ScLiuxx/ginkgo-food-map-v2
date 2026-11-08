@@ -4,6 +4,7 @@ import {
   fetchNotifications,
   markNotificationRead,
   markAllNotificationsRead,
+  deleteNotification,
   type NotificationPage,
 } from './notificationsApi'
 
@@ -38,6 +39,23 @@ const page = (): NotificationPage => ({
 afterEach(() => vi.restoreAllMocks())
 /** 校验私有身份回执、BIGINT精度和固定写路径，不把损坏数据当成空收件箱。 */
 describe('通知接口契约', () => {
+  it('按固定身份和消息ID删除，只接受204成功回执', async () => {
+    const signal = new AbortController().signal
+    const remove = vi.spyOn(httpClient, 'delete').mockResolvedValue({ status: 204 })
+    await deleteNotification('9007199254740993', 'original-session', signal)
+    expect(remove).toHaveBeenCalledWith('/api/me/notifications/9007199254740993', {
+      signal,
+      headers: { Authorization: 'Bearer original-session' },
+    })
+    for (const id of ['01', '0', '9223372036854775808']) {
+      await expect(deleteNotification(id, 'original-session', signal)).rejects.toThrow()
+    }
+    expect(remove).toHaveBeenCalledTimes(1)
+    remove.mockResolvedValueOnce({ status: 200 })
+    await expect(deleteNotification('101', 'original-session', signal)).rejects.toThrow(
+      '删除结果无法确认',
+    )
+  })
   it('关注通知独立分类统计，不含点评或审核快照', async () => {
     const source: NotificationPage = {
       ...page(),
@@ -172,4 +190,46 @@ describe('通知接口契约', () => {
     await expect(markNotificationRead('../42', 'token', signal)).rejects.toThrow('无法确认')
     expect(post).toHaveBeenCalledTimes(2)
   })
+})
+
+/** 公告与业务通知使用不同ID空间，不能误调用审核或其他来源。 */
+it('公告列表核验带类型ID，支持公告已读和删除的固定路径', async () => {
+  const source = page()
+  const announcement = {
+    ...source.records[0]!,
+    id: 'announcement:12',
+    notificationType: 'ANNOUNCEMENT',
+    sourceId: '12',
+    announcementId: '12',
+    announcementTitle: '全体公告',
+    requestId: null,
+    requestType: null,
+    decision: null,
+    restaurantName: null,
+    rejectReason: null,
+  }
+  source.records = [announcement]
+  source.latestSystem = announcement
+  const get = vi
+    .spyOn(httpClient, 'get')
+    .mockResolvedValue({ data: { success: true, data: source } })
+  const signal = new AbortController().signal
+  const data = await fetchNotifications('SYSTEM', 1, '42', 'token', signal)
+  expect(data.records[0]?.announcementTitle).toBe('全体公告')
+  const post = vi.spyOn(httpClient, 'post').mockResolvedValue({ status: 204 })
+  const remove = vi.spyOn(httpClient, 'delete').mockResolvedValue({ status: 204 })
+  await markNotificationRead('announcement:12', 'token', signal)
+  await deleteNotification('announcement:12', 'token', signal)
+  expect(post).toHaveBeenCalledWith('/api/me/notifications/announcement:12/read', null, {
+    signal,
+    headers: { Authorization: 'Bearer token' },
+  })
+  expect(remove).toHaveBeenCalledWith('/api/me/notifications/announcement:12', {
+    signal,
+    headers: { Authorization: 'Bearer token' },
+  })
+  get.mockResolvedValue({
+    data: { success: true, data: { ...source, records: [{ ...announcement, id: '12' }] } },
+  })
+  await expect(fetchNotifications('SYSTEM', 1, '42', 'token', signal)).rejects.toThrow()
 })

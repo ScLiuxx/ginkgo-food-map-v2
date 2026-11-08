@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
 // 共享导航只接收身份状态；写评回跳沿用认证页面的白名单验证。
-defineProps<{ authenticated: boolean; discovery?: boolean }>()
+defineProps<{ authenticated: boolean; discovery?: boolean; hasUnreadNotifications?: boolean }>()
 </script>
 
 <template>
@@ -27,7 +27,17 @@ defineProps<{ authenticated: boolean; discovery?: boolean }>()
           <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
         </span>
       </RouterLink>
-      <RouterLink to="/messages" aria-label="消息" title="消息">
+      <RouterLink
+        to="/messages"
+        :aria-label="authenticated && hasUnreadNotifications ? '消息（有未读）' : '消息'"
+        title="消息"
+        class="message-nav"
+      >
+        <span
+          v-if="authenticated && hasUnreadNotifications"
+          class="unread-dot"
+          aria-hidden="true"
+        />
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M5 17h14l-2-4V9a5 5 0 0 0-10 0v4ZM10 21h4M12 2v2" />
         </svg>
@@ -43,6 +53,20 @@ defineProps<{ authenticated: boolean; discovery?: boolean }>()
 </template>
 
 <style scoped>
+.message-nav {
+  position: relative;
+}
+.unread-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #dc3545;
+  top: 9px;
+  left: calc(50% + 7px);
+  box-shadow: 0 0 0 2px #fff;
+}
+
 /* 全站复用相同宽度和五等分布局，切换页面时导航位置保持稳定。 */
 .bottom-navigation {
   position: fixed;

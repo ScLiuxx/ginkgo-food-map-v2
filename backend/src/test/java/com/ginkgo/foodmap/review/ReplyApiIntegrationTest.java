@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.ginkgo.foodmap.restaurant.service.RestaurantReviewApplicationService;
+import com.ginkgo.foodmap.review.mapper.ReplyDeleteMapper;
 import com.ginkgo.foodmap.review.mapper.ReplyMapper;
 import com.ginkgo.foodmap.security.TestJwtKeys;
 import com.ginkgo.foodmap.security.config.AuthenticationProperties;
@@ -59,6 +60,7 @@ class ReplyApiIntegrationTest {
     @Autowired org.mybatis.spring.SqlSessionTemplate sql;
     @MockitoBean LoginSessionService sessions;
     @MockitoSpyBean ReplyMapper mapper;
+    @MockitoSpyBean ReplyDeleteMapper deletion;
     @MockitoSpyBean RestaurantReviewApplicationService restaurants;
     @MockitoSpyBean com.ginkgo.foodmap.notification.mapper.NotificationMapper notifications;
     private String owner, other;
@@ -83,7 +85,10 @@ class ReplyApiIntegrationTest {
 
     @BeforeEach
     void setup() {
-        reset(sessions, mapper, notifications);
+        reset(sessions, mapper, notifications, deletion);
+        jdbc.update("DELETE FROM reply_request_receipts");
+        jdbc.update("DELETE FROM review_request_receipts");
+        jdbc.update("DELETE FROM restaurant_search_outbox");
         jdbc.update("DELETE FROM notification_messages");
         jdbc.update("DELETE FROM content_likes");
         jdbc.update("DELETE FROM growth_rewards");
@@ -101,20 +106,25 @@ class ReplyApiIntegrationTest {
         jdbc.update("DELETE FROM users");
         for (long id : List.of(11L, 22L)) {
             jdbc.update(
-                    "INSERT INTO users(id,username,email,password_hash,email_verified) VALUES(?,?,?,?,TRUE)",
+                    "INSERT INTO users(id,username,email,password_hash,email_verified)"
+                            + " VALUES(?,?,?,?,TRUE)",
                     id,
                     "reply_" + id,
                     "reply" + id + "@example.test",
                     "test-only");
             jdbc.update(
-                    "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code='ROLE_USER'",
+                    "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE"
+                            + " code='ROLE_USER'",
                     id);
         }
         jdbc.update(
-                "INSERT INTO restaurants(id,name,category_code,created_by) VALUES(1,'回复测试店','OTHER',11),(2,'另一店','OTHER',11)");
+                "INSERT INTO restaurants(id,name,category_code,created_by)"
+                        + " VALUES(1,'回复测试店','OTHER',11),(2,'另一店','OTHER',11)");
         for (long id : List.of(1L, 2L, 3L)) {
             jdbc.update(
-                    "INSERT INTO reviews(id,restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,is_recommended,body,client_request_id,request_hash) VALUES(?,?,11,7,7,7,7,TRUE,'测试点评正文',UUID_TO_BIN(?),UNHEX(REPEAT('01',32)))",
+                    "INSERT INTO"
+                        + " reviews(id,restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,is_recommended,body,client_request_id,request_hash)"
+                        + " VALUES(?,?,11,7,7,7,7,TRUE,'测试点评正文',UUID_TO_BIN(?),UNHEX(REPEAT('01',32)))",
                     id,
                     id == 3 ? 2 : 1,
                     UUID.randomUUID().toString());
@@ -150,6 +160,293 @@ class ReplyApiIntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(input)));
+    }
+
+    /** 仅使用真实发布入口生成回复及回执，不在测试中伪造删除所需授权数据。 */
+    private long createReply(String token, String body) throws Exception {
+        var response = publish(token, 1, input(body)).andExpect(status().isCreated()).andReturn();
+        return json.readTree(response.getResponse().getContentAsString())
+                .at("/data/replyId")
+                .asLong();
+    }
+
+    private org.springframework.test.web.servlet.ResultActions removeReply(String token, String id)
+            throws Exception {
+        return mvc.perform(
+                delete("/api/review-replies/" + id).header("Authorization", "Bearer " + token));
+    }
+
+    /** 点评作者和管理员均不能代删，匿名、非法编号及重复删除的归属分别核验。 */
+    @Test
+    void deletesOnlyOwnReplyAndAuthorRetriesAreIdempotent() throws Exception {
+        long id = createReply(other, "只允许回复本人删除");
+        String value = Long.toString(id);
+        mvc.perform(delete("/api/review-replies/" + id)).andExpect(status().isUnauthorized());
+        jdbc.update(
+                "INSERT INTO user_roles(user_id,role_id) SELECT 11,id FROM roles WHERE"
+                        + " code='ROLE_ADMIN'");
+        removeReply(owner, value)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("REPLY_FORBIDDEN"));
+        for (String invalid : List.of("0", "01", "-1", "abc", "9223372036854775808")) {
+            removeReply(other, invalid).andExpect(status().isBadRequest());
+        }
+        removeReply(other, "9223372036854775807").andExpect(status().isNotFound());
+        removeReply(other, value)
+                .andExpect(status().isNoContent())
+                .andExpect(header().string("Cache-Control", "no-store"));
+        removeReply(other, value).andExpect(status().isNoContent());
+        removeReply(owner, value).andExpect(status().isForbidden());
+        mvc.perform(get("/api/reviews/1/replies")).andExpect(jsonPath("$.data.records").isEmpty());
+        assertThat(count()).isZero();
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT COUNT(*) FROM reply_request_receipts WHERE deleted_at IS"
+                                        + " NOT NULL",
+                                Long.class))
+                .isEqualTo(1);
+        verify(restaurants, never()).applyDelta(anyLong(), any());
+    }
+
+    /** 删除只移除正文，旧UUID不能在原点评或其他点评重建内容。 */
+    @Test
+    void deletedPublishCannotResurrectReplyOrSendAnotherNotice() throws Exception {
+        var request = input("删除后禁止重放");
+        var response = publish(other, 1, request).andExpect(status().isCreated()).andReturn();
+        String id =
+                json.readTree(response.getResponse().getContentAsString())
+                        .at("/data/replyId")
+                        .asText();
+        removeReply(other, id).andExpect(status().isNoContent());
+        publish(other, 1, request)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("REPLY_REQUEST_DELETED"));
+        publish(other, 3, request).andExpect(status().isConflict());
+        assertThat(count()).isZero();
+        assertThat(noticeCount()).isEqualTo(1);
+        publish(other, 1, input("正常新回复仍允许")).andExpect(status().isCreated());
+    }
+
+    /** 删除不改通知及首次阅读状态；源定位立即失效，点赞仍留作历史但不再计入获赞。 */
+    @Test
+    void deletionInvalidatesCommentAndLikeTargetsWithoutDeletingNotifications() throws Exception {
+        long id = createReply(other, "收到赞后删除的回复");
+        like(owner, "REPLY", id, true).andExpect(status().isOk());
+        long relation = jdbc.queryForObject("SELECT id FROM content_likes", Long.class);
+        readAll(owner, "COMMENTS");
+        var snapshot = jdbc.queryForList("SELECT * FROM notification_messages ORDER BY id");
+        mvc.perform(get("/api/me/received-likes").header("Authorization", "Bearer " + other))
+                .andExpect(jsonPath("$.data.count").value(1));
+        removeReply(other, Long.toString(id)).andExpect(status().isNoContent());
+        assertThat(jdbc.queryForList("SELECT * FROM notification_messages ORDER BY id"))
+                .isEqualTo(snapshot);
+        mvc.perform(get("/api/me/received-likes").header("Authorization", "Bearer " + other))
+                .andExpect(jsonPath("$.data.count").value(0));
+        mvc.perform(
+                        get("/api/me/review-replies/" + id + "/target")
+                                .header("Authorization", "Bearer " + owner))
+                .andExpect(status().isNotFound());
+        mvc.perform(
+                        get("/api/me/received-likes/" + relation + "/target")
+                                .header("Authorization", "Bearer " + other))
+                .andExpect(status().isNotFound());
+        like(owner, "REPLY", id, true).andExpect(status().isNotFound());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM growth_rewards", Long.class)).isZero();
+    }
+
+    /** 停业仍可删除；父店删除后拒绝首次操作，已完成的删除仍允许原作者核对回执。 */
+    @Test
+    void deletionRespectsParentVisibilityAndInvalidatesRemovedCursor() throws Exception {
+        long first = createReply(other, "分页锚点");
+        createReply(other, "后续回复");
+        var page = mvc.perform(get("/api/reviews/1/replies").param("pageSize", "1")).andReturn();
+        String cursor =
+                json.readTree(page.getResponse().getContentAsString())
+                        .at("/data/nextCursor")
+                        .asText();
+        jdbc.update("UPDATE restaurants SET business_status='CLOSED' WHERE id=1");
+        removeReply(other, Long.toString(first)).andExpect(status().isNoContent());
+        mvc.perform(get("/api/reviews/1/replies").param("cursor", cursor))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REPLY_INVALID_CURSOR"));
+        long next = jdbc.queryForObject("SELECT id FROM review_replies", Long.class);
+        jdbc.update(
+                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM'"
+                        + " WHERE id=1");
+        removeReply(other, Long.toString(next)).andExpect(status().isNotFound());
+        removeReply(other, Long.toString(first)).andExpect(status().isNoContent());
+    }
+
+    /** 故障发生在写删除回执之后，必须整体回滚，不能留下假成功回执或丢失正文。 */
+    @Test
+    void deletionRollsBackAndRetriesOnlyWholeTransactions() throws Exception {
+        long id = createReply(other, "故障回滚验证");
+        doThrow(new IllegalStateException("injected deletion failure"))
+                .when(deletion)
+                .remove(id, 22);
+        removeReply(other, Long.toString(id)).andExpect(status().isInternalServerError());
+        assertThat(count()).isEqualTo(1);
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT COUNT(*) FROM reply_request_receipts WHERE deleted_at IS"
+                                        + " NOT NULL",
+                                Long.class))
+                .isZero();
+        reset(deletion);
+        doThrow(new org.springframework.dao.CannotAcquireLockException("injected lock failure"))
+                .when(deletion)
+                .remove(id, 22);
+        removeReply(other, Long.toString(id)).andExpect(status().isServiceUnavailable());
+        verify(deletion, times(3)).remove(id, 22);
+        assertThat(count()).isEqualTo(1);
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT COUNT(*) FROM reply_request_receipts WHERE deleted_at IS"
+                                        + " NOT NULL",
+                                Long.class))
+                .isZero();
+        reset(deletion);
+        removeReply(other, Long.toString(id)).andExpect(status().isNoContent());
+    }
+
+    /** 真实并发删除共用父店/点评锁，两个原作者请求都成功且正文只移除一次。 */
+    @Test
+    void concurrentDeletesKeepOneTombstone() throws Exception {
+        long id = createReply(other, "并发删除");
+        var ready = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            Callable<Integer> call =
+                    () -> {
+                        ready.await();
+                        return removeReply(other, Long.toString(id))
+                                .andReturn()
+                                .getResponse()
+                                .getStatus();
+                    };
+            var first = pool.submit(call);
+            var second = pool.submit(call);
+            ready.countDown();
+            assertThat(first.get(20, TimeUnit.SECONDS)).isEqualTo(204);
+            assertThat(second.get(20, TimeUnit.SECONDS)).isEqualTo(204);
+        }
+        assertThat(count()).isZero();
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT COUNT(*) FROM reply_request_receipts WHERE deleted_at IS"
+                                        + " NOT NULL",
+                                Long.class))
+                .isEqualTo(1);
+    }
+
+    /** 整条删评同步标记子回复回执，重试删除仍只允许原回复作者，跨店重放被阻止。 */
+    @Test
+    void deletingReviewAlsoRetainsReplyReceipts() throws Exception {
+        // 本套回复夹具直接插入两条同作者点评，整条删评测试须同步建立准确的计分读模型。
+        jdbc.update(
+                "INSERT INTO"
+                    + " restaurant_review_statistics(restaurant_id,review_count,participant_count,recommend_count,taste_sum,value_sum,service_sum,ambience_sum,overall_score_sum)"
+                    + " VALUES(1,2,1,1,7,7,7,7,7)");
+        jdbc.update(
+                "INSERT INTO"
+                    + " review_request_receipts(author_user_id,client_request_id,review_id,restaurant_id)"
+                    + " SELECT author_user_id,client_request_id,id,restaurant_id FROM reviews");
+        var request = input("随点评删除的回复");
+        var response = publish(other, 1, request).andExpect(status().isCreated()).andReturn();
+        String id =
+                json.readTree(response.getResponse().getContentAsString())
+                        .at("/data/replyId")
+                        .asText();
+        mvc.perform(delete("/api/reviews/1").header("Authorization", "Bearer " + owner))
+                .andExpect(status().isNoContent());
+        removeReply(other, id).andExpect(status().isNoContent());
+        removeReply(owner, id).andExpect(status().isForbidden());
+        publish(other, 3, request).andExpect(status().isConflict());
+        assertThat(count()).isZero();
+    }
+
+    /** V33非空库升级回填所有存量回复，不改正文、时间或旧通知；重复迁移不重复写回执。 */
+    @Test
+    void upgradesExistingRepliesWithContentFreeReceipts() throws Exception {
+        String name = "ginkgo_reply_it_" + UUID.randomUUID().toString().replace("-", "");
+        try (var admin = connect("");
+                var statement = admin.createStatement()) {
+            statement.executeUpdate(
+                    "CREATE DATABASE `"
+                            + name
+                            + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci");
+            try {
+                var flyway =
+                        org.flywaydb.core.Flyway.configure()
+                                .dataSource(url(name), "root", password())
+                                .locations("classpath:db/migration")
+                                .target("33")
+                                .load();
+                flyway.migrate();
+                try (var connection = connect(name);
+                        var data = connection.createStatement()) {
+                    data.executeUpdate(
+                            "INSERT INTO"
+                                + " reviews(id,restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,is_recommended,body,client_request_id,request_hash)"
+                                + " VALUES(1,1,11,7,7,7,7,TRUE,'存量点评正文',UUID_TO_BIN(UUID()),UNHEX(REPEAT('01',32)))");
+                    data.executeUpdate(
+                            "INSERT INTO"
+                                + " review_replies(id,review_id,author_user_id,body,client_request_id,request_hash)"
+                                + " VALUES(1,1,22,'存量回复正文',UUID_TO_BIN(UUID()),UNHEX(REPEAT('02',32)))");
+                }
+                var latest =
+                        org.flywaydb.core.Flyway.configure()
+                                .dataSource(url(name), "root", password())
+                                .locations("classpath:db/migration")
+                                .target("34")
+                                .load();
+                assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
+                assertThat(latest.migrate().migrationsExecuted).isZero();
+                latest.validate();
+                try (var connection = connect(name);
+                        var data = connection.createStatement()) {
+                    var rows =
+                            data.executeQuery(
+                                    "SELECT p.body,p.client_request_id=r.client_request_id AS"
+                                        + " same_request,r.author_user_id,r.review_id,r.deleted_at"
+                                        + " FROM review_replies p JOIN reply_request_receipts r ON"
+                                        + " r.reply_id=p.id");
+                    assertThat(rows.next()).isTrue();
+                    assertThat(rows.getString("body")).isEqualTo("存量回复正文");
+                    assertThat(rows.getBoolean("same_request")).isTrue();
+                    assertThat(rows.getLong("author_user_id")).isEqualTo(22);
+                    assertThat(rows.getLong("review_id")).isEqualTo(1);
+                    assertThat(rows.getTimestamp("deleted_at")).isNull();
+                    assertThat(rows.next()).isFalse();
+                }
+            } finally {
+                statement.executeUpdate("DROP DATABASE `" + name + "`");
+            }
+        }
+    }
+
+    /** 收件箱删除不删除源回复；原业务重放仍成功，已删除提醒不重新进入列表。 */
+    @Test
+    void deletingNotificationNeverDeletesSourceReply() throws Exception {
+        var request = input("通知删除后的正常回复");
+        var response = publish(other, 1, request).andExpect(status().isCreated()).andReturn();
+        long reply =
+                json.readTree(response.getResponse().getContentAsString())
+                        .at("/data/replyId")
+                        .asLong();
+        long notification = jdbc.queryForObject("SELECT id FROM notification_messages", Long.class);
+        mvc.perform(
+                        delete("/api/me/notifications/" + notification)
+                                .header("Authorization", "Bearer " + owner))
+                .andExpect(status().isNoContent());
+        mvc.perform(
+                        get("/api/me/review-replies/" + reply + "/target")
+                                .header("Authorization", "Bearer " + owner))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.replyBody").value("通知删除后的正常回复"));
+        publish(other, 1, request).andExpect(status().isOk());
+        inbox(owner, "COMMENTS").andExpect(jsonPath("$.data.total").value(0));
+        assertThat(count()).isEqualTo(1);
+        assertThat(noticeCount()).isEqualTo(1);
     }
 
     private long count() {
@@ -254,7 +551,8 @@ class ReplyApiIntegrationTest {
         assertThat(ids)
                 .isEqualTo(
                         jdbc.queryForList(
-                                "SELECT CAST(id AS CHAR) FROM review_replies ORDER BY created_at,id",
+                                "SELECT CAST(id AS CHAR) FROM review_replies ORDER BY"
+                                        + " created_at,id",
                                 String.class));
     }
 
@@ -282,7 +580,9 @@ class ReplyApiIntegrationTest {
     @Test
     void historyRepliesStayOnOriginalReviewAndNeverChangeScores() throws Exception {
         String snapshot =
-                "SELECT id,restaurant_id,author_user_id,body,created_at,updated_at,taste_score,value_score,service_score,ambience_score,overall_score,is_recommended,HEX(client_request_id),HEX(request_hash) FROM reviews ORDER BY id";
+                "SELECT"
+                    + " id,restaurant_id,author_user_id,body,created_at,updated_at,taste_score,value_score,service_score,ambience_score,overall_score,is_recommended,HEX(client_request_id),HEX(request_hash)"
+                    + " FROM reviews ORDER BY id";
         var before = jdbc.queryForList(snapshot);
         publish(owner, 1, input("旧点评回复")).andExpect(status().isCreated());
         mvc.perform(get("/api/reviews/1/replies"))
@@ -312,7 +612,8 @@ class ReplyApiIntegrationTest {
         var input = input("停业也可回复");
         publish(owner, 1, input).andExpect(status().isCreated());
         jdbc.update(
-                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM' WHERE id=1");
+                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM'"
+                        + " WHERE id=1");
         publish(owner, 1, input).andExpect(status().isNotFound());
         mvc.perform(get("/api/reviews/1/replies")).andExpect(status().isNotFound());
     }
@@ -422,7 +723,8 @@ class ReplyApiIntegrationTest {
     void replyAndDeleteShareParentLock() throws Exception {
         // 正式商户删除现已限定管理员；此用例验证锁顺序，需要给删店操作者真实数据库角色。
         jdbc.update(
-                "INSERT INTO user_roles(user_id,role_id) SELECT 11,id FROM roles WHERE code='ROLE_ADMIN'");
+                "INSERT INTO user_roles(user_id,role_id) SELECT 11,id FROM roles WHERE"
+                        + " code='ROLE_ADMIN'");
         var reached = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         doAnswer(
@@ -562,7 +864,9 @@ class ReplyApiIntegrationTest {
         publish(other, 1, input("回复一")).andExpect(status().isCreated());
         publish(other, 2, input("回复二")).andExpect(status().isCreated());
         jdbc.update(
-                "INSERT INTO notification_messages(recipient_user_id,source_id,request_id,request_type,decision,restaurant_name) VALUES(11,900,900,'CREATE','APPROVED','审核店')");
+                "INSERT INTO"
+                    + " notification_messages(recipient_user_id,source_id,request_id,request_type,decision,restaurant_name)"
+                    + " VALUES(11,900,900,'CREATE','APPROVED','审核店')");
         inbox(owner, "ALL")
                 .andExpect(jsonPath("$.data.total").value(3))
                 .andExpect(jsonPath("$.data.unreadCounts.SYSTEM").value(1))
@@ -620,7 +924,8 @@ class ReplyApiIntegrationTest {
         mvc.perform(get(path).header("Authorization", "Bearer " + owner))
                 .andExpect(status().isOk());
         jdbc.update(
-                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM' WHERE id=1");
+                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM'"
+                        + " WHERE id=1");
         mvc.perform(get(path).header("Authorization", "Bearer " + owner))
                 .andExpect(status().isNotFound());
         jdbc.update("UPDATE restaurants SET deleted_at=NULL,delete_reason_code=NULL WHERE id=1");
@@ -662,9 +967,14 @@ class ReplyApiIntegrationTest {
                             new org.springframework.jdbc.datasource.DriverManagerDataSource(
                                     url(name), "root", password()));
             db.update(
-                    "INSERT INTO notification_messages(id,recipient_user_id,request_id,request_type,decision,restaurant_name,created_at,read_at) VALUES(91,11,71,'CREATE','APPROVED','旧通知','2026-11-01 01:00:00','2026-11-01 02:00:00')");
+                    "INSERT INTO"
+                        + " notification_messages(id,recipient_user_id,request_id,request_type,decision,restaurant_name,created_at,read_at)"
+                        + " VALUES(91,11,71,'CREATE','APPROVED','旧通知','2026-11-01"
+                        + " 01:00:00','2026-11-01 02:00:00')");
             String original =
-                    "SELECT id,recipient_user_id,request_id,request_type,decision,restaurant_name,reject_reason,created_at,read_at FROM notification_messages";
+                    "SELECT"
+                        + " id,recipient_user_id,request_id,request_type,decision,restaurant_name,reject_reason,created_at,read_at"
+                        + " FROM notification_messages";
             var before = db.queryForList(original);
             var flyway =
                     org.flywaydb.core.Flyway.configure()
@@ -682,17 +992,27 @@ class ReplyApiIntegrationTest {
             assertThat(flyway.migrate().migrationsExecuted).isZero();
             // 同一数字来源可分别属于审核和回复；同类型来源不能重复，也不能构造混合或缺字段的消息。
             db.update(
-                    "INSERT INTO notification_messages(recipient_user_id,notification_type,source_id,review_id,actor_user_id) VALUES(11,'REVIEW_REPLY',71,1,22)");
+                    "INSERT INTO"
+                        + " notification_messages(recipient_user_id,notification_type,source_id,review_id,actor_user_id)"
+                        + " VALUES(11,'REVIEW_REPLY',71,1,22)");
             org.junit.jupiter.api.Assertions.assertThrows(
                     org.springframework.dao.DataIntegrityViolationException.class,
                     () ->
                             db.update(
-                                    "INSERT INTO notification_messages(recipient_user_id,notification_type,source_id,review_id,actor_user_id) VALUES(11,'REVIEW_REPLY',71,1,22)"));
+                                    "INSERT INTO"
+                                        + " notification_messages(recipient_user_id,notification_type,source_id,review_id,actor_user_id)"
+                                        + " VALUES(11,'REVIEW_REPLY',71,1,22)"));
             for (String invalid :
                     List.of(
-                            "INSERT INTO notification_messages(recipient_user_id,notification_type,source_id,review_id,actor_user_id) VALUES(11,'REVIEW_REPLY',72,NULL,22)",
-                            "INSERT INTO notification_messages(recipient_user_id,notification_type,source_id,review_id,actor_user_id) VALUES(11,'REVIEW_REPLY',72,1,11)",
-                            "INSERT INTO notification_messages(recipient_user_id,notification_type,source_id,review_id,actor_user_id) VALUES(11,'review_reply',72,1,22)")) {
+                            "INSERT INTO"
+                                + " notification_messages(recipient_user_id,notification_type,source_id,review_id,actor_user_id)"
+                                + " VALUES(11,'REVIEW_REPLY',72,NULL,22)",
+                            "INSERT INTO"
+                                + " notification_messages(recipient_user_id,notification_type,source_id,review_id,actor_user_id)"
+                                + " VALUES(11,'REVIEW_REPLY',72,1,11)",
+                            "INSERT INTO"
+                                + " notification_messages(recipient_user_id,notification_type,source_id,review_id,actor_user_id)"
+                                + " VALUES(11,'review_reply',72,1,22)")) {
                 var failure =
                         org.junit.jupiter.api.Assertions.assertThrows(
                                 org.springframework.dao.DataAccessException.class,
@@ -706,10 +1026,14 @@ class ReplyApiIntegrationTest {
                     db.queryForList("SELECT * FROM notification_messages ORDER BY id");
             db.update("INSERT INTO growth_accounts(user_id,experience) VALUES(11,5)");
             db.update(
-                    "INSERT INTO growth_rewards(user_id,reward_type,business_key,source_type,source_id,amount) VALUES(11,'FIRST_STORE_REVIEW','1','REVIEW',1,5)");
+                    "INSERT INTO"
+                        + " growth_rewards(user_id,reward_type,business_key,source_type,source_id,amount)"
+                        + " VALUES(11,'FIRST_STORE_REVIEW','1','REVIEW',1,5)");
             var oldRewards =
                     db.queryForList(
-                            "SELECT id,user_id,reward_type,business_key,source_type,source_id,amount,status,granted_at,revoked_at,disposition_id FROM growth_rewards");
+                            "SELECT"
+                                + " id,user_id,reward_type,business_key,source_type,source_id,amount,status,granted_at,revoked_at,disposition_id"
+                                + " FROM growth_rewards");
             var next =
                     org.flywaydb.core.Flyway.configure()
                             .dataSource(url(name), "root", password())
@@ -722,22 +1046,29 @@ class ReplyApiIntegrationTest {
                     .isEqualTo(oldNotifications);
             assertThat(
                             db.queryForList(
-                                    "SELECT id,user_id,reward_type,business_key,source_type,source_id,amount,status,granted_at,revoked_at,disposition_id FROM growth_rewards"))
+                                    "SELECT"
+                                        + " id,user_id,reward_type,business_key,source_type,source_id,amount,status,granted_at,revoked_at,disposition_id"
+                                        + " FROM growth_rewards"))
                     .isEqualTo(oldRewards);
             assertThat(db.queryForObject("SELECT COUNT(*) FROM content_likes", Long.class))
                     .isZero();
             db.update(
-                    "INSERT INTO content_likes(target_type,target_id,user_id) VALUES('REVIEW',1,22)");
+                    "INSERT INTO content_likes(target_type,target_id,user_id)"
+                            + " VALUES('REVIEW',1,22)");
             org.junit.jupiter.api.Assertions.assertThrows(
                     org.springframework.dao.DataIntegrityViolationException.class,
                     () ->
                             db.update(
-                                    "INSERT INTO content_likes(target_type,target_id,user_id) VALUES('REVIEW',1,22)"));
+                                    "INSERT INTO content_likes(target_type,target_id,user_id)"
+                                            + " VALUES('REVIEW',1,22)"));
             for (String invalid :
                     List.of(
-                            "INSERT INTO content_likes(target_type,target_id,user_id) VALUES('review',1,33)",
-                            "INSERT INTO content_likes(target_type,target_id,user_id,active) VALUES('REVIEW',1,33,2)",
-                            "INSERT INTO content_likes(target_type,target_id,user_id) VALUES('REVIEW',0,33)")) {
+                            "INSERT INTO content_likes(target_type,target_id,user_id)"
+                                    + " VALUES('review',1,33)",
+                            "INSERT INTO content_likes(target_type,target_id,user_id,active)"
+                                    + " VALUES('REVIEW',1,33,2)",
+                            "INSERT INTO content_likes(target_type,target_id,user_id)"
+                                    + " VALUES('REVIEW',0,33)")) {
                 var failure =
                         org.junit.jupiter.api.Assertions.assertThrows(
                                 org.springframework.dao.DataAccessException.class,
@@ -938,7 +1269,8 @@ class ReplyApiIntegrationTest {
         jdbc.update("UPDATE restaurants SET business_status='CLOSED' WHERE id=1");
         like(other, "REVIEW", 1, true).andExpect(status().isOk());
         jdbc.update(
-                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM' WHERE id=1");
+                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM'"
+                        + " WHERE id=1");
         like(other, "REVIEW", 1, false).andExpect(status().isNotFound());
         mvc.perform(get("/api/content-likes").param("type", "REVIEW").param("ids", "1"))
                 .andExpect(jsonPath("$.data.records[0].available").value(false))
@@ -986,12 +1318,14 @@ class ReplyApiIntegrationTest {
         try {
             for (long id = 30; id < 37; id++) {
                 jdbc.update(
-                        "INSERT INTO users(id,username,email,password_hash,email_verified) VALUES(?,?,?,'test',1)",
+                        "INSERT INTO users(id,username,email,password_hash,email_verified)"
+                                + " VALUES(?,?,?,'test',1)",
                         id,
                         "like_" + id,
                         "like" + id + "@example.test");
                 jdbc.update(
-                        "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code='ROLE_USER'",
+                        "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE"
+                                + " code='ROLE_USER'",
                         id);
                 String actor = token(id);
                 long review = id % 2 == 0 ? 1 : 3;

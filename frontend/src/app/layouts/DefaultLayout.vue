@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasUnreadNotifications } from '@/modules/message/model/useRealtimeUnread'
 import AppHeader from '@/shared/ui/layout/AppHeader.vue'
 import AdminLayout from './AdminLayout.vue'
 import BottomNavigation from '@/shared/ui/layout/BottomNavigation.vue'
@@ -58,6 +59,7 @@ const detailPage = computed(
     </main>
     <BottomNavigation
       v-if="!detailPage"
+      :has-unread-notifications="hasUnreadNotifications"
       :discovery="route.path === '/'"
       :authenticated="auth.authenticated"
     />

@@ -3,6 +3,8 @@ import { httpClient } from '@/shared/api/httpClient'
 
 export type NotificationCategory = 'ALL' | 'SYSTEM' | 'COMMENTS' | 'LIKES' | 'FOLLOWERS'
 export interface NotificationItem {
+  announcementId?: string | null
+  announcementTitle?: string | null
   id: string
   requestId: string | null
   category: 'SYSTEM' | 'COMMENTS' | 'LIKES' | 'FOLLOWERS'
@@ -43,16 +45,38 @@ const invalid = () => new Error('消息资料无法确认，请重新加载。')
 
 /** 按消息类型显式投影；回复不允许混入审核快照或正文，不执行响应中的任意链接。 */
 function item(row: NotificationItem): NotificationItem {
+  const announcement = row?.notificationType === 'ANNOUNCEMENT'
   if (
     !row ||
-    !notificationId(row.id) ||
+    !(announcement
+      ? notificationId(row.announcementId) && row.id === `announcement:${row.announcementId}`
+      : notificationId(row.id)) ||
     !notificationId(row.sourceId) ||
     !date(row.createdAt) ||
     (row.readAt !== null &&
       (!date(row.readAt) || Date.parse(row.readAt) < Date.parse(row.createdAt)))
   )
     throw invalid()
-  if (row.category === 'SYSTEM') {
+  if (announcement) {
+    if (
+      row.category !== 'SYSTEM' ||
+      row.sourceId !== row.announcementId ||
+      typeof row.announcementTitle !== 'string' ||
+      !row.announcementTitle.trim() ||
+      Array.from(row.announcementTitle).length > 120 ||
+      [
+        row.requestId,
+        row.reviewId,
+        row.actorUserId,
+        row.actorUsername,
+        row.requestType,
+        row.decision,
+        row.restaurantName,
+        row.rejectReason,
+      ].some((value) => value !== null)
+    )
+      throw invalid()
+  } else if (row.category === 'SYSTEM') {
     if (
       !notificationId(row.requestId) ||
       row.sourceId !== row.requestId ||
@@ -102,6 +126,9 @@ function item(row: NotificationItem): NotificationItem {
       throw invalid()
   } else throw invalid()
   return {
+    ...(announcement
+      ? { announcementId: row.announcementId, announcementTitle: row.announcementTitle }
+      : {}),
     ...(row.notificationType ? { notificationType: row.notificationType } : {}),
     id: row.id,
     sourceId: row.sourceId,
@@ -193,7 +220,8 @@ export async function fetchNotifications(
 
 /** 已读写入不自动重试；先确认服务端成功再跳转或定位，失败保留原通知。 */
 export async function markNotificationRead(id: string, token: string, signal: AbortSignal) {
-  if (!notificationId(id)) throw invalid()
+  if (!((id.startsWith('announcement:') && notificationId(id.slice(13))) || notificationId(id)))
+    throw invalid()
   await httpClient.post(`${base}/${id}/read`, null, {
     signal,
     headers: { Authorization: `Bearer ${token}` },
@@ -209,4 +237,15 @@ export async function markAllNotificationsRead(
     signal,
     headers: { Authorization: `Bearer ${token}` },
   })
+}
+
+/** 固定调用方的身份凭证；只认204回执，未知结果可由原收件人安全重试。 */
+export async function deleteNotification(id: string, token: string, signal: AbortSignal) {
+  if (!((id.startsWith('announcement:') && notificationId(id.slice(13))) || notificationId(id)))
+    throw invalid()
+  const response = await httpClient.delete(`${base}/${id}`, {
+    signal,
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (response.status !== 204) throw new Error('消息删除结果无法确认，请刷新核对或重试。')
 }
