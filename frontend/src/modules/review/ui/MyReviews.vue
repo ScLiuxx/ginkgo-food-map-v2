@@ -175,7 +175,8 @@ onBeforeUnmount(() => {
     </div>
     <article v-for="group in records" :key="group.item.id" class="my-review-group">
       <header class="my-review-store">
-        <RouterLink :to="`/restaurants/${group.restaurant.id}`"
+        <RouterLink
+          :to="`/${group.restaurant.targetType === 'WINDOW' ? 'canteen-windows' : 'restaurants'}/${group.restaurant.id}`"
           ><h2>{{ group.restaurant.name }}</h2>
           <span aria-hidden="true">›</span></RouterLink
         ><span v-if="group.restaurant.businessStatus === 'CLOSED'" class="closed-store"
@@ -197,6 +198,7 @@ onBeforeUnmount(() => {
         <template v-if="group.item.historyCount" #history>
           <ReviewHistory
             :restaurant-id="group.restaurant.id"
+            :window="group.restaurant.targetType === 'WINDOW'"
             :item="group.item"
             :viewer-id="viewerId"
             star-scale

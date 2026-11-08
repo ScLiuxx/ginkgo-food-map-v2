@@ -39,10 +39,16 @@ public class ImageUploadService {
 
     /** 用途仅接受服务端白名单，路径由配置生成；商户与点评共用私有OSS及临时回收流程。 */
     public ImageUploadVo upload(InputStream source, String purpose) {
-        if (!"REVIEW".equals(purpose) && !"RESTAURANT".equals(purpose)) {
+        if (purpose == null
+                || !java.util.Set.of("REVIEW", "RESTAURANT", "WINDOW").contains(purpose)) {
             throw new BusinessException(FileErrorCode.INVALID_IMAGE);
         }
-        long owner = actors.requireActor().getUserId();
+        var actor = actors.requireActor();
+        // 窗口资料只由管理员维护，必须在处理图片和访问OSS之前拒绝普通账号。
+        if ("WINDOW".equals(purpose) && !actor.isAdministrator()) {
+            throw new org.springframework.security.access.AccessDeniedException("需要管理员权限");
+        }
+        long owner = actor.getUserId();
         storage.requireAvailable();
         var image = policy.process(source);
         var file = new MediaFile();
@@ -50,9 +56,11 @@ public class ImageUploadService {
         file.setBucketName(properties.getBucket());
         file.setPurpose(purpose);
         String prefix =
-                "RESTAURANT".equals(purpose)
-                        ? properties.getRestaurantPrefix()
-                        : properties.getPrefix();
+                switch (purpose) {
+                    case "RESTAURANT" -> properties.getRestaurantPrefix();
+                    case "WINDOW" -> properties.getWindowPrefix();
+                    default -> properties.getPrefix();
+                };
         file.setStorageKey(prefix + UUID.randomUUID() + ".jpg");
         file.setByteSize(image.getBytes().length);
         file.setWidth(image.getWidth());

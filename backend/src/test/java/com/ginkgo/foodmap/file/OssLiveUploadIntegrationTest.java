@@ -81,7 +81,8 @@ class OssLiveUploadIntegrationTest {
                             "bucket",
                             "access-key-id",
                             "access-key-secret",
-                            "restaurant-prefix")) {
+                            "restaurant-prefix",
+                            "window-prefix")) {
                 var key = "app.file.oss." + name;
                 var value = source.getProperty(key);
                 if (value != null) {
@@ -118,17 +119,20 @@ class OssLiveUploadIntegrationTest {
         jdbc.update("DELETE FROM users");
         for (long id : List.of(11L, 22L)) {
             jdbc.update(
-                    "INSERT INTO users(id,username,email,password_hash,email_verified) VALUES(?,?,?,?,TRUE)",
+                    "INSERT INTO users(id,username,email,password_hash,email_verified)"
+                        + " VALUES(?,?,?,?,TRUE)",
                     id,
                     "reviewer_" + id,
                     "reviewer" + id + "@example.test",
                     "test-only");
             jdbc.update(
-                    "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code='ROLE_USER'",
+                    "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE"
+                        + " code='ROLE_USER'",
                     id);
         }
         jdbc.update(
-                "INSERT INTO restaurants(id,name,category_code,created_by) VALUES(1,'发布店','OTHER',11),(2,'另一店','OTHER',11)");
+                "INSERT INTO restaurants(id,name,category_code,created_by)"
+                    + " VALUES(1,'发布店','OTHER',11),(2,'另一店','OTHER',11)");
         when(sessions.isActive(anyString(), anyLong(), anyLong())).thenReturn(true);
         owner = token(11, false);
         other = token(22, false);
@@ -150,8 +154,14 @@ class OssLiveUploadIntegrationTest {
 
     /** 验证真实multipart、JWT、MySQL与私有OSS，包含本人取消和他人越权，不发布点评。 */
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {"REVIEW", "RESTAURANT"})
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"REVIEW", "RESTAURANT", "WINDOW"})
     void uploadsReadsAndImmediatelyCancelsRealImage(String purpose) throws Exception {
+        // 窗口相册用途只授权隔离库的本次测试上传者，不改变开发或线上账号。
+        if ("WINDOW".equals(purpose)) {
+            jdbc.update(
+                    "INSERT INTO user_roles(user_id,role_id) SELECT 11,id FROM roles WHERE"
+                        + " code='ROLE_ADMIN'");
+        }
         var response =
                 mvc.perform(
                                 multipart("/api/files/images")
@@ -173,12 +183,14 @@ class OssLiveUploadIntegrationTest {
         var row = files.find(Long.parseLong(id));
         assertThat(row.getStatus()).isEqualTo("TEMPORARY");
         assertThat(row.getPurpose()).isEqualTo(purpose);
-        // 按实际配置核验前缀，兼容同级目录与受限RAM下的子目录部署。
+        // 核对三类图片的实际前缀，窗口相册不得写入点评或商家目录。
         assertThat(row.getStorageKey())
                 .startsWith(
-                        purpose.equals("RESTAURANT")
-                                ? ossProperties.getRestaurantPrefix()
-                                : ossProperties.getPrefix());
+                        switch (purpose) {
+                            case "RESTAURANT" -> ossProperties.getRestaurantPrefix();
+                            case "WINDOW" -> ossProperties.getWindowPrefix();
+                            default -> ossProperties.getPrefix();
+                        });
         byte[] downloaded = storage.read(row.getBucketName(), row.getStorageKey());
         assertThat(
                         javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(downloaded))

@@ -2,18 +2,21 @@ package com.ginkgo.foodmap.review.service;
 
 import com.ginkgo.foodmap.restaurant.service.RestaurantReviewTargetService;
 import com.ginkgo.foodmap.review.dto.ReviewListQuery;
-import com.ginkgo.foodmap.review.entity.ReviewReadEntity;
 import com.ginkgo.foodmap.review.entity.ReviewPhotoReferenceEntity;
+import com.ginkgo.foodmap.review.entity.ReviewReadEntity;
 import com.ginkgo.foodmap.review.mapper.MyReviewReadMapper;
 import com.ginkgo.foodmap.review.mapper.ReviewPhotoMapper;
 import com.ginkgo.foodmap.review.policy.ReviewHistoryCursorPolicy;
 import com.ginkgo.foodmap.review.vo.MyReviewPageVo;
 import com.ginkgo.foodmap.user.dto.PublicAuthor;
 import com.ginkgo.foodmap.user.service.PublicAuthorService;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -29,7 +32,9 @@ public class MyReviewReadService {
 
     /** 本人入口仅使用认证身份；公开主页服务先核验目标用户，外部请求不能直接调用本流程或指定offset。 */
     public MyReviewPageVo list(long userId, ReviewListQuery query) {
-        if (userId <= 0) throw new IllegalArgumentException("Authenticated user required");
+        if (userId <= 0) {
+            throw new IllegalArgumentException("Authenticated user required");
+        }
         var result = new MyReviewPageVo();
         var author = authors.find(List.of(userId)).get(Long.toString(userId));
         if (author == null) {
@@ -41,27 +46,56 @@ public class MyReviewReadService {
         result.setPage(query.getPage());
         result.setPageSize(query.getPageSize());
         var targets = restaurants.visible(mapper.targets(userId));
-        if (targets.isEmpty()) return result;
+        var windows = restaurants.visibleWindows(mapper.windowTargets(userId));
+        if (targets.isEmpty() && windows.isEmpty()) {
+            return result;
+        }
         var ids = List.copyOf(targets.keySet());
-        var counts = mapper.counts(userId, ids);
+        var windowIds = List.copyOf(windows.keySet());
+        var counts = mapper.mixedCounts(userId, ids, windowIds);
         result.setTotalGroups(counts.getTotalGroups());
         result.setTotalReviews(counts.getTotalReviews());
-        result.setTotalPages(counts.getTotalGroups() / query.getPageSize()
-                + (counts.getTotalGroups() % query.getPageSize() == 0 ? 0 : 1));
-        if (query.getOffset() >= counts.getTotalGroups()) return result;
-        var rows = mapper.page(userId, ids, query.getPageSize(), query.getOffset());
-        if (rows.isEmpty()) return result;
-        var references = photos.references(rows.stream().map(ReviewReadEntity::getId).toList()).stream()
-                .collect(Collectors.groupingBy(ReviewPhotoReferenceEntity::getReviewId));
-        result.setRecords(rows.stream().map(row -> {
-            var group = new MyReviewPageVo.Group();
-            group.setRestaurant(targets.get(row.getRestaurantId()));
-            group.setHistoryCount(row.getHistoryCount());
-            if (row.getHistoryCount() > 0) group.setNextHistoryCursor(ReviewHistoryCursorPolicy.encode(
-                    row.getRestaurantId(), userId, row.getCreatedAt(), row.getId()));
-            group.setCurrentReview(ReviewReadService.current(row, references.getOrDefault(row.getId(), List.of())));
-            return group;
-        }).toList());
+        result.setTotalPages(
+                counts.getTotalGroups() / query.getPageSize()
+                        + (counts.getTotalGroups() % query.getPageSize() == 0 ? 0 : 1));
+        if (query.getOffset() >= counts.getTotalGroups()) {
+            return result;
+        }
+        var rows = mapper.mixedPage(userId, ids, windowIds, query.getPageSize(), query.getOffset());
+        if (rows.isEmpty()) {
+            return result;
+        }
+        var references =
+                photos.references(rows.stream().map(ReviewReadEntity::getId).toList()).stream()
+                        .collect(Collectors.groupingBy(ReviewPhotoReferenceEntity::getReviewId));
+        result.setRecords(
+                rows.stream()
+                        .map(
+                                row -> {
+                                    var group = new MyReviewPageVo.Group();
+                                    group.setRestaurant(
+                                            row.getWindowId() == null
+                                                    ? targets.get(row.getRestaurantId())
+                                                    : windows.get(row.getWindowId()));
+                                    group.setHistoryCount(row.getHistoryCount());
+                                    if (row.getHistoryCount() > 0) {
+                                        group.setNextHistoryCursor(
+                                                ReviewHistoryCursorPolicy.encode(
+                                                        row.getWindowId() == null
+                                                                ? row.getRestaurantId()
+                                                                : -row.getWindowId(),
+                                                        userId,
+                                                        row.getCreatedAt(),
+                                                        row.getId()));
+                                    }
+                                    group.setCurrentReview(
+                                            ReviewReadService.current(
+                                                    row,
+                                                    references.getOrDefault(
+                                                            row.getId(), List.of())));
+                                    return group;
+                                })
+                        .toList());
         return result;
     }
 }

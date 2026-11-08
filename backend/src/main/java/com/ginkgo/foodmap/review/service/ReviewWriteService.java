@@ -1,13 +1,17 @@
 package com.ginkgo.foodmap.review.service;
 
 import com.ginkgo.foodmap.common.exception.BusinessException;
+import com.ginkgo.foodmap.file.service.MediaFileService;
 import com.ginkgo.foodmap.growth.dto.FirstStoreReviewContribution;
 import com.ginkgo.foodmap.growth.service.GrowthRewardApplicationService;
 import com.ginkgo.foodmap.restaurant.dto.RestaurantReviewDelta;
+import com.ginkgo.foodmap.restaurant.service.CanteenWindowService;
 import com.ginkgo.foodmap.restaurant.service.RestaurantReviewApplicationService;
 import com.ginkgo.foodmap.review.dto.ReviewPublishRequest;
 import com.ginkgo.foodmap.review.entity.ReviewEntity;
 import com.ginkgo.foodmap.review.exception.ReviewErrorCode;
+import com.ginkgo.foodmap.review.mapper.ReviewDeleteMapper;
+import com.ginkgo.foodmap.review.mapper.ReviewPhotoMapper;
 import com.ginkgo.foodmap.review.mapper.ReviewWriteMapper;
 import com.ginkgo.foodmap.review.policy.ReviewPublishPolicy;
 import com.ginkgo.foodmap.review.vo.ReviewPublishVo;
@@ -33,20 +37,51 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class ReviewWriteService {
     private final ReviewWriteMapper mapper;
-    private final com.ginkgo.foodmap.review.mapper.ReviewDeleteMapper deletion;
+    private final CanteenWindowService windows;
+    private final ReviewDeleteMapper deletion;
     private final RestaurantReviewApplicationService restaurants;
     private final CurrentActorService actors;
     private final PlatformTransactionManager transactions;
-    private final com.ginkgo.foodmap.file.service.MediaFileService media;
-    private final com.ginkgo.foodmap.review.mapper.ReviewPhotoMapper photos;
+    private final MediaFileService media;
+    private final ReviewPhotoMapper photos;
     private final GrowthRewardApplicationService growth;
 
     /** 事务最多重试三次，仅处理并发锁/唯一键竞争，不掩盖普通SQL或统计错误。 */
     @PreAuthorize("isAuthenticated()")
     public ReviewPublishVo publish(String restaurantId, ReviewPublishRequest request) {
+        return publishTarget(restaurantId, request, false);
+    }
+
+    /** 窗口点评使用独立目标类型，UUID仍在作者的全部点评间唯一。 */
+    @PreAuthorize("isAuthenticated()")
+    public ReviewPublishVo publishWindow(String id, ReviewPublishRequest request) {
+        return publishTarget(id, request, true);
+    }
+
+    private ReviewPublishVo publishTarget(
+            String restaurantId, ReviewPublishRequest request, boolean window) {
         var row =
                 ReviewPublishPolicy.normalize(
                         restaurantId, actors.requireActor().getUserId(), request);
+        if (window) {
+            row.setWindowId(row.getRestaurantId());
+            row.setRestaurantId(null);
+            // 将类型加入幂等摘要，数值相同的餐厅/窗口也不是同一点评对象。
+            try {
+                row.setRequestHash(
+                        java.util.HexFormat.of()
+                                .formatHex(
+                                        java.security.MessageDigest.getInstance("SHA-256")
+                                                .digest(
+                                                        ("WINDOW:" + row.getRequestHash())
+                                                                .getBytes(
+                                                                        java.nio.charset
+                                                                                .StandardCharsets
+                                                                                .UTF_8))));
+            } catch (java.security.NoSuchAlgorithmException e) {
+                throw new IllegalStateException(e);
+            }
+        }
         var photoIds = ReviewPublishPolicy.photoIds(request);
         for (int attempt = 0; attempt < 3; attempt++) {
             var tx = new TransactionTemplate(transactions);
@@ -70,7 +105,11 @@ public class ReviewWriteService {
     }
 
     private ReviewPublishVo publishTransaction(ReviewEntity row, java.util.List<Long> photoIds) {
-        restaurants.lockVisible(row.getRestaurantId());
+        if (row.getWindowId() != null) {
+            windows.lockVisible(row.getWindowId(), false);
+        } else {
+            restaurants.lockPublishable(row.getRestaurantId());
+        }
         if (deletion.deletedRequest(row.getAuthorUserId(), row.getClientRequestId()) != 0) {
             throw new BusinessException(ReviewErrorCode.REQUEST_DELETED);
         }
@@ -81,7 +120,14 @@ public class ReviewWriteService {
             }
             return result(existing, true);
         }
-        var previous = mapper.latest(row.getRestaurantId(), row.getAuthorUserId());
+        // 停业阻止新发布；既有请求重放仍应确认原成功回执。
+        if (row.getWindowId() != null) {
+            windows.lockVisible(row.getWindowId(), true);
+        }
+        var previous =
+                row.getWindowId() == null
+                        ? mapper.latest(row.getRestaurantId(), row.getAuthorUserId())
+                        : mapper.latestWindow(row.getWindowId(), row.getAuthorUserId());
         row.setCreatedAt(previous == null ? null : previous.getCreatedAt());
         row.setId(null);
         mapper.insert(row);
@@ -92,11 +138,16 @@ public class ReviewWriteService {
         for (int position = 0; position < photoIds.size(); position++) {
             photos.insert(row.getId(), position, photoIds.get(position));
         }
-        restaurants.applyDelta(row.getRestaurantId(), delta(row, previous));
+        if (row.getWindowId() == null) {
+            restaurants.applyDelta(row.getRestaurantId(), delta(row, previous));
+        } else {
+            windows.applyDelta(row.getWindowId(), delta(row, previous));
+        }
         // 业务资源锁及所有点评写入完成后，加入同一事务计奖；失败一起回滚，幂等回执分支不补发经验。
         var contribution = new FirstStoreReviewContribution();
         contribution.setUserId(row.getAuthorUserId());
-        contribution.setRestaurantId(row.getRestaurantId());
+        contribution.setRestaurantId(row.getRestaurantId() == null ? 0 : row.getRestaurantId());
+        contribution.setWindowId(row.getWindowId());
         contribution.setReviewId(row.getId());
         growth.grantFirstStoreReview(contribution);
         return result(row, false);
@@ -104,7 +155,8 @@ public class ReviewWriteService {
 
     private boolean sameContent(ReviewEntity a, ReviewEntity b) {
         return a.getRequestHash().equalsIgnoreCase(b.getRequestHash())
-                && a.getRestaurantId() == b.getRestaurantId()
+                && Objects.equals(a.getRestaurantId(), b.getRestaurantId())
+                && Objects.equals(a.getWindowId(), b.getWindowId())
                 && a.getTasteScore().compareTo(b.getTasteScore()) == 0
                 && a.getValueScore().compareTo(b.getValueScore()) == 0
                 && a.getServiceScore().compareTo(b.getServiceScore()) == 0
@@ -138,7 +190,8 @@ public class ReviewWriteService {
     private ReviewPublishVo result(ReviewEntity row, boolean replayed) {
         var vo = new ReviewPublishVo();
         vo.setReviewId(Long.toString(row.getId()));
-        vo.setRestaurantId(Long.toString(row.getRestaurantId()));
+        vo.setRestaurantId(row.getRestaurantId() == null ? null : row.getRestaurantId().toString());
+        vo.setWindowId(row.getWindowId() == null ? null : row.getWindowId().toString());
         vo.setReplayed(replayed);
         return vo;
     }

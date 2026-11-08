@@ -13,7 +13,8 @@ interface Target {
   targetType: 'REVIEW' | 'REPLY'
   targetId: string
   reviewId: string
-  restaurantId: string
+  restaurantId: string | null
+  windowId?: string | null
   author: { id: string; username: string }
   body: string
   createdAt: string
@@ -49,7 +50,10 @@ async function load() {
   try {
     const response = await httpClient.get<ApiResponse<Target>>(
         `/api/me/received-likes/${props.id}/target`,
-        { signal: controller.signal, headers: { Authorization: `Bearer ${authToken.value}` } },
+        {
+          signal: controller.signal,
+          headers: { Authorization: `Bearer ${authToken.value}` },
+        },
       ),
       data = response.data.data
     if (
@@ -60,7 +64,10 @@ async function load() {
       data.targetType !== props.type ||
       !notificationId(data.targetId) ||
       !notificationId(data.reviewId) ||
-      !notificationId(data.restaurantId) ||
+      !(
+        (notificationId(data.restaurantId) && !data.windowId) ||
+        (data.restaurantId === null && notificationId(data.windowId))
+      ) ||
       data.author?.id !== user ||
       typeof data.author.username !== 'string' ||
       typeof data.body !== 'string' ||
@@ -75,6 +82,7 @@ async function load() {
         targetId: data.targetId,
         reviewId: data.reviewId,
         restaurantId: data.restaurantId,
+        windowId: data.windowId,
         author: { id: data.author.id, username: data.author.username },
         body: data.body,
         createdAt: data.createdAt,
@@ -129,7 +137,9 @@ onBeforeUnmount(clear)
         <p>{{ target.body }}</p>
         <time>{{ new Date(target.createdAt).toLocaleString('zh-CN') }}</time>
         <p>
-          <RouterLink :to="`/restaurants/${target.restaurantId}`" @click="close"
+          <RouterLink
+            :to="`/${target.windowId ? 'canteen-windows' : 'restaurants'}/${target.windowId ?? target.restaurantId}`"
+            @click="close"
             >进入店铺 ›</RouterLink
           >
         </p>

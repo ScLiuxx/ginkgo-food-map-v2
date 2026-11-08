@@ -48,6 +48,23 @@
 
 服务器运行配置中的数据库、Redis、SMTP、验证码 HMAC 及 JWT 密钥不进入 Git、构建产物或部署日志。RSA 和 HMAC 密钥由服务器独立生成。Runner 与后端 systemd 服务均已设置开机启动，首次发布后后端服务已运行。
 
+## 图片存储目录
+
+同一私有OSS Bucket下统一使用三个同级目录：
+
+```text
+Bucket/
+├── review-images/{UUID}.jpg       餐厅和窗口的点评照片
+├── restaurant-images/{UUID}.jpg   新店投稿、纠错附图和正式商家相册
+└── windows-images/{UUID}.jpg      管理员窗口相册，首张作为封面
+```
+
+`app.file.oss.prefix`配置为`review-images/`，`app.file.oss.restaurant-prefix`配置为`restaurant-images/`，`app.file.oss.window-prefix`配置为`windows-images/`；本地配置与默认配置保持一致，不再使用`review-images/restaurants/`。文件名由服务端随机生成，用户、店铺和点评归属保存在数据库中，不继续分目录。图片绑定或审核通过时沿用原对象，不移动文件。
+
+RAM凭证需允许`review-images/*`、`restaurant-images/*`和`windows-images/*`对象的PutObject、GetObject和DeleteObject；仅创建OSS目录不会自动获得权限。WINDOW上传用途由后端额外限制为管理员。Bucket及对象保持私有，页面通过后端校验可见性后读取。
+
+修改前缀只影响新上传文件，既有文件按数据库记录的Bucket与存储键读取。清理旧图片时须先备份，核对数据库关联与实际对象，删除图片关联并刷新相关店铺的搜索封面，不能只在OSS控制台删除文件。2026-11-08本地旧图清理已同步完成，证据见[开发记录](../development.md#2026-11-08图片存储目录统一与旧图清理)；不代表服务器配置或线上数据已同步修改。
+
 ## 发布 Runner 与权限
 
 Runner 以独立的 `ginkgo-deploy` 用户运行，并通过 systemd 开机启动。服务器主动通过 HTTPS 连接 GitHub 和产物下载服务，不需要为 GitHub 开放22端口，也不需要固定 GitHub Runner 的出口 IP。

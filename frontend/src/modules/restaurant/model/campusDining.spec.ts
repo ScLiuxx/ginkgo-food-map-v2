@@ -7,7 +7,6 @@ const window = (id: string, changes: Partial<DiningWindow> = {}): DiningWindow =
   canteenId: 'canteen',
   name: id,
   floor: '二楼',
-  category: null,
   score: 8,
   reviewCount: 1,
   price: null,
@@ -26,15 +25,23 @@ describe('canteen independent window summary', () => {
         window('unreviewed', { reviewCount: 0 }),
         window('closed', { score: 10, closed: true }),
         window('foreign', { canteenId: 'other' }),
-        window('canteen'),
         window('a'),
         window('nan', { score: NaN }),
         window('bad', { score: 12 }),
       ]),
     ).toEqual({ score: 7, count: 2 })
   })
+  it('allows a window and its parent to share a numeric identity', () => {
+    expect(canteenRating('canteen', [window('canteen')])).toEqual({
+      score: 8,
+      count: 1,
+    })
+  })
   it('preserves a reviewed zero and shows unrated instead of a parent score for empty/unavailable collections', () => {
-    expect(canteenRating('canteen', [window('zero', { score: 0 })])).toEqual({ score: 0, count: 1 })
+    expect(canteenRating('canteen', [window('zero', { score: 0 })])).toEqual({
+      score: 0,
+      count: 1,
+    })
     expect(canteenRating('canteen', null)).toEqual({ score: null, count: 0 })
     expect(canteenRating('canteen', [])).toEqual({ score: null, count: 0 })
     expect(canteenRating('canteen', [window('closed', { closed: true })])).toEqual({

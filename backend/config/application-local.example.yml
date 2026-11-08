@@ -39,7 +39,7 @@ app:
   file:
     oss:
       # Bucket为私有；在未跟踪的application-local.yml中填好位置和凭证后开启。
-      # 凭证仅允许本Bucket的review-images/*对象PutObject/GetObject/DeleteObject。
+      # 凭证仅允许本Bucket下三个图片目录的对象Put/Get/Delete。
       # Bucket保持私有且未启用版本控制；真实AccessKey不能写入这个example文件。
       enabled: false
       endpoint: https://oss-cn-hangzhou.aliyuncs.com
@@ -48,8 +48,11 @@ app:
       # 两者同时填写则优先使用；都留空时读取OSS_ACCESS_KEY_ID/OSS_ACCESS_KEY_SECRET环境变量。
       access-key-id: ""
       access-key-secret: ""
-      # 商户待审图沿用同一个Bucket，须授予此目录对象读写删除权限。
+      # 点评照片、商家图片与管理员窗口相册使用同级目录。
+      prefix: review-images/
+      # 投稿、纠错附图和审核后的正式相册沿用同一对象，不移动目录。
       restaurant-prefix: restaurant-images/
+      window-prefix: windows-images/
       temporary-ttl: 24h
   user:
     verification-code:

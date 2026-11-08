@@ -10,7 +10,8 @@ import java.time.Instant;
 @Data
 public class ReviewEntity {
     private Long id;
-    private long restaurantId;
+    private Long restaurantId;
+    private Long windowId;
     private long authorUserId;
     private BigDecimal tasteScore;
     private BigDecimal valueScore;

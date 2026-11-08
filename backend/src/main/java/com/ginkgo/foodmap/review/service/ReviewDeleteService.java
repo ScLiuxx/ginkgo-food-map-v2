@@ -3,10 +3,14 @@ package com.ginkgo.foodmap.review.service;
 import com.ginkgo.foodmap.common.exception.BusinessException;
 import com.ginkgo.foodmap.file.service.MediaFileService;
 import com.ginkgo.foodmap.restaurant.dto.RestaurantReviewDelta;
+import com.ginkgo.foodmap.restaurant.service.CanteenWindowService;
 import com.ginkgo.foodmap.restaurant.service.RestaurantReviewApplicationService;
 import com.ginkgo.foodmap.review.entity.ReviewEntity;
 import com.ginkgo.foodmap.review.exception.ReviewErrorCode;
-import com.ginkgo.foodmap.review.mapper.*;
+import com.ginkgo.foodmap.review.mapper.ReplyDeleteMapper;
+import com.ginkgo.foodmap.review.mapper.ReviewDeleteMapper;
+import com.ginkgo.foodmap.review.mapper.ReviewPhotoMapper;
+import com.ginkgo.foodmap.review.mapper.ReviewWriteMapper;
 import com.ginkgo.foodmap.review.policy.ReviewReadPolicy;
 import com.ginkgo.foodmap.security.service.CurrentActorService;
 
@@ -16,7 +20,9 @@ import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.*;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionTimedOutException;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
@@ -26,6 +32,7 @@ import java.math.BigDecimal;
 @RequiredArgsConstructor
 public class ReviewDeleteService {
     private final ReviewDeleteMapper deletion;
+    private final CanteenWindowService windows;
     private final ReviewWriteMapper reviews;
     private final ReviewPhotoMapper photos;
     private final ReplyDeleteMapper replyReceipts;
@@ -64,7 +71,11 @@ public class ReviewDeleteService {
             return;
         }
         // 父店锁先于子资源锁，和发评、回复、删店统一顺序。
-        restaurants.lockVisible(row.getRestaurantId());
+        if (row.getWindowId() == null) {
+            restaurants.lockVisible(row.getRestaurantId());
+        } else {
+            windows.lockVisible(row.getWindowId(), false);
+        }
         row = deletion.find(id);
         if (row == null) {
             requireDeletedOwner(id, owner);
@@ -73,7 +84,10 @@ public class ReviewDeleteService {
         if (row.getAuthorUserId() != owner) {
             throw new BusinessException(ReviewErrorCode.FORBIDDEN);
         }
-        var previous = reviews.latest(row.getRestaurantId(), owner);
+        var previous =
+                (row.getWindowId() == null
+                        ? reviews.latest(row.getRestaurantId(), owner)
+                        : reviews.latestWindow(row.getWindowId(), owner));
         var fileIds = photos.ids(id);
         if (deletion.tombstone(id) != 1) {
             throw new IllegalStateException("Missing review request receipt");
@@ -85,8 +99,15 @@ public class ReviewDeleteService {
         if (deletion.review(id) != 1) {
             throw new IllegalStateException("Missing review during delete");
         }
-        var next = reviews.latest(row.getRestaurantId(), owner);
-        restaurants.applyDelta(row.getRestaurantId(), delta(previous, next));
+        var next =
+                (row.getWindowId() == null
+                        ? reviews.latest(row.getRestaurantId(), owner)
+                        : reviews.latestWindow(row.getWindowId(), owner));
+        if (row.getWindowId() == null) {
+            restaurants.applyDelta(row.getRestaurantId(), delta(previous, next));
+        } else {
+            windows.applyDelta(row.getWindowId(), delta(previous, next));
+        }
     }
 
     /** 原作者重试已完成的删除得到204；其他账号仍403，未知ID为404。 */

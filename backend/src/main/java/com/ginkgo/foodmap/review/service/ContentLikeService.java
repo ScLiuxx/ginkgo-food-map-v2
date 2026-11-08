@@ -4,13 +4,12 @@ import com.ginkgo.foodmap.common.exception.BusinessException;
 import com.ginkgo.foodmap.growth.service.GrowthRewardApplicationService;
 import com.ginkgo.foodmap.notification.dto.ContentLikeNotification;
 import com.ginkgo.foodmap.notification.service.NotificationPublicationService;
-import com.ginkgo.foodmap.restaurant.service.RestaurantReviewApplicationService;
+import com.ginkgo.foodmap.restaurant.service.CanteenWindowService;
 import com.ginkgo.foodmap.restaurant.service.RestaurantReviewTargetService;
 import com.ginkgo.foodmap.review.entity.ContentLikeEntity;
 import com.ginkgo.foodmap.review.entity.LikeTargetEntity;
 import com.ginkgo.foodmap.review.exception.ContentLikeErrorCode;
 import com.ginkgo.foodmap.review.mapper.ContentLikeMapper;
-import com.ginkgo.foodmap.review.mapper.ReplyMapper;
 import com.ginkgo.foodmap.review.vo.ContentLikeViews;
 import com.ginkgo.foodmap.security.service.CurrentActorService;
 import com.ginkgo.foodmap.user.service.PublicAuthorService;
@@ -44,9 +43,9 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class ContentLikeService {
+    private final ReviewParentService parents;
+    private final CanteenWindowService windows;
     private final ContentLikeMapper likeMapper;
-    private final ReplyMapper replyMapper;
-    private final RestaurantReviewApplicationService restaurantReviews;
     private final RestaurantReviewTargetService restaurantTargets;
     private final CurrentActorService currentActors;
     private final NotificationPublicationService notifications;
@@ -84,11 +83,7 @@ public class ContentLikeService {
     private ContentLikeViews.State write(
             String type, long id, long user, boolean active, Instant occurred) {
         var source = requireSource(type, id);
-        if (source.getRestaurantId() == null) {
-            throw missing();
-        }
-        restaurantReviews.lockVisibleParent(source.getRestaurantId());
-        if (!source.getRestaurantId().equals(replyMapper.lockReview(source.getReviewId()))) {
+        if (parents.lock(source.getReviewId()) == null) {
             throw missing();
         }
         // 父店/点评锁阻止源删除；重新读取回复作者，禁止使用加锁前失效的目标事实。
@@ -146,9 +141,20 @@ public class ContentLikeService {
                                 .filter(Objects::nonNull)
                                 .distinct()
                                 .toList());
+        var visibleWindows =
+                windows.targets(
+                        rows.stream()
+                                .map(LikeTargetEntity::getWindowId)
+                                .filter(Objects::nonNull)
+                                .distinct()
+                                .toList());
         var valid =
                 rows.stream()
-                        .filter(r -> visible.containsKey(r.getRestaurantId()))
+                        .filter(
+                                r ->
+                                        r.getWindowId() != null
+                                                ? visibleWindows.containsKey(r.getWindowId())
+                                                : visible.containsKey(r.getRestaurantId()))
                         .map(LikeTargetEntity::getId)
                         .collect(Collectors.toSet());
         var counts =
@@ -205,10 +211,13 @@ public class ContentLikeService {
             throw missing();
         }
         var source = requireSource(row.getTargetType(), row.getTargetId());
-        if (source.getAuthorUserId() != user || source.getRestaurantId() == null) {
+        if (source.getAuthorUserId() != user
+                || (source.getRestaurantId() == null && source.getWindowId() == null)) {
             throw missing();
         }
-        if (restaurantTargets.visible(List.of(source.getRestaurantId())).isEmpty()) {
+        if (source.getWindowId() != null
+                ? !windowVisible(source.getWindowId())
+                : restaurantTargets.visible(List.of(source.getRestaurantId())).isEmpty()) {
             throw missing();
         }
         var name = publicAuthors.find(List.of(user)).get(Long.toString(user));
@@ -221,11 +230,22 @@ public class ContentLikeService {
         result.setTargetId(Long.toString(row.getTargetId()));
         result.setTargetType(row.getTargetType());
         result.setReviewId(Long.toString(source.getReviewId()));
-        result.setRestaurantId(source.getRestaurantId().toString());
+        result.setRestaurantId(
+                source.getRestaurantId() == null ? null : source.getRestaurantId().toString());
+        result.setWindowId(source.getWindowId() == null ? null : source.getWindowId().toString());
         result.setAuthor(name);
         result.setBody(source.getBody());
         result.setCreatedAt(source.getCreatedAt());
         return result;
+    }
+
+    private boolean windowVisible(long id) {
+        try {
+            windows.requireVisible(id);
+            return true;
+        } catch (BusinessException missing) {
+            return false;
+        }
     }
 
     private LikeTargetEntity requireSource(String type, long id) {

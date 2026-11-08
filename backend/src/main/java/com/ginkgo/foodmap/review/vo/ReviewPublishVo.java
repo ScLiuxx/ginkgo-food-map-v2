@@ -7,5 +7,6 @@ import lombok.Data;
 public class ReviewPublishVo {
     private String reviewId;
     private String restaurantId;
+    private String windowId;
     private boolean replayed;
 }

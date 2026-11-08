@@ -4,16 +4,25 @@ import { reviewGatewayKey, unavailableReviewGateway } from '../model/review'
 import { replyScopeVisibleKey } from '../model/replyEditor'
 import type { ReviewItem } from '../model/review'
 import ReviewEntry from './ReviewEntry.vue'
+import { windowReviewGateway } from '../api/reviewApi'
 
 /** 历史只在独立面板内展示；关闭保留记录和回复草稿，不把旧卡片嵌回主列表。 */
 const props = defineProps<{
+  window?: boolean
   restaurantId: string
   item: ReviewItem
   viewerId?: string
   starScale?: boolean
 }>()
-const emit = defineEmits<{ photo: [url: string]; refresh: []; delete: [item: ReviewItem] }>()
-const gateway = inject(reviewGatewayKey, unavailableReviewGateway)
+const emit = defineEmits<{
+  photo: [url: string]
+  refresh: []
+  delete: [item: ReviewItem]
+}>()
+const gateway = props.window
+  ? windowReviewGateway
+  : inject(reviewGatewayKey, unavailableReviewGateway)
+provide(reviewGatewayKey, gateway)
 const open = ref(false),
   loading = ref(false),
   loaded = ref(false),

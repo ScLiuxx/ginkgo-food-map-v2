@@ -29,6 +29,12 @@ const router = createRouter({
       meta: { title: '商户管理 · 管理工作台', layout: 'admin' },
     },
     {
+      path: '/admin/restaurants/:id/windows',
+      component: () => import('@/pages/admin/AdminWindowPage.vue'),
+      props: true,
+      meta: { title: '窗口管理 · 管理工作台', layout: 'admin' },
+    },
+    {
       path: '/admin/restaurants/new',
       component: () => import('@/pages/admin/AdminRestaurantPage.vue'),
       props: { editing: true },
@@ -111,6 +117,12 @@ const router = createRouter({
       component: () => import('@/modules/restaurant/ui/RestaurantCorrection.vue'),
       props: true,
       meta: { title: '补充 / 纠错' },
+    },
+    {
+      path: '/canteen-windows/:id',
+      component: () => import('@/pages/restaurant/RestaurantPage.vue'),
+      props: (route) => ({ id: route.params.id, window: true }),
+      meta: { title: '窗口详情' },
     },
     {
       path: '/restaurants/:id',

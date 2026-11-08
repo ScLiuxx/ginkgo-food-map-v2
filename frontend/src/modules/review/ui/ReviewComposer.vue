@@ -3,7 +3,7 @@ import { computed, inject, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useLoginStore } from '@/modules/auth/model/login.store'
 import { authToken } from '@/shared/api/authSession'
-import { fetchRestaurants } from '@/modules/restaurant/api/restaurantApi'
+import { fetchRestaurant, fetchRestaurants } from '@/modules/restaurant/api/restaurantApi'
 import type { RestaurantReadModel } from '@/modules/restaurant/model/restaurant.types'
 import { ratingDimensions } from '@/modules/restaurant/model/catalog.logic'
 import HalfStarRating from './HalfStarRating.vue'
@@ -96,6 +96,26 @@ watch(
   },
   { flush: 'sync' },
 )
+/** 全站选食堂后加载真实完整窗口；切换对象后拒绝旧响应。 */
+watch(selected, async (id) => {
+  const item = restaurants.value.find((row) => row.id === id)
+  if (
+    !opened.value ||
+    !item ||
+    item.restaurantType !== 'CANTEEN' ||
+    (item.dining?.windows !== undefined && item.dining.windows !== null)
+  )
+    return
+  const ticket = generation
+  try {
+    const fresh = await fetchRestaurant(id, controller?.signal)
+    if (ticket === generation && selected.value === id)
+      restaurants.value = restaurants.value.map((row) => (row.id === id ? fresh : row))
+  } catch {
+    if (ticket === generation && selected.value === id)
+      error.value = '窗口加载失败，请重新选择食堂重试。'
+  }
+})
 watch(
   floor,
   () => {
@@ -128,7 +148,7 @@ async function open() {
       path: '/login',
       query: {
         redirect: props.restaurant
-          ? `/restaurants/${props.restaurant.id}?writeReview=1`
+          ? `/${props.restaurant.dining?.kind === 'window' ? 'canteen-windows' : 'restaurants'}/${props.restaurant.id}?writeReview=1`
           : '/?writeReview=1',
       },
     })
@@ -248,6 +268,7 @@ async function submit() {
   const ticket = generation
   // 相同内容重试复用请求号；改动正文、评分或图片后是新请求，避免后端幂等内容冲突。
   const content = JSON.stringify([
+    isCanteen.value || dining.value?.kind === 'window' ? 'WINDOW' : 'RESTAURANT',
     publishTarget.value,
     scores.value,
     recommended.value,
@@ -259,6 +280,9 @@ async function submit() {
   try {
     const result = await gateway.publish({
       restaurantId: publishTarget.value,
+      ...(isCanteen.value || dining.value?.kind === 'window'
+        ? { windowId: publishTarget.value }
+        : {}),
       scores: { ...scores.value },
       recommended: recommended.value,
       body: body.value.trim(),
@@ -313,7 +337,9 @@ watch(
 onUnmounted(close)
 </script>
 <template>
-  <button type="button" class="review-open" @click="open">{{ triggerLabel || '写评价' }}</button>
+  <button type="button" class="review-open" @click="open">
+    {{ triggerLabel || '写评价' }}
+  </button>
   <dialog ref="dialog" class="review-dialog" @cancel.prevent="requestClose">
     <section v-if="receipt" class="publish-receipt" role="status">
       <h2>{{ receipt.replayed ? '已确认此前发布成功' : '点评发布成功' }}</h2>
@@ -344,7 +370,9 @@ onUnmounted(close)
               aria-label="评价对象"
               :disabled="loading || targetLocked"
             >
-              <option value="">{{ loading ? '正在加载餐厅…' : '请选择餐厅' }}</option>
+              <option value="">
+                {{ loading ? '正在加载餐厅…' : '请选择餐厅' }}
+              </option>
               <option v-for="r in restaurants" :key="r.id" :value="r.id">
                 {{ r.name }}{{ r.closed ? '（已停业）' : '' }}
               </option>
@@ -364,7 +392,9 @@ onUnmounted(close)
             <label
               >窗口<select v-model="windowId" aria-label="窗口" :disabled="!floor">
                 <option value="">请选择具体窗口（必选）</option>
-                <option v-for="w in floorWindows" :key="w.id" :value="w.id">{{ w.name }}</option>
+                <option v-for="w in floorWindows" :key="w.id" :value="w.id">
+                  {{ w.name }}
+                </option>
               </select></label
             >
           </div>
@@ -372,7 +402,9 @@ onUnmounted(close)
             该食堂暂无收录窗口，请先添加窗口后再评价。
           </p>
           <p v-else-if="isCanteen" class="hint target-note">评价将发布到所选窗口</p>
-          <p v-if="targetHint && !isCanteen" class="hint target-note">{{ targetHint }}</p>
+          <p v-if="targetHint && !isCanteen" class="hint target-note">
+            {{ targetHint }}
+          </p>
           <RouterLink
             v-if="!targetLocked"
             class="add-missing"
@@ -511,7 +543,9 @@ onUnmounted(close)
       </section>
       <footer>
         <!-- 反馈与提交按钮放在同一个固定区域，校验、网络错误和等待状态始终可见。 -->
-        <p v-if="error" role="alert" class="error submit-feedback">{{ error }}</p>
+        <p v-if="error" role="alert" class="error submit-feedback">
+          {{ error }}
+        </p>
         <p v-else-if="busy || loading || processing" role="status" class="hint submit-feedback">
           {{
             busy

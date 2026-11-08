@@ -1,6 +1,8 @@
 package com.ginkgo.foodmap.review.service;
 
 import com.ginkgo.foodmap.common.exception.BusinessException;
+import com.ginkgo.foodmap.growth.service.GrowthQueryService;
+import com.ginkgo.foodmap.restaurant.service.CanteenWindowService;
 import com.ginkgo.foodmap.restaurant.service.RestaurantReadService;
 import com.ginkgo.foodmap.review.dto.ReviewHistoryQuery;
 import com.ginkgo.foodmap.review.dto.ReviewListQuery;
@@ -31,16 +33,31 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 public class ReviewReadService {
     private final RestaurantReadService restaurants;
+    private final CanteenWindowService windows;
     private final ReviewReadMapper mapper;
     private final ReviewPhotoMapper photos;
     private final PublicAuthorService authors;
-    private final com.ginkgo.foodmap.growth.service.GrowthQueryService growth;
+    private final GrowthQueryService growth;
 
     /** 不持写锁，不访问OSS；默认排序在分页前批量取得等级，空页省去批量补全查询。 */
     public ReviewPageVo list(String restaurantId, ReviewListQuery query) {
+        return listTarget(restaurantId, query, false);
+    }
+
+    /** 窗口公开点评与普通餐厅使用同一响应，身份由独立路由区分。 */
+    public ReviewPageVo listWindow(String id, ReviewListQuery query) {
+        return listTarget(id, query, true);
+    }
+
+    private ReviewPageVo listTarget(String restaurantId, ReviewListQuery query, boolean window) {
         long restaurant = ReviewReadPolicy.restaurantId(restaurantId);
-        restaurants.requireVisible(restaurant);
-        var counts = mapper.counts(restaurant);
+        long cursorScope = window ? -restaurant : restaurant;
+        if (window) {
+            windows.requireVisible(restaurant);
+        } else {
+            restaurants.requireVisible(restaurant);
+        }
+        var counts = window ? mapper.windowCounts(restaurant) : mapper.counts(restaurant);
         var result = new ReviewPageVo();
         result.setTotalGroups(counts.getTotalGroups());
         result.setTotalReviews(counts.getTotalReviews());
@@ -55,12 +72,21 @@ public class ReviewReadService {
         // 最新代表独立于排序；历史点评的赞不合并到当前代表。
         var rows =
                 "TIME".equals(query.getSort())
-                        ? mapper.page(restaurant, query.getPageSize(), query.getOffset())
-                        : mapper.rankedPage(
-                                restaurant,
-                                query.getPageSize(),
-                                query.getOffset(),
-                                growth.authorLevels(mapper.authorIds(restaurant)));
+                        ? (window
+                                ? mapper.windowPage(
+                                        restaurant, query.getPageSize(), query.getOffset())
+                                : mapper.page(restaurant, query.getPageSize(), query.getOffset()))
+                        : (window
+                                ? mapper.windowRankedPage(
+                                        restaurant,
+                                        query.getPageSize(),
+                                        query.getOffset(),
+                                        growth.authorLevels(mapper.windowAuthorIds(restaurant)))
+                                : mapper.rankedPage(
+                                        restaurant,
+                                        query.getPageSize(),
+                                        query.getOffset(),
+                                        growth.authorLevels(mapper.authorIds(restaurant))));
         var names = authors.find(rows.stream().map(ReviewReadEntity::getAuthorUserId).toList());
         var references =
                 photos.references(rows.stream().map(ReviewReadEntity::getId).toList()).stream()
@@ -82,7 +108,7 @@ public class ReviewReadService {
                                     if (row.getHistoryCount() > 0) {
                                         group.setNextHistoryCursor(
                                                 ReviewHistoryCursorPolicy.encode(
-                                                        restaurant,
+                                                        cursorScope,
                                                         row.getAuthorUserId(),
                                                         row.getCreatedAt(),
                                                         row.getId()));
@@ -100,14 +126,35 @@ public class ReviewReadService {
 
     /** 历史按需读取，同一快照核验父店、最新代表、锚点和本段照片；不加载OSS字节。 */
     public ReviewHistoryVo history(String restaurantId, String authorId, ReviewHistoryQuery query) {
+        return historyTarget(restaurantId, authorId, query, false);
+    }
+
+    /** 游标命名空间与普通餐厅隔离，即使ID相同也拒绝交叉复用。 */
+    public ReviewHistoryVo historyWindow(String id, String author, ReviewHistoryQuery query) {
+        return historyTarget(id, author, query, true);
+    }
+
+    private ReviewHistoryVo historyTarget(
+            String restaurantId, String authorId, ReviewHistoryQuery query, boolean window) {
         long restaurant = ReviewReadPolicy.restaurantId(restaurantId);
         long author = ReviewReadPolicy.restaurantId(authorId);
-        restaurants.requireVisible(restaurant);
-        var latest = mapper.latest(restaurant, author);
+        if (window) {
+            windows.requireVisible(restaurant);
+        } else {
+            restaurants.requireVisible(restaurant);
+        }
+        long cursorScope = window ? -restaurant : restaurant;
+        var latest =
+                window
+                        ? mapper.windowLatest(restaurant, author)
+                        : mapper.latest(restaurant, author);
         ReviewReadEntity boundary = latest;
         if (query.getCursor() != null) {
-            var decoded = ReviewHistoryCursorPolicy.decode(query.getCursor(), restaurant, author);
-            boundary = mapper.anchor(restaurant, author, decoded.getId());
+            var decoded = ReviewHistoryCursorPolicy.decode(query.getCursor(), cursorScope, author);
+            boundary =
+                    window
+                            ? mapper.windowAnchor(restaurant, author, decoded.getId())
+                            : mapper.anchor(restaurant, author, decoded.getId());
             if (boundary == null || !boundary.getCreatedAt().equals(decoded.getCreatedAt())) {
                 throw new BusinessException(ReviewErrorCode.INVALID_CURSOR);
             }
@@ -125,12 +172,19 @@ public class ReviewReadService {
         }
         result.setAuthor(name);
         var rows =
-                mapper.history(
-                        restaurant,
-                        author,
-                        boundary.getCreatedAt(),
-                        boundary.getId(),
-                        query.getPageSize() + 1);
+                window
+                        ? mapper.windowHistory(
+                                restaurant,
+                                author,
+                                boundary.getCreatedAt(),
+                                boundary.getId(),
+                                query.getPageSize() + 1)
+                        : mapper.history(
+                                restaurant,
+                                author,
+                                boundary.getCreatedAt(),
+                                boundary.getId(),
+                                query.getPageSize() + 1);
         boolean more = rows.size() > query.getPageSize();
         rows = rows.subList(0, Math.min(rows.size(), query.getPageSize()));
         if (!rows.isEmpty()) {
@@ -154,7 +208,7 @@ public class ReviewReadService {
                 var last = rows.getLast();
                 result.setNextCursor(
                         ReviewHistoryCursorPolicy.encode(
-                                restaurant, author, last.getCreatedAt(), last.getId()));
+                                cursorScope, author, last.getCreatedAt(), last.getId()));
             }
         }
         result.setHasMore(more);

@@ -3,7 +3,14 @@ import { httpClient } from '@/shared/api/httpClient'
 import type { ReviewItem, Scores } from '../model/review'
 
 export interface MyReviewGroup {
-  restaurant: { id: string; name: string; businessStatus: 'OPERATING' | 'CLOSED' }
+  restaurant: {
+    id: string
+    name: string
+    businessStatus: 'OPERATING' | 'CLOSED'
+    targetType?: 'RESTAURANT' | 'WINDOW'
+    windowId?: string | null
+    canteenId?: string | null
+  }
   item: ReviewItem
 }
 export interface MyReviewPage {
@@ -79,7 +86,9 @@ export async function fetchMyReviews(
     if (
       !restaurant ||
       !validId(restaurant.id) ||
-      groups.has(restaurant.id) ||
+      (restaurant.targetType === 'WINDOW' &&
+        (restaurant.windowId !== restaurant.id || !validId(restaurant.canteenId))) ||
+      groups.has(`${restaurant.targetType ?? 'RESTAURANT'}:${restaurant.id}`) ||
       typeof restaurant.name !== 'string' ||
       !['OPERATING', 'CLOSED'].includes(restaurant.businessStatus) ||
       !review ||
@@ -113,7 +122,7 @@ export async function fetchMyReviews(
       )
     )
       throw invalid()
-    groups.add(restaurant.id)
+    groups.add(`${restaurant.targetType ?? 'RESTAURANT'}:${restaurant.id}`)
     reviewIds.add(review.id)
     return {
       restaurant,
@@ -124,7 +133,10 @@ export async function fetchMyReviews(
         authorLevel: data.author.level,
         historyCount: group.historyCount,
         nextHistoryCursor: group.nextHistoryCursor,
-        photos: review.photos.map((photo) => ({ id: photo.id, url: photo.url })),
+        photos: review.photos.map((photo) => ({
+          id: photo.id,
+          url: photo.url,
+        })),
         canDelete: false,
         replies: [],
       },

@@ -72,14 +72,23 @@ public class GrowthRewardApplicationService {
         }
         positive(
                 contribution.getUserId(),
-                contribution.getRestaurantId(),
+                contribution.getWindowId() == null
+                        ? contribution.getRestaurantId()
+                        : contribution.getWindowId(),
                 contribution.getReviewId());
+        if (contribution.getWindowId() != null && contribution.getRestaurantId() != 0) {
+            throw new IllegalArgumentException("Ambiguous contribution target");
+        }
         long user = contribution.getUserId();
         accounts.initialize(user);
         if (accounts.lock(user) == null) {
             throw new IllegalStateException("Growth account unavailable");
         }
-        String key = Long.toString(contribution.getRestaurantId());
+        // 窗口业务键增加类型前缀；数值相同的餐厅不占用其首次点评资格。
+        String key =
+                contribution.getWindowId() == null
+                        ? Long.toString(contribution.getRestaurantId())
+                        : "WINDOW:" + contribution.getWindowId();
         var existing = rewards.firstStoreReview(user, key);
         if (existing != null) {
             return "REVOKED".equals(existing.getStatus())

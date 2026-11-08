@@ -1,3 +1,4 @@
+import { fetchCanteenWindows } from './canteenWindowApi'
 import type { ApiResponse } from '@/shared/api/api.types'
 import { httpClient } from '@/shared/api/httpClient'
 import type { CatalogFilters, RestaurantReadModel } from '../model/restaurant.types'
@@ -9,7 +10,7 @@ export interface RestaurantResponse {
   restaurantType?: RestaurantReadModel['restaurantType']
   supportsDineIn?: boolean | null
   supportsDelivery?: boolean | null
-  /** 前端预留的校园详情契约，当前后端没有该字段；不发起不存在的窗口/菜品接口。 */
+  /** 校园展示模型由正式餐厅与独立窗口接口组装。 */
   dining?: RestaurantReadModel['dining']
   id: string
   name: string
@@ -173,7 +174,18 @@ export async function fetchRestaurant(
     `/api/restaurants/${encodeURIComponent(id)}`,
     { signal },
   )
-  return toRestaurantModel(response.data.data)
+  const model = toRestaurantModel(response.data.data)
+  if (model.restaurantType === 'CANTEEN')
+    model.dining = {
+      kind: 'canteen',
+      campus: null,
+      parent: null,
+      floor: null,
+      description: null,
+      windows: await fetchCanteenWindows(id, signal),
+      dishes: [],
+    }
+  return model
 }
 
 /** 固定发起操作时的凭证，避免请求排队期间切换账号后用新身份提交旧表单。 */

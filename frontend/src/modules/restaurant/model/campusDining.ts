@@ -1,6 +1,4 @@
-/** 校园餐饮的前端展示契约。当前服务端尚未提供 dining 字段；不从名称推断校区、楼层或窗口关系。
- * 窗口仍须拥有独立餐厅记录 ID，现有点评接口按该 ID 读写，禁止借用父食堂 ID。
- */
+/** 窗口和餐厅是不同资源；数字ID允许相同，路由及接口按类型区分。 */
 export interface DiningDish {
   id: string
   name: string
@@ -15,7 +13,6 @@ export interface DiningWindow {
   canteenId: string
   name: string
   floor: string | null
-  category: string | null
   description?: string | null
   imageUrl?: string | null
   score: number | null
@@ -68,13 +65,7 @@ export function diningDetails(restaurant: {
 export function canteenWindows(canteenId: string, windows: DiningWindow[] | null): DiningWindow[] {
   const seen = new Set<string>()
   return (windows ?? []).filter((window) => {
-    if (
-      !window.id ||
-      window.canteenId !== canteenId ||
-      window.id === canteenId ||
-      seen.has(window.id)
-    )
-      return false
+    if (!window.id || window.canteenId !== canteenId || seen.has(window.id)) return false
     seen.add(window.id)
     return true
   })

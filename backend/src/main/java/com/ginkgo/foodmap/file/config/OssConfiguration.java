@@ -28,6 +28,9 @@ public class OssConfiguration {
                 || !p.getPrefix().matches("[A-Za-z0-9][A-Za-z0-9/_-]*/")
                 || !p.getRestaurantPrefix().matches("[A-Za-z0-9][A-Za-z0-9/_-]*/")
                 || p.getPrefix().equals(p.getRestaurantPrefix())
+                || !p.getWindowPrefix().matches("[A-Za-z0-9][A-Za-z0-9/_-]*/")
+                || p.getWindowPrefix().equals(p.getPrefix())
+                || p.getWindowPrefix().equals(p.getRestaurantPrefix())
                 || p.getTemporaryTtl().toSeconds() < 1) {
             throw new IllegalStateException("OSS配置无效，请核对HTTPS Endpoint、Region、Bucket和临时有效期");
         }

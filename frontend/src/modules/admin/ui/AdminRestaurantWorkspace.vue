@@ -143,6 +143,11 @@ onBeforeRouteUpdate(() => !busy.value)
                     }}</span>
                   </td>
                   <td class="actions">
+                    <RouterLink
+                      v-if="item.restaurantType === 'CANTEEN'"
+                      :to="`/admin/restaurants/${item.id}/windows`"
+                      >窗口管理</RouterLink
+                    >
                     <RouterLink :to="`/admin/restaurants/${item.id}/edit`">编辑</RouterLink
                     ><button :disabled="busy" @click="inspect(item.id)">管理 / 删除</button>
                   </td>

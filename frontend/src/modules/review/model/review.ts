@@ -31,6 +31,8 @@ export interface ReviewItem {
   replies: { id: string; username: string; body: string; createdAt: string }[]
 }
 export interface ReviewDraft {
+  /** 窗口提交显式携带windowId，restaurantId仅作旧组件的显示键。 */
+  windowId?: string
   restaurantId: string
   scores: Scores
   recommended: boolean
@@ -42,7 +44,8 @@ export interface ReviewDraft {
 }
 export interface ReviewPublishReceipt {
   reviewId: string
-  restaurantId: string
+  windowId?: string | null
+  restaurantId: string | null
   replayed: boolean
 }
 /** 单层回复独立分页，始终归属于请求路径中的具体点评。 */

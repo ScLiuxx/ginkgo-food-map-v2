@@ -1,6 +1,6 @@
 # MySQL 表结构
 
-本文集中维护 MySQL 业务表的当前字段、类型、默认值、枚举、主键、索引、外键与字段约束。覆盖当前迁移定义的 29 张应用表，按下列分组查阅；Flyway 自建的迁移历史表不属于应用表。
+本文集中维护 MySQL 业务表的当前字段、类型、默认值、枚举、主键、索引、外键与字段约束。覆盖当前迁移定义的 30 张应用表，按下列分组查阅；Flyway 自建的迁移历史表不属于应用表。
 
 ## 目录
 
@@ -277,12 +277,13 @@ position范围0～2147483647，同一商户内唯一；0表示默认封面。
 | `canteen_type` | `varchar(16)` | 否 | 外键类型锚点，固定CANTEEN；默认CANTEEN |
 | `name` | `varchar(40)` | 否 | 名称 |
 | `floor_number` | `smallint` | 否 | 楼层数，负数表示地下，0表示地面层 |
-| `category_code` | `varchar(32)` | 是 | 分类编码 |
 | `description` | `varchar(500)` | 是 | 可选介绍，不代替菜品表 |
 | `price_per_person` | `smallint unsigned` | 是 | 参考整数元人均，未知为空 |
 | `price_kind` | `varchar(16)` | 否 | UNKNOWN未知、EXACT填报、ESTIMATE估值；默认UNKNOWN |
 | `cover_file_id` | `bigint unsigned` | 是 | file模块逻辑ID |
 | `business_status` | `varchar(16)` | 否 | OPERATING营业、CLOSED暂停或停止营业，保留历史点评；默认OPERATING |
+| `client_request_id` | `binary(16)` | 是 | 创建请求UUID；旧窗口为空 |
+| `request_hash` | `binary(32)` | 是 | 规范化创建内容及所属食堂的SHA-256摘要 |
 | `created_by` | `bigint unsigned` | 否 | 创建账号逻辑ID，必须为正数 |
 | `updated_by` | `bigint unsigned` | 是 | 最近修改账号逻辑ID |
 | `created_at` | `timestamp(6)` | 否 | 创建时间；默认CURRENT_TIMESTAMP(6) |
@@ -290,9 +291,19 @@ position范围0～2147483647，同一商户内唯一；0表示默认封面。
 | `deleted_at` | `timestamp(6)` | 是 | 软删除时间，NULL表示可见 |
 | `deleted_by` | `bigint unsigned` | 是 | 删除账号逻辑ID |
 
-索引 `(canteen_id,canteen_type)`；索引 `(category_code)`；索引 `(canteen_id,floor_number,category_code,id)`；主键 `(id)`。
+唯一索引 `uk_window_create_request(created_by,client_request_id)`；索引 `(canteen_id,canteen_type)`；索引 `(canteen_id,floor_number,id)`；主键 `(id)`。
 
-canteen_type固定CANTEEN，与canteen_id组成复合外键引用restaurants(id,restaurant_type)；category_code引用restaurant_categories.code。楼层范围-10～100，参考价格范围1～5000元，UNKNOWN时金额为空。
+canteen_type固定CANTEEN，与canteen_id组成复合外键引用restaurants(id,restaurant_type)。楼层范围-10～100，参考价格范围1～5000元，UNKNOWN时金额为空。
+
+### `canteen_window_photos`：窗口相册
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| `window_id` | `bigint unsigned` | 否 | 窗口ID；无默认值 |
+| `media_file_id` | `bigint unsigned` | 否 | 媒体逻辑ID；无默认值 |
+| `created_at` | `timestamp(6)` | 否 | 入册时间；默认CURRENT_TIMESTAMP(6) |
+
+主键`(window_id,media_file_id)`；唯一索引`uk_window_photo_file (media_file_id)`；普通索引`idx_window_photo_order (window_id,created_at,media_file_id)`。外键`window_id`→`canteen_windows.id`，删除/更新RESTRICT；媒体文件跨模块仅逻辑关联。CHECK要求两个ID均为1～9223372036854775807。InnoDB、utf8mb4、utf8mb4_0900_ai_ci。
 
 ### `window_review_statistics`：窗口点评统计
 
@@ -485,7 +496,7 @@ position范围0–4；media_file_id唯一。
 | `height` | `smallint unsigned` | 否 | 解码高度不超过1200 |
 | `sha256` | `binary(32)` | 否 | 最终文件内容摘要，不唯一 |
 | `status` | `varchar(16)` | 否 | UPLOADING / TEMPORARY / BOUND / PENDING_DELETE |
-| `purpose` | `varchar(16)` | 否 | REVIEW点评图 / RESTAURANT商户待审图；默认REVIEW |
+| `purpose` | `varchar(16)` | 否 | REVIEW点评图 / RESTAURANT商家申请图 / WINDOW窗口相册；默认REVIEW，CHECK限定这三个值且不得包含空白 |
 | `created_at` | `timestamp(6)` | 否 | 创建时间；默认CURRENT_TIMESTAMP(6) |
 | `updated_at` | `timestamp(6)` | 否 | 最后修改时间；默认CURRENT_TIMESTAMP(6) |
 | `expires_at` | `timestamp(6)` | 是 | 临时上传过期时间，由服务端设置 |

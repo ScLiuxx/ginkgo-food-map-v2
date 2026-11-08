@@ -2,11 +2,13 @@
 import axios from 'axios'
 import { ReviewComposer, ReviewPanel } from '@/modules/review'
 import RestaurantAlbum from './RestaurantAlbum.vue'
+import WindowAlbum from './WindowAlbum.vue'
 import FavoriteButton from './FavoriteButton.vue'
 import { navigationUrl } from '@/modules/map'
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 import { fetchRestaurant } from '../api/restaurantApi'
+import { fetchWindow } from '../api/canteenWindowApi'
 import type { RestaurantReadModel } from '../model/restaurant.types'
 import { priceLabel, ratingDimensions } from '../model/catalog.logic'
 import StarScore from '@/shared/ui/StarScore.vue'
@@ -17,7 +19,7 @@ import RestaurantManagementActions from './RestaurantManagementActions.vue'
 import { useRestaurantCatalog } from '../model/catalog.store'
 import { isProvenanceTag } from './restaurantPresentation'
 
-const props = defineProps<{ id: string }>()
+const props = defineProps<{ id: string; window?: boolean }>()
 const restaurant = ref<RestaurantReadModel | null>(null)
 const dining = computed(() => (restaurant.value ? diningDetails(restaurant.value) : null))
 const isCanteen = computed(() => dining.value?.kind === 'canteen')
@@ -30,9 +32,7 @@ const route = useRoute()
 const aggregate = computed(() =>
   canteenRating(restaurant.value?.id ?? props.id, dining.value?.windows ?? null),
 )
-const displayScore = computed(() =>
-  isCanteen.value ? aggregate.value.score : (restaurant.value?.score ?? null),
-)
+const displayScore = computed(() => restaurant.value?.score ?? null)
 /** 返回链接只使用真实父食堂ID；筛选来自窗口入口快照，直达窗口时回到其所属楼层。 */
 const parentLink = computed(() => ({
   path: `/restaurants/${encodeURIComponent(dining.value?.parent?.id ?? '')}`,
@@ -41,7 +41,6 @@ const parentLink = computed(() => ({
       typeof route.query.fromFloor === 'string'
         ? route.query.fromFloor
         : (dining.value?.floor ?? ''),
-    windowCategory: typeof route.query.fromCategory === 'string' ? route.query.fromCategory : '',
   },
 }))
 const loading = ref(true)
@@ -72,7 +71,7 @@ async function refreshStatistics(): Promise<void> {
   statisticsLoading.value = true
   statisticsError.value = ''
   try {
-    const fresh = await fetchRestaurant(id, signal)
+    const fresh = await (props.window ? fetchWindow(id, signal) : fetchRestaurant(id, signal))
     if (ticket === statisticsGeneration && props.id === id) restaurant.value = fresh
   } catch (reason) {
     if (ticket !== statisticsGeneration || signal.aborted || props.id !== id) return
@@ -109,7 +108,9 @@ async function loadDetail(): Promise<void> {
   failedDishes.value = []
   legacyReviews.value = false
   try {
-    const result = await fetchRestaurant(props.id, signal)
+    const result = await (props.window
+      ? fetchWindow(props.id, signal)
+      : fetchRestaurant(props.id, signal))
     if (requestGeneration === generation) restaurant.value = result
   } catch (reason) {
     if (requestGeneration !== generation || signal.aborted) return
@@ -122,7 +123,7 @@ async function loadDetail(): Promise<void> {
   }
 }
 watch(
-  () => props.id,
+  () => [props.id, props.window],
   () => {
     void loadDetail()
   },
@@ -156,7 +157,7 @@ async function copyText(text: string): Promise<void> {
 function shareRestaurant(): void {
   if (!restaurant.value) return
   const link = new globalThis.URL(
-    `/restaurants/${encodeURIComponent(restaurant.value.id)}`,
+    `/${props.window ? 'canteen-windows' : 'restaurants'}/${encodeURIComponent(restaurant.value.id)}`,
     globalThis.location.origin,
   )
   void copyText(
@@ -189,7 +190,14 @@ function shareRestaurant(): void {
     </nav>
 
     <header class="detail-hero" :class="{ 'canteen-hero': isCanteen }">
+      <WindowAlbum
+        v-if="isWindow"
+        :id="restaurant.id"
+        :key="`window-${restaurant.id}`"
+        :name="restaurant.name"
+      />
       <RestaurantAlbum
+        v-if="!isWindow"
         :key="restaurant.id"
         :restaurant-id="restaurant.id"
         :name="restaurant.name"
@@ -198,6 +206,7 @@ function shareRestaurant(): void {
         <div class="hero-topline">
           <h1 id="restaurant-title">{{ restaurant.name }}</h1>
           <ReviewComposer
+            v-if="!restaurant.closed"
             :restaurant="restaurant"
             fixed-target
             :trigger-label="isCanteen ? '＋ 评窗口' : isWindow ? '＋ 评此窗口' : '＋ 写点评'"
@@ -206,8 +215,10 @@ function shareRestaurant(): void {
         </div>
         <p v-if="isWindow" class="detail-affiliation">
           <RouterLink v-if="dining.parent" :to="parentLink">{{ dining.parent.name }}</RouterLink
-          ><span v-else>所属食堂待补充</span> · {{ dining.floor || '楼层待补充' }} ·
-          {{ restaurant.category }}
+          ><span v-else>所属食堂待补充</span> · {{ dining.floor || '楼层待补充' }}
+        </p>
+        <p v-if="isWindow && dining.description" class="detail-affiliation">
+          {{ dining.description }}
         </p>
         <div class="detail-subtitle">
           <StarScore class="hero-score" :score="displayScore" />
@@ -263,7 +274,8 @@ function shareRestaurant(): void {
         <p v-if="restaurant.closed" class="closed-note">暂停营业 · 历史点评仍可阅读</p>
         <p v-if="statisticsLoading" class="panel-note" role="status">正在更新评分…</p>
         <p v-if="statisticsError" class="panel-note" role="alert">
-          {{ statisticsError }} <button type="button" @click="refreshStatistics">重试刷新</button>
+          {{ statisticsError }}
+          <button type="button" @click="refreshStatistics">重试刷新</button>
         </p>
       </div>
     </header>
@@ -276,7 +288,7 @@ function shareRestaurant(): void {
     />
 
     <section
-      v-if="!isCanteen && (isWindow || dining.dishes.length)"
+      v-if="!isCanteen && dining.dishes.length"
       class="detail-dishes"
       aria-labelledby="dishes-title"
     >
@@ -309,6 +321,7 @@ function shareRestaurant(): void {
       <ReviewPanel
         :key="restaurant.id"
         :restaurant-id="restaurant.id"
+        :window="isWindow"
         :revision="reviewRevision"
         star-scale
         :title="isWindow ? '本窗口点评' : '同学点评'"
@@ -320,9 +333,7 @@ function shareRestaurant(): void {
       class="legacy-canteen-reviews"
       @toggle="($event.target as HTMLDetailsElement).open && (legacyReviews = true)"
     >
-      <summary>
-        历史食堂点评 <small>{{ restaurant.reviewCount }}</small>
-      </summary>
+      <summary>历史食堂点评</summary>
       <p class="panel-note">此前对食堂整体的点评，不参与窗口汇总。</p>
       <ReviewPanel
         v-if="legacyReviews"
@@ -349,7 +360,9 @@ function shareRestaurant(): void {
           >在高德中打开 ↗</a
         >
       </div>
-      <p v-if="copyFeedback" class="copy-feedback" role="status">{{ copyFeedback }}</p>
+      <p v-if="copyFeedback" class="copy-feedback" role="status">
+        {{ copyFeedback }}
+      </p>
       <label v-if="manualCopyText" class="manual-copy"
         >待复制的内容<textarea
           :value="manualCopyText"
@@ -358,7 +371,7 @@ function shareRestaurant(): void {
           @focus="($event.target as HTMLTextAreaElement).select()"
         />
       </label>
-      <RestaurantManagementActions :id="restaurant.id" :key="restaurant.id" />
+      <RestaurantManagementActions v-if="!isWindow" :id="restaurant.id" :key="restaurant.id" />
     </footer>
   </article>
   <section v-else class="missing-restaurant" aria-labelledby="missing-title">

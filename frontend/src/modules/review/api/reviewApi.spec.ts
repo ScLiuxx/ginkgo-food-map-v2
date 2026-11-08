@@ -4,6 +4,7 @@ import { clearAccessToken, setAccessToken } from '@/shared/api/authSession'
 import {
   publishTextReview,
   textReviewGateway,
+  windowReviewGateway,
   fetchReviewPage,
   fetchReviewHistory,
   fetchReplies,
@@ -308,5 +309,58 @@ describe('history HTTP integration', () => {
         '响应格式',
       )
     }
+  })
+})
+
+/** 相同数字ID的餐厅与窗口不能共享发布/读取路径。 */
+describe('window review identity', () => {
+  it('publishes to the window route and validates both mutually exclusive target fields', async () => {
+    setAccessToken('window-session')
+    const post = vi
+      .spyOn(httpClient, 'post')
+      .mockResolvedValue({
+        data: {
+          success: true,
+          data: { reviewId: '7', restaurantId: null, windowId: '101', replayed: false },
+        },
+      })
+    await publishTextReview({ ...draft(), windowId: '101' })
+    expect(post).toHaveBeenCalledWith(
+      '/api/canteen-windows/101/reviews',
+      expect.anything(),
+      expect.anything(),
+    )
+    post.mockResolvedValue({ data: { success: true, data: { ...receipt, windowId: '101' } } })
+    await expect(publishTextReview({ ...draft(), windowId: '101' })).rejects.toThrow(
+      '发布结果无法确认',
+    )
+  })
+  it('loads main cards and history using the independent window route', async () => {
+    const get = vi
+      .spyOn(httpClient, 'get')
+      .mockResolvedValue({ data: { success: true, data: readPayload() } })
+    const signal = new globalThis.AbortController().signal
+    await windowReviewGateway.list('101', signal)
+    expect(get).toHaveBeenLastCalledWith(
+      '/api/canteen-windows/101/reviews',
+      expect.objectContaining({ signal }),
+    )
+    get.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          author: null,
+          currentReviewId: null,
+          records: [],
+          hasMore: false,
+          nextCursor: null,
+        },
+      },
+    })
+    await windowReviewGateway.history!('101', '22', signal)
+    expect(get).toHaveBeenLastCalledWith(
+      '/api/canteen-windows/101/reviews/authors/22/history',
+      expect.objectContaining({ signal }),
+    )
   })
 })

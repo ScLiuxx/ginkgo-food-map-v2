@@ -6,6 +6,9 @@ import lombok.Data;
 @Data
 public class RestaurantReviewTarget {
     private String id;
+    private String targetType = "RESTAURANT";
+    private String windowId;
+    private String canteenId;
     private String name;
     private String businessStatus;
 }

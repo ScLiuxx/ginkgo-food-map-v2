@@ -107,7 +107,9 @@ const time = (value: string) => new Date(value).toLocaleString('zh-CN', { hour12
           <p>{{ target.replyBody }}</p>
           <time>{{ time(target.replyCreatedAt) }}</time>
         </article>
-        <RouterLink :to="`/restaurants/${target.restaurantId}`" @click="close"
+        <RouterLink
+          :to="`/${target.windowId ? 'canteen-windows' : 'restaurants'}/${target.windowId ?? target.restaurantId}`"
+          @click="close"
           >进入店铺 ›</RouterLink
         >
       </template>

@@ -13,6 +13,8 @@ public class ReviewReadEntity {
     /** 本人跨店分组读取时使用；商户视角查询不需要填充，不改变公开点评字段。 */
     private Long restaurantId;
 
+    private Long windowId;
+
     private long authorUserId;
     private BigDecimal tasteScore;
     private BigDecimal valueScore;

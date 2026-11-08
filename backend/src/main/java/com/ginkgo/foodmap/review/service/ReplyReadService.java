@@ -1,7 +1,6 @@
 package com.ginkgo.foodmap.review.service;
 
 import com.ginkgo.foodmap.common.exception.BusinessException;
-import com.ginkgo.foodmap.restaurant.service.RestaurantReadService;
 import com.ginkgo.foodmap.review.dto.ReplyListQuery;
 import com.ginkgo.foodmap.review.entity.ReplyEntity;
 import com.ginkgo.foodmap.review.exception.ReplyErrorCode;
@@ -14,25 +13,24 @@ import com.ginkgo.foodmap.user.service.PublicAuthorService;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.*;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
 /** 单段只读一致快照覆盖点评、父店、锚点、回复及批量署名，避免N+1。 */
 @Service
 @RequiredArgsConstructor
 public class ReplyReadService {
+    private final ReviewParentService parents;
     private final ReplyMapper mapper;
-    private final RestaurantReadService restaurants;
     private final PublicAuthorService authors;
 
     /** 升序按需读取；跨段不保持事务，删除锚点后要求重新加载。 */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public ReplyPageVo list(String review, ReplyListQuery query) {
         long id = ReplyPolicy.reviewId(review);
-        Long restaurant = mapper.restaurant(id);
-        if (restaurant == null) {
+        if (parents.visible(id) == null) {
             throw new BusinessException(ReplyErrorCode.NOT_FOUND);
         }
-        restaurants.requireVisible(restaurant);
         ReplyEntity boundary = null;
         if (query.getCursor() != null) {
             boundary = ReplyPolicy.decode(query.getCursor(), id);

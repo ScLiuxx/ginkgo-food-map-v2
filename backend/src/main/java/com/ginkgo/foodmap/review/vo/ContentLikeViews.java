@@ -34,6 +34,7 @@ public final class ContentLikeViews {
         private String targetId;
         private String reviewId;
         private String restaurantId;
+        private String windowId;
         private PublicAuthor author;
         private String body;
         private Instant createdAt;

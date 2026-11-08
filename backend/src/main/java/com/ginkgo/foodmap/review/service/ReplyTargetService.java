@@ -1,9 +1,10 @@
 package com.ginkgo.foodmap.review.service;
 
 import com.ginkgo.foodmap.common.exception.BusinessException;
-import com.ginkgo.foodmap.restaurant.service.RestaurantReadService;
 import com.ginkgo.foodmap.review.exception.ReplyErrorCode;
-import com.ginkgo.foodmap.review.mapper.*;
+import com.ginkgo.foodmap.review.mapper.ReplyMapper;
+import com.ginkgo.foodmap.review.mapper.ReviewPhotoMapper;
+import com.ginkgo.foodmap.review.mapper.ReviewReadMapper;
 import com.ginkgo.foodmap.review.policy.ReplyPolicy;
 import com.ginkgo.foodmap.review.vo.ReplyTargetVo;
 import com.ginkgo.foodmap.security.service.CurrentActorService;
@@ -14,7 +15,8 @@ import lombok.RequiredArgsConstructor;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.*;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -23,10 +25,10 @@ import java.util.List;
 @RequiredArgsConstructor
 @PreAuthorize("isAuthenticated()")
 public class ReplyTargetService {
+    private final ReviewParentService parents;
     private final ReplyMapper replies;
     private final ReviewReadMapper reviews;
     private final ReviewPhotoMapper photos;
-    private final RestaurantReadService restaurants;
     private final CurrentActorService actors;
     private final PublicAuthorService authors;
 
@@ -38,26 +40,30 @@ public class ReplyTargetService {
         if (reply == null) {
             throw new BusinessException(ReplyErrorCode.NOT_FOUND);
         }
-        Long restaurant = replies.restaurant(reply.getReviewId());
-        if (restaurant == null) {
+        var source = parents.visible(reply.getReviewId());
+        if (source == null || source.getAuthorUserId() != owner) {
             throw new BusinessException(ReplyErrorCode.NOT_FOUND);
         }
-        var review = reviews.anchor(restaurant, owner, reply.getReviewId());
-        if (review == null) {
-            throw new BusinessException(ReplyErrorCode.NOT_FOUND);
-        }
-        restaurants.requireVisible(restaurant);
+        Long restaurant = source.getRestaurantId();
+        var review =
+                source.getWindowId() == null
+                        ? reviews.anchor(restaurant, owner, reply.getReviewId())
+                        : reviews.windowAnchor(source.getWindowId(), owner, reply.getReviewId());
         var names =
                 authors.find(List.of(owner, reply.getAuthorUserId()).stream().distinct().toList());
         var result = new ReplyTargetVo();
         result.setUserId(Long.toString(owner));
-        result.setRestaurantId(restaurant.toString());
+        result.setRestaurantId(restaurant == null ? null : restaurant.toString());
+        result.setWindowId(source.getWindowId() == null ? null : source.getWindowId().toString());
         result.setReviewId(review.getId().toString());
         result.setReplyId(reply.getId().toString());
         result.setReviewAuthor(name(names, owner));
         result.setReplyAuthor(name(names, reply.getAuthorUserId()));
         var content = ReviewReadService.current(review, photos.references(List.of(review.getId())));
-        var latest = reviews.latest(restaurant, owner);
+        var latest =
+                source.getWindowId() == null
+                        ? reviews.latest(restaurant, owner)
+                        : reviews.windowLatest(source.getWindowId(), owner);
         content.setScoringStatus(
                 latest != null && latest.getId().equals(review.getId()) ? "current" : "history");
         result.setReview(content);

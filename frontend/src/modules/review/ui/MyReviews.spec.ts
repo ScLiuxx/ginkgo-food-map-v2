@@ -208,7 +208,7 @@ describe('我的点评页面', () => {
     expect(confirm().textContent).toContain('保留已获得的成长经验')
     expect(remove).not.toHaveBeenCalled()
     ;[...confirm().querySelectorAll<HTMLButtonElement>('button')]
-      .find((button) => button.textContent === '取消')!
+      .find((button) => button.textContent?.trim() === '取消')!
       .click()
     expect(remove).not.toHaveBeenCalled()
     vi.mocked(fetchMyReviews).mockResolvedValueOnce(result('101', '42', 0))

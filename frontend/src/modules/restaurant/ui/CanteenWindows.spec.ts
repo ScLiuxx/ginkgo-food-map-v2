@@ -10,14 +10,12 @@ import { diningDetails } from '../model/campusDining'
 const windowFixture = (
   id: string,
   floor: string | null,
-  category: string,
   overrides: Partial<DiningWindow> = {},
 ): DiningWindow => ({
   id,
   canteenId: '100',
   name: `测试窗口${id}`,
   floor,
-  category,
   score: null,
   reviewCount: 0,
   price: null,
@@ -40,11 +38,13 @@ describe('canteen window browsing', () => {
       history: createMemoryHistory(),
       routes: [
         { path: '/', component: { template: '<div />' } },
-        { path: '/restaurants/:id', component: { template: '<div />' } },
+        { path: '/canteen-windows/:id', component: { template: '<div />' } },
       ],
     })
     await router.push({ path: '/', query })
-    app = createApp({ render: () => h(CanteenWindows, { canteenId: '100', windows }) }).use(router)
+    app = createApp({
+      render: () => h(CanteenWindows, { canteenId: '100', windows }),
+    }).use(router)
     app.mount(host)
     await nextTick()
     return router
@@ -58,11 +58,11 @@ describe('canteen window browsing', () => {
     return button
   }
 
-  it('derives floors and categories from real input, combines filters and links stable IDs', async () => {
+  it('filters real windows by floor and links stable IDs without category controls', async () => {
     await mount([
-      windowFixture('201', '一楼', '面食'),
-      windowFixture('202', '二楼', '小吃'),
-      windowFixture('203', '二楼', '面食'),
+      windowFixture('201', '一楼'),
+      windowFixture('202', '二楼'),
+      windowFixture('203', '二楼'),
     ])
     expect(host.querySelectorAll('.window-row')).toHaveLength(3)
     expect(host.querySelectorAll('.floor-section')).toHaveLength(2)
@@ -74,27 +74,29 @@ describe('canteen window browsing', () => {
     const floor = await choose('二楼', '按楼层筛选窗口')
     expect(floor.getAttribute('aria-pressed')).toBe('true')
     expect(host.querySelectorAll('.window-row')).toHaveLength(2)
-    await choose('面食', '按美食类别筛选窗口')
-    expect(host.querySelectorAll('.window-row')).toHaveLength(1)
+    expect(host.querySelector('[aria-label="按美食类别筛选窗口"]')).toBeNull()
     expect(host.querySelector('.window-row')?.getAttribute('href')).toContain(
-      '/restaurants/203?fromFloor=',
+      '/canteen-windows/202?fromFloor=',
     )
     await choose('一楼', '按楼层筛选窗口')
-    await choose('小吃', '按美食类别筛选窗口')
-    expect(host.querySelector('.dining-empty')?.textContent).toContain('没有符合')
-    host.querySelector<HTMLButtonElement>('.dining-empty button')!.click()
-    await nextTick()
+    expect(host.querySelectorAll('.window-row')).toHaveLength(1)
+    await choose('全部楼层', '按楼层筛选窗口')
     expect(host.querySelectorAll('.window-row')).toHaveLength(3)
   })
 
-  it('keeps unknown-floor and closed windows, rejects foreign/self relationships and preserves real zero', async () => {
+  it('keeps unknown-floor and closed windows, rejects foreign relationships and allows matching parent IDs and preserves real zero', async () => {
     await mount([
-      windowFixture('201', null, '面食', { score: 0, reviewCount: 1, price: 0, closed: true }),
-      windowFixture('202', '二楼', '小吃', { canteenId: '999' }),
-      windowFixture('100', '一楼', '小吃'),
+      windowFixture('201', null, {
+        score: 0,
+        reviewCount: 1,
+        price: 0,
+        closed: true,
+      }),
+      windowFixture('202', '二楼', { canteenId: '999' }),
+      windowFixture('100', '一楼'),
     ])
-    expect(host.querySelectorAll('.window-row')).toHaveLength(1)
-    const text = host.querySelector('.window-row')!.textContent!
+    expect(host.querySelectorAll('.window-row')).toHaveLength(2)
+    const text = host.querySelector('[href*="canteen-windows/201"]')!.textContent!
     expect(text).toContain('0.0')
     expect(text).toContain('¥0')
     expect(text).toContain('暂停营业')
@@ -102,12 +104,13 @@ describe('canteen window browsing', () => {
     expect(text).toContain('楼层待补充')
   })
 
-  it('distinguishes unavailable data from a known empty list and never offers an unreviewed write', async () => {
+  it('distinguishes unavailable data from a known empty list without a user submission entry', async () => {
     await mount(null)
     expect(host.textContent).toContain('窗口资料尚未接入')
     expect(host.textContent).not.toContain('已收录 0')
     expect(host.querySelectorAll('[aria-label="按楼层筛选窗口"] button')).toHaveLength(1)
-    expect(host.querySelector('#supplement-window button')?.hasAttribute('disabled')).toBe(true)
+    expect(host.querySelector('#supplement-window')).toBeNull()
+    expect(host.textContent).not.toContain('补充窗口')
     expect(host.querySelectorAll('form')).toHaveLength(0)
     app?.unmount()
     host.remove()
@@ -122,22 +125,21 @@ describe('canteen window browsing', () => {
       campus: null,
       windows: null,
     })
-    expect(diningDetails({ category: '其他' })).toMatchObject({ kind: 'restaurant', parent: null })
+    expect(diningDetails({ category: '其他' })).toMatchObject({
+      kind: 'restaurant',
+      parent: null,
+    })
   })
-  it('restores combined filters from the return URL and carries them to a window detail', async () => {
+  it('restores the floor from a legacy URL while ignoring its obsolete category filter', async () => {
     const router = await mount(
-      [
-        windowFixture('201', '一楼', '面食'),
-        windowFixture('202', '二楼', '面食'),
-        windowFixture('203', '二楼', '小吃'),
-      ],
+      [windowFixture('201', '一楼'), windowFixture('202', '二楼'), windowFixture('203', '二楼')],
       { floor: '二楼', windowCategory: '面食' },
     )
-    expect(host.querySelectorAll('.window-row')).toHaveLength(1)
+    expect(host.querySelectorAll('.window-row')).toHaveLength(2)
     const link = host.querySelector<HTMLAnchorElement>('.window-row')!
     const target = router.resolve(link.getAttribute('href')!)
-    expect(target.path).toBe('/restaurants/202')
-    expect(target.query).toEqual({ fromFloor: '二楼', fromCategory: '面食' })
+    expect(target.path).toBe('/canteen-windows/202')
+    expect(target.query).toEqual({ fromFloor: '二楼' })
     const counts = host.querySelector('[aria-label="按楼层筛选窗口"]')!.textContent!
     expect(counts).toContain('全部楼层(3)')
     expect(counts).toContain('二楼(2)')

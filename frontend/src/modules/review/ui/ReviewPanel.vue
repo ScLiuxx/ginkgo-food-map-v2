@@ -5,11 +5,13 @@ import { useRouter, useRoute } from 'vue-router'
 import { authToken } from '@/shared/api/authSession'
 import { useLoginStore } from '@/modules/auth/model/login.store'
 import ReviewEntry from './ReviewEntry.vue'
+import { windowReviewGateway } from '../api/reviewApi'
 import ReviewHistory from './ReviewHistory.vue'
 import { reviewGatewayKey, unavailableReviewGateway, validBody } from '../model/review'
 import type { ReviewItem, ReviewSort } from '../model/review'
 import { detailPhotos, type DetailPhotoUpdate } from '../model/detailPhotos'
 const props = defineProps<{
+    window?: boolean
     restaurantId: string
     preview?: boolean
     revision?: number
@@ -17,10 +19,13 @@ const props = defineProps<{
     title?: string
   }>(),
   emit = defineEmits<{ changed: []; photos: [update: DetailPhotoUpdate] }>()
-const gateway = inject(reviewGatewayKey, unavailableReviewGateway),
+const gateway = props.window
+    ? windowReviewGateway
+    : inject(reviewGatewayKey, unavailableReviewGateway),
   auth = useLoginStore(),
   router = useRouter(),
   route = useRoute()
+provide(reviewGatewayKey, gateway)
 const records = ref<ReviewItem[]>([]),
   loading = ref(false),
   error = ref(''),
@@ -112,7 +117,11 @@ async function load(targetPage = page.value) {
       totalPages.value = result.totalPages
       totalGroups.value = result.totalGroups
       totalReviews.value = result.totalReviews
-      emit('photos', { restaurantId, state: 'ready', photos: detailPhotos(result.records) })
+      emit('photos', {
+        restaurantId,
+        state: 'ready',
+        photos: detailPhotos(result.records),
+      })
     }
   } catch (reason) {
     if (ticket === generation) {
@@ -227,7 +236,8 @@ function view(url: string) {
   >
     <header>
       <h2 id="reviews-title">
-        {{ title || '同学点评' }} <small v-if="starScale">({{ totalReviews }})</small>
+        {{ title || '同学点评' }}
+        <small v-if="starScale">({{ totalReviews }})</small>
       </h2>
       <div v-if="starScale" class="content-filters" aria-label="点评筛选">
         <button

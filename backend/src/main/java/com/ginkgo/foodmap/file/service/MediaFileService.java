@@ -4,10 +4,13 @@ import com.ginkgo.foodmap.common.exception.BusinessException;
 import com.ginkgo.foodmap.file.exception.FileErrorCode;
 import com.ginkgo.foodmap.file.mapper.MediaFileMapper;
 import com.ginkgo.foodmap.file.storage.OssStorageClient;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.util.List;
 
 /** 文件模块公开入口：负责媒体归属与状态，不访问点评表，不向其他模块暴露持久化实体。 */
@@ -37,46 +40,84 @@ public class MediaFileService {
 
     private byte[] readRestaurantFile(long id, long owner) {
         var row = files.find(id);
-        if (row == null || !"BOUND".equals(row.getStatus()) || !"RESTAURANT".equals(row.getPurpose())
-                || row.getUploaderUserId() != owner) throw new BusinessException(FileErrorCode.NOT_FOUND);
+        if (row == null
+                || !"BOUND".equals(row.getStatus())
+                || !"RESTAURANT".equals(row.getPurpose())
+                || row.getUploaderUserId() != owner)
+            throw new BusinessException(FileErrorCode.NOT_FOUND);
         return storage.read(row.getBucketName(), row.getStorageKey());
     }
 
     /** 审核事务内校验已绑定文件，不再次绑定、不访问OSS；升序锁定防止与文件状态变更交错。 */
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
-    @Transactional(propagation=Propagation.MANDATORY)
+    @Transactional(propagation = Propagation.MANDATORY)
     public void validateRestaurantPublication(List<Long> ids, long owner) {
         if (ids == null || ids.size() > 5 || ids.stream().distinct().count() != ids.size())
             throw new BusinessException(FileErrorCode.NOT_BINDABLE);
         for (long id : ids.stream().sorted().toList()) {
             var row = files.lock(id);
-            if (row == null || !"BOUND".equals(row.getStatus()) || !"RESTAURANT".equals(row.getPurpose())
-                    || row.getUploaderUserId() != owner) throw new BusinessException(FileErrorCode.NOT_BINDABLE);
+            if (row == null
+                    || !"BOUND".equals(row.getStatus())
+                    || !"RESTAURANT".equals(row.getPurpose())
+                    || row.getUploaderUserId() != owner)
+                throw new BusinessException(FileErrorCode.NOT_BINDABLE);
         }
     }
 
     /** 加入点评事务，固定ID升序加锁；展示顺序由review关联表保留。 */
-    @Transactional(propagation=Propagation.MANDATORY)
-    public void bind(List<Long> ids,long owner) {
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void bind(List<Long> ids, long owner) {
         bindPurpose(ids, owner, "REVIEW");
     }
 
     /** 商户申请服务先校验申请归属；加入申请事务，任一图片不合法时全部回滚。 */
-    @Transactional(propagation=Propagation.MANDATORY)
+    @Transactional(propagation = Propagation.MANDATORY)
     public void bindRestaurantPhotos(List<Long> ids, long owner) {
         bindPurpose(ids, owner, "RESTAURANT");
     }
 
+    /** 窗口服务先锁父食堂和窗口；仅允许绑定当前管理员本人上传的WINDOW用途图片。 */
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void bindWindowPhoto(long id, long owner) {
+        bindPurpose(List.of(id), owner, "WINDOW");
+    }
+
+    /** 窗口服务已核对关联和管理员权限；允许其他管理员删除旧图，不改变上传者记录。 */
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void releaseWindowPhoto(long id) {
+        var row = files.lock(id);
+        if (row == null
+                || !"WINDOW".equals(row.getPurpose())
+                || !"BOUND".equals(row.getStatus())
+                || files.releaseBound(id, row.getUploaderUserId()) != 1) {
+            throw new BusinessException(FileErrorCode.NOT_BINDABLE);
+        }
+    }
+
+    /** 仅供已核对窗口及父食堂可见性、相册关联的服务调用，删除后立即停止读取。 */
+    public byte[] readWindowPhoto(long id) {
+        var row = files.find(id);
+        if (row == null || !"BOUND".equals(row.getStatus()) || !"WINDOW".equals(row.getPurpose())) {
+            throw new BusinessException(FileErrorCode.NOT_FOUND);
+        }
+        return storage.read(row.getBucketName(), row.getStorageKey());
+    }
+
     private void bindPurpose(List<Long> ids, long owner, String purpose) {
-        for(long id:ids.stream().sorted().toList()) {
-            var row=files.lock(id);
-            if(row==null || row.getUploaderUserId()!=owner || !purpose.equals(row.getPurpose()) || files.bind(id,owner)!=1)
+        for (long id : ids.stream().sorted().toList()) {
+            var row = files.lock(id);
+            if (row == null
+                    || row.getUploaderUserId() != owner
+                    || !purpose.equals(row.getPurpose())
+                    || files.bind(id, owner) != 1)
                 throw new BusinessException(FileErrorCode.NOT_BINDABLE);
         }
     }
 
     /** 调用方先验证点评归属；和删评同事务登记清理，失败时关联与文件状态一起回滚。 */
-    @Transactional(propagation=Propagation.MANDATORY)
+    @Transactional(propagation = Propagation.MANDATORY)
     public void releaseBound(List<Long> ids, long owner) {
         for (long id : ids.stream().sorted().toList()) {
             if (files.releaseBound(id, owner) != 1)
@@ -86,9 +127,9 @@ public class MediaFileService {
 
     /** 仅在调用方已验证点评可见性与关联后读取；不提供按文件ID公开HTTP访问。 */
     public byte[] readBound(long id) {
-        var row=files.find(id);
-        if(row==null || !"BOUND".equals(row.getStatus()) || !"REVIEW".equals(row.getPurpose()))
+        var row = files.find(id);
+        if (row == null || !"BOUND".equals(row.getStatus()) || !"REVIEW".equals(row.getPurpose()))
             throw new BusinessException(FileErrorCode.NOT_FOUND);
-        return storage.read(row.getBucketName(),row.getStorageKey());
+        return storage.read(row.getBucketName(), row.getStorageKey());
     }
 }

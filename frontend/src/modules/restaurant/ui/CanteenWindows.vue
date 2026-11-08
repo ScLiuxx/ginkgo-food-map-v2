@@ -5,43 +5,37 @@ import StarScore from '@/shared/ui/StarScore.vue'
 import type { DiningWindow } from '../model/campusDining'
 import { canteenWindows, windowHasRating, compareFloors } from '../model/campusDining'
 
-const props = defineProps<{ canteenId: string; windows: DiningWindow[] | null }>()
+const props = defineProps<{
+  canteenId: string
+  windows: DiningWindow[] | null
+}>()
 const route = useRoute(),
   router = useRouter()
 const floor = ref(typeof route.query.floor === 'string' ? route.query.floor : '')
-const category = ref(
-  typeof route.query.windowCategory === 'string' ? route.query.windowCategory : '',
-)
 /** 筛选留在当前历史条目的URL，窗口链接携带同一快照；浏览器返回、刷新和返回食堂均可恢复。 */
-watch([floor, category], () => {
+watch(floor, () => {
   void router.replace({
     path: route.path,
     query: {
       ...route.query,
       floor: floor.value || undefined,
-      windowCategory: category.value || undefined,
+      windowCategory: undefined,
     },
     hash: route.hash,
   })
 })
 watch(
-  () => [route.query.floor, route.query.windowCategory],
+  () => route.query.floor,
   () => {
     floor.value =
       typeof route.query.floor === 'string' && floors.value.includes(route.query.floor)
         ? route.query.floor
         : ''
-    category.value =
-      typeof route.query.windowCategory === 'string' &&
-      categories.value.includes(route.query.windowCategory)
-        ? route.query.windowCategory
-        : ''
   },
 )
-/** 清空组合条件，不触发路由跳转或重新加载整页。 */
+/** 清空楼层条件，不触发路由跳转或重新加载整页。 */
 function resetFilters(): void {
   floor.value = ''
-  category.value = ''
 }
 const failedImages = ref<string[]>([])
 const records = computed(() => canteenWindows(props.canteenId, props.windows))
@@ -51,16 +45,7 @@ const floors = computed(() =>
     compareFloors,
   ),
 )
-const categories = computed(() => [
-  ...new Set(records.value.map((w) => w.category).filter((v): v is string => !!v)),
-])
-const visible = computed(() =>
-  records.value.filter(
-    (w) =>
-      (!floor.value || w.floor === floor.value) &&
-      (!category.value || w.category === category.value),
-  ),
-)
+const visible = computed(() => records.value.filter((w) => !floor.value || w.floor === floor.value))
 // 楼层作为可展开的浏览单元；未知楼层保留独立分组，不能擅自分配到一楼。
 const groups = computed(() => {
   const names = [...new Set(visible.value.map((window) => window.floor))].sort((a, b) =>
@@ -75,7 +60,6 @@ watch(
   () => props.canteenId,
   () => {
     floor.value = ''
-    category.value = ''
     failedImages.value = []
   },
 )
@@ -83,13 +67,6 @@ watch(
   floors,
   (values) => {
     if (!values.includes(floor.value)) floor.value = ''
-  },
-  { immediate: true },
-)
-watch(
-  categories,
-  (values) => {
-    if (!values.includes(category.value)) category.value = ''
   },
   { immediate: true },
 )
@@ -112,11 +89,9 @@ function menuLine(window: DiningWindow) {
   <section class="canteen-windows" aria-labelledby="windows-title">
     <div class="section-heading">
       <h2 id="windows-title">
-        食堂窗口 <small v-if="windows !== null">已收录 {{ records.length }} 个</small>
+        食堂窗口
+        <small v-if="windows !== null">已收录 {{ records.length }} 个</small>
       </h2>
-      <a href="#supplement-window" @click="($refs.supplement as HTMLDetailsElement).open = true"
-        >补充窗口 ↗</a
-      >
     </div>
     <div class="window-filters" role="group" aria-label="按楼层筛选窗口">
       <span class="filter-label">楼层</span>
@@ -134,30 +109,7 @@ function menuLine(window: DiningWindow) {
       </button>
     </div>
     <template v-if="records.length">
-      <div
-        v-if="categories.length"
-        class="window-filters categories"
-        role="group"
-        aria-label="按美食类别筛选窗口"
-      >
-        <span class="filter-label">品类</span>
-        <button type="button" :aria-pressed="!category" @click="category = ''">全部类别</button>
-        <button
-          v-for="value in categories"
-          :key="value"
-          type="button"
-          :aria-pressed="category === value"
-          @click="category = value"
-        >
-          {{ value }}
-        </button>
-      </div>
-      <details
-        v-for="group in groups"
-        :key="`${floor}:${category}:${group.name}`"
-        class="floor-section"
-        open
-      >
+      <details v-for="group in groups" :key="`${floor}:${group.name}`" class="floor-section" open>
         <summary>
           <strong>{{ group.name }}</strong
           ><span>{{ group.windows.length }} 个窗口</span
@@ -169,8 +121,8 @@ function menuLine(window: DiningWindow) {
             :key="window.id"
             class="window-row"
             :to="{
-              path: `/restaurants/${encodeURIComponent(window.id)}`,
-              query: { fromFloor: floor, fromCategory: category },
+              path: `/canteen-windows/${encodeURIComponent(window.id)}`,
+              query: { fromFloor: floor },
             }"
           >
             <div class="window-media">
@@ -192,12 +144,12 @@ function menuLine(window: DiningWindow) {
                 >
                 <span v-else class="unrated">暂无评分</span>
               </p>
-              <p v-if="menuLine(window)" class="specialties">{{ menuLine(window) }}</p>
+              <p v-if="menuLine(window)" class="specialties">
+                {{ menuLine(window) }}
+              </p>
               <p v-else-if="window.price !== null">参考人均 ¥{{ window.price }}</p>
               <p class="window-meta">
-                <span
-                  >{{ window.floor || '楼层待补充'
-                  }}<template v-if="window.category"> · {{ window.category }}</template></span
+                <span>{{ window.floor || '楼层待补充' }}</span
                 ><span class="enter-window">进窗口 →</span>
               </p>
               <p v-if="window.closed" class="excluded-note">不计入当前汇总</p>
@@ -206,7 +158,7 @@ function menuLine(window: DiningWindow) {
         </div>
       </details>
       <div v-if="!visible.length" class="dining-empty" role="status">
-        <p>这个楼层暂时没有符合所选类别的窗口。</p>
+        <p>这个楼层暂时没有窗口。</p>
         <button type="button" @click="resetFilters">查看全部窗口</button>
       </div>
     </template>
@@ -214,11 +166,6 @@ function menuLine(window: DiningWindow) {
       <strong>{{ windows === null ? '窗口资料尚未接入' : '暂未收录窗口' }}</strong>
       <p>暂无可浏览的楼层与窗口</p>
     </div>
-    <details id="supplement-window" ref="supplement" class="supplement-window">
-      <summary>发现遗漏窗口？补充窗口信息</summary>
-      <p>窗口投稿暂未开放，开放后经审核收录。</p>
-      <button type="button" disabled>窗口信息提交暂未开放</button>
-    </details>
   </section>
 </template>
 
@@ -295,10 +242,6 @@ a {
   color: inherit;
   text-decoration: none;
 }
-.section-heading a {
-  font-size: 13px;
-  color: #986319;
-}
 .floor-section {
   border-top: 1px solid #edf0f2;
   margin-top: 18px;
@@ -342,13 +285,6 @@ a {
 .window-filters button[aria-pressed='true'] {
   color: #a45e0c;
   border-bottom-color: #e99a22;
-}
-.categories {
-  margin-top: 0;
-  gap: 20px;
-}
-.categories button {
-  font-size: 13px;
 }
 .filter-result {
   color: #687583;
@@ -446,25 +382,6 @@ h3 small {
   cursor: pointer;
   font: inherit;
   min-height: 44px;
-}
-.supplement-window {
-  margin-top: 20px;
-  font-size: 13px;
-  color: #687583;
-  line-height: 1.8;
-  scroll-margin-top: 20px;
-}
-.supplement-window summary {
-  cursor: pointer;
-  color: #97621b;
-  padding: 8px 0;
-}
-.supplement-window button {
-  padding: 10px;
-  border: 1px solid #e3e6e8;
-  border-radius: 5px;
-  background: #fafafa;
-  color: #737e89;
 }
 button:focus-visible,
 a:focus-visible,

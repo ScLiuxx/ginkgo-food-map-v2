@@ -628,7 +628,7 @@ describe('review interactions matching the original site', () => {
     await settle()
     expect(gateway.remove).not.toHaveBeenCalled()
     const confirm = [...document.querySelectorAll('button')].find(
-      (el) => el.textContent === '确认删除',
+      (el) => el.textContent?.trim() === '确认删除',
     )!
     confirm.click()
     await settle()
@@ -724,7 +724,7 @@ describe('review interactions matching the original site', () => {
     await settle()
     expect(host.querySelector('[role=alert]')?.textContent).toContain('网络失败')
     expect(host.querySelector('.empty')).toBeNull()
-    ;[...host.querySelectorAll('button')].find((b) => b.textContent === '重试')!.click()
+    ;[...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === '重试')!.click()
     await settle()
     expect(host.textContent).toContain('第2 / 2页')
     expect(vi.mocked(gateway.list).mock.calls.map((c) => c[2])).toEqual([1, 2, 2])

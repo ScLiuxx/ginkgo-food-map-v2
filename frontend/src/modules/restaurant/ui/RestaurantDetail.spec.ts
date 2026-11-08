@@ -55,7 +55,10 @@ describe('restaurant detail API integration', () => {
   beforeEach(async () => {
     vi.resetAllMocks()
     vi.mocked(fetchRestaurant).mockResolvedValue(restaurantFixture)
-    vi.mocked(fetchRestaurantAlbum).mockResolvedValue({ records: [], nextCursor: null })
+    vi.mocked(fetchRestaurantAlbum).mockResolvedValue({
+      records: [],
+      nextCursor: null,
+    })
     currentId.value = restaurantFixture.id
     await router.push('/')
     host = document.createElement('div')
@@ -68,7 +71,9 @@ describe('restaurant detail API integration', () => {
     vi.restoreAllMocks()
   })
   async function mount() {
-    app = createApp({ render: () => h(RestaurantDetail, { id: currentId.value }) })
+    app = createApp({
+      render: () => h(RestaurantDetail, { id: currentId.value }),
+    })
       .use(router)
       .use(createPinia())
     app.mount(host)
@@ -210,7 +215,10 @@ describe('restaurant detail API integration', () => {
   })
 
   it('puts the canteen window empty state ahead of its own overall reviews without fabricating campus or floors', async () => {
-    vi.mocked(fetchRestaurant).mockResolvedValueOnce({ ...restaurantFixture, category: '食堂' })
+    vi.mocked(fetchRestaurant).mockResolvedValueOnce({
+      ...restaurantFixture,
+      category: '食堂',
+    })
     await mount()
     expect(host.querySelector('.detail-affiliation')?.textContent).toBe('校园食堂')
     expect(host.querySelector('.canteen-windows')?.textContent).toContain('窗口资料尚未接入')
@@ -270,12 +278,12 @@ describe('restaurant detail API integration', () => {
     expect(host.querySelector('.test-review-panel')?.getAttribute('data-revision')).toBe('1')
   })
 
-  it('shows an equal window aggregate instead of the existing canteen score', async () => {
+  it('uses the authoritative backend canteen aggregate', async () => {
     vi.mocked(fetchRestaurant).mockResolvedValueOnce({
       ...restaurantFixture,
       id: '100',
       category: '食堂',
-      score: 10,
+      score: 7,
       dining: {
         kind: 'canteen',
         campus: null,
@@ -289,7 +297,7 @@ describe('restaurant detail API integration', () => {
             canteenId: '100',
             name: '窗口A',
             floor: '一楼',
-            category: null,
+
             score: 8,
             reviewCount: 100,
             price: null,
@@ -301,7 +309,7 @@ describe('restaurant detail API integration', () => {
             canteenId: '100',
             name: '窗口B',
             floor: '二楼',
-            category: null,
+
             score: 6,
             reviewCount: 1,
             price: null,
@@ -313,7 +321,7 @@ describe('restaurant detail API integration', () => {
             canteenId: '100',
             name: '暂停窗口',
             floor: '二楼',
-            category: null,
+
             score: 10,
             reviewCount: 9,
             price: null,

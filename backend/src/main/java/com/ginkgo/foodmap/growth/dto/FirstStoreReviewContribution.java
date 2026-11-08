@@ -7,5 +7,9 @@ import lombok.Data;
 public class FirstStoreReviewContribution {
     private long userId;
     private long restaurantId;
+
+    /** 窗口和餐厅互斥；旧调用默认普通餐厅，不改变既有奖励键。 */
+    private Long windowId;
+
     private long reviewId;
 }

@@ -1,7 +1,6 @@
 package com.ginkgo.foodmap.review.service;
 
 import com.ginkgo.foodmap.common.exception.BusinessException;
-import com.ginkgo.foodmap.restaurant.service.RestaurantReviewApplicationService;
 import com.ginkgo.foodmap.review.exception.ReplyErrorCode;
 import com.ginkgo.foodmap.review.mapper.ReplyDeleteMapper;
 import com.ginkgo.foodmap.review.mapper.ReplyMapper;
@@ -23,9 +22,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 @RequiredArgsConstructor
 public class ReplyDeleteService {
+    private final ReviewParentService parents;
     private final ReplyMapper replies;
     private final ReplyDeleteMapper deletion;
-    private final RestaurantReviewApplicationService restaurants;
     private final CurrentActorService actors;
     private final PlatformTransactionManager transactions;
 
@@ -58,14 +57,10 @@ public class ReplyDeleteService {
             requireDeletedOwner(replyId, authorId);
             return;
         }
-        Long restaurantId = replies.restaurant(reply.getReviewId());
-        if (restaurantId == null) {
+        if (parents.lock(reply.getReviewId()) == null) {
             requireDeletedOwner(replyId, authorId);
             return;
         }
-        // 先父店再点评，与发回复、点赞和删评串行化；加锁后重读，不能信任锁前的归属事实。
-        restaurants.lockVisibleParent(restaurantId);
-        replies.lockReview(reply.getReviewId());
         reply = replies.find(replyId);
         if (reply == null) {
             requireDeletedOwner(replyId, authorId);
