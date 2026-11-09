@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { useLoginStore } from '@/modules/auth'
 import { authToken } from '@/shared/api/authSession'
@@ -16,6 +16,15 @@ const auth = useLoginStore()
 const route = useRoute()
 const profile = ref<PublicProfile | null>(null)
 const tab = ref<'reviews' | 'favorites'>('reviews')
+// 标签数量仅采信已获授权的列表响应；未读取或私密拒绝时不伪造为零。
+const reviewTotal = ref<number | null>(null)
+const favoriteTotal = ref<number | null>(null)
+const reviews = ref<InstanceType<typeof MyReviews>>()
+const favorites = ref<InstanceType<typeof RestaurantFavorites>>()
+const activeList = computed(() => (tab.value === 'reviews' ? reviews.value : favorites.value))
+const avatarInitial = computed(() =>
+  Array.from(profile.value?.username.trim() || '?')[0]!.toUpperCase(),
+)
 const error = ref(''),
   loading = ref(false)
 let controller: globalThis.AbortController | undefined,
@@ -24,6 +33,7 @@ async function load() {
   const ticket = ++generation
   controller?.abort()
   profile.value = null
+  reviewTotal.value = favoriteTotal.value = null
   tab.value = 'reviews'
   error.value = ''
   loading.value = false
@@ -54,9 +64,9 @@ onBeforeUnmount(() => {
 })
 </script>
 <template>
-  <section class="account-center" aria-label="个人主页">
+  <section class="account-center public-profile-page" aria-label="个人主页">
     <header class="account-topline">
-      <RouterLink to="/account">‹ 我的</RouterLink>
+      <RouterLink class="public-profile-back" to="/account">‹ 我的</RouterLink>
       <h1>个人主页</h1>
     </header>
     <div v-if="!auth.authenticated" class="account-guest">
@@ -73,36 +83,80 @@ onBeforeUnmount(() => {
     </div>
     <template v-else-if="profile">
       <div class="account-profile">
-        <div class="profile-heading">
-          <h2>{{ profile.username }}</h2>
-          <span class="level-badge">Lv.{{ profile.level }}</span>
+        <div class="profile-identity">
+          <span class="profile-avatar" aria-hidden="true">{{ avatarInitial }}</span>
+          <div class="profile-info">
+            <div class="profile-heading">
+              <h2>{{ profile.username }}</h2>
+              <span class="level-badge">Lv.{{ profile.level }}</span>
+            </div>
+            <p class="profile-bio">{{ profile.bio || '还没有填写个人简介' }}</p>
+          </div>
         </div>
-        <p class="profile-bio">{{ profile.bio || '还没有填写个人简介' }}</p>
-        <p class="profile-bio">
-          当前获赞 <strong>{{ profile.receivedLikes }}</strong>
-        </p>
+        <div class="public-profile-statistics" aria-label="互动统计">
+          <FollowSummary :key="profile.userId" :user-id="profile.userId" />
+          <span class="public-profile-likes"
+            ><strong>{{ profile.receivedLikes }}</strong
+            ><span>获赞</span></span
+          >
+        </div>
       </div>
-      <FollowSummary :key="profile.userId" :user-id="profile.userId" />
       <FollowList
         v-if="section"
         :user-id="profile.userId"
         :kind="section === 'following' ? 'FOLLOWING' : 'FOLLOWERS'"
       />
-      <nav v-if="!section" class="profile-tabs" aria-label="个人主页内容">
-        <button type="button" :aria-pressed="tab === 'reviews'" @click="tab = 'reviews'">
-          点评
-        </button>
-        <button type="button" :aria-pressed="tab === 'favorites'" @click="tab = 'favorites'">
-          收藏店铺
-        </button>
-      </nav>
-      <MyReviews
-        v-if="!section && tab === 'reviews'"
-        :key="profile.userId"
-        :public-user-id="profile.userId"
-      />
-      <RestaurantFavorites v-else-if="!section" :key="profile.userId" :user-id="profile.userId" />
+      <div v-if="!section" class="public-profile-content">
+        <nav class="profile-tabs" aria-label="个人主页内容">
+          <button
+            type="button"
+            :aria-pressed="tab === 'reviews'"
+            aria-controls="public-profile-content"
+            @click="tab = 'reviews'"
+          >
+            点评
+            <span v-if="reviewTotal !== null" class="profile-tab-count">{{ reviewTotal }}</span>
+          </button>
+          <button
+            type="button"
+            :aria-pressed="tab === 'favorites'"
+            aria-label="收藏店铺"
+            aria-controls="public-profile-content"
+            @click="tab = 'favorites'"
+          >
+            收藏
+            <span v-if="favoriteTotal !== null" class="profile-tab-count">{{ favoriteTotal }}</span>
+          </button>
+          <button
+            type="button"
+            class="profile-refresh"
+            :disabled="!activeList || activeList.refreshing"
+            @click="activeList?.refresh()"
+          >
+            <span aria-hidden="true">⟳</span> 刷新
+          </button>
+        </nav>
+        <div id="public-profile-content">
+          <MyReviews
+            v-if="tab === 'reviews'"
+            ref="reviews"
+            :key="profile.userId"
+            :public-user-id="profile.userId"
+            profile-layout
+            @total="reviewTotal = $event"
+          />
+          <RestaurantFavorites
+            v-else
+            ref="favorites"
+            :key="profile.userId"
+            :user-id="profile.userId"
+            profile-layout
+            @total="favoriteTotal = $event"
+          />
+        </div>
+      </div>
     </template>
   </section>
 </template>
 <style scoped src="./account-center.css"></style>
+<style scoped src="./public-profile.css"></style>

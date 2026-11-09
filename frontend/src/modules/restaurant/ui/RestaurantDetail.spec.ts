@@ -40,7 +40,7 @@ vi.mock('@/modules/review', async () => {
   }
 })
 
-/** 直达链接独立请求；只有404展示缺失页，故障可重试，剪贴板仍保留降级。 */
+/** 直达链接独立请求；只有404展示缺失页，故障可重试，移除冗余提示及复制分享入口。 */
 describe('restaurant detail API integration', () => {
   let app: App | undefined
   let host: HTMLDivElement
@@ -122,18 +122,18 @@ describe('restaurant detail API integration', () => {
     expect(host.querySelector('h1')?.textContent).toBe(restaurantFixture.name)
   })
 
-  it('offers manual copy when clipboard fails and shares the database ID', async () => {
-    vi.stubGlobal('navigator', {
-      clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+  it('keeps navigation without copy or share controls', async () => {
+    vi.mocked(fetchRestaurant).mockResolvedValueOnce({
+      ...restaurantFixture,
+      latitude: 30.7,
+      longitude: 104.0,
+      needsLocation: false,
     })
     await mount()
-    host.querySelector<HTMLButtonElement>('.share-button')!.click()
-    await settle()
-    expect(host.querySelector('.copy-feedback')?.textContent).toContain('手动复制')
-    const text = host.querySelector<HTMLTextAreaElement>('.manual-copy textarea')?.value
-    expect(text).toContain(`/restaurants/${restaurantFixture.id}`)
-    expect(text).not.toContain('联调模拟数据')
-    expect(text).toContain('营业与消费信息请出发前核实')
+    expect(host.querySelector('.copy-address')).toBeNull()
+    expect(host.querySelector('.share-button')).toBeNull()
+    expect(host.querySelector('.manual-copy')).toBeNull()
+    expect(host.querySelector('.location-links a')?.textContent).toContain('在高德中打开')
   })
 
   it('ignores the previous restaurant response after switching routes', async () => {
@@ -152,7 +152,7 @@ describe('restaurant detail API integration', () => {
     expect(host.querySelector('h1')?.textContent).toBe(restaurantFixture.name)
   })
 
-  it('shows effective participants independently from history count and preserves a real zero', async () => {
+  it('preserves review counts and a real zero without small-sample hints', async () => {
     vi.mocked(fetchRestaurant).mockResolvedValueOnce({
       ...restaurantFixture,
       score: 0,
@@ -163,7 +163,7 @@ describe('restaurant detail API integration', () => {
     await mount()
     expect(host.querySelector('.hero-score')?.textContent).toContain('0.0')
     expect(host.querySelector('.detail-subtitle')?.textContent).toContain('7 条点评')
-    expect(host.textContent).toContain('2 人评分')
+    expect(host.textContent).not.toContain('样本较少')
     expect(host.querySelector('.score-details')).toBeNull()
   })
 
@@ -214,7 +214,7 @@ describe('restaurant detail API integration', () => {
     expect(host.querySelector('.hero-score')?.textContent).toContain('3.0')
   })
 
-  it('puts the canteen window empty state ahead of its own overall reviews without fabricating campus or floors', async () => {
+  it('shows canteen windows without legacy overall reviews or redundant floor controls', async () => {
     vi.mocked(fetchRestaurant).mockResolvedValueOnce({
       ...restaurantFixture,
       category: '食堂',
@@ -222,26 +222,11 @@ describe('restaurant detail API integration', () => {
     await mount()
     expect(host.querySelector('.detail-affiliation')?.textContent).toBe('校园食堂')
     expect(host.querySelector('.canteen-windows')?.textContent).toContain('窗口资料尚未接入')
-    expect(
-      host
-        .querySelector('.canteen-windows')!
-        .compareDocumentPosition(host.querySelector('.legacy-canteen-reviews')!) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy()
     expect(host.querySelector('.hero-score')?.textContent).toContain('待评级')
     expect(host.querySelector('.test-review-panel')).toBeNull()
-    expect(host.querySelectorAll('[aria-label="按楼层筛选窗口"] button')).toHaveLength(1)
-    const reviews = host.querySelector<HTMLDetailsElement>('.legacy-canteen-reviews')!
-    expect(reviews.open).toBe(false)
-    reviews.open = true
-    reviews.dispatchEvent(new Event('toggle'))
-    await settle()
-    const panel = host.querySelector('.test-review-panel')
-    expect(panel?.textContent).toBe(restaurantFixture.id)
-    reviews.open = false
-    reviews.dispatchEvent(new Event('toggle'))
-    await settle()
-    expect(host.querySelector('.test-review-panel')).toBe(panel)
+    expect(host.querySelectorAll('[aria-label="按楼层筛选窗口"] button')).toHaveLength(0)
+    expect(host.textContent).not.toContain('历史食堂点评')
+    expect(host.querySelector('.legacy-canteen-reviews')).toBeNull()
   })
 
   it('keeps window reviews, publication and statistics on its own ID and only uses the parent for navigation', async () => {
@@ -271,7 +256,7 @@ describe('restaurant detail API integration', () => {
     expect(host.querySelector('.test-review-panel')?.textContent).toBe('201')
     expect(host.querySelector('.detail-dishes')?.textContent).toContain('¥0')
     expect(host.querySelector('.hero-score')?.textContent).toContain('3.8')
-    expect(host.querySelector('.panel-note')?.textContent).toContain('样本较少')
+    expect(host.textContent).not.toContain('样本较少')
     host.querySelector<HTMLButtonElement>('.test-publish')!.click()
     await settle()
     expect(vi.mocked(fetchRestaurant).mock.calls.every(([id]) => id === '201')).toBe(true)
@@ -333,7 +318,8 @@ describe('restaurant detail API integration', () => {
     })
     await mount()
     expect(host.querySelector('.hero-score strong')?.textContent).toBe('3.5')
-    expect(host.querySelector('.aggregate-source')?.textContent).toContain('2 个已评窗口')
+    expect(host.querySelector('.aggregate-source')).toBeNull()
+    expect(host.textContent).not.toContain('汇总自')
     expect(host.querySelectorAll('.window-row')).toHaveLength(3)
     expect(host.querySelector('.restaurant-album')).not.toBeNull()
     expect(host.querySelector('.score-summary')).toBeNull()

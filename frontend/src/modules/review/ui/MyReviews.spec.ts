@@ -205,7 +205,8 @@ describe('我的点评页面', () => {
     await mount()
     buttons('删除评价')[0]!.click()
     await settle()
-    expect(confirm().textContent).toContain('保留已获得的成长经验')
+    expect(confirm().textContent).toContain('确定删除这条点评？')
+    expect(confirm().querySelector('p')).toBeNull()
     expect(remove).not.toHaveBeenCalled()
     ;[...confirm().querySelectorAll<HTMLButtonElement>('button')]
       .find((button) => button.textContent?.trim() === '取消')!

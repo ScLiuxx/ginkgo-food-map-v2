@@ -460,14 +460,15 @@ time {
 .reply-composer {
   margin: 8px 0 16px;
   padding: 14px;
-  border: 1px solid #e8dfd0;
-  border-radius: 12px;
-  background: #fffcf7;
+  border: 1px solid #e3e7ed;
+  border-radius: 10px;
+  background: white;
 }
 label {
   display: block;
   font-size: 12px;
-  color: #8c7a62;
+  color: #657180;
+  font-weight: 500;
   margin-bottom: 10px;
   overflow-wrap: anywhere;
 }
@@ -484,41 +485,60 @@ textarea {
   border-radius: 0;
   padding: 0;
   background: transparent;
-  color: #423d35;
+  color: #303b49;
+  font-size: 14px;
 }
 textarea::placeholder {
-  color: #aaa091;
+  color: #a0a8b2;
 }
-/* 文本框通过整个编辑区的边框提示焦点，避免出现框中框。 */
+/* 白底编辑区使用浅灰边框，聚焦时仅以淡橙描边衔接页面主色，避免框中框。 */
 textarea:focus-visible {
   outline: none;
 }
 .reply-composer:focus-within {
-  border-color: #ccab72;
-  box-shadow: 0 0 0 2px #e9b94912;
+  border-color: #f1b780;
+  box-shadow: 0 0 0 3px #fb8b2414;
 }
 .composer-footer {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-top: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f2f5;
 }
 .word-count {
   margin-right: auto;
+  color: #929ca9;
 }
 .cancel-action {
-  padding: 0 4px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 7px;
+  background: #f5f6f8;
+  color: #697586;
 }
 .send-action {
   border: 0;
-  border-radius: 20px;
-  background: #e9b949;
-  color: #4c3816;
+  border-radius: 7px;
+  background: #fb8b24;
+  color: white;
   font: inherit;
+  font-size: 14px;
   font-weight: 600;
   padding: 0 20px;
   min-height: 40px;
   cursor: pointer;
+}
+.send-action:hover:not(:disabled) {
+  background: #ed7d1a;
+}
+.reply-composer button:focus-visible {
+  outline-color: #f19741;
+}
+.reply-composer .cancel-action:hover {
+  background: #eceff3;
+  color: #465365;
 }
 .reply-error {
   color: #a53c2e;

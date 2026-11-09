@@ -25,6 +25,13 @@ const bioDialog = ref<globalThis.HTMLDialogElement>()
 const bioDraft = ref('')
 const bioNotice = ref('')
 const profileTab = ref<'reviews' | 'favorites'>('reviews')
+// 独立内容页复用主页列表的紧凑展示；数量与刷新状态仍由实际列表读取结果提供。
+const listTotal = ref<number | null>(null)
+const ownReviews = ref<InstanceType<typeof MyReviews>>()
+const ownFavorites = ref<InstanceType<typeof RestaurantFavorites>>()
+const activeAccountList = computed(() =>
+  props.section === 'reviews' ? ownReviews.value : ownFavorites.value,
+)
 // 草稿只留在当前弹窗；退出、切页或切换查看对象均清除，不写入浏览器存储。
 watch(
   () => [route.path, authToken.value],
@@ -33,6 +40,7 @@ watch(
     bioDraft.value = ''
     bioNotice.value = ''
     profileTab.value = 'reviews'
+    listTotal.value = null
   },
 )
 function openBio() {
@@ -56,6 +64,10 @@ const ownProfile = computed(
   () => !publicProfile.value || props.publicUserId === String(auth.user?.id),
 )
 const home = computed(() => !props.section)
+// 首字头像只取公开用户名，不提供上传或额外保存用户资料。
+const avatarInitial = computed(() =>
+  Array.from(auth.user?.username.trim() || '?')[0]!.toUpperCase(),
+)
 const profileState = useOwnProfile(
   () => ownProfile.value && (home.value || props.section === 'settings'),
 )
@@ -80,6 +92,18 @@ const nextExperience = computed(() =>
     ? null
     : Math.max(0, summary.value.nextLevelThreshold - summary.value.experience),
 )
+// 仅展示当前已开放的奖励规则；等级门槛和进度继续读取服务端，不在前端计算等级。
+const growthRewards = [
+  {
+    title: '首次点评一家店',
+    description: '每人每家餐厅或窗口仅奖励一次',
+    icon: 'review',
+    experience: 5,
+  },
+  { title: '新店投稿审核通过', icon: 'store', experience: 20 },
+  { title: '纠错审核通过', icon: 'edit', experience: 10 },
+  { title: '点评收到点赞', description: '每日最多获得 5 经验', icon: 'heart', experience: 1 },
+]
 const pendingSections: Record<string, readonly string[]> = {
   reviews: [
     'review',
@@ -106,19 +130,21 @@ const pending = computed(() => pendingSections[props.section ?? ''])
 </script>
 
 <template>
-  <section class="account-center" aria-labelledby="account-title">
+  <section
+    class="account-center"
+    :class="{
+      'account-home': home && !publicProfile,
+      'account-growth': section === 'growth' && !publicProfile,
+      'account-settings': section === 'settings' && !publicProfile,
+      'account-list-page': (section === 'reviews' || section === 'favorites') && !publicProfile,
+    }"
+    aria-labelledby="account-title"
+  >
     <header class="account-topline">
       <RouterLink v-if="section || publicProfile" class="account-back" to="/account"
         >‹ <span>我的</span></RouterLink
       >
       <h1 id="account-title">{{ title }}</h1>
-      <RouterLink
-        v-if="home && !publicProfile && auth.authenticated"
-        class="settings-link"
-        to="/account/settings"
-        aria-label="账号设置"
-        ><AccountIcon name="settings"
-      /></RouterLink>
     </header>
 
     <div v-if="!auth.authenticated" class="account-guest">
@@ -137,54 +163,61 @@ const pending = computed(() => pendingSections[props.section ?? ''])
 
     <template v-if="auth.authenticated && home">
       <div v-if="ownProfile" class="account-profile">
-        <div class="profile-heading">
-          <h2>{{ auth.user?.username }}</h2>
-          <span v-if="summary" class="level-badge">Lv.{{ summary.level }}</span>
+        <div class="profile-identity">
+          <span class="profile-avatar" aria-hidden="true">{{ avatarInitial }}</span>
+          <div class="profile-info">
+            <div class="profile-heading">
+              <h2>{{ auth.user?.username }}</h2>
+              <span v-if="summary" class="level-badge">Lv.{{ summary.level }}</span>
+            </div>
+            <p v-if="ownDetails" class="profile-bio">
+              {{ ownDetails.bio || '还没有填写个人简介' }}
+            </p>
+            <p v-else-if="profileLoading" class="profile-bio" role="status">正在加载简介…</p>
+            <div v-else-if="profileError" class="profile-read-error" role="alert">
+              <p>个人资料加载失败：{{ profileError }}</p>
+              <button class="inline-link" @click="profileState.refresh">重新加载资料</button>
+            </div>
+          </div>
           <RouterLink v-if="!publicProfile" class="public-link" :to="`/users/${auth.user?.id}`"
             >个人主页 <span aria-hidden="true">›</span></RouterLink
           >
         </div>
-        <p v-if="ownDetails" class="profile-bio">{{ ownDetails.bio || '还没有填写个人简介' }}</p>
-        <p v-else-if="profileLoading" class="profile-bio" role="status">正在加载简介…</p>
-        <div v-else-if="profileError" class="profile-read-error" role="alert">
-          <p>个人资料加载失败：{{ profileError }}</p>
-          <button class="inline-link" @click="profileState.refresh">重新加载资料</button>
-        </div>
         <div class="profile-statistics" aria-label="互动统计">
           <FollowSummary v-if="auth.user" :user-id="String(auth.user.id)" />
           <ReceivedLikeTotal />
+        </div>
+        <!-- 首页成长资料收进个人卡片；失败重试及独立成长规则页继续使用原逻辑。 -->
+        <div v-if="!publicProfile" class="growth-card growth-compact" :aria-busy="loading">
+          <div class="growth-compact-line">
+            <strong class="growth-compact-title"
+              >成长等级 <span v-if="summary">Lv.{{ summary.level }}</span></strong
+            >
+            <RouterLink to="/account/growth" class="growth-entry" aria-label="查看成长规则">
+              <span v-if="summary"
+                >{{ summary.experience
+                }}<template v-if="summary.nextLevelThreshold !== null">
+                  / {{ summary.nextLevelThreshold }}</template
+                >
+                经验</span
+              >
+              <span v-else>成长规则</span>
+              <span aria-hidden="true">›</span>
+            </RouterLink>
+          </div>
+          <progress v-if="summary" :value="progress" max="100" aria-label="当前等级升级进度" />
+          <p v-if="summary && nextExperience === null">已达到当前最高等级</p>
+          <p v-else-if="loading" role="status">正在加载成长资料…</p>
+          <div v-else-if="error" role="alert">
+            <p>成长资料加载失败：{{ error }}</p>
+            <button class="inline-link" @click="growth.refresh">重新加载</button>
+          </div>
         </div>
       </div>
       <div v-else class="account-pending public-pending">
         <h2>个人资料即将开放</h2>
         <p>公开简介、点评和互动资料暂未开放。</p>
         <button class="account-secondary" disabled title="关注功能即将开放">关注 · 即将开放</button>
-      </div>
-
-      <div v-if="ownProfile && !publicProfile" class="growth-card" :aria-busy="loading">
-        <div class="growth-heading">
-          <AccountIcon name="growth" /><strong>成长等级</strong
-          ><RouterLink to="/account/growth">成长规则 ›</RouterLink>
-        </div>
-        <template v-if="summary">
-          <div class="growth-numbers">
-            <strong>Lv.{{ summary.level }}</strong
-            ><span>{{ summary.experience }} 经验</span>
-          </div>
-          <progress :value="progress" max="100" aria-label="当前等级升级进度" />
-          <p>
-            {{
-              nextExperience === null
-                ? '已达到当前最高等级，继续分享你的用餐体验吧。'
-                : `距离 Lv.${summary.level + 1} 还需 ${nextExperience} 经验`
-            }}
-          </p>
-        </template>
-        <p v-else-if="loading" role="status">正在加载成长资料…</p>
-        <div v-else-if="error" role="alert">
-          <p>成长资料加载失败：{{ error }}</p>
-          <button class="inline-link" @click="growth.refresh">重新加载</button>
-        </div>
       </div>
     </template>
 
@@ -233,25 +266,38 @@ const pending = computed(() => pendingSections[props.section ?? ''])
         </p>
       </div>
     </template>
-    <aside v-if="home && !publicProfile" class="community-note">
-      <AccountIcon name="shield" />
-      <p>分享真实体验，一起维护友善的校园美食社区。</p>
-    </aside>
 
     <template v-if="auth.authenticated && section">
       <template v-if="section === 'growth'">
-        <div class="growth-card" :aria-busy="loading">
+        <div class="growth-card growth-level-card" :aria-busy="loading">
+          <div class="growth-level-heading">
+            <span>当前等级</span>
+            <button
+              v-if="summary"
+              class="growth-refresh"
+              :disabled="loading"
+              @click="growth.refresh"
+            >
+              <span aria-hidden="true">⟳</span> 刷新
+            </button>
+          </div>
           <template v-if="summary"
             ><div class="growth-numbers">
               <strong>Lv.{{ summary.level }}</strong
-              ><span>{{ summary.experience }} 经验</span>
+              ><span class="growth-experience"
+                ><b>{{ summary.experience }}</b
+                ><template v-if="summary.nextLevelThreshold !== null">
+                  / {{ summary.nextLevelThreshold }}</template
+                >
+                经验</span
+              >
             </div>
             <progress :value="progress" max="100" aria-label="当前等级升级进度" />
             <p>
               {{
                 nextExperience === null
                   ? '已达到当前最高等级'
-                  : `距离下一等级还需 ${nextExperience} 经验`
+                  : `距离 Lv.${summary.level + 1} 还差 ${nextExperience} 经验`
               }}
             </p></template
           >
@@ -260,38 +306,38 @@ const pending = computed(() => pendingSections[props.section ?? ''])
             <p>成长资料加载失败：{{ error }}</p>
             <button class="inline-link" @click="growth.refresh">重新加载</button>
           </div>
-          <button v-if="summary" class="inline-link" @click="growth.refresh">刷新经验</button>
         </div>
-        <section class="account-block">
-          <h2>每一份认真分享，都有积累</h2>
-          <div class="reward-row">
-            <div>
-              <strong>每家店首次点评</strong>
-              <p>每人每店奖励一次，删评重发不重复计奖。</p>
+        <section class="growth-rewards" aria-labelledby="growth-rewards-title">
+          <h2 id="growth-rewards-title">如何获得经验</h2>
+          <div v-for="reward in growthRewards" :key="reward.title" class="growth-reward-row">
+            <span class="growth-reward-icon"><AccountIcon :name="reward.icon" /></span>
+            <div class="growth-reward-info">
+              <strong>{{ reward.title }}</strong>
+              <p v-if="reward.description">{{ reward.description }}</p>
             </div>
-            <span>已开放</span>
+            <span class="growth-reward-amount"
+              ><b>+{{ reward.experience }}</b> 经验</span
+            >
           </div>
-          <div
-            v-for="label in ['新店投稿审核通过', '纠错审核通过', '点评收到的赞']"
-            :key="label"
-            class="reward-row"
-          >
-            <strong>{{ label }}</strong
-            ><span>已开放</span>
-          </div>
-          <p class="fine-print">
-            点评获赞暂定每次+1，同一人每天最多为同一作者贡献一次，作者每日最多+5；回复获赞不奖励经验。升级不消耗经验。普通删评或取消点赞不扣回已获经验；违规或刷分时会撤销对应经验，等级可能下降。高等级也须遵守社区规则。
-          </p>
+        </section>
+        <section class="growth-rules" aria-labelledby="growth-rules-title">
+          <h2 id="growth-rules-title">规则说明</h2>
+          <ul>
+            <li>升级不消耗经验。</li>
+            <li>同一点赞者每天最多贡献 1 经验，回复获赞不计。</li>
+            <li>普通删评、取消点赞不扣经验，重复发布不重复奖励。</li>
+            <li>违规或刷分可能撤销经验，等级随之下降。</li>
+          </ul>
         </section>
       </template>
 
       <template v-else-if="section === 'settings'">
         <section class="account-block">
           <h2>个人资料</h2>
-          <div class="setting-row">
+          <div class="setting-row username-setting">
             <span>用户名</span><strong>{{ auth.user?.username }}</strong>
           </div>
-          <p class="fine-print">用户名同时用于登录和公开展示，暂不支持修改。</p>
+          <p class="fine-print">用于登录和公开展示，暂不支持修改。</p>
           <button
             class="setting-row bio-entry"
             :disabled="!ownDetails || profileLoading || bioSaving"
@@ -313,6 +359,7 @@ const pending = computed(() => pendingSections[props.section ?? ''])
           <h2>隐私设置</h2>
           <FavoriteVisibilitySetting />
           <FollowPrivacySetting />
+          <p class="settings-privacy-note">关闭后仅自己可见，关注和粉丝数仍公开。</p>
         </section>
         <section class="account-block">
           <h2>账号安全</h2>
@@ -371,8 +418,36 @@ const pending = computed(() => pendingSections[props.section ?? ''])
         </dialog>
       </template>
 
-      <MyReviews v-else-if="section === 'reviews'" />
-      <RestaurantFavorites v-else-if="section === 'favorites'" />
+      <section
+        v-else-if="section === 'reviews' || section === 'favorites'"
+        class="account-list-card"
+        :aria-label="title"
+      >
+        <header class="account-list-toolbar">
+          <span v-if="listTotal !== null" class="account-list-total"
+            >共 {{ listTotal }} {{ section === 'reviews' ? '条点评' : '家店铺' }}</span
+          >
+          <div class="account-list-actions">
+            <button
+              type="button"
+              :disabled="!activeAccountList || activeAccountList.refreshing"
+              @click="activeAccountList?.refresh()"
+            >
+              <span aria-hidden="true">⟳</span> 刷新
+            </button>
+            <RouterLink v-if="section === 'reviews'" to="/?writeReview=1"
+              >写点评 <span aria-hidden="true">›</span></RouterLink
+            >
+          </div>
+        </header>
+        <MyReviews
+          v-if="section === 'reviews'"
+          ref="ownReviews"
+          profile-layout
+          @total="listTotal = $event"
+        />
+        <RestaurantFavorites v-else ref="ownFavorites" profile-layout @total="listTotal = $event" />
+      </section>
       <FollowList
         v-else-if="section === 'following' || section === 'followers'"
         :kind="section === 'following' ? 'FOLLOWING' : 'FOLLOWERS'"
@@ -399,3 +474,6 @@ const pending = computed(() => pendingSections[props.section ?? ''])
 </template>
 
 <style scoped src="./account-center.css"></style>
+<style scoped src="./growth-page.css"></style>
+<style scoped src="./account-list-pages.css"></style>
+<style scoped src="./account-settings.css"></style>

@@ -66,87 +66,68 @@ onBeforeUnmount(() => {
 <template>
   <dialog
     ref="dialog"
-    class="announcement-reader"
+    class="announcement-reader content-dialog"
     aria-labelledby="announcement-reader-heading"
     @cancel.prevent="$emit('close')"
   >
-    <button class="reader-close" aria-label="关闭公告" @click="$emit('close')">×</button
-    ><span class="reader-tag">系统公告</span>
+    <header class="detail-dialog-header">
+      <span class="reader-tag">系统公告</span>
+      <button
+        type="button"
+        class="detail-dialog-close"
+        aria-label="关闭公告"
+        @click="$emit('close')"
+      >
+        ×
+      </button>
+    </header>
     <h2 id="announcement-reader-heading">{{ detail?.title || '公告详情' }}</h2>
-    <p v-if="loading" role="status">正在加载公告…</p>
-    <div v-else-if="error" role="alert">
+    <p v-if="loading" class="detail-dialog-state" role="status">正在加载公告…</p>
+    <div v-else-if="error" class="detail-dialog-state" role="alert">
       <p>{{ error }}</p>
-      <button @click="load">重新读取</button>
+      <button type="button" class="dialog-secondary" @click="load">重新读取</button>
     </div>
-    <template v-else-if="detail"
-      ><time>{{ new Date(detail.publishedAt).toLocaleString('zh-CN', { hour12: false }) }}</time>
+    <template v-else-if="detail">
+      <time class="detail-dialog-date" :datetime="detail.publishedAt">{{
+        new Date(detail.publishedAt).toLocaleString('zh-CN', {
+          year: 'numeric',
+          month: 'numeric',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        })
+      }}</time>
       <p class="reader-content">{{ detail.content }}</p>
-      <footer>泥电美食地图</footer></template
-    >
+    </template>
+    <footer class="detail-dialog-actions">
+      <button type="button" class="dialog-secondary" @click="$emit('close')">关闭</button>
+    </footer>
   </dialog>
 </template>
+<style scoped src="../../../shared/styles/content-dialog.css"></style>
 <style scoped>
-.announcement-reader {
-  box-sizing: border-box;
-  width: min(660px, calc(100% - 32px));
-  max-height: 85vh;
-  overflow: auto;
-  border: 1px solid #e3ddd4;
-  border-radius: 10px;
-  padding: 32px;
-  color: #30343a;
-  background: #fff;
-  font-family: Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-}
-.announcement-reader::backdrop {
-  background: rgb(30 25 20 / 30%);
-}
-.reader-close {
-  position: absolute;
-  right: 12px;
-  top: 8px;
-  border: 0;
-  background: transparent;
-  font-size: 26px;
-  padding: 4px 10px;
-  cursor: pointer;
-}
 .reader-tag {
-  color: #e97913;
-  font-size: 13px;
+  color: #e18b42;
+  font-size: 11px;
+  letter-spacing: 0.5px;
 }
 .announcement-reader h2 {
+  margin: 20px 0 10px;
+  color: #273443;
   font-size: 23px;
-  line-height: 1.6;
-  margin: 14px 0;
-  overflow-wrap: anywhere;
-}
-.announcement-reader time {
-  color: #888;
-  font-size: 13px;
+  line-height: 1.5;
 }
 .reader-content {
-  border-top: 1px solid #ece8e2;
-  padding-top: 22px;
-  margin-top: 22px;
+  margin: 20px 0 0;
+  padding-top: 20px;
+  border-top: 1px solid #edf0f3;
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  line-height: 1.9;
-}
-.announcement-reader footer {
-  text-align: right;
-  color: #888;
-  font-size: 13px;
-  margin-top: 32px;
-}
-.announcement-reader button:focus-visible {
-  outline: 2px solid #bd6816;
-  outline-offset: 3px;
+  color: #475566;
+  font-size: 15px;
+  line-height: 1.95;
 }
 @media (max-width: 500px) {
-  .announcement-reader {
-    padding: 26px 20px;
-  }
   .announcement-reader h2 {
     font-size: 20px;
   }

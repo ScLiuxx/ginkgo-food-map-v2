@@ -1,0 +1,182 @@
+/* 成长页样式限定本页；保留首页紧凑成长条和设置等子页的现有外观。 */
+:global(body:has(.account-growth)) {
+  background: #f6f7f9;
+}
+.account-growth {
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+}
+.account-growth .account-topline {
+  margin-bottom: 25px;
+  gap: 18px;
+}
+.account-growth .growth-level-card,
+.growth-rewards {
+  padding: 25px 28px 24px;
+  border: 1px solid #e5e8ec;
+  border-radius: 16px;
+  background: #fff;
+}
+.account-growth .growth-level-card {
+  margin-bottom: 20px;
+}
+.growth-level-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 28px;
+  gap: 12px;
+  font-size: 14px;
+  color: #727d8b;
+}
+.growth-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  padding: 5px 0;
+  color: #8a939f;
+  font-size: 12px;
+  cursor: pointer;
+}
+.account-growth .growth-numbers {
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+.account-growth .growth-numbers > strong {
+  color: #293441;
+  font-size: 38px;
+  line-height: 1.2;
+  letter-spacing: -1px;
+  font-weight: 700;
+}
+.account-growth .growth-numbers > .growth-experience {
+  color: #929ba6;
+  font-size: 13px;
+}
+.growth-experience b {
+  color: #596674;
+  font-size: 17px;
+  font-weight: 600;
+  margin-right: 3px;
+}
+.account-growth .growth-level-card progress {
+  margin: 20px 0 12px;
+}
+.account-growth .growth-level-card p {
+  color: #8a94a0;
+}
+.growth-rewards {
+  padding-top: 24px;
+  padding-bottom: 3px;
+}
+.growth-rewards h2 {
+  margin: 0 0 6px;
+  font-size: 17px;
+  font-weight: 650;
+}
+.growth-reward-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 0;
+  min-height: 76px;
+  border-bottom: 1px solid #edf0f3;
+}
+.growth-reward-row:last-child {
+  border-bottom: 0;
+}
+.growth-reward-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: #fff7eb;
+  color: #d58f29;
+}
+.growth-reward-icon svg {
+  width: 20px;
+  height: 20px;
+}
+.growth-reward-info {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.growth-reward-info strong {
+  font-size: 15px;
+  font-weight: 550;
+}
+.growth-reward-info p {
+  margin: 7px 0 0;
+  font-size: 12px;
+  color: #959ea8;
+  line-height: 1.6;
+}
+.growth-reward-amount {
+  margin-left: auto;
+  color: #a98957;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.growth-reward-amount b {
+  font-size: 21px;
+  color: #c4882e;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  margin-right: 5px;
+}
+.growth-rules {
+  padding: 0 4px;
+  margin-top: 25px;
+}
+.growth-rules h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #788492;
+  margin: 0 0 10px;
+}
+.growth-rules ul {
+  padding-left: 17px;
+  margin: 0;
+  color: #929ba6;
+  font-size: 12px;
+  line-height: 2.05;
+}
+.growth-rules li::marker {
+  color: #bac1ca;
+}
+@media (max-width: 600px) {
+  .account-growth .growth-level-card,
+  .growth-rewards {
+    padding: 22px 18px;
+    border-radius: 12px;
+  }
+  .growth-rewards {
+    padding-bottom: 2px;
+  }
+  .growth-reward-row {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 18px 0;
+  }
+  .growth-reward-icon {
+    width: 34px;
+    height: 34px;
+  }
+  .growth-reward-info strong {
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .growth-reward-amount b {
+    font-size: 19px;
+    margin-right: 2px;
+  }
+  .growth-reward-amount {
+    font-size: 11px;
+  }
+}

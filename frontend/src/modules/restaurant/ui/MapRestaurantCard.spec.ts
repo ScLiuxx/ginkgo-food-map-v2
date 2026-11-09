@@ -44,7 +44,7 @@ describe('地图商户分栏信息', () => {
       tags: ['川菜', '家常菜', '测试数据'],
       distanceKm: 0.5,
     })
-    expect(host.querySelector('.map-score')?.textContent).toContain('8.5')
+    expect(host.querySelector('.map-score')?.textContent).toContain('4.3')
     expect(host.querySelector('.map-review-count')?.textContent).toContain('12 条点评')
     expect(host.querySelector('.map-price-value')?.textContent).toContain('约 ¥25')
     expect(host.querySelector('.map-price-kind')?.textContent).toContain('估值')

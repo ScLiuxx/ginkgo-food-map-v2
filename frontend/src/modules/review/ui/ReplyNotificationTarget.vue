@@ -70,106 +70,127 @@ watch(
   { flush: 'post' },
 )
 onBeforeUnmount(clear)
-const time = (value: string) => new Date(value).toLocaleString('zh-CN', { hour12: false })
+const time = (value: string) =>
+  new Date(value).toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
 </script>
 <template>
-  <Teleport to="body"
-    ><dialog
+  <Teleport to="body">
+    <dialog
       ref="dialog"
-      class="reply-notification-dialog"
+      class="reply-notification-dialog content-dialog"
       aria-labelledby="reply-target-heading"
       @cancel.prevent="close"
       @close="close"
     >
-      <header>
+      <header class="detail-dialog-header">
         <h2 id="reply-target-heading">点评与回复</h2>
-        <button type="button" aria-label="关闭评论详情" @click="close">关闭</button>
+        <button type="button" class="detail-dialog-close" aria-label="关闭评论详情" @click="close">
+          ×
+        </button>
       </header>
-      <p v-if="loading" role="status">正在定位点评和回复…</p>
-      <div v-else-if="error" role="alert">
+      <p v-if="loading" class="detail-dialog-state" role="status">正在定位点评和回复…</p>
+      <div v-else-if="error" class="detail-dialog-state" role="alert">
         <p>{{ error }}</p>
-        <button type="button" @click="load">重试加载</button>
+        <button type="button" class="dialog-secondary" @click="load">重试加载</button>
       </div>
       <template v-else-if="target">
+        <!-- 原点评保留上下文并适度弱化，让本次收到的回复成为主要阅读内容。 -->
         <article class="reply-target-review">
           <h3>原点评</h3>
-          <strong>{{ target.reviewAuthor.username }}</strong
-          ><span>
-            · {{ target.review.overallScore.toFixed(2) }} 分 ·
-            {{ target.review.recommended ? '推荐' : '不推荐' }}</span
-          >
+          <div class="review-identity">
+            <strong>{{ target.reviewAuthor.username }}</strong>
+            <span class="review-score"
+              >★ {{ (target.review.overallScore / 2).toFixed(1) }} ·
+              {{ target.review.recommended ? '推荐' : '不推荐' }}</span
+            >
+          </div>
           <p>{{ target.review.body }}</p>
-          <time>{{ time(target.review.createdAt) }}</time>
+          <time class="detail-dialog-date" :datetime="target.review.createdAt">{{
+            time(target.review.createdAt)
+          }}</time>
         </article>
         <article class="reply-target-highlight">
-          <h3>本条回复</h3>
-          <strong>{{ target.replyAuthor.username }}</strong>
-          <p>{{ target.replyBody }}</p>
-          <time>{{ time(target.replyCreatedAt) }}</time>
+          <div class="reply-identity">
+            <strong class="detail-dialog-author">{{ target.replyAuthor.username }}</strong>
+            <span>回复</span>
+            <time class="detail-dialog-date" :datetime="target.replyCreatedAt">{{
+              time(target.replyCreatedAt)
+            }}</time>
+          </div>
+          <p class="detail-dialog-body">{{ target.replyBody }}</p>
         </article>
+      </template>
+      <footer class="detail-dialog-actions">
+        <button type="button" class="dialog-secondary" @click="close">关闭</button>
         <RouterLink
+          v-if="target"
+          class="dialog-primary"
           :to="`/${target.windowId ? 'canteen-windows' : 'restaurants'}/${target.windowId ?? target.restaurantId}`"
           @click="close"
-          >进入店铺 ›</RouterLink
+          >进入店铺 →</RouterLink
         >
-      </template>
-    </dialog></Teleport
-  >
+      </footer>
+    </dialog>
+  </Teleport>
 </template>
+<style scoped src="../../../shared/styles/content-dialog.css"></style>
 <style scoped>
-.reply-notification-dialog {
-  width: min(640px, calc(100vw - 32px));
-  max-height: 85vh;
-  box-sizing: border-box;
-  overflow: auto;
-  border: 1px solid #eee7db;
-  border-radius: 14px;
-  padding: 24px;
-  color: #27313c;
+.reply-target-review {
+  margin-top: 22px;
+  padding: 16px 18px;
+  border: 1px solid #eef0f3;
+  border-radius: 9px;
+  background: #f7f8fa;
 }
-.reply-notification-dialog::backdrop {
-  background: #0006;
+.reply-target-review h3 {
+  margin: 0 0 12px;
+  color: #939dab;
+  font-size: 11px;
+  font-weight: 400;
 }
-.reply-notification-dialog header {
+.review-identity {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
 }
-.reply-notification-dialog h2 {
-  font-size: 19px;
-  margin: 0;
-}
-.reply-notification-dialog h3 {
+.review-identity strong {
+  color: #374453;
   font-size: 14px;
-  color: #86653a;
+  font-weight: 650;
 }
-.reply-notification-dialog article {
-  padding: 12px 0;
-  overflow-wrap: anywhere;
+.review-score {
+  color: #ed862b;
+  font-size: 12px;
 }
-.reply-notification-dialog p {
+.reply-target-review p {
+  margin: 10px 0;
+  color: #687584;
   white-space: pre-wrap;
+  font-size: 13px;
   line-height: 1.8;
 }
 .reply-target-highlight {
-  background: #fff8e9;
-  padding: 12px !important;
-  border-radius: 8px;
-  margin: 12px 0;
+  margin-top: 24px;
 }
-.reply-notification-dialog time {
-  font-size: 12px;
-  color: #737a80;
+.reply-identity {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 9px;
 }
-.reply-notification-dialog button {
-  padding: 6px 10px;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  cursor: pointer;
+.reply-identity > span {
+  color: #9ca5af;
+  font-size: 11px;
 }
-.reply-notification-dialog a {
-  color: #a36524;
+.reply-identity time {
+  margin-left: auto;
 }
 </style>

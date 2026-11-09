@@ -1,0 +1,157 @@
+/* 公开主页沿用“我的”卡片语言，所有覆盖限定在本页，保留复用列表原有行为。 */
+:global(body:has(.public-profile-page)) {
+  background: #f6f7f9;
+}
+.public-profile-page {
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+}
+.public-profile-page .account-topline {
+  gap: 17px;
+  margin-bottom: 25px;
+}
+.public-profile-back {
+  font-size: 13px;
+  color: #78828f;
+  padding: 12px 0;
+}
+.public-profile-page .account-profile,
+.public-profile-content {
+  border: 1px solid #e5e8ec;
+  border-radius: 16px;
+  background: #fff;
+}
+.public-profile-page .account-profile {
+  padding: 26px 28px 24px;
+}
+.public-profile-page .profile-heading h2 {
+  font-size: 29px;
+}
+.public-profile-statistics {
+  display: flex;
+  width: min(360px, 100%);
+  margin: 23px 0 0 68px;
+  align-items: flex-start;
+}
+.public-profile-statistics :deep(.follow-summary) {
+  flex: 2;
+  min-width: 0;
+  margin: 0;
+}
+.public-profile-statistics :deep(.follow-counts) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+}
+.public-profile-statistics :deep(.follow-counts a),
+.public-profile-likes {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  position: relative;
+  color: #8b929c;
+  font-size: 13px;
+  line-height: 20px;
+}
+.public-profile-likes {
+  flex: 1;
+  min-width: 0;
+}
+.public-profile-statistics :deep(strong) {
+  color: #26313e;
+  font-size: 23px;
+  line-height: 30px;
+  font-weight: 650;
+}
+.public-profile-statistics :deep(.follow-counts a + a)::before,
+.public-profile-likes::before {
+  content: '';
+  position: absolute;
+  width: 1px;
+  height: 24px;
+  left: 0;
+  top: 10px;
+  background: #edf0f3;
+}
+/* 他人主页仍有关注及失败重读入口，不用纯展示统计替代真实互动组件。 */
+.public-profile-statistics :deep(.follow-summary > button) {
+  display: block;
+  margin: 16px auto 0;
+}
+.public-profile-content {
+  margin-top: 20px;
+  padding: 0 28px 8px;
+}
+.public-profile-content .profile-tabs {
+  margin: 0;
+  gap: 26px;
+  min-height: 65px;
+  align-items: stretch;
+}
+.public-profile-content .profile-tabs button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  font-size: 15px;
+  color: #8a939f;
+}
+.public-profile-content .profile-tabs button[aria-pressed='true'] {
+  color: #26313e;
+  font-weight: 650;
+}
+.public-profile-content .profile-tabs button[aria-pressed='true']::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 3px;
+  background: #df9e36;
+}
+.profile-tab-count {
+  font-size: 12px;
+  color: #939ca6;
+  font-weight: 400;
+}
+.public-profile-content .profile-tabs .profile-refresh {
+  margin-left: auto;
+  font-size: 12px;
+  color: #8a939f;
+}
+@media (max-width: 600px) {
+  .public-profile-page .account-profile {
+    padding: 22px 18px;
+    border-radius: 12px;
+  }
+  .public-profile-page .profile-identity {
+    gap: 12px;
+  }
+  .public-profile-page .profile-avatar {
+    flex-basis: 52px;
+    height: 52px;
+    font-size: 25px;
+  }
+  .public-profile-page .profile-heading {
+    gap: 8px;
+  }
+  .public-profile-page .profile-heading h2 {
+    font-size: 25px;
+  }
+  .public-profile-statistics {
+    width: 100%;
+    margin: 22px 0 0;
+  }
+  .public-profile-content {
+    padding: 0 18px 4px;
+    margin-top: 18px;
+    border-radius: 12px;
+  }
+  .public-profile-content .profile-tabs {
+    gap: 20px;
+    min-height: 60px;
+  }
+}

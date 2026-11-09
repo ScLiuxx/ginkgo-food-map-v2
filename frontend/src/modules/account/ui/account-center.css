@@ -1,4 +1,4 @@
-/* 个人中心沿用消息页的阅读宽度、白底与暖橙色，所有布局从320px起可自然换行。 */
+/* 个人中心保持840px阅读宽度；首页卡片布局与子页面样式分开，避免影响设置和成长规则。 */
 .account-center {
   width: min(840px, calc(100% - 64px));
   margin: 0 auto;
@@ -11,10 +11,8 @@
 }
 .account-topline,
 .profile-heading,
-.growth-heading,
 .growth-numbers,
 .setting-row,
-.reward-row,
 .contribution-toolbar {
   display: flex;
   align-items: center;
@@ -40,18 +38,6 @@
 }
 .account-back span {
   font-size: 13px;
-}
-.settings-link {
-  margin-left: auto;
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  color: #687480;
-  border-radius: 8px;
-}
-.settings-link:hover {
-  background: #f6f7f8;
 }
 .account-profile {
   padding: 0 0 26px;
@@ -144,20 +130,6 @@
   border-radius: 12px;
   background: #fcf9f3;
 }
-.growth-heading {
-  font-size: 14px;
-  color: #6f5937;
-  margin-bottom: 16px;
-}
-.growth-heading svg {
-  width: 20px;
-  height: 20px;
-}
-.growth-heading a {
-  margin-left: auto;
-  font-size: 12px;
-  color: #9b835f;
-}
 .growth-numbers {
   justify-content: space-between;
 }
@@ -240,23 +212,6 @@
 .tool-arrow {
   color: #bcc2c8;
   font-size: 20px;
-}
-.community-note {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-  color: #a6adb3;
-  font-size: 12px;
-  margin-top: 36px;
-}
-.community-note svg {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-.community-note p {
-  line-height: 1.8;
 }
 .account-guest,
 .account-pending {
@@ -392,29 +347,6 @@ button.setting-row {
   color: #89929b;
   max-width: 100%;
 }
-.reward-row {
-  justify-content: space-between;
-  padding: 16px 0;
-  border-bottom: 1px solid #f1f2f4;
-  font-size: 13px;
-}
-.reward-row strong {
-  font-weight: 500;
-}
-.reward-row p {
-  font-size: 12px;
-  color: #929ba5;
-  line-height: 1.8;
-  margin: 6px 0 0;
-}
-.reward-row > span {
-  font-size: 11px;
-  color: #a28758;
-  flex-shrink: 0;
-}
-.reward-row + .fine-print {
-  margin-top: 18px;
-}
 .sign-out {
   width: 100%;
   min-height: 48px;
@@ -461,6 +393,180 @@ button.setting-row {
 .account-center :is(a, button, textarea, select):focus-visible {
   outline: 2px solid #cf9f53;
   outline-offset: 3px;
+}
+/* 首页使用浅灰整页背景；选择器绑定首页，路由离开后自动恢复原页面背景。 */
+:global(body:has(.account-home)) {
+  background: #f6f7f9;
+}
+.account-home {
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+}
+.account-home .account-topline {
+  margin-bottom: 25px;
+}
+.account-home .account-profile,
+.account-home .account-tools {
+  background: #fff;
+  border: 1px solid #e5e8ec;
+  border-radius: 16px;
+}
+.account-home .account-profile {
+  padding: 30px 32px 25px;
+}
+.profile-identity {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: #fff1df;
+  color: #b96b16;
+  font-size: 30px;
+  font-weight: 650;
+}
+.profile-info {
+  min-width: 0;
+}
+.account-home .profile-heading h2 {
+  font-size: 29px;
+}
+.profile-identity .profile-bio {
+  margin: 8px 0 0;
+  color: #8b929c;
+  font-size: 14px;
+}
+.profile-identity .public-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #727c89;
+  min-height: 44px;
+}
+/* 只在个人中心内统一统计组件；公开主页等复用位置不受深层样式影响。 */
+.account-home .profile-statistics {
+  width: min(360px, 100%);
+  margin: 27px 0 26px 68px;
+  gap: 0;
+  align-items: flex-start;
+}
+.account-home .profile-statistics :deep(.follow-summary) {
+  flex: 2;
+  margin: 0;
+  min-width: 0;
+}
+.account-home .profile-statistics :deep(.follow-counts) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+}
+.account-home .profile-statistics :deep(.follow-counts a),
+.account-home .profile-statistics :deep(.received-like-total) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  color: #8b929c;
+  font-size: 13px;
+  line-height: 20px;
+}
+.account-home .profile-statistics :deep(.received-like-total) {
+  flex: 1;
+  min-width: 0;
+}
+.account-home .profile-statistics :deep(strong) {
+  font-size: 23px;
+  font-weight: 650;
+  line-height: 30px;
+  color: #26313e;
+}
+.account-home .profile-statistics :deep(.follow-counts a + a)::before,
+.account-home .profile-statistics :deep(.received-like-total)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 11px;
+  width: 1px;
+  height: 24px;
+  background: #edf0f3;
+}
+.account-home .growth-compact {
+  border-top: 1px solid #edf0f3;
+  border-radius: 0;
+  background: transparent;
+  padding: 21px 0 0;
+  margin: 0;
+}
+.growth-compact-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+.growth-compact-title {
+  color: #626d7a;
+  font-weight: 600;
+}
+.growth-compact-title span {
+  margin-left: 8px;
+  color: #ad711f;
+}
+.growth-entry {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #727c89;
+  min-height: 28px;
+}
+.account-home .growth-compact progress {
+  margin: 10px 0 0;
+}
+.account-home .growth-compact p {
+  margin-top: 8px;
+}
+.account-home .account-tools {
+  margin-top: 22px;
+  padding: 5px 26px;
+}
+.account-home .account-tools > a {
+  min-height: 92px;
+  padding: 16px 8px;
+  grid-template-columns: 40px minmax(0, 1fr) 10px;
+  gap: 16px;
+  border-radius: 0;
+  color: #26313e;
+}
+.account-home .account-tools > a:nth-child(odd) {
+  padding-right: 29px;
+}
+.account-home .account-tools > a:nth-child(even) {
+  padding-left: 29px;
+}
+.account-home .account-tools > a:nth-child(-n + 2) {
+  border-bottom: 1px solid #edf0f3;
+}
+.account-home .tool-icon {
+  width: 40px;
+  height: 40px;
+  background: #fff7eb;
+  border-radius: 11px;
+  color: #d58f29;
+}
+.account-home .tool-icon svg {
+  width: 21px;
+  height: 21px;
+}
+.account-home .account-tools strong {
+  font-size: 15px;
+  font-weight: 600;
 }
 .bio-dialog {
   width: min(440px, calc(100% - 32px));
@@ -517,13 +623,66 @@ button.setting-row {
   .account-tools strong {
     font-size: 13px;
   }
-  .community-note {
-    justify-content: flex-start;
-  }
   .public-link {
     font-size: 12px;
   }
   .profile-statistics {
     gap: 28px;
+  }
+  .account-home .account-profile {
+    padding: 22px 18px 20px;
+    border-radius: 12px;
+  }
+  .account-home .profile-identity {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .account-home .profile-avatar {
+    flex-basis: 52px;
+    height: 52px;
+    font-size: 25px;
+  }
+  .account-home .profile-info {
+    flex: 1;
+  }
+  .account-home .profile-heading {
+    gap: 8px;
+  }
+  .account-home .profile-heading h2 {
+    font-size: 25px;
+  }
+  .account-home .profile-bio {
+    font-size: 13px;
+  }
+  .account-home .public-link {
+    margin-left: auto;
+    font-size: 12px;
+    min-height: 32px;
+  }
+  .account-home .profile-statistics {
+    width: 100%;
+    margin: 22px 0;
+  }
+  .growth-compact-line {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
+  .growth-entry {
+    margin-left: auto;
+    gap: 8px;
+  }
+  .account-home .account-tools {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 4px 16px;
+    margin-top: 18px;
+    border-radius: 12px;
+  }
+  .account-home .account-tools > a:nth-child(n) {
+    min-height: 76px;
+    padding: 14px 0;
+    border-bottom: 1px solid #edf0f3;
+  }
+  .account-home .account-tools > a:last-child {
+    border-bottom: 0;
   }
 }

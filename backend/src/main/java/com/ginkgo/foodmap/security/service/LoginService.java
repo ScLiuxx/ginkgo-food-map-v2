@@ -49,14 +49,14 @@ public class LoginService {
 
     /** Redis 写入成功后才返回凭证，防止向客户端返回无法使用或未受会话约束的令牌。 */
     public LoginResponse login(LoginRequest request) {
-        String username = request.getUsername().trim();
+        String accountInput = request.getUsername().trim();
         try {
-            var identity = accounts.findByUsername(username);
-            String key = protection.key(identity.map(user -> user.getId()).orElse(null), username);
+            var identity = accounts.findByLoginAccount(accountInput);
+            String key = protection.key(identity.map(user -> user.getId()).orElse(null), accountInput);
             protection.check(key);
             // BCrypt 只接受最多72字节，超长 Unicode 密码直接失败，不允许截断后匹配。
             var user = request.getPassword().getBytes(StandardCharsets.UTF_8).length <= 72
-                    ? accounts.authenticate(username, request.getPassword()) : java.util.Optional
+                    ? accounts.authenticate(accountInput, request.getPassword()) : java.util.Optional
                     .<com.ginkgo.foodmap.user.dto.UserIdentity>empty();
             if (user.isEmpty()) {
                 throw new BusinessException(protection.failed(key) ? AuthenticationErrorCode.LOGIN_LOCKED

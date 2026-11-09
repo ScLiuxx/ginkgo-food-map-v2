@@ -13,18 +13,16 @@ const known = ref(false),
   active = ref(false),
   loading = ref(false),
   busy = ref(false),
-  error = ref(''),
-  notice = ref('')
+  error = ref('')
 let controller: globalThis.AbortController | undefined,
   generation = 0
-/** 换店和换号都清空旧状态；写入失败先重读服务端，不依赖乐观翻转。 */
+/** 收藏成功由按钮状态体现；仅失败时展示说明，换店和换号清空旧状态。 */
 async function load() {
   const ticket = ++generation
   controller?.abort()
   known.value = false
   active.value = false
   error.value = ''
-  notice.value = ''
   loading.value = false
   busy.value = false
   const token = authToken.value
@@ -59,12 +57,10 @@ async function toggle() {
   if (!token) return
   busy.value = true
   error.value = ''
-  notice.value = ''
   try {
     const result = await setFavorite(id, !active.value, token)
     if (ticket === generation) {
       active.value = result.favorited
-      notice.value = result.favorited ? '已收藏，可在“我的收藏”查看' : '已取消收藏'
     }
   } catch (reason) {
     if (ticket === generation) {
@@ -108,7 +104,6 @@ onBeforeUnmount(() => {
       }}
     </button>
     <p v-if="error" role="alert">{{ error }}</p>
-    <p v-else-if="notice" role="status">{{ notice }}</p>
   </div>
 </template>
 <style scoped>

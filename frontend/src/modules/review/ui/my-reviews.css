@@ -73,6 +73,22 @@
   border-top: 0;
   padding: 18px 0 26px;
 }
+/* 主页工具栏已由标签区域提供；列表内部仅保留店铺、内容和实际交互。 */
+.profile-review-list .my-review-group {
+  padding-top: 23px;
+}
+.profile-review-list .my-review-group:last-of-type {
+  border-bottom: 0;
+}
+.profile-review-list .my-review-group :deep(.review-card) {
+  padding: 10px 0 18px;
+}
+.profile-review-list :deep(.delete-review) {
+  border: 0;
+  background: transparent;
+  color: #98a1ad;
+  padding: 8px 0;
+}
 .my-review-status,
 .my-review-empty,
 .my-review-error {
@@ -111,10 +127,11 @@
   color: #89939e;
 }
 .my-review-confirm {
-  width: min(440px, calc(100% - 32px));
-  border: 1px solid #ece5dc;
-  border-radius: 12px;
-  padding: 24px;
+  width: min(360px, calc(100% - 32px));
+  border: 1px solid #e5e8ec;
+  border-radius: 16px;
+  padding: 26px;
+  background: #fff;
   color: #47535e;
 }
 .my-review-confirm h2 {
@@ -137,16 +154,18 @@
 }
 .my-review-confirm button {
   padding: 10px 16px;
-  border: 1px solid #e4d8c7;
-  border-radius: 6px;
-  background: white;
-  color: #9c7b46;
+  border: 1px solid #e5e8ec;
+  border-radius: 8px;
+  background: #f5f6f8;
+  color: #697586;
   font: inherit;
   font-size: 13px;
   cursor: pointer;
 }
 .my-review-confirm .confirm-remove {
-  background: #fcf4e6;
+  background: #e99432;
+  border-color: #e99432;
+  color: #fff;
 }
 .my-review-confirm::backdrop,
 .my-review-lightbox::backdrop {

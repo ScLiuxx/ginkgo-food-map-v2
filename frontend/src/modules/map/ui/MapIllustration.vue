@@ -1,13 +1,14 @@
 <script setup lang="ts">
+import { formatRating } from '@/shared/lib/formatRating'
 import { ref } from 'vue'
 /** 独立预览的矢量示意底图；所有像素位置均为设计坐标，禁止用于真实经纬度投影。 */
 defineProps<{ ids: string[]; selected: string | null }>()
 defineEmits<{ select: [id: string]; hover: [id: string]; leave: [] }>()
 const zoom = ref(1)
-const positions: Record<string, { x: number; y: number; score: string }> = {
-  'demo-1': { x: 31, y: 47, score: '8.6' },
-  'demo-2': { x: 69, y: 51, score: '8.2' },
-  'demo-3': { x: 62, y: 77, score: '7.9' },
+const positions: Record<string, { x: number; y: number; score: number }> = {
+  'demo-1': { x: 31, y: 47, score: 8.6 },
+  'demo-2': { x: 69, y: 51, score: 8.2 },
+  'demo-3': { x: 62, y: 77, score: 7.9 },
 }
 </script>
 <template>
@@ -94,7 +95,7 @@ const positions: Record<string, { x: number; y: number; score: string }> = {
         class="score-pin"
         :class="{ active: id === selected }"
         :style="{ left: `${positions[id]!.x}%`, top: `${positions[id]!.y}%` }"
-        :aria-label="`选中${positions[id]!.score}分示例餐厅`"
+        :aria-label="`选中${formatRating(positions[id]!.score)}分示例餐厅`"
         :aria-pressed="id === selected"
         @click="$emit('select', id)"
         @mouseenter="$emit('hover', id)"
@@ -102,7 +103,7 @@ const positions: Record<string, { x: number; y: number; score: string }> = {
         @focus="$emit('hover', id)"
         @blur="$emit('leave')"
       >
-        {{ positions[id]!.score }}
+        {{ formatRating(positions[id]!.score) }}
       </button>
     </div>
     <div class="map-tools">

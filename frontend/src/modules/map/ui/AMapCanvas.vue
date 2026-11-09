@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatRating } from '@/shared/lib/formatRating'
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { loadAMap } from '../sdk/amap'
 import type { AMapSDK, SDKMap, SDKMarker, SDKBounds } from '../sdk/types'
@@ -84,7 +85,7 @@ function draw() {
     const button = globalThis.document.createElement('button')
     // 未评分用小圆点，详情仍通过名称访问；避免100个“待评”文本挤占地图。
     button.className = `amap-score-pin${point.kind === 'amap' ? ' external' : ''}${point.score === null ? ' unrated' : ''}${point.id === props.selected ? ' active' : ''}${point.businessStatus === 'CLOSED' ? ' closed' : ''}`
-    button.textContent = point.score === null ? '' : point.score.toFixed(1)
+    button.textContent = point.score === null ? '' : formatRating(point.score)
     button.setAttribute('aria-label', point.name)
     button.setAttribute('aria-pressed', String(point.id === props.selected))
     button.addEventListener('click', () => emit('select', point.id))

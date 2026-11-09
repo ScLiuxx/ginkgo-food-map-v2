@@ -1,0 +1,111 @@
+/* 设置页按资料、隐私、安全分卡，覆盖仅作用于当前页及简介弹窗。 */
+:global(body:has(.account-settings)) {
+  background: #f6f7f9;
+}
+.account-settings {
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+}
+.account-settings .account-topline {
+  margin-bottom: 25px;
+  gap: 18px;
+}
+.account-settings .account-block {
+  padding: 24px 28px 12px;
+  margin-bottom: 20px;
+  border: 1px solid #e5e8ec;
+  border-radius: 16px;
+  background: #fff;
+}
+.account-settings .account-block h2 {
+  font-size: 17px;
+  font-weight: 650;
+  margin-bottom: 8px;
+}
+.account-settings .setting-row {
+  font-size: 15px;
+  min-height: 56px;
+  gap: 12px;
+}
+.account-settings .setting-row strong {
+  font-weight: 500;
+  color: #53606e;
+}
+.account-settings .username-setting + .fine-print {
+  border-bottom: 1px solid #edf0f3;
+  margin: -2px 0 2px;
+  padding-bottom: 18px;
+}
+.account-settings .pending-tag,
+.account-settings .masked-email {
+  font-size: 13px;
+  color: #8c97a3;
+}
+.account-settings .bio-preview {
+  font-size: 13px;
+  color: #8b96a3;
+  margin: -2px 0 14px;
+}
+.account-settings :deep(.favorite-privacy) {
+  border-bottom: 1px solid #edf0f3;
+}
+.settings-privacy-note {
+  margin: 0 0 8px;
+  color: #939ca7;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.account-settings .setting-link {
+  border-top: 1px solid #edf0f3;
+  color: #34404d;
+}
+.account-settings .setting-link > span:last-child {
+  color: #a1aab5;
+}
+.account-settings .sign-out {
+  min-height: 50px;
+  border-color: #e5e8ec;
+  border-radius: 12px;
+  background: #fff;
+  color: #ac7770;
+}
+.account-settings .bio-dialog {
+  padding: 26px;
+  border-color: #e5e8ec;
+  border-radius: 16px;
+  background: #fff;
+}
+.account-settings .bio-dialog textarea {
+  background: #fff;
+  border-color: #dfe4ea;
+  border-radius: 8px;
+}
+.account-settings .bio-dialog .account-secondary,
+.account-settings .bio-dialog .account-primary {
+  min-height: 40px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.account-settings .bio-dialog .account-secondary {
+  background: #f5f6f8;
+  border-color: #e5e8ec;
+  color: #697586;
+}
+.account-settings .bio-dialog .account-primary {
+  background: #e99432;
+  border-color: #e99432;
+  color: #fff;
+}
+@media (max-width: 600px) {
+  .account-settings .account-block {
+    padding: 22px 18px 10px;
+    border-radius: 12px;
+    margin-bottom: 18px;
+  }
+  .account-settings .masked-email {
+    font-size: 12px;
+  }
+  .account-settings .bio-dialog {
+    padding: 22px;
+    border-radius: 12px;
+  }
+}

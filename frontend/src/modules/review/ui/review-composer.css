@@ -130,10 +130,6 @@ textarea:focus {
   font-weight: 500;
   flex: 1;
 }
-.locked-target small {
-  color: #8c929a;
-  white-space: nowrap;
-}
 .add-missing {
   display: inline-block;
   font-size: 12px;

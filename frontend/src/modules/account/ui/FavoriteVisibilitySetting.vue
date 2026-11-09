@@ -77,16 +77,20 @@ onBeforeUnmount(() => {
 })
 </script>
 <template>
-  <div class="favorite-privacy">
-    <label
-      ><span>向其他登录用户公开收藏列表</span
+  <div class="favorite-privacy privacy-setting">
+    <label class="privacy-row"
+      ><span class="privacy-copy"
+        ><span class="privacy-label">公开收藏列表</span
+        ><span class="privacy-description">允许其他登录用户查看有效店铺</span></span
       ><input
+        class="privacy-switch"
         type="checkbox"
+        role="switch"
+        aria-label="公开收藏列表"
         :checked="value"
         :disabled="!known || loading || saving"
         @change="change"
     /></label>
-    <p>默认仅自己可见。公开后，他人也看不到失效店铺；游客始终不可查看。</p>
     <p v-if="loading || saving" role="status">{{ saving ? '正在保存…' : '正在读取收藏设置…' }}</p>
     <p v-if="notice" role="status">{{ notice }}</p>
     <div v-if="error" role="alert">
@@ -95,33 +99,4 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
-<style scoped>
-.favorite-privacy {
-  padding: 16px 0;
-}
-.favorite-privacy label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  line-height: 1.6;
-}
-.favorite-privacy input {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  accent-color: #c98f2b;
-}
-.favorite-privacy p {
-  font-size: 12px;
-  color: #7c8794;
-  line-height: 1.8;
-}
-.favorite-privacy button {
-  min-height: 44px;
-  padding: 6px 12px;
-  border: 1px solid #ded7c8;
-  border-radius: 6px;
-  background: white;
-}
-</style>
+<style scoped src="../../../shared/styles/privacy-setting.css"></style>

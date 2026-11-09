@@ -1,0 +1,172 @@
+/* 搜索框沿用首页的灰底、图标、字号与聚焦样式；结果区域独立滚动，底部提供缺店引导。 */
+.target-search-field {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  height: 56px;
+  padding: 0 20px;
+  border-radius: 10px;
+  background: #f2f3f5;
+  margin-top: 8px;
+}
+.target-search-field:focus-within {
+  outline: 2px solid #b47c3b;
+  outline-offset: 2px;
+}
+.target-search-field > svg {
+  width: 21px;
+  height: 21px;
+  flex: 0 0 21px;
+  color: #697482;
+}
+.target-search-field input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  color: #303946;
+  background: transparent;
+  font: inherit;
+  font-size: 16px;
+}
+.target-search-field input::placeholder {
+  color: #626e7b;
+}
+.target-search-submit {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.target-search-submit:focus-visible {
+  position: static;
+  width: auto;
+  height: 36px;
+  padding: 0 10px;
+  clip-path: none;
+  border: 0;
+  border-radius: 5px;
+  color: #4f5d6b;
+  background: #fff;
+}
+.target-search-results {
+  margin-top: 10px;
+  max-height: 252px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #e9ecf0;
+  border-radius: 10px;
+  scrollbar-width: thin;
+}
+.target-search-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  text-align: left;
+  background: #fff;
+  border: 0;
+  border-bottom: 1px solid #edf0f3;
+  padding: 12px 15px;
+  color: #a0a9b5;
+  font: inherit;
+  cursor: pointer;
+}
+.target-search-row > span:first-child {
+  min-width: 0;
+}
+.target-search-row strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #34404d;
+  overflow-wrap: anywhere;
+}
+.target-search-row small {
+  display: block;
+  color: #939da9;
+  font-size: 12px;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+.target-search-row:hover,
+.target-search-row[aria-pressed='true'] {
+  background: #fff9f1;
+}
+.target-search-state {
+  margin: 0;
+  padding: 18px 15px;
+  color: #87929f;
+  font-size: 13px;
+}
+.target-search-missing {
+  padding: 16px 15px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  justify-content: space-between;
+  align-items: center;
+  color: #939da9;
+  font-size: 12px;
+  background: #fafbfc;
+}
+.target-search-missing button,
+.target-search-state button,
+.target-search-selected button,
+.target-load-more {
+  border: 0;
+  background: transparent;
+  color: #bb7e2b;
+  font: inherit;
+  cursor: pointer;
+  min-height: 32px;
+  padding: 4px 0;
+}
+.target-load-more {
+  display: block;
+  width: 100%;
+  font-size: 12px;
+  padding: 10px;
+}
+.target-search-selected {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #8a95a3;
+}
+.target-search-selected strong {
+  color: #53606e;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.review-target-search :is(button, input):focus-visible {
+  outline: 2px solid #cf9f53;
+  outline-offset: 2px;
+}
+.review-target-search input:focus-visible {
+  outline: none;
+}
+@media (max-width: 480px) {
+  .target-search-field {
+    padding: 0 13px;
+    gap: 9px;
+  }
+  .target-search-field input {
+    font-size: 14px;
+  }
+  .target-search-missing {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+}

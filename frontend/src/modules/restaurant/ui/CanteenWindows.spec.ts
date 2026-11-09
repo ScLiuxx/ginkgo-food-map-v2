@@ -66,10 +66,8 @@ describe('canteen window browsing', () => {
     ])
     expect(host.querySelectorAll('.window-row')).toHaveLength(3)
     expect(host.querySelectorAll('.floor-section')).toHaveLength(2)
-    const firstFloor = host.querySelector<HTMLDetailsElement>('.floor-section')!
-    expect(firstFloor.open).toBe(true)
-    firstFloor.open = false
-    expect(firstFloor.querySelectorAll('.window-row')).toHaveLength(1)
+    expect(host.querySelector('.floor-heading')?.textContent).toBe('一楼')
+    expect(host.querySelectorAll('details')).toHaveLength(0)
     expect(host.querySelector('[aria-label="按楼层筛选窗口"]')?.textContent).not.toContain('三楼')
     const floor = await choose('二楼', '按楼层筛选窗口')
     expect(floor.getAttribute('aria-pressed')).toBe('true')
@@ -80,7 +78,7 @@ describe('canteen window browsing', () => {
     )
     await choose('一楼', '按楼层筛选窗口')
     expect(host.querySelectorAll('.window-row')).toHaveLength(1)
-    await choose('全部楼层', '按楼层筛选窗口')
+    await choose('全部', '按楼层筛选窗口')
     expect(host.querySelectorAll('.window-row')).toHaveLength(3)
   })
 
@@ -101,14 +99,15 @@ describe('canteen window browsing', () => {
     expect(text).toContain('¥0')
     expect(text).toContain('暂停营业')
     expect(text).toContain('历史')
-    expect(text).toContain('楼层待补充')
+    expect(host.textContent).toContain('楼层待补充')
+    expect(host.querySelector('.window-meta')?.textContent).not.toContain('楼层待补充')
   })
 
   it('distinguishes unavailable data from a known empty list without a user submission entry', async () => {
     await mount(null)
     expect(host.textContent).toContain('窗口资料尚未接入')
-    expect(host.textContent).not.toContain('已收录 0')
-    expect(host.querySelectorAll('[aria-label="按楼层筛选窗口"] button')).toHaveLength(1)
+    expect(host.querySelector('h2 small')).toBeNull()
+    expect(host.querySelectorAll('[aria-label="按楼层筛选窗口"] button')).toHaveLength(0)
     expect(host.querySelector('#supplement-window')).toBeNull()
     expect(host.textContent).not.toContain('补充窗口')
     expect(host.querySelectorAll('form')).toHaveLength(0)
@@ -116,7 +115,16 @@ describe('canteen window browsing', () => {
     host.remove()
     await mount([])
     expect(host.textContent).toContain('暂未收录窗口')
-    expect(host.textContent).toContain('已收录 0')
+    expect(host.querySelector('h2 small')?.textContent).toBe('(0)')
+  })
+
+  it('shows a single floor once without filters, group headers or repeated card labels', async () => {
+    await mount([windowFixture('201', '一楼'), windowFixture('202', '一楼')])
+    expect(host.querySelector('.single-floor')?.textContent).toBe('一楼')
+    expect(host.querySelector('.window-filters')).toBeNull()
+    expect(host.querySelectorAll('.floor-heading')).toHaveLength(0)
+    expect(host.querySelectorAll('.window-row')).toHaveLength(2)
+    expect(host.textContent?.match(/一楼/g)).toHaveLength(1)
   })
 
   it('recognizes only the existing canteen category and does not infer campus or windows from a name', () => {
@@ -140,8 +148,7 @@ describe('canteen window browsing', () => {
     const target = router.resolve(link.getAttribute('href')!)
     expect(target.path).toBe('/canteen-windows/202')
     expect(target.query).toEqual({ fromFloor: '二楼' })
-    const counts = host.querySelector('[aria-label="按楼层筛选窗口"]')!.textContent!
-    expect(counts).toContain('全部楼层(3)')
-    expect(counts).toContain('二楼(2)')
+    expect(host.querySelectorAll('.floor-heading')).toHaveLength(0)
+    expect(host.querySelector('h2 small')?.textContent).toBe('(3)')
   })
 })

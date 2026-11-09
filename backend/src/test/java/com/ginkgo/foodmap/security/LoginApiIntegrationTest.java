@@ -213,6 +213,54 @@ class LoginApiIntegrationTest {
         verify(protection).succeeded("login-test");
     }
 
+    /** 邮箱大小写及首尾空格规范化后登录同一账号，两种入口共用用户ID限流。 */
+    @Test
+    void shouldLoginWithRegisteredEmailAndShareAccountProtection() throws Exception {
+        for (String account : List.of("ginkgo_user", " STUDENT@STD.UESTC.EDU.CN ")) {
+            String response =
+                    mvc.perform(
+                                    post("/auth/login")
+                                            .contentType(MediaType.APPLICATION_JSON)
+                                            .content(json.writeValueAsString(
+                                                    Map.of("username", account, "password", "Ginkgo2026"))))
+                            .andExpect(status().isOk())
+                            .andExpect(jsonPath("$.data.user.username").value("ginkgo_user"))
+                            .andReturn()
+                            .getResponse()
+                            .getContentAsString();
+            String token = json.readTree(response).path("data").path("accessToken").asText();
+            mvc.perform(get("/auth/me").header("Authorization", "Bearer " + token))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.id").value(user.getId()));
+        }
+        verify(protection).key(user.getId(), "ginkgo_user");
+        verify(protection).key(user.getId(), "STUDENT@STD.UESTC.EDU.CN");
+    }
+
+    /** 邮箱入口与用户名入口一样拒绝错误密码、未知邮箱、停用及未验证账号。 */
+    @Test
+    void shouldRejectInvalidEmailCredentialsAndUnavailableAccounts() throws Exception {
+        for (String account : List.of("student@std.uestc.edu.cn", "missing@std.uestc.edu.cn")) {
+            mvc.perform(
+                            post("/auth/login")
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(json.writeValueAsString(
+                                            Map.of("username", account, "password", "wrong"))))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.code").value("AUTH_INVALID_CREDENTIALS"));
+        }
+        for (String update : List.of("status = 'DISABLED'", "status = 'ACTIVE', email_verified = FALSE")) {
+            jdbc.update("UPDATE users SET " + update + " WHERE id = ?", user.getId());
+            mvc.perform(
+                            post("/auth/login")
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content("{\"username\":\"student@std.uestc.edu.cn\",\"password\":\"Ginkgo2026\"}"))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.code").value("AUTH_INVALID_CREDENTIALS"));
+        }
+        verify(sessions, never()).create(anyString(), anyLong(), anyLong(), any());
+    }
+
     /** 不存在账号、错误密码及停用账号返回同一提示，均不能签发会话。 */
     @Test
     void shouldHideAccountExistenceAndRejectUnavailableAccounts() throws Exception {

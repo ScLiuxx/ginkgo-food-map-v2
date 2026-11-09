@@ -78,7 +78,7 @@ describe('login form', () => {
 
   it('rejects empty input without sending a request', async () => {
     await fillAndSubmit('', '')
-    expect(host.querySelector('#login-username-error')?.textContent).toContain('请输入用户名')
+    expect(host.querySelector('#login-username-error')?.textContent).toContain('请输入用户名或邮箱')
     expect(host.querySelector('#login-password-error')?.textContent).toContain('请输入密码')
     expect(login).not.toHaveBeenCalled()
   })
@@ -120,6 +120,22 @@ describe('login form', () => {
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/'))
     expect(login).toHaveBeenCalledWith({ username: 'ginkgo_user', password: ' Ginkgo2026 ' })
     expect(host.querySelector<HTMLInputElement>('#login-password')?.value).toBe('')
+  })
+
+  it('accepts a registered email in the same login field without changing password spaces', async () => {
+    vi.mocked(login).mockResolvedValue({
+      accessToken: 'email-session',
+      tokenType: 'Bearer',
+      expiresAt: '2099-01-01T00:00:00Z',
+      user: { id: 42, username: 'ginkgo_user', roles: ['ROLE_USER'] },
+    })
+    await fillAndSubmit(' student@std.uestc.edu.cn ', ' secret ')
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/'))
+    expect(login).toHaveBeenCalledWith({
+      username: 'student@std.uestc.edu.cn',
+      password: ' secret ',
+    })
+    expect(host.querySelector<HTMLInputElement>('#login-username')?.maxLength).toBe(254)
   })
 
   it.each([

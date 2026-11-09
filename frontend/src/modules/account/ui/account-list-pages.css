@@ -1,0 +1,67 @@
+/* 独立点评与收藏页沿用个人主页的内容卡片，统一工具栏，不重复列表标题。 */
+:global(body:has(.account-list-page)) {
+  background: #f6f7f9;
+}
+.account-list-page {
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+}
+.account-list-page .account-topline {
+  margin-bottom: 25px;
+  gap: 18px;
+}
+.account-list-card {
+  border: 1px solid #e5e8ec;
+  border-radius: 16px;
+  background: #fff;
+  padding: 0 28px 8px;
+}
+.account-list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 65px;
+  border-bottom: 1px solid #edf0f3;
+}
+.account-list-total {
+  color: #8b95a2;
+  font-size: 13px;
+}
+.account-list-actions {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.account-list-actions button,
+.account-list-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  border: 0;
+  padding: 8px 0;
+  background: transparent;
+  color: #8a939f;
+  font-size: 12px;
+  cursor: pointer;
+}
+.account-list-actions a {
+  color: #bb812e;
+}
+@media (max-width: 600px) {
+  .account-list-card {
+    padding: 0 18px 4px;
+    border-radius: 12px;
+  }
+  .account-list-toolbar {
+    min-height: 60px;
+    flex-wrap: wrap;
+    gap: 0 12px;
+    padding: 6px 0;
+  }
+  .account-list-actions {
+    gap: 16px;
+  }
+}

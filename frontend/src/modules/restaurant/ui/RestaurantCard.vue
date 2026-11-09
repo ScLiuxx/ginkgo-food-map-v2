@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatRating } from '@/shared/lib/formatRating'
 import { useUserLocation } from '@/modules/map/model/userLocation.store'
 const userLocation = useUserLocation()
 import { computed, ref, watch } from 'vue'
@@ -62,7 +63,7 @@ const distanceLabel = computed(() =>
       <template v-if="!cafeteria">
         <p class="card-rating" :class="{ unrated: restaurant.score === null }">
           <span v-if="restaurant.score !== null" class="score-value"
-            ><span aria-hidden="true">★</span> {{ restaurant.score.toFixed(1) }}</span
+            ><span aria-hidden="true">★</span> {{ formatRating(restaurant.score) }}</span
           >
           <span v-else>暂无评分</span>
           <small class="review-count" :title="`${restaurant.participantCount}人参与评分`"

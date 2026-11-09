@@ -41,7 +41,6 @@ const replyRequests = new Map<string, { body: string; id: string }>()
 provide(activeReplyEditorKey, ref<string | null>(null))
 const page = ref(1),
   totalPages = ref(0),
-  totalGroups = ref(0),
   totalReviews = ref(0)
 let requestedPage = 1
 const currentOnly = ref(false)
@@ -49,10 +48,6 @@ const sort = ref<ReviewSort>('DEFAULT')
 // 切换排序回到第一页；load取消旧请求并核验代次，阻止旧排序响应覆盖新选择。
 watch(sort, () => {
   cancelDelete()
-  void load(1)
-})
-const contentFilter = ref<'all' | 'recommended' | 'photos'>('all')
-watch(contentFilter, () => {
   void load(1)
 })
 const viewerId = computed(() =>
@@ -82,40 +77,12 @@ async function load(targetPage = page.value) {
   emit('photos', { restaurantId, state: 'loading', photos: [] })
   requestedPage = targetPage
   try {
-    // 新条件尚无服务端参数：完整读取作者组再筛选分页；失败整体报错，不把当前页冒充全部。
-    // 沿用取消信号和代次校验，切换店铺或条件后不接受晚到的旧响应。
-    const signal = controller.signal
-    const result = {
-      ...(await gateway.list(
-        restaurantId,
-        signal,
-        props.starScale && contentFilter.value !== 'all' ? 1 : targetPage,
-        sort.value,
-      )),
-    }
-    if (ticket !== generation) return
-    const filter = contentFilter.value
-    if (props.starScale && filter !== 'all') {
-      const all = [...result.records]
-      for (let next = 2; next <= result.totalPages; next++) {
-        const batch = await gateway.list(restaurantId, signal, next, sort.value)
-        if (ticket !== generation) return
-        all.push(...batch.records)
-      }
-      const matching = [...new Map(all.map((item) => [item.id, item])).values()].filter((item) =>
-        filter === 'recommended' ? item.recommended : item.photos.length > 0,
-      )
-      const pageSize = result.pageSize || 8
-      result.totalGroups = matching.length
-      result.totalPages = Math.ceil(matching.length / pageSize)
-      result.page = Math.max(1, Math.min(targetPage, result.totalPages || 1))
-      result.records = matching.slice((result.page - 1) * pageSize, result.page * pageSize)
-    }
+    // 直接读取当前排序的目标页，避免为浏览点评额外遍历所有页面。
+    const result = await gateway.list(restaurantId, controller.signal, targetPage, sort.value)
     if (ticket === generation) {
       records.value = result.records
       page.value = result.page
       totalPages.value = result.totalPages
-      totalGroups.value = result.totalGroups
       totalReviews.value = result.totalReviews
       emit('photos', {
         restaurantId,
@@ -137,7 +104,7 @@ watch(
   () => {
     cancelDelete()
     page.value = 1
-    totalPages.value = totalGroups.value = totalReviews.value = 0
+    totalPages.value = totalReviews.value = 0
     void load(1)
   },
   { immediate: true },
@@ -239,29 +206,6 @@ function view(url: string) {
         {{ title || '同学点评' }}
         <small v-if="starScale">({{ totalReviews }})</small>
       </h2>
-      <div v-if="starScale" class="content-filters" aria-label="点评筛选">
-        <button
-          type="button"
-          :aria-pressed="contentFilter === 'all'"
-          @click="contentFilter = 'all'"
-        >
-          全部
-        </button>
-        <button
-          type="button"
-          :aria-pressed="contentFilter === 'recommended'"
-          @click="contentFilter = 'recommended'"
-        >
-          推荐
-        </button>
-        <button
-          type="button"
-          :aria-pressed="contentFilter === 'photos'"
-          @click="contentFilter = 'photos'"
-        >
-          有图
-        </button>
-      </div>
       <div v-if="!preview" class="content-filters" aria-label="点评排序">
         <button type="button" :aria-pressed="sort === 'DEFAULT'" @click="sort = 'DEFAULT'">
           默认排序
@@ -272,17 +216,6 @@ function view(url: string) {
       </div>
       <button type="button" :disabled="loading" @click="load(1)">刷新评价</button>
     </header>
-    <p v-if="!preview" class="scoring-rule">
-      {{ sort === 'DEFAULT' ? '点赞数优先，同赞时高等级作者优先。' : '按发布时间从新到旧。' }}
-    </p>
-    <p v-if="!preview && !loading && !error" class="scoring-rule">
-      <template v-if="starScale">{{
-        contentFilter === 'all' ? `${totalGroups} 位同学` : `${totalGroups} 条符合条件`
-      }}</template>
-      <template v-else
-        >{{ totalGroups }}位同学 · {{ totalReviews }}条点评。每位同学展示最新点评。</template
-      >
-    </p>
     <template v-if="preview && hasScoringStatus">
       <p class="scoring-rule">
         同一账号可记录多次用餐，只有最新一条有效点评参与评分；历史点评仍可阅读。
@@ -301,9 +234,7 @@ function view(url: string) {
       <p>{{ error }}</p>
       <button type="button" @click="load(requestedPage)">重试</button>
     </div>
-    <p v-else-if="!records.length" class="empty">
-      {{ contentFilter === 'all' ? '还没有人评价，来当第一个吧。' : '暂无符合条件的点评' }}
-    </p>
+    <p v-else-if="!records.length" class="empty">还没有人评价，来当第一个吧。</p>
     <details v-if="preview && wall.length" class="student-album">
       <summary>同学上传的照片（{{ wall.length }}） · 查看照片与原点评</summary>
       <p>下方各条点评保留作者和照片对应关系，点击照片可查看大图。</p>
@@ -356,19 +287,19 @@ function view(url: string) {
     <Teleport to="body">
       <dialog
         ref="confirm"
+        class="delete-dialog"
         aria-labelledby="delete-review-title"
         @cancel.prevent="cancelDelete"
         @close="deleting = null"
       >
         <h3 id="delete-review-title">确定删除这条评价？</h3>
-        <p>回复和照片将一并删除，删除后无法恢复。</p>
-        <p v-if="deleting?.scoringStatus === 'current'">
-          删除后，你在这家店的上一条有效点评会重新参与评分；没有历史点评时移除你的评分。
-        </p>
-        <p v-if="preview">当前仅演示页面变化，不会删除真实数据，可通过“重置示例”恢复。</p>
         <p v-if="deleteError" role="alert">{{ deleteError }}</p>
-        <button type="button" autofocus @click="cancelDelete">取消</button
-        ><button type="button" :disabled="busy" @click="remove">确认删除</button>
+        <div class="delete-dialog-actions">
+          <button type="button" class="cancel-delete" autofocus @click="cancelDelete">取消</button>
+          <button type="button" class="confirm-delete" :disabled="busy" @click="remove">
+            {{ busy ? '删除中…' : '确认删除' }}
+          </button>
+        </div>
       </dialog>
     </Teleport>
     <dialog ref="lightbox" class="lightbox">
@@ -387,21 +318,29 @@ function view(url: string) {
 }
 .star-panel > header {
   flex-wrap: wrap;
-  gap: 10px 18px;
+  gap: 8px;
+  min-height: 77px;
 }
 .star-panel h2 {
-  font-size: 20px;
+  font-size: 21px;
+  font-weight: 750;
+  letter-spacing: -0.5px;
+  color: #202733;
   margin-right: auto;
 }
 .star-panel h2 small {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 400;
-  color: #98a0a9;
+  letter-spacing: 0;
+  color: #8d97a3;
 }
 .star-panel > header > button {
   border: 0;
-  padding: 4px;
-  color: #9aa2ab;
+  border-left: 1px solid #eceff2;
+  border-radius: 0;
+  padding: 0 0 0 13px;
+  margin-left: 4px;
+  color: #9099a4;
   font-size: 12px;
 }
 .star-panel .scoring-rule {
@@ -418,9 +357,9 @@ function view(url: string) {
 .content-filters button {
   border: 0;
   border-radius: 5px;
-  padding: 4px 12px;
-  color: #8b95a0;
-  font-size: 13px;
+  padding: 8px 11px;
+  color: #9099a4;
+  font-size: 12px;
 }
 .content-filters button[aria-pressed='true'] {
   background: #fff4e9;
@@ -438,7 +377,11 @@ function view(url: string) {
 @media (max-width: 480px) {
   .star-panel h2 {
     flex: 1 0 100%;
-    font-size: 18px;
+    font-size: 20px;
+    margin-top: 20px;
+  }
+  .star-panel > header {
+    padding-bottom: 12px;
   }
   .star-panel > header > button {
     margin-left: auto;
@@ -532,6 +475,59 @@ dialog {
   border-radius: 12px;
   padding: 20px;
   background: #fffdf8;
+}
+/* 删除确认只承载简短问题和两项操作，避免默认标题外边距与相邻按钮挤在一起。 */
+.delete-dialog {
+  width: min(360px, calc(100% - 40px));
+  padding: 28px;
+  border: 1px solid #eceef1;
+  border-radius: 16px;
+  background: white;
+  color: #273341;
+  box-shadow: 0 20px 60px #18233026;
+}
+.delete-dialog::backdrop {
+  background: #18233066;
+}
+.delete-dialog h3 {
+  margin: 0 0 26px;
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+.delete-dialog [role='alert'] {
+  margin: -10px 0 20px;
+  color: #b64d42;
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.delete-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.delete-dialog-actions button {
+  min-height: 40px;
+  min-width: 88px;
+  padding: 9px 16px;
+  border-radius: 7px;
+  font-size: 14px;
+}
+.delete-dialog-actions .cancel-delete {
+  background: #f5f6f8;
+  border-color: #e7eaf0;
+  color: #657180;
+}
+.delete-dialog-actions .confirm-delete {
+  border-color: #fb8b24;
+  background: #fb8b24;
+  color: white;
+  font-weight: 600;
+}
+.delete-dialog-actions .confirm-delete:hover:not(:disabled) {
+  background: #ed7d1a;
+  border-color: #ed7d1a;
 }
 .lightbox img {
   display: block;

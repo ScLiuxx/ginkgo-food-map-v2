@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatRating } from '@/shared/lib/formatRating'
 import { ref, watch, onUnmounted } from 'vue'
 import { useRestaurantCatalog } from '../model/catalog.store'
 import { fetchRestaurants } from '../api/restaurantApi'
@@ -115,7 +116,7 @@ onUnmounted(invalidate)
           <strong>{{ priceLabel(selected) }}</strong>
           <p>
             {{ selected.reviewCount }} 条评价 ·
-            {{ selected.score === null ? '暂无评分' : `${selected.score.toFixed(1)}分` }}
+            {{ selected.score === null ? '暂无评分' : `${formatRating(selected.score)}分` }}
           </p>
         </div>
       </div>

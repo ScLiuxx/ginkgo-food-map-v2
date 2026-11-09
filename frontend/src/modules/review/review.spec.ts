@@ -235,6 +235,16 @@ describe('review interactions matching the original site', () => {
   async function open() {
     host.querySelector<HTMLButtonElement>('.review-open')!.click()
     await settle()
+    const search = host.querySelector<HTMLInputElement>('.target-search-field input')
+    if (search) {
+      search.value = '测试'
+      search.dispatchEvent(new Event('input'))
+      await settle()
+      host.querySelector<HTMLButtonElement>('.target-search-submit')!.click()
+      await settle()
+    }
+    host.querySelector<HTMLButtonElement>('.target-search-row')?.click()
+    await settle()
   }
   async function fill(text: string) {
     const field = host.querySelector<HTMLTextAreaElement>('textarea')!
@@ -278,6 +288,16 @@ describe('review interactions matching the original site', () => {
     }
   }
   async function choose(label: string, value: string) {
+    if (label === '评价对象') {
+      host
+        .querySelector<HTMLInputElement>('.target-search-field input')!
+        .dispatchEvent(new Event('focus'))
+      await settle()
+      const rows = [...host.querySelectorAll<HTMLButtonElement>('.target-search-row')]
+      rows[value === 'second' ? 1 : 0]!.click()
+      await settle()
+      return
+    }
     const select = host.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`)!
     select.value = value
     select.dispatchEvent(new Event('change'))
@@ -350,6 +370,8 @@ describe('review interactions matching the original site', () => {
     expect(host.querySelector('.locked-target')?.textContent).toContain(
       '测试食堂 · 二楼 · 测试独立窗口',
     )
+    expect(host.querySelector('.locked-target')?.textContent).not.toContain('已锁定')
+    expect(host.querySelector('.locked-target [aria-hidden]')).toBeNull()
     const star = host.querySelector<HTMLInputElement>('[type=range]')!
     star.value = '4.5'
     star.dispatchEvent(new Event('input'))
@@ -370,7 +392,7 @@ describe('review interactions matching the original site', () => {
     expect(validBody('     ', 1, 200)).toBe(false)
     expect(validBody('字'.repeat(501), 5, 500)).toBe(false)
   })
-  it('filters recommended and photo reviews across every page and displays five-star scores', async () => {
+  it('shows reviews without content filters or explanations and paginates five-star scores', async () => {
     const second = {
       ...review,
       id: 'page-two',
@@ -387,40 +409,22 @@ describe('review interactions matching the original site', () => {
       totalPages: 2,
     }))
     await mount(ReviewPanel, { restaurantId: '1', starScale: true })
-    const filter = async (name: string) => {
-      const button = [...host.querySelectorAll<HTMLButtonElement>('.content-filters button')].find(
-        (el) => el.textContent?.trim() === name,
-      )!
-      button.click()
-      await settle()
-    }
-    await filter('推荐')
-    expect(vi.mocked(gateway.list).mock.calls.some((call) => call[2] === 2)).toBe(true)
+    expect(host.querySelector('[aria-label="点评筛选"]')).toBeNull()
+    expect(host.querySelector('.scoring-rule')).toBeNull()
+    expect(host.querySelector('h2')?.textContent).toContain('(2)')
+    expect(
+      [...host.querySelectorAll('.content-filters button')].map((el) => el.textContent?.trim()),
+    ).toEqual(['默认排序', '时间排序'])
+    expect(gateway.list).toHaveBeenCalledTimes(1)
+    expect(host.querySelector('.body')?.textContent).toBe('第一页普通点评')
+    ;[...host.querySelectorAll<HTMLButtonElement>('button')]
+      .find((el) => el.textContent?.trim() === '下一页点评')!
+      .click()
+    await settle()
+    expect(vi.mocked(gateway.list).mock.calls.map((call) => call[2])).toEqual([1, 2])
     expect(host.querySelectorAll('.review-card')).toHaveLength(1)
     expect(host.querySelector('.body')?.textContent).toBe(second.body)
     expect(host.querySelector('.star-score strong')?.textContent).toBe('4.5')
-    await filter('有图')
-    expect(host.querySelector('.body')?.textContent).toBe(second.body)
-    await filter('全部')
-    expect(host.querySelector('.body')?.textContent).toBe('第一页普通点评')
-  })
-  it('shows an error for an incomplete filtered traversal instead of presenting partial matches', async () => {
-    vi.mocked(gateway.list).mockImplementation(async (_id, _signal, page = 1) => {
-      if (page === 2) throw new Error('后续页读取失败')
-      return {
-        records: [review],
-        page: 1,
-        pageSize: 1,
-        totalGroups: 2,
-        totalReviews: 2,
-        totalPages: 2,
-      }
-    })
-    await mount(ReviewPanel, { restaurantId: '1', starScale: true })
-    host.querySelectorAll<HTMLButtonElement>('.content-filters button')[1]!.click()
-    await settle()
-    expect(host.querySelector('[role=alert]')?.textContent).toContain('后续页读取失败')
-    expect(host.querySelectorAll('.review-card')).toHaveLength(0)
   })
   it('redirects guests to login and preserves the write-review return target', async () => {
     await mount(ReviewComposer)
@@ -429,7 +433,7 @@ describe('review interactions matching the original site', () => {
     expect(router.currentRoute.value.query.redirect).toBe('/?writeReview=1')
     expect(fetchRestaurants).not.toHaveBeenCalled()
   })
-  it('loads all restaurant pages, including closed restaurants, with original defaults', async () => {
+  it('loads restaurant pages on demand, including closed restaurants, with original rating defaults', async () => {
     login()
     vi.mocked(fetchRestaurants)
       .mockResolvedValueOnce({
@@ -448,8 +452,16 @@ describe('review interactions matching the original site', () => {
       })
     await mount(ReviewComposer)
     await open()
+    expect(fetchRestaurants).toHaveBeenCalledTimes(1)
+    host
+      .querySelector<HTMLInputElement>('.target-search-field input')!
+      .dispatchEvent(new Event('focus'))
+    await settle()
+    host.querySelector<HTMLButtonElement>('.target-load-more')!.click()
+    await settle()
     expect(fetchRestaurants).toHaveBeenCalledTimes(2)
-    expect(host.querySelector('select')!.textContent).toContain('停业店（已停业）')
+    expect(host.querySelector('.target-search-results')!.textContent).toContain('停业店')
+    expect(host.querySelector('.target-search-results')!.textContent).toContain('暂停营业')
     expect(
       [...host.querySelectorAll<HTMLInputElement>('input[type=range]')].map((el) => [
         el.value,
@@ -458,7 +470,7 @@ describe('review interactions matching the original site', () => {
         el.step,
       ]),
     ).toEqual(Array(4).fill(['3.5', '0', '5', '0.5']))
-    expect(host.querySelector('[aria-pressed=true]')?.textContent?.trim()).toBe('推荐')
+    expect(host.querySelector('.attitude [aria-pressed=true]')?.textContent?.trim()).toBe('推荐')
     expect(host.textContent).toContain('发布账号：测试社员')
   })
   it('consumes the login return intent once without automatically publishing', async () => {
@@ -481,8 +493,8 @@ describe('review interactions matching the original site', () => {
     })
     await open()
     expect(fetchRestaurants).not.toHaveBeenCalled()
-    expect(host.querySelector<HTMLSelectElement>('select')?.disabled).toBe(true)
-    expect(host.querySelector<HTMLSelectElement>('select')?.value).toBe('201')
+    expect(host.querySelector('.review-target-search')).toBeNull()
+    expect(host.querySelector('.locked-target')?.textContent).toContain('测试窗口')
     expect(host.textContent).toContain('只评价这个窗口')
     await fill('测试窗口的独立评价正文')
     await submit()
@@ -595,7 +607,8 @@ describe('review interactions matching the original site', () => {
   it('renders safe cards, retains failed replies and reuses the same retry ID', async () => {
     login()
     await mount(ReviewPanel, { restaurantId: '1' })
-    expect(host.querySelector('.review-card')!.textContent).toContain('7.88')
+    expect(host.querySelector('.review-card')!.textContent).toContain('3.94')
+    expect(host.querySelector('.chips')?.textContent).toContain('4.0')
     expect(host.querySelector('.body')!.textContent).toBe(review.body)
     expect(host.querySelector('script')).toBeNull()
     const input = host.querySelector('input')!
@@ -627,6 +640,9 @@ describe('review interactions matching the original site', () => {
     button.click()
     await settle()
     expect(gateway.remove).not.toHaveBeenCalled()
+    const dialog = document.querySelector('dialog[open]')!
+    expect(dialog.querySelector('h3')?.textContent).toBe('确定删除这条评价？')
+    expect(dialog.querySelectorAll('p')).toHaveLength(0)
     const confirm = [...document.querySelectorAll('button')].find(
       (el) => el.textContent?.trim() === '确认删除',
     )!
@@ -686,7 +702,7 @@ describe('review interactions matching the original site', () => {
     await mount({
       setup: () => () => h(ReviewPanel, { restaurantId: '1', revision: revision.value }),
     })
-    expect(host.textContent).toContain('9位同学 · 12条点评')
+    expect(host.querySelector('.scoring-rule')).toBeNull()
     expect(host.textContent).toContain('2条历史点评')
     expect(host.querySelector('form')).toBeNull()
     const click = async (name: string) => {

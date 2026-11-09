@@ -63,7 +63,9 @@ describe('点赞按钮', () => {
     expect(setLike).toHaveBeenCalledTimes(1)
     resolve(state(true))
     await settle()
-    expect(button.textContent).toContain('已赞')
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+    expect(button.getAttribute('aria-label')).toBe('取消点赞（1）')
+    expect(button.querySelector('svg')).not.toBeNull()
     expect(button.textContent).toContain('1')
   })
   it('失败后保留原计数，重新读取确认状态后才允许操作', async () => {
@@ -76,7 +78,7 @@ describe('点赞按钮', () => {
     vi.mocked(fetchLike).mockResolvedValue(state(true))
     host.querySelector<HTMLButtonElement>('.like-error button')!.click()
     await settle()
-    expect(host.textContent).toContain('已赞')
+    expect(host.querySelector('.like-entry')?.getAttribute('aria-pressed')).toBe('true')
     expect(setLike).toHaveBeenCalledTimes(1)
   })
   it('换号后旧写入回执不能恢复已赞状态', async () => {

@@ -82,21 +82,32 @@ onBeforeUnmount(() => {
 })
 </script>
 <template>
-  <div class="follow-privacy">
-    <label
-      >向其他登录用户公开关注名单<input
+  <div class="follow-privacy privacy-setting">
+    <label class="privacy-row"
+      ><span class="privacy-copy"
+        ><span class="privacy-label">公开关注名单</span
+        ><span class="privacy-description">允许其他登录用户查看</span></span
+      ><input
+        class="privacy-switch"
         type="checkbox"
+        role="switch"
+        aria-label="公开关注名单"
         :checked="data?.followingPublic ?? false"
         :disabled="!known || busy || loading"
         @change="change('followingPublic', $event)" /></label
-    ><label
-      >向其他登录用户公开粉丝名单<input
+    ><label class="privacy-row"
+      ><span class="privacy-copy"
+        ><span class="privacy-label">公开粉丝名单</span
+        ><span class="privacy-description">允许其他登录用户查看</span></span
+      ><input
+        class="privacy-switch"
         type="checkbox"
+        role="switch"
+        aria-label="公开粉丝名单"
         :checked="data?.followersPublic ?? false"
         :disabled="!known || busy || loading"
         @change="change('followersPublic', $event)"
     /></label>
-    <p>两个名单默认仅本人可见；关注数和粉丝数仍向其他登录用户展示。</p>
     <p v-if="loading || busy" role="status">{{ busy ? '正在保存…' : '正在读取名单设置…' }}</p>
     <p v-if="notice" role="status">{{ notice }}</p>
     <div v-if="error" role="alert">
@@ -105,34 +116,4 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
-<style scoped>
-.follow-privacy {
-  padding: 16px 0;
-}
-.follow-privacy label {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 16px;
-  line-height: 1.7;
-}
-.follow-privacy input {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  accent-color: #c98f2b;
-}
-.follow-privacy p {
-  font-size: 12px;
-  color: #87919e;
-  line-height: 1.8;
-}
-.follow-privacy button {
-  min-height: 44px;
-  padding: 6px 12px;
-  border: 1px solid #ddd;
-  background: white;
-  border-radius: 6px;
-}
-</style>
+<style scoped src="../../../shared/styles/privacy-setting.css"></style>

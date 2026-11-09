@@ -1,0 +1,137 @@
+/* 消息正文弹窗共用视觉规范；仅描述容器与操作层次，读取和鉴权仍由各业务组件管理。 */
+.content-dialog {
+  box-sizing: border-box;
+  width: min(640px, calc(100vw - 32px));
+  max-height: 85dvh;
+  overflow: auto;
+  padding: 26px 28px;
+  border: 1px solid #e8ebef;
+  border-radius: 16px;
+  background: white;
+  color: #2c3846;
+  box-shadow: 0 18px 55px #17233524;
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.content-dialog::backdrop {
+  background: #2431444d;
+}
+.detail-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 19px;
+  border-bottom: 1px solid #edf0f3;
+}
+.detail-dialog-header h2 {
+  margin: 0;
+  color: #24313f;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.detail-dialog-close {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: #929ca8;
+  font: inherit;
+  font-size: 25px;
+  line-height: 1;
+  cursor: pointer;
+}
+.detail-dialog-close:hover {
+  background: #f5f6f8;
+  color: #556273;
+}
+.detail-dialog-author {
+  color: #293746;
+  font-size: 15px;
+  font-weight: 650;
+}
+.detail-dialog-date {
+  display: block;
+  color: #9aa4af;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.detail-dialog-body {
+  margin: 14px 0 0;
+  white-space: pre-wrap;
+  color: #344252;
+  font-size: 15px;
+  line-height: 1.9;
+}
+.detail-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 27px;
+  padding-top: 19px;
+  border-top: 1px solid #edf0f3;
+}
+.dialog-primary,
+.dialog-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 9px 18px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  text-decoration: none;
+  cursor: pointer;
+}
+.dialog-primary {
+  background: #fb8b24;
+  color: white;
+  font-weight: 600;
+}
+.dialog-primary:hover {
+  background: #ed7d1a;
+}
+.dialog-secondary {
+  border-color: #e7ebf0;
+  background: #f6f7f9;
+  color: #778493;
+}
+.dialog-secondary:hover {
+  background: #eceff3;
+  color: #556273;
+}
+.detail-dialog-state {
+  margin: 22px 0 0;
+  color: #778493;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.detail-dialog-state[role='alert'] {
+  color: #b64d42;
+}
+.content-dialog button:focus-visible,
+.content-dialog a:focus-visible {
+  outline: 2px solid #f19741;
+  outline-offset: 3px;
+}
+@media (max-width: 500px) {
+  .content-dialog {
+    padding: 22px 20px;
+    border-radius: 12px;
+  }
+  .detail-dialog-header {
+    gap: 12px;
+  }
+}

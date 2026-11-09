@@ -155,14 +155,14 @@ describe('个人中心', () => {
     return router
   }
 
-  it('本人展示真实等级和四个入口，不使用头像、虚构统计或暂缓功能', async () => {
+  it('本人展示真实等级、用户名首字和四个入口，不使用虚构统计或暂缓功能', async () => {
     await mount()
-    await vi.waitFor(() => expect(host.textContent).toContain('125 经验'))
-    expect(host.textContent).toContain('275 经验')
+    await vi.waitFor(() => expect(host.textContent).toContain('125 / 400 经验'))
     expect(host.querySelectorAll('.account-tools > a')).toHaveLength(4)
     expect(host.querySelector('.level-badge')?.textContent).toBe('Lv.2')
     expect(host.querySelector('progress')?.value).toBeCloseTo((25 / 300) * 100)
     expect(host.querySelector('.avatar, img')).toBeNull()
+    expect(host.querySelector('.profile-avatar')?.textContent).toBe('测')
     expect(host.querySelectorAll('.profile-statistics strong')[0]?.textContent).toBe('2')
     expect(host.textContent).not.toMatch(/私信|最近浏览|草稿箱|会员|称号|我的举报/)
   })
@@ -175,7 +175,7 @@ describe('个人中心', () => {
     )
     expect(host.querySelector('.level-badge, progress')).toBeNull()
     host.querySelector<HTMLButtonElement>('.inline-link')!.click()
-    await vi.waitFor(() => expect(host.textContent).toContain('125 经验'))
+    await vi.waitFor(() => expect(host.textContent).toContain('125 / 400 经验'))
   })
 
   it('换号后清除旧数据，并拒绝旧请求晚到覆盖新账号', async () => {
@@ -202,10 +202,10 @@ describe('个人中心', () => {
       currentLevelThreshold: 0,
       nextLevelThreshold: 100,
     })
-    await vi.waitFor(() => expect(host.textContent).toContain('5 经验'))
+    await vi.waitFor(() => expect(host.textContent).toContain('5 / 100 经验'))
     old.resolve(summary)
     await nextTick()
-    expect(host.textContent).not.toContain('125 经验')
+    expect(host.textContent).not.toContain('125 / 400 经验')
     expect(host.textContent).not.toContain('测试同学')
     clearAccessToken()
     await nextTick()

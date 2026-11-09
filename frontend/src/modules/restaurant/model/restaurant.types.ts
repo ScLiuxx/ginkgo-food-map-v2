@@ -19,6 +19,7 @@ export interface RestaurantReadModel {
   closed: boolean
   price: number | null
   priceKind: 'estimate' | 'exact' | 'unknown'
+  /** 保留接口0–10分，展示时换算为五分制，排序与统计使用原值。 */
   score: number | null
   reviewCount: number
   /** 每账号每店只取最新有效点评，人数不随历史条数增长。 */
@@ -31,7 +32,8 @@ export interface RestaurantReadModel {
 
 export type RatingDimension = 'taste' | 'value' | 'service' | 'ambience'
 /** 四维评分保留详情展示，列表暂不提供按四维排序。 */
-export type RestaurantSort = 'auto' | 'relevance' | 'score' | 'reviews' | 'price' | 'distance' | 'recommend'
+export type RestaurantSort =
+  'auto' | 'relevance' | 'score' | 'reviews' | 'price' | 'distance' | 'recommend'
 
 /** 分类使用服务端稳定编码，所有条件随分页请求提交，不在当前页二次筛选。 */
 export interface CatalogFilters {

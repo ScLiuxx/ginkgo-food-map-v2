@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatRating } from '@/shared/lib/formatRating'
 import { computed, provide, ref } from 'vue'
 import ReviewPanel from './ReviewPanel.vue'
 import { reviewGatewayKey } from '../model/review'
@@ -53,7 +54,7 @@ function reset() {
           <div>
             <span>综合评分</span
             ><strong data-testid="score"
-              >{{ snapshot.score?.toFixed(2) ?? '—' }}<small> / 10</small></strong
+              >{{ formatRating(snapshot.score, 2) }}<small> / 5</small></strong
             >
           </div>
           <div>

@@ -115,75 +115,58 @@ watch(
 onBeforeUnmount(clear)
 </script>
 <template>
-  <Teleport to="body"
-    ><dialog
+  <Teleport to="body">
+    <dialog
       ref="dialog"
-      class="like-target-dialog"
+      class="like-target-dialog content-dialog"
       aria-labelledby="like-target-title"
       @cancel.prevent="close"
       @close="close"
     >
-      <header>
+      <header class="detail-dialog-header">
         <h2 id="like-target-title">获赞{{ type === 'REVIEW' ? '点评' : '回复' }}</h2>
-        <button @click="close">关闭获赞详情</button>
+        <button type="button" class="detail-dialog-close" aria-label="关闭获赞详情" @click="close">
+          ×
+        </button>
       </header>
-      <p v-if="loading" role="status">正在读取获赞内容…</p>
-      <div v-else-if="error" role="alert">
+      <p v-if="loading" class="detail-dialog-state" role="status">正在读取获赞内容…</p>
+      <div v-else-if="error" class="detail-dialog-state" role="alert">
         <p>{{ error }}</p>
-        <button @click="load">重试加载</button>
+        <button type="button" class="dialog-secondary" @click="load">重试加载</button>
       </div>
-      <article v-else-if="target">
-        <strong>{{ target.author.username }}</strong>
-        <p>{{ target.body }}</p>
-        <time>{{ new Date(target.createdAt).toLocaleString('zh-CN') }}</time>
-        <p>
-          <RouterLink
-            :to="`/${target.windowId ? 'canteen-windows' : 'restaurants'}/${target.windowId ?? target.restaurantId}`"
-            @click="close"
-            >进入店铺 ›</RouterLink
-          >
-        </p>
+      <article v-else-if="target" class="like-target-content">
+        <strong class="detail-dialog-author">{{ target.author.username }}</strong>
+        <time class="detail-dialog-date" :datetime="target.createdAt">{{
+          new Date(target.createdAt).toLocaleString('zh-CN', {
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+          })
+        }}</time>
+        <p class="detail-dialog-body">{{ target.body }}</p>
       </article>
-    </dialog></Teleport
-  >
+      <footer class="detail-dialog-actions">
+        <button type="button" class="dialog-secondary" @click="close">关闭</button>
+        <RouterLink
+          v-if="target"
+          class="dialog-primary"
+          :to="`/${target.windowId ? 'canteen-windows' : 'restaurants'}/${target.windowId ?? target.restaurantId}`"
+          @click="close"
+          >进入店铺 →</RouterLink
+        >
+      </footer>
+    </dialog>
+  </Teleport>
 </template>
+<style scoped src="../../../shared/styles/content-dialog.css"></style>
 <style scoped>
-.like-target-dialog {
-  width: min(640px, calc(100vw - 32px));
-  max-height: 85vh;
-  box-sizing: border-box;
-  overflow: auto;
-  border: 1px solid #eee7db;
-  border-radius: 14px;
-  padding: 24px;
-  color: #27313c;
-  overflow-wrap: anywhere;
+.like-target-content {
+  padding-top: 22px;
 }
-.like-target-dialog::backdrop {
-  background: #0006;
-}
-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-h2 {
-  font-size: 19px;
-}
-p {
-  white-space: pre-wrap;
-  line-height: 1.8;
-}
-time {
-  font-size: 12px;
-  color: #737a80;
-}
-button {
-  padding: 6px 10px;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  cursor: pointer;
+.like-target-content time {
+  margin-top: 8px;
 }
 </style>

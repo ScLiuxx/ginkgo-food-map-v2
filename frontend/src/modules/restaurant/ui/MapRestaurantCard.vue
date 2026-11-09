@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatRating } from '@/shared/lib/formatRating'
 import { useUserLocation } from '@/modules/map/model/userLocation.store'
 const userLocation = useUserLocation()
 import { computed } from 'vue'
@@ -56,7 +57,7 @@ defineEmits<{ select: [] }>()
         <span class="map-rating" :class="{ unrated: restaurant.score === null }">
           <small class="map-metric-label">综合评分</small>
           <span v-if="restaurant.score !== null" class="map-score"
-            ><span aria-hidden="true">★</span> {{ restaurant.score.toFixed(1) }}</span
+            ><span aria-hidden="true">★</span> {{ formatRating(restaurant.score) }}</span
           >
           <span v-else class="metric-empty">暂无评分</span>
           <small v-if="restaurant.reviewCount > 0" class="map-review-count"

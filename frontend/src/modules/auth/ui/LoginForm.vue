@@ -19,7 +19,7 @@ function checkField(field: 'username' | 'password') {
   errors[field] = (field === 'username' ? form.username.trim() : form.password)
     ? ''
     : field === 'username'
-      ? '请输入用户名'
+      ? '请输入用户名或邮箱'
       : '请输入密码'
 }
 
@@ -61,12 +61,15 @@ onBeforeUnmount(() => {
     <h1 id="login-title">欢迎回来</h1>
     <p v-if="resetUsername" class="form-intro" role="status">密码已重置，请输入新密码登录。</p>
     <div class="form-field">
-      <label for="login-username">用户名</label>
+      <label for="login-username">用户名或邮箱</label>
       <input
         id="login-username"
         v-model="form.username"
         autocomplete="username"
-        maxlength="32"
+        maxlength="254"
+        placeholder="请输入用户名或邮箱"
+        autocapitalize="none"
+        :spellcheck="false"
         :aria-invalid="!!errors.username"
         :aria-describedby="errors.username ? 'login-username-error' : undefined"
         :disabled="auth.loggingIn"

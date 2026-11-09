@@ -69,7 +69,7 @@ it('shows real public data and selected-user reviews without private fields or e
   await mount()
   expect(host.textContent).toContain('同学22')
   expect(host.textContent).toContain('Lv.3')
-  expect(host.textContent).toContain('当前获赞 7')
+  expect(host.querySelector('.public-profile-likes strong')?.textContent).toBe('7')
   expect(host.querySelector('[data-reviews]')?.textContent).toContain('22')
   expect(host.querySelector('script,img,textarea')).toBeNull()
   expect(host.textContent).not.toContain('邮箱')

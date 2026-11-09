@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatRating } from '@/shared/lib/formatRating'
 import { computed } from 'vue'
 /** 只转换展示：后端0–10分按比例显示五星，未知/异常不显示成0星。 */
 const props = defineProps<{ score: number | null }>()
@@ -14,7 +15,7 @@ const valid = computed(
       <span class="star-symbols" aria-hidden="true"
         >★★★★★<span :style="{ width: `${score! * 10}%` }">★★★★★</span></span
       >
-      <strong>{{ (score! / 2).toFixed(1) }}</strong
+      <strong>{{ formatRating(score) }}</strong
       ><span class="sr-only"> / 5 星</span>
     </template>
     <span v-else>待评级</span>

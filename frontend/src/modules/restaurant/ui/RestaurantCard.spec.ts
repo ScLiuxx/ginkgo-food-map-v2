@@ -50,7 +50,7 @@ describe('商户行的真实资料边界', () => {
       distanceKm: 1.2,
       tags: ['火锅', '招牌面', '联调模拟'],
     })
-    expect(host.querySelector('.score-value')?.textContent).toContain('8.4')
+    expect(host.querySelector('.score-value')?.textContent).toContain('4.2')
     expect(host.querySelector('.card-price')?.textContent).toContain('约 ¥25')
     expect(host.querySelector('.card-price')?.textContent).toContain('估值')
     expect(host.querySelector('.business-tag')?.textContent).toBe('招牌面')

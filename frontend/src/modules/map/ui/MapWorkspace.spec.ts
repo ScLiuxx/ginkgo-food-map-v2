@@ -35,6 +35,8 @@ describe('地图界面预览隔离与选店', () => {
     await mount()
     expect(fetchRestaurants).not.toHaveBeenCalled()
     expect(host.textContent).toContain('非真实地图')
+    expect(host.querySelector('.score-pin')?.textContent?.trim()).toBe('4.3')
+    expect(host.querySelector('.map-card-list .map-score')?.textContent).toContain('4.3')
     expect(host.querySelectorAll('.map-card-list .map-restaurant')).toHaveLength(3)
     expect(host.querySelector('.map-selection a')).toBeNull()
     expect(host.querySelector<HTMLButtonElement>('.map-selection .map-navigate')?.disabled).toBe(

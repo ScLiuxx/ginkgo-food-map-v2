@@ -10,7 +10,8 @@ import ReviewEntry from './ReviewEntry.vue'
 import ReviewHistory from './ReviewHistory.vue'
 
 /** 本人跨店列表；归组、计数及可见性均由服务端完成，历史和删除复用现有点评能力。 */
-const props = defineProps<{ publicUserId?: string }>()
+const props = defineProps<{ publicUserId?: string; profileLayout?: boolean }>()
+const emit = defineEmits<{ total: [value: number | null] }>()
 const auth = useLoginStore()
 const gateway = inject(reviewGatewayKey, unavailableReviewGateway)
 provide(activeReplyEditorKey, ref<string | null>(null))
@@ -49,6 +50,7 @@ async function load(target = page.value) {
   requestedPage = target
   records.value = []
   loaded.value = false
+  emit('total', null)
   loading.value = true
   error.value = ''
   try {
@@ -67,6 +69,7 @@ async function load(target = page.value) {
     totalPages.value = result.totalPages
     totalGroups.value = result.totalGroups
     totalReviews.value = result.totalReviews
+    emit('total', result.totalReviews)
     loaded.value = true
   } catch (reason) {
     if (ticket === generation && owner === context) error.value = toErrorMessage(reason)
@@ -134,15 +137,18 @@ onBeforeUnmount(() => {
   generation++
   controller?.abort()
 })
+// 主页的统一工具栏只代理当前列表刷新，读取与写入进行中均禁用重复操作。
+defineExpose({ refresh: () => load(1), refreshing: computed(() => loading.value || busy.value) })
 </script>
 
 <template>
   <section
     class="my-reviews"
+    :class="{ 'profile-review-list': profileLayout }"
     :aria-label="publicUserId ? '用户公开点评' : '本人点评列表'"
     :aria-busy="loading"
   >
-    <header class="my-reviews-toolbar">
+    <header v-if="!profileLayout" class="my-reviews-toolbar">
       <p v-if="loaded">
         当前可查看 <strong>{{ totalGroups }}</strong> 家店 ·
         <strong>{{ totalReviews }}</strong> 条点评
@@ -186,6 +192,7 @@ onBeforeUnmount(() => {
       <ReviewEntry
         :item="group.item"
         star-scale
+        :profile-entry="profileLayout"
         :authenticated="auth.authenticated"
         :viewer-id="viewerId"
         :busy="busy"
@@ -229,11 +236,6 @@ onBeforeUnmount(() => {
         @cancel.prevent="cancelDelete"
       >
         <h2 id="my-delete-title">确定删除这条点评？</h2>
-        <p>该点评的照片和关联回复将一并删除，无法恢复。</p>
-        <p v-if="deleting?.scoringStatus === 'current'">
-          你在这家店的上一条有效点评将接替计分，没有其他点评时移除你的评分。
-        </p>
-        <p>普通删评保留已获得的成长经验，删评重发不重复奖励。</p>
         <p v-if="deleteError" role="alert">{{ deleteError }}</p>
         <footer>
           <button type="button" :disabled="busy" autofocus @click="cancelDelete">取消</button

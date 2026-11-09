@@ -83,11 +83,18 @@ onBeforeUnmount(clear)
       class="like-entry"
       :class="{ liked: result?.liked }"
       :aria-pressed="!!result?.liked"
+      :aria-label="`${result?.liked ? '取消点赞' : '点赞'}（${result?.count ?? '—'}）`"
       :disabled="busy || own || !!error || !result?.available"
       :title="own ? '不能给自己的内容点赞' : result?.liked ? '取消点赞' : '点赞'"
       @click="toggle"
     >
-      {{ result?.liked ? '已赞' : '赞' }} <span>{{ result?.count ?? '—' }}</span>
+      <!-- 图标表达点赞状态，读屏名称仍保留操作含义与实际计数。 -->
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"
+        />
+      </svg>
+      <span>{{ result?.count ?? '—' }}</span>
     </button>
     <span v-if="error" class="like-error" role="alert"
       >{{ error }} <button @click="load">重新读取</button></span
@@ -103,6 +110,9 @@ onBeforeUnmount(clear)
   overflow-wrap: anywhere;
 }
 .like-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   border: 0;
   background: none;
   color: inherit;
@@ -110,8 +120,20 @@ onBeforeUnmount(clear)
   cursor: pointer;
   padding: 6px 0;
 }
+.like-entry svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .like-entry.liked {
-  color: #be7d2c;
+  color: #ed8424;
+}
+.like-entry.liked svg {
+  fill: currentColor;
 }
 .like-entry:disabled {
   cursor: not-allowed;

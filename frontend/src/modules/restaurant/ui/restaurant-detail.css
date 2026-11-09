@@ -1,11 +1,16 @@
-/* 详情延续首页白底、橙色与1200px内容宽度；食堂取消大图，首屏直接浏览窗口。 */
-.restaurant-detail {
-  width: min(1200px, calc(100% - 64px));
-  margin: 0 auto;
-  padding: 26px 0 64px;
-  color: #2c333c;
-  background: white;
+/* 按确认稿使用浅灰页面和白色内容区，标题、评分、正文依次建立阅读层次。 */
+.detail-page {
+  min-height: calc(100dvh - 76px);
+  background: #f7f8fa;
 }
+.restaurant-detail {
+  width: min(1000px, 100%);
+  margin: 0 auto;
+  padding: 28px 36px 42px;
+  color: #202733;
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+}
+
 a {
   text-decoration: none;
   color: inherit;
@@ -13,14 +18,6 @@ a {
 button {
   font: inherit;
   cursor: pointer;
-}
-.favorite-entry {
-  margin: 8px 0 0 16px;
-  padding: 7px 0;
-  border: 0;
-  color: #9b8a72;
-  background: transparent;
-  font-size: 12px;
 }
 a:focus-visible,
 button:focus-visible,
@@ -34,45 +31,76 @@ summary:focus-visible {
   gap: 16px;
   font-size: 13px;
   color: #8a929c;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
 .detail-breadcrumb a {
-  padding: 6px 0;
+  padding: 0;
 }
 .detail-hero {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  gap: 30px;
-  padding-bottom: 30px;
-  border-bottom: 1px solid #edf0f2;
-}
-.detail-hero.canteen-hero {
-  padding-bottom: 24px;
+  grid-template-columns: 224px minmax(0, 1fr);
+  gap: 28px;
+  padding: 26px;
+  background: white;
+  border: 1px solid #eceef1;
+  border-radius: 16px;
 }
 .detail-heading {
   min-width: 0;
 }
 .hero-topline {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 16px;
+  margin-bottom: 15px;
 }
 h1 {
-  font-size: 27px;
-  font-weight: 700;
-  line-height: 1.4;
+  font-size: 28px;
+  font-weight: 750;
+  line-height: 1.35;
+  letter-spacing: -0.8px;
+  color: #171c24;
   margin: 0;
   overflow-wrap: anywhere;
 }
-.hero-topline :deep(.review-open) {
+/* 主次按钮共享一行；收藏控件中的错误与回执仍可换行显示。 */
+.detail-primary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 22px;
+}
+.detail-primary-actions :deep(.review-open) {
+  min-height: 40px;
   white-space: nowrap;
-  background: #f58a24;
+  background: #fb8b24;
   color: white;
-  padding: 10px 18px;
+  padding: 10px 22px;
+  border: 0;
   border-radius: 7px;
   font-size: 14px;
+  font-weight: 650;
+}
+.detail-primary-actions :deep(.favorite-control) {
+  margin: 0;
+}
+.detail-primary-actions :deep(.favorite-entry) {
+  min-height: 40px;
+  padding: 9px 17px;
+  border: 1px solid #e3e6eb;
+  border-radius: 7px;
+  color: #525f70;
+  background: white;
+  font: inherit;
+  font-size: 14px;
+}
+.detail-primary-actions :deep(.favorite-entry[aria-pressed='true']) {
+  background: #fff3e9;
+  border-color: #f5c99f;
+  color: #df7b23;
+}
+.detail-primary-actions :deep(.favorite-control p) {
+  max-width: 230px;
+  margin: 6px 0 0;
+  color: #7c8794;
 }
 .detail-affiliation {
   color: #818b96;
@@ -86,39 +114,47 @@ h1 {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px 16px;
+  gap: 10px 12px;
   font-size: 13px;
-  color: #87909b;
+  color: #727d89;
 }
 .detail-subtitle .detail-affiliation {
   margin: 0;
 }
 .hero-score {
-  font-size: 24px;
+  font-size: 34px;
+  color: #ed7918;
+}
+.hero-score :deep(strong) {
+  font-weight: 750;
+  letter-spacing: -1px;
+}
+.hero-score :deep(.star-symbols) {
+  font-size: 22px;
 }
 .hero-price {
   margin-left: auto;
-  color: #505b67;
-  font-size: 16px;
+  color: #828c98;
+  font-size: 13px;
 }
 .hero-price small {
   font-size: 12px;
   color: #8d959f;
 }
 .score-summary {
-  margin: 14px 0;
+  margin: 12px 0 0;
 }
 .score-dimensions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 7px 18px;
-  font-size: 13px;
-  color: #8a929b;
+  gap: 7px 20px;
+  font-size: 12px;
+  color: #929aa4;
 }
 .score-dimensions strong {
   font-weight: 500;
-  color: #5d6773;
+  color: #66717f;
   margin-left: 3px;
 }
 .panel-note {
@@ -131,13 +167,20 @@ h1 {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 12px;
-  margin-top: 13px;
-  color: #7d8792;
+  gap: 8px 10px;
+  margin-top: 19px;
+  color: #647080;
   font-size: 13px;
 }
 .detail-location {
   overflow-wrap: anywhere;
+}
+.category-tag {
+  background: #f5f6f8;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: #657080;
+  font-size: 12px;
 }
 .service-tag {
   font-size: 11px;
@@ -167,16 +210,21 @@ h1 {
 }
 .detail-hero :deep(.gallery-main) {
   width: 100%;
-  height: 172px;
+  height: 208px;
+  border-radius: 10px;
 }
 .detail-hero :deep(.gallery-empty) {
   min-height: 0;
-  height: 218px;
+  height: 208px;
+  border-radius: 10px;
+  background: #f5f6f8;
   padding: 16px;
   box-sizing: border-box;
 }
 .detail-hero :deep(.gallery-empty strong) {
   font-size: 12px;
+  font-weight: 400;
+  color: #9aa2ad;
 }
 .detail-hero :deep(.gallery-credit) {
   padding: 14px 8px 6px;
@@ -196,11 +244,15 @@ h1 {
   height: 38px;
 }
 .detail-dishes {
-  padding: 26px 0;
-  border-bottom: 1px solid #edf0f2;
+  margin-top: 22px;
+  padding: 26px;
+  border: 1px solid #eceef1;
+  border-radius: 16px;
+  background: white;
 }
 h2 {
-  font-size: 20px;
+  font-size: 21px;
+  font-weight: 750;
   margin: 0 0 18px;
 }
 .dish-list {
@@ -250,26 +302,14 @@ h2 {
   padding: 18px 0;
 }
 .detail-reviews {
-  padding: 28px 0 0;
-}
-.legacy-canteen-reviews {
-  margin-top: 24px;
-  padding: 18px 0;
-  border-top: 1px solid #edf0f2;
-}
-.legacy-canteen-reviews > summary {
-  cursor: pointer;
-  color: #828c97;
-  font-size: 14px;
-}
-.legacy-canteen-reviews small {
-  margin-left: 6px;
-  color: #a2a8b0;
+  margin-top: 22px;
+  padding: 0 26px;
+  background: white;
+  border: 1px solid #eceef1;
+  border-radius: 16px;
 }
 .detail-extra {
-  padding-top: 28px;
-  margin-top: 20px;
-  border-top: 1px solid #edf0f2;
+  margin-top: 22px;
   color: #8c96a1;
   font-size: 12px;
   line-height: 1.8;
@@ -280,7 +320,6 @@ h2 {
   gap: 10px 24px;
   margin-bottom: 14px;
 }
-.location-links button,
 .location-links a {
   border: 0;
   background: none;
@@ -296,20 +335,6 @@ h2 {
 }
 .detail-extra p {
   margin: 8px 0;
-}
-.copy-feedback {
-  font-size: 12px;
-  color: #8c96a1;
-}
-.manual-copy textarea {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-  border: 1px solid #e6e9ec;
-  background: #fafbfc;
-  border-radius: 6px;
-  font: inherit;
-  padding: 12px;
 }
 .missing-restaurant {
   width: min(1000px, calc(100% - 40px));
@@ -331,17 +356,27 @@ h2 {
   border-radius: 7px;
   padding: 12px 20px;
 }
+/* 次要纠错入口使用文字按钮，不抢占写点评的主操作层次。 */
+.correction-entry {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 9px 3px;
+  color: #7c8794;
+  font-size: 12px;
+  text-decoration: none;
+}
+.correction-entry:hover {
+  color: #df7b23;
+}
 @media (max-width: 900px) {
+  .restaurant-detail {
+    padding-right: 24px;
+    padding-left: 24px;
+  }
   .detail-hero {
     grid-template-columns: 190px minmax(0, 1fr);
     gap: 22px;
-  }
-  h1 {
-    font-size: 23px;
-  }
-  .hero-topline {
-    flex-wrap: wrap;
-    gap: 10px;
   }
   .hero-price {
     margin-left: 0;
@@ -352,8 +387,7 @@ h2 {
 }
 @media (max-width: 600px) {
   .restaurant-detail {
-    width: calc(100% - 32px);
-    padding-top: 16px;
+    padding: 18px 16px 32px;
   }
   .detail-breadcrumb {
     margin-bottom: 18px;
@@ -361,39 +395,39 @@ h2 {
   }
   .detail-hero {
     display: flex;
-    flex-direction: column-reverse;
-    gap: 18px;
-    padding-bottom: 22px;
-  }
-  .hero-topline {
-    flex-wrap: nowrap;
-    align-items: center;
+    flex-direction: column;
+    gap: 20px;
+    padding: 18px;
+    border-radius: 12px;
   }
   h1 {
-    font-size: 22px;
-  }
-  .hero-topline :deep(.review-open) {
-    padding: 9px 12px;
-    font-size: 12px;
+    font-size: 24px;
   }
   .detail-subtitle {
-    gap: 8px 12px;
+    gap: 8px 10px;
+    font-size: 12px;
   }
   .hero-score {
-    font-size: 22px;
+    font-size: 30px;
   }
-  .hero-price {
-    font-size: 14px;
+  .hero-score :deep(.star-symbols) {
+    font-size: 20px;
   }
   .score-dimensions {
     gap: 8px 14px;
-    font-size: 12px;
   }
-  .detail-hero :deep(.gallery-main) {
-    height: 180px;
+  .detail-primary-actions {
+    gap: 8px;
   }
+  .detail-primary-actions :deep(.review-open) {
+    padding: 10px 15px;
+  }
+  .detail-primary-actions :deep(.favorite-entry) {
+    padding: 9px 13px;
+  }
+  .detail-hero :deep(.gallery-main),
   .detail-hero :deep(.gallery-empty) {
-    height: 148px;
+    height: 180px;
   }
   .detail-hero :deep(.gallery-thumbnails button) {
     flex-basis: 52px;
@@ -403,26 +437,10 @@ h2 {
     grid-template-columns: 1fr;
   }
   .detail-reviews {
-    padding-top: 22px;
+    padding: 0 18px;
+    border-radius: 12px;
   }
-}
-
-/* 图片右侧资料区的次要入口，不与写点评主操作争夺视觉层级。 */
-.correction-entry {
-  display: inline-flex;
-  align-items: center;
-  margin-top: 12px;
-  padding: 7px 12px;
-  border: 1px solid #e5a14a;
-  border-radius: 6px;
-  color: #ba741e;
-  font-size: 13px;
-  text-decoration: none;
-}
-.correction-entry:hover {
-  background: #fff8ed;
-}
-.correction-entry:focus-visible {
-  outline: 2px solid #ad6f26;
-  outline-offset: 3px;
+  .detail-dishes {
+    padding: 18px;
+  }
 }

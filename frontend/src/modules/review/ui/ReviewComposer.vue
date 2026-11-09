@@ -3,10 +3,11 @@ import { computed, inject, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useLoginStore } from '@/modules/auth/model/login.store'
 import { authToken } from '@/shared/api/authSession'
-import { fetchRestaurant, fetchRestaurants } from '@/modules/restaurant/api/restaurantApi'
+import { fetchRestaurant } from '@/modules/restaurant/api/restaurantApi'
 import type { RestaurantReadModel } from '@/modules/restaurant/model/restaurant.types'
 import { ratingDimensions } from '@/modules/restaurant/model/catalog.logic'
 import HalfStarRating from './HalfStarRating.vue'
+import ReviewTargetSearch from './ReviewTargetSearch.vue'
 import {
   canteenWindows,
   diningDetails,
@@ -167,44 +168,18 @@ async function open() {
   if (dialog.value?.showModal) dialog.value.showModal()
   else if (dialog.value) dialog.value.open = true
   loading.value = true
-  const ticket = ++generation
+  ++generation
   controller = new globalThis.AbortController()
   restaurants.value = props.restaurant ? [props.restaurant] : []
   floor.value = ''
   windowId.value = ''
   selected.value = props.restaurant?.id ?? ''
-  // 详情点评固定到当前对象，尤其不能从窗口悄悄切换到父食堂；全站选店入口仍读取完整目录。
-  if (targetLocked.value && props.restaurant) {
-    loading.value = false
-    return
-  }
-  try {
-    const all: RestaurantReadModel[] = []
-    for (let page = 1; ; page++) {
-      const result = await fetchRestaurants(
-        {
-          keyword: '',
-          category: '',
-          sort: 'score',
-          hideClosed: false,
-          maxPrice: null,
-          maxDistanceMeters: null,
-        },
-        page,
-        100,
-        controller.signal,
-      )
-      all.push(...result.records)
-      if (page >= result.totalPages) break
-    }
-    if (ticket !== generation) return
-    restaurants.value = all.filter((r) => r.dining?.kind !== 'window')
-    selected.value = props.restaurant?.id ?? restaurants.value[0]?.id ?? ''
-  } catch {
-    if (ticket === generation) error.value = '餐厅列表加载失败，请关闭后重试。'
-  } finally {
-    if (ticket === generation) loading.value = false
-  }
+  // 全站选店由搜索组件按需分页读取，详情对象继续保持固定目标。
+  loading.value = false
+}
+function chooseRestaurant(item: RestaurantReadModel) {
+  restaurants.value = [item]
+  selected.value = item.id
 }
 /** 图片按顺序处理；过量明确提示，不静默丢图。账号切换或关窗后丢弃解码结果。 */
 async function addPhotos(files: globalThis.FileList | null) {
@@ -362,25 +337,16 @@ onUnmounted(close)
       </header>
       <div v-show="!locked" class="review-fields">
         <fieldset class="review-inputs" :disabled="busy || locked">
-          <label class="target-label"
-            >评价对象
-            <select
-              v-show="!targetLocked"
-              v-model="selected"
-              aria-label="评价对象"
-              :disabled="loading || targetLocked"
-            >
-              <option value="">
-                {{ loading ? '正在加载餐厅…' : '请选择餐厅' }}
-              </option>
-              <option v-for="r in restaurants" :key="r.id" :value="r.id">
-                {{ r.name }}{{ r.closed ? '（已停业）' : '' }}
-              </option>
-            </select>
-          </label>
+          <span class="target-label">评价对象</span>
+          <ReviewTargetSearch
+            v-if="opened && !targetLocked"
+            :selected="current"
+            :disabled="busy || locked"
+            @select="chooseRestaurant"
+            @leave="close"
+          />
           <div v-if="targetLocked" class="locked-target">
-            <span aria-hidden="true">🔒</span><strong>{{ lockedName }}</strong
-            ><small>已锁定</small>
+            <strong>{{ lockedName }}</strong>
           </div>
           <div v-if="isCanteen" class="window-selectors">
             <label
@@ -405,14 +371,6 @@ onUnmounted(close)
           <p v-if="targetHint && !isCanteen" class="hint target-note">
             {{ targetHint }}
           </p>
-          <RouterLink
-            v-if="!targetLocked"
-            class="add-missing"
-            to="/restaurants/new"
-            :aria-disabled="busy || locked"
-            @click="busy || locked ? $event.preventDefault() : close()"
-            >找不到要评价的店？添加餐厅 →</RouterLink
-          >
           <section class="ratings-section" aria-label="四维评分">
             <div class="section-heading">
               <h3>四维评分 <small>支持半星</small></h3>

@@ -6,6 +6,7 @@ export interface CurrentUser {
 }
 
 export interface LoginRequest {
+  /** 兼容接口字段名，值可以是用户名或注册邮箱。 */
   username: string
   password: string
 }

@@ -46,7 +46,9 @@ const floors = computed(() =>
   ),
 )
 const visible = computed(() => records.value.filter((w) => !floor.value || w.floor === floor.value))
-// 楼层作为可展开的浏览单元；未知楼层保留独立分组，不能擅自分配到一楼。
+// 只有多个实际楼层时展示切换；单楼层只在标题旁标注一次，避免重复楼层说明。
+const multipleFloors = computed(() => new Set(records.value.map((window) => window.floor)).size > 1)
+// 查看全部时按楼层归组；已选楼层不再重复标题，未知楼层不擅自分配到一楼。
 const groups = computed(() => {
   const names = [...new Set(visible.value.map((window) => window.floor))].sort((a, b) =>
     compareFloors(a || '楼层待补充', b || '楼层待补充'),
@@ -89,32 +91,27 @@ function menuLine(window: DiningWindow) {
   <section class="canteen-windows" aria-labelledby="windows-title">
     <div class="section-heading">
       <h2 id="windows-title">
-        食堂窗口
-        <small v-if="windows !== null">已收录 {{ records.length }} 个</small>
+        食堂窗口 <small v-if="windows !== null">({{ records.length }})</small>
       </h2>
-    </div>
-    <div class="window-filters" role="group" aria-label="按楼层筛选窗口">
-      <span class="filter-label">楼层</span>
-      <button type="button" :aria-pressed="!floor" @click="floor = ''">
-        全部楼层<small v-if="windows !== null">({{ records.length }})</small>
-      </button>
-      <button
-        v-for="value in floors"
-        :key="value"
-        type="button"
-        :aria-pressed="floor === value"
-        @click="floor = value"
-      >
-        {{ value }}<small>({{ records.filter((w) => w.floor === value).length }})</small>
-      </button>
+      <span v-if="!multipleFloors && records.length" class="single-floor">{{
+        groups[0]?.name
+      }}</span>
+      <div v-if="multipleFloors" class="window-filters" role="group" aria-label="按楼层筛选窗口">
+        <button type="button" :aria-pressed="!floor" @click="floor = ''">全部</button>
+        <button
+          v-for="value in floors"
+          :key="value"
+          type="button"
+          :aria-pressed="floor === value"
+          @click="floor = value"
+        >
+          {{ value }}
+        </button>
+      </div>
     </div>
     <template v-if="records.length">
-      <details v-for="group in groups" :key="`${floor}:${group.name}`" class="floor-section" open>
-        <summary>
-          <strong>{{ group.name }}</strong
-          ><span>{{ group.windows.length }} 个窗口</span
-          ><span class="floor-toggle">展开 / 收起</span>
-        </summary>
+      <section v-for="group in groups" :key="`${floor}:${group.name}`" class="floor-section">
+        <h3 v-if="multipleFloors && !floor" class="floor-heading">{{ group.name }}</h3>
         <div class="window-grid">
           <RouterLink
             v-for="window in group.windows"
@@ -149,14 +146,13 @@ function menuLine(window: DiningWindow) {
               </p>
               <p v-else-if="window.price !== null">参考人均 ¥{{ window.price }}</p>
               <p class="window-meta">
-                <span>{{ window.floor || '楼层待补充' }}</span
-                ><span class="enter-window">进窗口 →</span>
+                <span class="enter-window">进窗口 →</span>
               </p>
               <p v-if="window.closed" class="excluded-note">不计入当前汇总</p>
             </div>
           </RouterLink>
         </div>
-      </details>
+      </section>
       <div v-if="!visible.length" class="dining-empty" role="status">
         <p>这个楼层暂时没有窗口。</p>
         <button type="button" @click="resetFilters">查看全部窗口</button>
@@ -170,16 +166,10 @@ function menuLine(window: DiningWindow) {
 </template>
 
 <style scoped>
-.filter-label {
-  align-self: center;
-  font-size: 12px;
-  color: #929ba5;
-  flex-shrink: 0;
-}
-.window-filters small {
-  margin-left: 4px;
-  font-size: 11px;
-  font-weight: 400;
+.single-floor {
+  font-size: 13px;
+  color: #87929e;
+  margin-left: auto;
 }
 .window-row:hover .enter-window {
   color: #ec8424;
@@ -208,22 +198,18 @@ function menuLine(window: DiningWindow) {
   color: #a1a8b0;
   font-size: 11px;
 }
-.floor-section > summary::before {
-  content: '›';
-  color: #9aa3ad;
-  font-size: 18px;
-}
-.floor-section[open] > summary::before {
-  content: '⌄';
-}
+/* 整个窗口区与食堂资料使用同款卡片，内部窗口仍只以细线分隔。 */
 .canteen-windows {
-  padding: 28px 0;
-  border-bottom: 1px solid #edf0f2;
+  margin-top: 22px;
+  padding: 26px;
+  background: white;
+  border: 1px solid #eceef1;
+  border-radius: 16px;
 }
 .section-heading {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 14px;
   flex-wrap: wrap;
 }
@@ -236,60 +222,43 @@ h2 small {
   font-size: 13px;
   color: #687583;
   font-weight: 400;
-  margin-left: 10px;
+  margin-left: 4px;
 }
 a {
   color: inherit;
   text-decoration: none;
 }
 .floor-section {
-  border-top: 1px solid #edf0f2;
-  margin-top: 18px;
+  margin-top: 16px;
 }
-.floor-section > summary {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 20px 0 0;
-  cursor: pointer;
-  list-style: none;
-}
-.floor-section > summary strong {
-  font-size: 19px;
-}
-.floor-section > summary span {
-  font-size: 12px;
-  color: #687583;
-}
-.floor-toggle {
-  margin-left: auto;
+.floor-heading {
+  font-size: 15px;
+  font-weight: 600;
+  color: #586676;
+  margin: 22px 0 0;
 }
 .window-filters {
   display: flex;
   overflow-x: auto;
-  gap: 22px;
-  margin-top: 20px;
+  gap: 6px;
+  max-width: 100%;
+  margin-left: auto;
 }
 .window-filters button {
   border: 0;
   background: none;
-  color: #626e7b;
-  padding: 8px 0;
+  color: #7c8794;
+  padding: 8px 13px;
   white-space: nowrap;
   min-height: 44px;
   font: inherit;
   font-size: 14px;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
+  border-radius: 6px;
 }
 .window-filters button[aria-pressed='true'] {
-  color: #a45e0c;
-  border-bottom-color: #e99a22;
-}
-.filter-result {
-  color: #687583;
-  font-size: 12px;
-  margin: 12px 0 0;
+  color: #ed8424;
+  background: #fff3e9;
 }
 .window-grid {
   display: grid;
@@ -384,8 +353,7 @@ h3 small {
   min-height: 44px;
 }
 button:focus-visible,
-a:focus-visible,
-summary:focus-visible {
+a:focus-visible {
   outline: 2px solid #ad6f26;
   outline-offset: 4px;
 }
@@ -402,6 +370,12 @@ summary:focus-visible {
   }
   .window-copy h3 {
     font-size: 17px;
+  }
+}
+@media (max-width: 600px) {
+  .canteen-windows {
+    padding: 18px;
+    border-radius: 12px;
   }
 }
 </style>
