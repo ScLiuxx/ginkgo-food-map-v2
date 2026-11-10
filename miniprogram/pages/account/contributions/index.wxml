@@ -1,0 +1,83 @@
+<view class="page contribution-page">
+  <view class="ambient">
+    <view class="ambient-blob ambient-a"></view>
+    <view class="ambient-blob ambient-b"></view>
+    <view class="ambient-blob ambient-c"></view>
+  </view>
+
+  <view class="content-head">
+    <view class="content-title">投稿与纠错</view>
+    <view class="content-sub">查看新店投稿和资料纠错的审核进度</view>
+  </view>
+
+  <view wx:if="{{!loggedIn}}" class="card content-state">
+    <view class="state-title">登录后查看投稿记录</view>
+    <view class="state-copy">使用注册邮箱登录，即可查看自己的投稿和纠错进度。</view>
+    <view class="primary-button state-action" bindtap="login">去登录</view>
+  </view>
+
+  <block wx:else>
+    <view class="filter-row">
+      <view
+        wx:for="{{filters}}"
+        wx:key="key"
+        class="filter-chip {{filter === item.key ? 'active' : ''}}"
+        data-filter="{{item.key}}"
+        bindtap="switchFilter"
+      >
+        <text>{{item.label}}</text>
+        <text wx:if="{{loaded}}" class="filter-count">{{item.count}}</text>
+      </view>
+    </view>
+
+    <view class="content-meta">
+      <text wx:if="{{loaded}}">共 {{total}} 条记录</text>
+    </view>
+
+    <view wx:if="{{hint}}" class="error-text content-hint">{{hint}}</view>
+
+    <view wx:if="{{loading}}" class="card content-state">
+      <view class="state-copy">正在加载…</view>
+    </view>
+
+    <view wx:elif="{{errorMessage}}" class="card content-state">
+      <view class="state-title">读取失败</view>
+      <view class="state-copy">{{errorMessage}}</view>
+      <view class="ghost-button state-action" bindtap="reload">重新加载</view>
+    </view>
+
+    <block wx:else>
+      <view wx:if="{{!items.length}}" class="card content-state">
+        <view class="state-title">暂无{{filter === 'ALL' ? '投稿' : '对应状态'}}记录</view>
+        <view class="state-copy">小程序当前只支持查看记录；新店投稿与纠错提交请在网页端完成。</view>
+      </view>
+
+      <view
+        wx:for="{{items}}"
+        wx:key="id"
+        class="card contribution-card"
+        data-id="{{item.id}}"
+        bindtap="openDetail"
+      >
+        <view class="contribution-head">
+          <view class="contribution-name {{item.status === 'WITHDRAWN' ? 'title-muted' : ''}}">{{item.name}}</view>
+          <view class="status-badge status-{{item.statusClass}}">{{item.statusLabel}}</view>
+        </view>
+        <view class="contribution-meta">
+          <text>{{item.typeLabel}}</text>
+          <text> · {{item.dateText}}</text>
+          <text wx:if="{{item.photoText}}"> · {{item.photoText}}</text>
+        </view>
+        <view class="contribution-note">{{item.noteText}}</view>
+        <view class="contribution-foot">
+          <text class="contribution-id">申请 #{{item.id}}</text>
+          <text class="content-link">查看详情 ›</text>
+        </view>
+      </view>
+
+      <view wx:if="{{page < totalPages}}" class="load-more" bindtap="loadMore">
+        {{loadingMore ? '加载中…' : '加载更多'}}
+      </view>
+    </block>
+  </block>
+</view>

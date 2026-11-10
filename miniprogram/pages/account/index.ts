@@ -12,12 +12,13 @@ type AccountData = {
 /**
  * 个人中心展示账号状态、我的点评与收藏入口以及退出登录。
  *
- * 投稿、成长等级和资料设置仍待后续步骤接入；
- * 这里不放置点击无效的菜单，避免让用户误以为功能已经可用。
+ * 成长等级、资料设置与投稿提交仍待后续步骤接入；
+ * 投稿与纠错记录当前只支持查看，不放置点击无效的编辑入口。
  */
 type AccountCustom = {
   performLogout(): Promise<void>
   openMyContent(event: WxTapEvent): void
+  openContributions(): void
 }
 
 Page<AccountData, AccountCustom>({
@@ -55,6 +56,13 @@ Page<AccountData, AccountCustom>({
     if (tab !== 'reviews' && tab !== 'favorites') return
     wx.navigateTo({
       url: `/pages/account/content/index?tab=${tab}`,
+    })
+  },
+
+  /** 投稿与纠错只读列表，默认展示全部状态。 */
+  openContributions() {
+    wx.navigateTo({
+      url: '/pages/account/contributions/index',
     })
   },
 

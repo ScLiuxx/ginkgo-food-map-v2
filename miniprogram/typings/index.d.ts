@@ -129,6 +129,7 @@ interface Wx {
   compressImage(options: WxCompressImageOptions): void
   getImageInfo(options: WxGetImageInfoOptions): void
   uploadFile(options: WxUploadFileOptions): void
+  downloadFile(options: WxDownloadFileOptions): void
   getFileSystemManager(): WxFileSystemManager
 }
 
@@ -188,6 +189,14 @@ interface WxUploadFileOptions {
   header?: Record<string, string>
   timeout?: number
   success?: (result: { statusCode: number; data: string }) => void
+  fail?: (error: { errMsg: string }) => void
+}
+
+interface WxDownloadFileOptions {
+  url: string
+  header?: Record<string, string>
+  timeout?: number
+  success?: (result: { statusCode: number; tempFilePath: string }) => void
   fail?: (error: { errMsg: string }) => void
 }
 

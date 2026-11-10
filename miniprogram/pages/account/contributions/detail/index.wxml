@@ -1,0 +1,88 @@
+<view class="page detail-page">
+  <view class="ambient">
+    <view class="ambient-blob ambient-a"></view>
+    <view class="ambient-blob ambient-b"></view>
+    <view class="ambient-blob ambient-c"></view>
+  </view>
+
+  <view wx:if="{{!loggedIn}}" class="card content-state">
+    <view class="state-title">登录后查看投稿详情</view>
+    <view class="state-copy">申请内容与附图只对提交人开放。</view>
+    <view class="primary-button state-action" bindtap="login">去登录</view>
+  </view>
+
+  <view wx:elif="{{loading}}" class="card content-state">
+    <view class="state-copy">正在加载…</view>
+  </view>
+
+  <view wx:elif="{{errorMessage}}" class="card content-state">
+    <view class="state-title">读取失败</view>
+    <view class="state-copy">{{errorMessage}}</view>
+    <view class="ghost-button state-action" bindtap="load">重新加载</view>
+  </view>
+
+  <block wx:elif="{{detail}}">
+    <view class="card detail-head">
+      <view class="detail-head-top">
+        <view class="detail-name">{{detail.name}}</view>
+        <view class="status-badge status-{{detail.statusClass}}">{{detail.statusLabel}}</view>
+      </view>
+      <view class="detail-meta">{{detail.typeLabel}} · 申请 #{{detail.id}}</view>
+      <view wx:if="{{detail.previousRequestText}}" class="detail-meta">{{detail.previousRequestText}}</view>
+      <view class="detail-timeline">
+        <text>提交于 {{detail.createdText}}</text>
+        <text wx:if="{{detail.reviewedText}}"> · 审核于 {{detail.reviewedText}}</text>
+        <text wx:if="{{detail.withdrawnText}}"> · 撤回于 {{detail.withdrawnText}}</text>
+      </view>
+    </view>
+
+    <view wx:if="{{detail.rejectReason}}" class="card reject-card">
+      <view class="section-title">驳回原因</view>
+      <view class="reject-text">{{detail.rejectReason}}</view>
+    </view>
+
+    <view class="card">
+      <view class="section-title">提交内容</view>
+      <view wx:for="{{detail.proposed}}" wx:key="label" class="field-row">
+        <view class="field-label">{{item.label}}</view>
+        <view class="field-value">{{item.value}}</view>
+      </view>
+    </view>
+
+    <view wx:if="{{detail.approved.length}}" class="card">
+      <view class="section-title">审核通过内容</view>
+      <view wx:for="{{detail.approved}}" wx:key="label" class="field-row">
+        <view class="field-label">{{item.label}}</view>
+        <view class="field-value">{{item.value}}</view>
+      </view>
+    </view>
+
+    <view wx:if="{{detail.photoPositions.length}}" class="card">
+      <view class="section-title">附图（{{detail.photoPositions.length}} 张）</view>
+      <view class="photo-grid">
+        <view
+          wx:for="{{photos}}"
+          wx:key="position"
+          class="photo-cell"
+          data-index="{{index}}"
+          bindtap="previewPhoto"
+        >
+          <image wx:if="{{item.path}}" class="photo-image" src="{{item.path}}" mode="aspectFill" />
+          <view wx:elif="{{item.loading}}" class="photo-state">加载中…</view>
+          <view wx:else class="photo-state photo-error">
+            <text>{{item.error || '读取失败'}}</text>
+            <text class="photo-retry" catchtap="retryPhoto" data-index="{{index}}">重试</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{detail.targetAvailable && detail.restaurantId}}" class="primary-button detail-action" bindtap="openRestaurant">
+      查看店铺
+    </view>
+
+    <view class="readonly-note">
+      小程序当前仅支持查看记录；待审修改、撤回和驳回重提请在网页端完成。
+    </view>
+  </block>
+</view>
