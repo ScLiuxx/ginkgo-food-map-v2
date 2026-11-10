@@ -8,6 +8,7 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 
 import com.ginkgo.foodmap.restaurant.config.*;
 import com.ginkgo.foodmap.restaurant.dto.RestaurantListQuery;
+import com.ginkgo.foodmap.restaurant.metrics.RestaurantSearchSyncMetrics;
 import com.ginkgo.foodmap.restaurant.search.*;
 import com.ginkgo.foodmap.restaurant.service.*;
 import com.ginkgo.foodmap.security.TestJwtKeys;
@@ -323,37 +324,67 @@ class RestaurantSearchQueryIntegrationTest {
         }
     }
 
+    /** 列表接受同步延迟；改名、删除及恢复在投影刷新后生效，积压不再强制切SQL。 */
     @Test
-    void changedDeletedAndRestoredRowsNeverReuseOldEsTotal() throws Exception {
+    void listUsesProjectionUntilOutboxChangesBecomeSearchable() throws Exception {
         jdbc.update("UPDATE restaurants SET name='资料已改',search_projection_version=2 WHERE id=101");
         var changed = queries.list(query("清水河咖啡"));
-        assertThat(changed.getSearch().getReason()).isEqualTo("DATA_CHANGED");
-        assertThat(changed.getTotal()).isEqualTo(1); // SQL完整字符串匹配仅保留102，不复用ES的4条总数。
+        assertThat(changed.getSearch().getEngine()).isEqualTo("ES");
+        assertThat(changed.getTotal()).isEqualTo(4);
+        assertThat(changed.getRecords()).extracting(r -> r.getName()).contains("清水河咖啡");
         jdbc.update(
-                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM',search_projection_version=3 WHERE id=102");
-        var deleted = queries.list(query("咖啡"));
-        assertThat(deleted.getSearch().getReason()).isEqualTo("DATA_CHANGED");
-        assertThat(deleted.getRecords()).extracting(r -> r.getId()).doesNotContain("102");
+                "UPDATE restaurants SET"
+                    + " deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM',search_projection_version=3"
+                    + " WHERE id=102");
+        assertThat(queries.list(query("咖啡")).getRecords())
+                .extracting(r -> r.getId())
+                .contains("102");
         publish(List.of(101L, 102L));
+        assertThat(queries.list(query("咖啡")).getRecords())
+                .extracting(r -> r.getId())
+                .doesNotContain("102");
         jdbc.update(
-                "UPDATE restaurants SET deleted_at=NULL,delete_reason_code=NULL,search_projection_version=4 WHERE id=102");
+                "UPDATE restaurants SET"
+                    + " deleted_at=NULL,delete_reason_code=NULL,search_projection_version=4 WHERE"
+                    + " id=102");
         jdbc.update(
-                "INSERT INTO restaurant_search_outbox(restaurant_id,projection_version) VALUES(102,4)");
+                "INSERT INTO restaurant_search_outbox(restaurant_id,projection_version)"
+                        + " VALUES(102,4)");
         var pending = queries.list(query("咖啡"));
-        assertThat(pending.getSearch().getReason()).isEqualTo("SYNC_PENDING");
-        assertThat(pending.getRecords()).extracting(r -> r.getId()).contains("102");
+        assertThat(pending.getSearch().getEngine()).isEqualTo("ES");
+        assertThat(pending.getRecords()).extracting(r -> r.getId()).doesNotContain("102");
         jdbc.update("UPDATE restaurant_search_outbox SET status='FAILED'");
-        assertThat(queries.list(query("咖啡")).getSearch().getReason()).isEqualTo("SYNC_PENDING");
-        publish(List.of(102L));
-        jdbc.update("UPDATE restaurant_search_outbox SET status='SUCCEEDED'");
         assertThat(queries.list(query("咖啡")).getSearch().getEngine()).isEqualTo("ES");
+        publish(List.of(102L));
+        assertThat(queries.list(query("咖啡")).getRecords())
+                .extracting(r -> r.getId())
+                .contains("102");
+    }
+
+    /** 无关键词目录的匹配、资料、排序与分页由真实ES直接返回。 */
+    @Test
+    void emptyKeywordListsCatalogFromEs() {
+        var q = query("");
+        q.setPageSize(2);
+        var page = queries.list(q);
+        assertThat(page.getSearch().getEngine()).isEqualTo("ES");
+        assertThat(page.getSearch().getReason()).isEqualTo("CATALOG");
+        assertThat(page.getTotal()).isEqualTo(6);
+        assertThat(page.getTotalPages()).isEqualTo(3);
+        assertThat(page.getRecords()).extracting(r -> r.getId()).containsExactly("101", "102");
+        assertThat(page.getRecords().getFirst().getName()).isEqualTo("清水河咖啡");
+        q.setPage(2);
+        assertThat(queries.list(q).getRecords())
+                .extracting(r -> r.getId())
+                .containsExactly("103", "104");
     }
 
     /** 一位小数后的同分以ID排序；含舍入临界值、未知/零、全局分页及SQL降级一致性。 */
     @Test
     void roundedRatingSortsStayOnEsAndAgreeWithSql() throws Exception {
         jdbc.update(
-                "UPDATE restaurants SET latitude=30.75,longitude=103.93004,needs_location=FALSE WHERE id=103");
+                "UPDATE restaurants SET latitude=30.75,longitude=103.93004,needs_location=FALSE"
+                        + " WHERE id=103");
         rating(101, 10000, 9234, "82400"); // 8.24 -> 8.2，92.34% -> 92.3%
         rating(102, 100000, 92349, "824900"); // 更高尾数仍同档，不能排到较小ID前面。
         rating(103, 10000, 9235, "82500"); // 8.25 -> 8.3，92.35% -> 92.4%
@@ -411,7 +442,9 @@ class RestaurantSearchQueryIntegrationTest {
 
     private void rating(long id, long participants, long recommended, String sum) {
         jdbc.update(
-                "INSERT INTO restaurant_review_statistics(restaurant_id,review_count,participant_count,recommend_count,overall_score_sum) VALUES(?,?,?,?,?)",
+                "INSERT INTO"
+                    + " restaurant_review_statistics(restaurant_id,review_count,participant_count,recommend_count,overall_score_sum)"
+                    + " VALUES(?,?,?,?,?)",
                 id,
                 participants,
                 participants,
@@ -460,7 +493,8 @@ class RestaurantSearchQueryIntegrationTest {
         try {
             var beans = new org.springframework.beans.factory.support.DefaultListableBeanFactory();
             beans.registerSingleton(
-                    "offlineReader", new RestaurantSearchReader(disconnected, json, properties));
+                    "offlineReader",
+                    new RestaurantSearchReader(disconnected, json, properties, meters));
             var offline =
                     new RestaurantQueryService(
                             mysql,
@@ -521,7 +555,9 @@ class RestaurantSearchQueryIntegrationTest {
     private void insert(
             long id, String name, String address, Integer price, String lat, String lon) {
         jdbc.update(
-                "INSERT INTO restaurants(id,name,category_code,address,price_kind,price_per_person,latitude,longitude,needs_location) VALUES(?,?,'OTHER',?,?,?,?,?,?)",
+                "INSERT INTO"
+                    + " restaurants(id,name,category_code,address,price_kind,price_per_person,latitude,longitude,needs_location)"
+                    + " VALUES(?,?,'OTHER',?,?,?,?,?,?)",
                 id,
                 name,
                 address,
@@ -535,7 +571,9 @@ class RestaurantSearchQueryIntegrationTest {
     private void publish(List<Long> ids) throws Exception {
         var settings = new RestaurantSearchSyncProperties();
         settings.setIndexAlias(properties.getIndexAlias());
-        var writer = new RestaurantSearchIndexWriter(client, json, settings);
+        var writer =
+                new RestaurantSearchIndexWriter(
+                        client, json, settings, mock(RestaurantSearchSyncMetrics.class));
         // 投影服务每批最多100店；测试同样遵守边界。
         for (var document : projections.assemble(ids)) {
             writer.write(document);

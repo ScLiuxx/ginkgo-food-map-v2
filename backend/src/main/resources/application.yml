@@ -61,7 +61,8 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # 指标允许管理员JWT；显式开启后也允许独立机器采集凭据，不开放其他管理端点。
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: never
@@ -75,7 +76,7 @@ app:
     level-thresholds: ${GROWTH_LEVEL_THRESHOLDS:0,100,400,1000}
   search:
     query:
-      # 仅显式开启读入口；本阶段不默认切换网站搜索，不影响原Outbox消费。
+      # 显式开启后，普通列表及关键词列表均直接读取ES投影；默认关闭，独立于Outbox消费。
       enabled: ${ES_QUERY_ENABLED:false}
       index-alias: ${ES_QUERY_INDEX_ALIAS:restaurant-search}
       # 列表/地图共用进程内熔断器；只统计ES调用，MySQL回查及Outbox同步不在统计范围。
@@ -90,8 +91,14 @@ app:
       enabled: ${ES_SYNC_ENABLED:false}
       index-alias: ${ES_SYNC_INDEX_ALIAS:restaurant-search}
       batch-size: 20
-      delay-ms: 5000
+      # 固定窗口合并突发提交，不随后续通知延长；Bulk按UTF-8 NDJSON字节数拆分。
+      coalesce-window-ms: 200
+      bulk-max-bytes: 1048576
+      # 提交后异步唤醒负责及时处理；此周期仅用于丢失通知、重启和到期重试的兜底扫描。
+      delay-ms: 30000
       retry-delay-ms: 30000
+      # 观测定期汇总未完成任务，抓取指标时只读内存缓存，不访问数据库。
+      metrics-delay-ms: 30000
       max-attempts: 5
     elasticsearch:
       # 连接准备不代表已切换搜索；未显式开启时不创建ES客户端。
@@ -139,6 +146,10 @@ app:
       from: ${AUTH_MAIL_FROM:}
       subject-prefix: "[银杏美食地图]"
   security:
+    metrics:
+      # 默认关闭机器采集；固定用户名prometheus，仅能GET指标端点，不具备业务权限。
+      enabled: ${METRICS_SCRAPE_ENABLED:false}
+      password: ${METRICS_SCRAPE_PASSWORD:}
     authentication:
       # 私钥仅用于签发 JWT，公钥用于请求验证；密钥文件本身不得提交到 Git。
       jwt:

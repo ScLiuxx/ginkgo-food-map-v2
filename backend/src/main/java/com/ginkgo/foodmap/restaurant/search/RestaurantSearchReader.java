@@ -7,8 +7,13 @@ import co.elastic.clients.json.JsonData;
 
 import com.ginkgo.foodmap.restaurant.config.RestaurantSearchQueryProperties;
 import com.ginkgo.foodmap.restaurant.dto.RestaurantListQuery;
+import com.ginkgo.foodmap.restaurant.dto.RestaurantSearchDocument;
 import com.ginkgo.foodmap.restaurant.dto.RestaurantSearchResult;
+import com.ginkgo.foodmap.restaurant.metrics.RestaurantSearchMetrics;
+import com.ginkgo.foodmap.restaurant.policy.RestaurantSearchListPolicy;
 import com.ginkgo.foodmap.restaurant.policy.RestaurantSearchQueryPolicy;
+
+import io.micrometer.core.instrument.MeterRegistry;
 
 import lombok.RequiredArgsConstructor;
 
@@ -32,6 +37,7 @@ public class RestaurantSearchReader {
     private final ElasticsearchClient client;
     private final ObjectMapper json;
     private final RestaurantSearchQueryProperties properties;
+    private final MeterRegistry meters;
 
     /** 只为有文字搜索意义的四字段建立辅助倒排索引，数值及地理字段不参与。 */
     private static final List<String> CHARACTER_FIELDS =
@@ -40,10 +46,30 @@ public class RestaurantSearchReader {
     /** 固定超时、不接受部分分片成功；失败交给应用层整次降级，不把异常解释成空结果。 */
     public RestaurantSearchResult search(RestaurantListQuery query, boolean map)
             throws IOException {
+        if (map) {
+            return execute(query, true, null);
+        }
+        long started = System.nanoTime();
+        int[] requests = {0};
+        Throwable failure = null;
+        try {
+            return execute(query, false, requests);
+        } catch (IOException | RuntimeException exception) {
+            failure = exception;
+            throw exception;
+        } finally {
+            RestaurantSearchMetrics.es(meters, query, started, requests[0], failure);
+        }
+    }
+
+    /** 本次计数器仅在当前栈内使用，避免并发请求互相污染；地图沿用原路径。 */
+    private RestaurantSearchResult execute(RestaurantListQuery query, boolean map, int[] requests)
+            throws IOException {
         String target = properties.getIndexAlias();
         if (RestaurantSearchQueryPolicy.isSingleHan(query.getKeyword())) {
             // term查询遇到未映射字段会静默返回0；先确认四字段均可检索，并固定本次物理索引。
             // 固定目标避免校验之后别名切回旧结构时，将索引未就绪误解释成业务空结果。
+            attempted(query, requests, "field_caps");
             var capabilities =
                     client.fieldCaps(
                             b -> b.index(properties.getIndexAlias()).fields(CHARACTER_FIELDS));
@@ -66,7 +92,8 @@ public class RestaurantSearchReader {
             target = capabilities.indices().getFirst();
         }
         String exact = "";
-        if ("relevance".equals(query.getEffectiveSort())) {
+        if (!query.getKeyword().strip().isEmpty() && "relevance".equals(query.getEffectiveSort())) {
+            attempted(query, requests, "analyze");
             var analyzed =
                     client.indices()
                             .analyze(
@@ -79,7 +106,9 @@ public class RestaurantSearchReader {
             }
             exact = analyzed.tokens().getFirst().token();
         }
-        var response = client.search(request(query, map, exact, target), JsonData.class);
+        var request = request(query, map, exact, target);
+        attempted(query, requests, "search");
+        var response = client.search(request, JsonData.class);
         var total = response.hits().total();
         if (response.timedOut()
                 || response.shards().failed().longValue() != 0
@@ -91,6 +120,7 @@ public class RestaurantSearchReader {
         result.setTotal(total.value());
         var hits = new ArrayList<RestaurantSearchResult.Hit>();
         var seen = new HashSet<Long>();
+        var records = new ArrayList<com.ginkgo.foodmap.restaurant.vo.RestaurantVo>();
         for (var hit : response.hits().hits()) {
             if (hit.source() == null) {
                 throw new IllegalStateException("搜索身份缺失");
@@ -109,6 +139,12 @@ public class RestaurantSearchReader {
             item.setId(id);
             item.setProjectionVersion(version);
             hits.add(item);
+            if (!map) {
+                var document =
+                        json.readValue(
+                                hit.source().toJson().toString(), RestaurantSearchDocument.class);
+                records.add(RestaurantSearchListPolicy.toView(document, query));
+            }
         }
         int size = map ? 100 : query.getPageSize();
         long offset = map ? 0 : query.getOffset();
@@ -116,7 +152,16 @@ public class RestaurantSearchReader {
             throw new IllegalStateException("搜索页不完整");
         }
         result.setHits(List.copyOf(hits));
+        result.setRecords(List.copyOf(records));
         return result;
+    }
+
+    /** 仅在列表路径统计应用发起的SDK请求尝试，不把地图混入列表数据。 */
+    private void attempted(RestaurantListQuery query, int[] requests, String operation) {
+        if (requests != null) {
+            requests[0]++;
+            RestaurantSearchMetrics.request(meters, query, operation);
+        }
     }
 
     /** JSON仅由固定字段及结构化参数组装；用户输入不作为查询语法、脚本或字段名执行。 */
@@ -214,9 +259,10 @@ public class RestaurantSearchReader {
                                     1));
         }
         var bool = new LinkedHashMap<String, Object>();
-        bool.put("must", List.of(matching));
+        boolean hasKeyword = !query.getKeyword().strip().isEmpty();
+        bool.put("must", List.of(hasKeyword ? matching : Map.of("match_all", Map.of())));
         bool.put("filter", filters);
-        if (!singleHan) {
+        if (hasKeyword && !singleHan) {
             bool.put(
                     "should",
                     List.of(
@@ -247,7 +293,9 @@ public class RestaurantSearchReader {
                                         "script",
                                         Map.of(
                                                 "source",
-                                                "doc['name.exact'].size()!=0 && doc['name.exact'].value.equals(params.name) ? 1 : 0",
+                                                "doc['name.exact'].size()!=0 &&"
+                                                    + " doc['name.exact'].value.equals(params.name)"
+                                                    + " ? 1 : 0",
                                                 "params",
                                                 Map.of("name", exact)))));
                 sorts.add(Map.of("_score", Map.of("order", "desc")));
@@ -265,7 +313,32 @@ public class RestaurantSearchReader {
         body.put("sort", sorts);
         body.put("track_total_hits", true);
         body.put("version", true);
-        body.put("_source", List.of("id", "projectionVersion"));
+        body.put(
+                "_source",
+                map
+                        ? List.of("id", "projectionVersion")
+                        : List.of(
+                                "id",
+                                "projectionVersion",
+                                "deleted",
+                                "name",
+                                "categoryCode",
+                                "categoryName",
+                                "restaurantType",
+                                "tags",
+                                "address",
+                                "supportsDineIn",
+                                "supportsDelivery",
+                                "pricePerPerson",
+                                "priceKind",
+                                "businessStatus",
+                                "location",
+                                "needsLocation",
+                                "ratingScore",
+                                "recommendRate",
+                                "participantCount",
+                                "reviewCount",
+                                "coverPhotoId"));
         body.put("from", map ? 0 : query.getOffset());
         body.put("size", map ? 100 : query.getPageSize());
         body.put("timeout", "800ms");
@@ -298,7 +371,8 @@ public class RestaurantSearchReader {
                 "script",
                 Map.of(
                         "source",
-                        "if (params._source.needsLocation == false && params._source.location != null) emit((double)params._source.location[params.axis]);",
+                        "if (params._source.needsLocation == false && params._source.location !="
+                                + " null) emit((double)params._source.location[params.axis]);",
                         "params",
                         Map.of("axis", axis)));
     }
@@ -311,7 +385,8 @@ public class RestaurantSearchReader {
                 "script",
                 Map.of(
                         "source",
-                        "if (doc[params.field].size()!=0) emit(Math.round(doc[params.field].value * params.factor));",
+                        "if (doc[params.field].size()!=0) emit(Math.round(doc[params.field].value *"
+                                + " params.factor));",
                         "params",
                         Map.of("field", field, "factor", factor)));
     }
@@ -319,12 +394,12 @@ public class RestaurantSearchReader {
     /** 与现行MySQL共用6371000米半径和haversine计算；未知位置不emit，范围比较不会把它当0。 */
     private static final String DISTANCE =
             """
-        if (params._source.needsLocation == false && params._source.location != null) {
-          double lat = params._source.location.lat; double lon = params._source.location.lon;
-          double a = Math.pow(Math.sin(Math.toRadians(lat - (double)params.lat) / 2), 2)
-            + Math.cos(Math.toRadians((double)params.lat)) * Math.cos(Math.toRadians(lat))
-            * Math.pow(Math.sin(Math.toRadians(lon - (double)params.lon) / 2), 2);
-          emit(6371000 * 2 * Math.asin(Math.sqrt(Math.min(1.0, Math.max(0.0, a)))));
-        }
-        """;
+            if (params._source.needsLocation == false && params._source.location != null) {
+              double lat = params._source.location.lat; double lon = params._source.location.lon;
+              double a = Math.pow(Math.sin(Math.toRadians(lat - (double)params.lat) / 2), 2)
+                + Math.cos(Math.toRadians((double)params.lat)) * Math.cos(Math.toRadians(lat))
+                * Math.pow(Math.sin(Math.toRadians(lon - (double)params.lon) / 2), 2);
+              emit(6371000 * 2 * Math.asin(Math.sqrt(Math.min(1.0, Math.max(0.0, a)))));
+            }
+            """;
 }

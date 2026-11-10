@@ -9,7 +9,7 @@
 | 本地后端 | `http://localhost:8080` |
 | 本地前端 | `http://localhost:5173`，代理`/auth`和`/api` |
 | 请求格式 | 有请求体的业务接口使用JSON；图片上传使用multipart/form-data |
-| 认证 | `Authorization: Bearer <accessToken>`；不使用Basic或Cookie会话 |
+| 认证 | 业务接口使用`Authorization: Bearer <accessToken>`，不使用Basic或Cookie会话；内部指标端点可选独立Basic采集凭据 |
 | 业务ID | 餐厅、申请、点评、回复和文件ID采用无前导零的正整数字符串，范围1–9223372036854775807 |
 | 账号ID | `/auth/login`、`/auth/me`及`/api/admin/me`中的账号ID为JSON整数；其他署名/业务资源引用为字符串 |
 | 时间 | ISO 8601 UTC字符串 |
@@ -32,6 +32,7 @@
 
 | 方法 | 路径 | 认证 | 成功状态 | 用途 |
 | --- | --- | --- | --- | --- |
+| GET | `/actuator/prometheus` | 管理员Bearer／可选采集Basic | 200 文本 | 内部指标采集；[访问说明](operations/deployment.md#prometheus指标采集端点)、[自动采集认证与错误响应](operations/prometheus.md#独立采集认证)、[列表检索指标](operations/elasticsearch-metrics.md)、[启用同步时的Outbox指标](operations/elasticsearch-sync-metrics.md) |
 | POST | `/auth/email/code/register` | 公开 | 200 | 注册验证码 |
 | POST | `/auth/email/code/password-reset` | 公开 | 200 | 找回密码验证码 |
 | POST | `/auth/register` | 公开 | 201 | 注册普通账号 |
@@ -318,12 +319,12 @@ reason必填，DTO最多200个UTF-16单元，去Unicode首尾空白后不能为�
 
 条件取交集，在完整可见集合上排序、计数后分页。关键词价格/点评数/距离排序同值按数字ID升序，ES与SQL采用相同规则；综合分和好评率在目录及搜索中均先四舍五入，同值按数字ID升序。评分类与推荐率排序未知值排后，人均升序；好评率按百分数的一位小数比较，不再按计分人数或原始尾数破同分。距离按请求用户原点升序，缺原点时距离为null且按名称/ID稳定排序。视口不支持跨日期变更线，边界包含，提供视口时排除待定位记录。用户坐标不保存。
 
-餐厅类型读取正式restaurant_type，独立于美食品类；食堂本身无美食分类，因此CANTEEN与具体美食品类组合时返回空集合，不自动忽略任一条件。类型及用餐方式过滤同时作用于COUNT、排序分页和地图点位。非法restaurantType/diningMode返回400 `COMMON_VALIDATION_FAILED`，不静默忽略。公开列表和地图共用RestaurantQueryService引擎策略；字典及详情始终读取MySQL。ES查询需同时显式开启ES_ENABLED及ES_QUERY_ENABLED，默认不启用。无关键词、单个汉字（按Unicode码点识别）或地理条件缺原点时，完整查询走SQL。综合分/好评率/价格/点评数/有原点距离排序及默认相关度均可走ES；未知价格和距离排后。
+餐厅类型读取正式restaurant_type，独立于美食品类；食堂本身无美食分类，因此CANTEEN与具体美食品类组合时返回空集合，不自动忽略任一条件。类型及用餐方式过滤同时作用于COUNT、排序分页和地图点位。非法restaurantType/diningMode返回400 `COMMON_VALIDATION_FAILED`，不静默忽略。公开列表和地图共用RestaurantQueryService引擎策略；字典及详情始终读取MySQL。ES查询需同时显式开启ES_ENABLED及ES_QUERY_ENABLED，默认不启用。列表无关键词浏览及单汉字搜索均优先走ES；地理条件缺原点时走SQL。地图点位无关键词仍走SQL。综合分/好评率/价格/点评数/有原点距离排序及默认相关度均可走ES；未知价格和距离排后。
 
 杯型计算与响应字段tier已移除；目录和地图请求若携带view、tiers或tiers数组参数，返回400 `RESTAURANT_INVALID_INPUT`，不静默忽略旧筛选。详情与点评保留四维评分展示。
 
 
-成功200，data为`{records,total,page,pageSize,totalPages,accessiblePages,search}`。非空关键词统一要求`(page-1)*pageSize+pageSize <= 10000`，超过返回400 `RESTAURANT_INVALID_INPUT`（不会因ES开关或降级而改变）；窗口内越界页为空、200。`total`/`totalPages`是真实总量，`accessiblePages=min(totalPages,floor(10000/pageSize))`；无关键词不限制窗口。单条餐厅结构：
+成功200，data为`{records,total,page,pageSize,totalPages,accessiblePages,search}`。所有列表请求统一要求`(page-1)*pageSize+pageSize <= 10000`，超过返回400 `RESTAURANT_INVALID_INPUT`（不会因ES开关或降级而改变）；窗口内越界页为空、200。`total`/`totalPages`是真实总量，`accessiblePages=min(totalPages,floor(10000/pageSize))`；无关键词浏览同样限制窗口。单条餐厅结构：
 
 ```json
 {
@@ -336,11 +337,11 @@ reason必填，DTO最多200个UTF-16单元，去Unicode首尾空白后不能为�
 }
 ```
 
-无人计分的分数/推荐率/四维为null，真实0分保持0。reviewCount计全部有效点评，participantCount计每人最新有效代表。score为代表点评综合分累计值/人数，四舍五入保留一位小数；recommendRate为推荐人数/人数（0–1），四舍五入保留三位小数，对应百分比一位小数（0.923表示92.3%）。历史点评不重复贡献评分，原始累计值不变。地址、价格和位置未知保持null，不用模拟值补齐。列表/详情不返回创建者、删除元数据或数据库版本。
+无人计分的分数/推荐率/四维为null，真实0分保持0。reviewCount计全部有效点评，participantCount计每人最新有效代表。score为代表点评综合分累计值/人数，四舍五入保留一位小数；recommendRate为推荐人数/人数（0–1），四舍五入保留三位小数，对应百分比一位小数（0.923表示92.3%）。历史点评不重复贡献评分，原始累计值不变。地址、价格和位置未知保持null，不用模拟值补齐。列表/详情不返回创建者、删除元数据或数据库版本。ES列表没有四维和审计时间投影，因此dimensions四项及createdAt/updatedAt为null；详情仍读取MySQL并返回实际值。
 
 食堂响应使用`"restaurantType":"CANTEEN","categoryCode":null,"categoryName":null`。不传category时目录及地图包含食堂；指定美食品类时不包含食堂。餐厅类型通过现有前端独立筛选选择，不把CANTEEN作为美食分类参数。
 
-目录、详情及管理回执的restaurant新增coverPhoto：无正式相册首图为null，否则为`{id,position:0,cover:true,url}`，例如`{"id":"801","position":0,"cover":true,"url":"/api/restaurants/101/photos/801"}`。首页/地图卡片直接使用此正式封面；目录在分页完成后按当前页商户ID集合一次批量补齐元数据，不逐卡片读取相册/点评，不在列表查询中访问OSS。查询要求商户未删除、来源申请已通过且目标一致；仅有待审照片或点评照片不会产生封面。
+目录、详情及管理回执的restaurant新增coverPhoto：无正式相册首图为null，否则为`{id,position:0,cover:true,url}`，例如`{"id":"801","position":0,"cover":true,"url":"/api/restaurants/101/photos/801"}`。首页/地图卡片直接使用此正式封面；ES列表直接按投影中的coverPhotoId组装同源图片地址，图片读取仍校验当前可见性；SQL降级在分页完成后按当前页商户ID集合一次批量补齐元数据，不逐卡片读取相册/点评，不在列表查询中访问OSS。查询要求商户未删除、来源申请已通过且目标一致；仅有待审照片或点评照片不会产生封面。
 
 ### 6.2.1 正式搜索与简单降级契约（2026-11-05）
 
@@ -349,11 +350,11 @@ reason必填，DTO最多200个UTF-16单元，去Unicode首尾空白后不能为�
 - 单字ES匹配采用原字语义，不继承MySQL排序规则的字符等价扩展，例如〇不会命中ASCII数字0。真实库中〇的ES字面命中为1家，旧SQL为3748家；SQL降级仍可能受数据库排序规则影响，因此基础匹配提示保留。
 - score/recommend不再强制走SQL；ES在现有double字段上计算整数排序键：Math.round(ratingScore*10)、Math.round(recommendRate*1000)，同键按数字ID升序，未知末尾、真实零保留。SQL公开读取分别ROUND到一位/三位并使用相同排序；实际排序按此精度比较，不只是页面格式化，无需改mapping或重新导入。
 - SQL路径保持原LIKE包含匹配；请求相关度但实际走SQL时，实际排序为score。首版不做无结果放宽、拼音、简称、错字或全局同义扩展。
-- 所有硬筛选在ES计数及分页之前执行，MySQL只回查本页正式资料及同快照投影版本，不以LIKE再次过滤ES分词命中。不拿ES前100条交给SQL筛选后当作全量。
-- ES不可达、客户端不存在、索引不存在、超时、部分分片失败、非精确总数或不完整结果，均整次执行原SQL；ES本身返回空集合不触发降级。查询前或回查快照存在当前版本PENDING/FAILED任务时保守走SQL；回查有删除、缺失、版本或硬条件变化时丢弃整页ES结果和total，完整重查SQL。
+- 所有硬筛选在ES计数及分页之前执行。列表直接读取ES公开投影，不回查MySQL资料、标签、封面或Outbox，接受评分、资料、删除与恢复的短暂同步延迟；详情及写操作仍以MySQL为准。地图点位保留MySQL当前页资料和版本回查，不以LIKE再次过滤ES分词命中。不拿ES前100条交给SQL筛选后当作全量。
+- ES不可达、客户端不存在、索引不存在、超时、部分分片失败、非精确总数或不完整结果，均整次执行原SQL；ES本身返回空集合不触发降级。仅地图点位在查询前或回查快照存在当前版本PENDING/FAILED任务时保守走SQL；地图回查有删除、缺失、版本或硬条件变化时丢弃整页ES结果和total，完整重查SQL。列表不因同步积压降级，但非法或不完整的投影正文仍作为ES错误整次降级。
 - ES查询接入Resilience4j进程内熔断，列表/地图共享：统计最近20次调用，至少10次后失败率达到50%打开，等待10秒后由首个符合ES入口条件的真实请求触发半开，只允许1次探测，其余直接走SQL；探测成功关闭、失败重新等待10秒。只包ES字段检查/分析/搜索，不把SQL回查或降级成功算ES成功，也不将同步积压或资料变化计为ES故障。空结果仍是成功。半开及熔断状态随进程重启清空，不跨实例共享。
-- 不新增后台探活、查询自动重试或全量恢复工具；独立慢调用比例熔断本轮不启用。原ES执行超时800ms及客户端连接2s/响应3s保持不变；这不是整个多阶段ES流程或接口总时限，熔断不会取消已在执行的请求，SQL降级另需时间。
-- `search`示例：`{"engine":"ES","degraded":false,"reason":"SEARCH","effectiveSort":"relevance","resultWindow":10000}`。降级示例：`{"engine":"MYSQL","degraded":true,"reason":"ES_UNAVAILABLE","effectiveSort":"score","resultWindow":10000}`。reason枚举：CATALOG、NO_LOCATION、DISABLED、SEARCH、ES_UNAVAILABLE、ES_CIRCUIT_OPEN、SYNC_PENDING、DATA_CHANGED；前三项是预定SQL路径，不标记degraded。ES_CIRCUIT_OPEN表示熔断打开或半开探测名额已用尽，响应仍200、engine=MYSQL、degraded=true；触发熔断的失败请求本身仍为ES_UNAVAILABLE。不再返回SINGLE_HAN。无关键词时resultWindow为null。
+- 不新增后台探活、查询自动重试或全量恢复工具；独立慢调用比例熔断本轮不启用。ES执行超时800ms、客户端连接2s；单次HTTP调用同时设置socket与请求级响应超时3s，防止连接已建立但服务不响应时无限等待。这不是整个多阶段ES流程或接口总时限，熔断不会取消已在执行的请求，SQL降级另需时间。
+- `search`示例：`{"engine":"ES","degraded":false,"reason":"SEARCH","effectiveSort":"relevance","resultWindow":10000}`。降级示例：`{"engine":"MYSQL","degraded":true,"reason":"ES_UNAVAILABLE","effectiveSort":"score","resultWindow":10000}`。reason枚举：CATALOG、NO_LOCATION、DISABLED、SEARCH、ES_UNAVAILABLE、ES_CIRCUIT_OPEN、SYNC_PENDING、DATA_CHANGED；CATALOG对列表表示ES无关键词浏览，对地图点位表示预定SQL路径；NO_LOCATION及DISABLED为预定SQL路径，不标记degraded。ES_CIRCUIT_OPEN表示熔断打开或半开探测名额已用尽，响应仍200、engine=MYSQL、degraded=true；触发熔断的失败请求本身仍为ES_UNAVAILABLE。不再返回SINGLE_HAN。列表无关键词时resultWindow同样为10000；无关键词地图点位为null。
 - 页面基于accessiblePages导航，保留真实total，并在需要时提示基础关键词匹配。切换关键词不会覆盖用户已选业务排序，auto按空关键词、单汉字、多字选择默认意图。
 - 地理runtime字段从_source原始GCJ-02坐标计算，视口含边界，距离沿用SQL的6371000米半径和haversine公式；不使用geo_point量化坐标或不同地球半径改变既有规则。该方式有读取原文与计算成本，尚未做性能收益评测。
 - 正常ES搜索为最终一致性；任务已成功到refresh可见之间仍有窗口。回查只能检查本页命中，不能发现所有未命中的资料变化；直接SQL绕过Outbox仍需补同步。独立翻页与列表/地图请求不承诺跨请求快照固定。
@@ -1076,3 +1077,7 @@ POST只接受`{"fileId":"501"}`，fileId为正Long字符串。相同窗口和文
 DELETE只解除本窗口的图片关联，并提交媒体待回收状态；云端文件由后台删除，失败继续重试。同窗口重复删除已移除的图片仍204，不操作其他窗口文件。删除首张后下一张接替封面，最后一张删除后coverUrl为null。窗口软删除保留相册，恢复后重新可读；窗口或父食堂已删除时公开相册及单图均404，管理员写入前也必须恢复。
 
 匿名管理操作401、普通用户403；非法ID或请求字段400；窗口/父食堂不可见或图片不属于窗口404；文件不可绑定409 `FILE_NOT_BINDABLE`；第六张409 `RESTAURANT_STATE_CONFLICT`；私有图片读取故障503 `FILE_STORAGE_UNAVAILABLE`。窗口停业仍允许管理员维护相册；相册不改变点评、评分或成长经验。当前不提供手动封面选择、重排、菜品图片或普通用户窗口资料上传。
+
+### 搜索同步副作用
+
+影响搜索内容的成功事务提交后立即通知异步Outbox消费者，空闲唤醒后固定200毫秒合并窗口，30秒定时扫描兜底；批内同餐厅合并后通过Bulk写入，逐项确认本批捕获任务。HTTP不等待ES完成，搜索仍为最终一致性，不保证提交即刻可见；无接口参数或响应变更。调度与指标口径见[同步说明](operations/elasticsearch-sync-metrics.md)。

@@ -18,6 +18,8 @@ docs/
 
 ## 按问题查找
 
+ES 监控的实际故障验证见[故障演练报告](history/elasticsearch-metrics-fault-drill-2026-11-10.md)：保留首次超时失败依据，已修复并验证暂停无响应时的及时降级、熔断与恢复。
+
 | 想了解什么 | 阅读入口 |
 | --- | --- |
 | 现在能用哪些功能 | [功能说明](features.md) |
@@ -51,9 +53,11 @@ docs/
 - 统一登录：`/login`按服务端角色分流前台/工作台，`/admin/login`仅兼容跳转；管理身份由后端`/api/admin/me`校验。身份与查询边界见[前端架构](architecture/frontend.md)。
 - 搜索：[实施进度与待办](plans/elasticsearch-search.md)、[索引结构](architecture/elasticsearch-schema.md)、[同步任务表](architecture/mysql-schema.md#restaurant-search-outbox)；现行查询契约见[API](api.md#621-正式搜索与简单降级契约2026-11-05)。
 - 词库：[IK配置与维护](../deploy/elasticsearch/README.md)，包含持久化、词表加载与重建边界。
+- ES监控：[建设计划](plans/elasticsearch-metrics.md)、[检索指标](operations/elasticsearch-metrics.md)、[Outbox同步指标](operations/elasticsearch-sync-metrics.md)，已接通受保护端点、Prometheus采集及Grafana检索/同步看板；[八条本地告警与排查](operations/search-alerts.md)、[首次告警演练](history/elasticsearch-alert-drill-2026-11-10.md)、[同步指标验证](history/elasticsearch-sync-metrics-2026-11-10.md)、[提交后唤醒与合并验证](history/elasticsearch-sync-wakeup-2026-11-10.md)及[固定窗口与Bulk验证](history/elasticsearch-bulk-2026-11-10.md)。
 - 搜索投影：[内部组装服务](../backend/src/main/java/com/ginkgo/foodmap/restaurant/service/RestaurantSearchProjectionService.java)，字段定义见[ES结构](architecture/elasticsearch-schema.md)。
 - 地图：[高德地图基础闭环](plans/map-foundation.md)，包含导航、点位接口、页面联动及分步验收。
 - 运维：[自动部署与排障](operations/deployment.md)。
+- 指标采集：[Prometheus本地运行与独立认证](operations/prometheus.md)、[Grafana检索看板与启动](operations/grafana.md)。
 - 高德：[环境配置与真实底图验收](operations/amap-setup.md)。
 
 ## 历史追溯

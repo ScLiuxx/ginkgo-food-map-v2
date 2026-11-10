@@ -17,6 +17,8 @@ frontend/.env.*.local
 backend/config/application-local.yml
 # RSA 私钥、公钥仅由本机生成，禁止纳入版本控制。
 backend/secrets/
+# Prometheus采集密码和Grafana管理员密码只保存在本机，Docker配置通过secret引用。
+deploy/monitoring/secrets/
 *.log
 __pycache__/
 

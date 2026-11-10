@@ -6,6 +6,7 @@ import com.ginkgo.foodmap.restaurant.dto.RestaurantListQuery;
 import com.ginkgo.foodmap.restaurant.dto.RestaurantSearchResult;
 import com.ginkgo.foodmap.restaurant.exception.RestaurantErrorCode;
 import com.ginkgo.foodmap.restaurant.exception.RestaurantSearchStaleException;
+import com.ginkgo.foodmap.restaurant.metrics.RestaurantSearchMetrics;
 import com.ginkgo.foodmap.restaurant.search.RestaurantSearchReader;
 import com.ginkgo.foodmap.restaurant.vo.RestaurantMapPointsVo;
 import com.ginkgo.foodmap.restaurant.vo.RestaurantPageVo;
@@ -23,7 +24,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 
-/** 列表与地图共用引擎选择和整次降级。ES网络请求不包数据库事务，回查服务独立开启RR快照。 ES调用共享失败率熔断；SQL回查及降级位于熔断器外，空结果不触发降级。 */
+/** 列表直接读取ES投影，允许同步延迟；地图点位暂保留回查。ES故障整次降级SQL，空结果不降级。 */
 @Service
 @RequiredArgsConstructor
 public class RestaurantQueryService {
@@ -33,22 +34,40 @@ public class RestaurantQueryService {
     private final CircuitBreaker restaurantEsQueryCircuitBreaker;
     private final MeterRegistry meters;
 
-    /** 关键词统一10000条访问窗口，实际总数和可访问页数分开返回。 */
+    /** 列表统一10000条访问窗口，实际总数和可访问页数分开返回。 */
     public RestaurantPageVo list(RestaurantListQuery query) {
-        validate(query, false);
-        var status = status(query);
+        long started = System.nanoTime();
+        RestaurantSearchStatus status = null;
+        RestaurantPageVo page = null;
+        try {
+            validate(query, false);
+            status = status(query, false);
+            page = list(query, status);
+            return page;
+        } finally {
+            RestaurantSearchMetrics.list(meters, query, status, page, started);
+        }
+    }
+
+    /** 保留原引擎选择和降级流程；外层统一计时，SQL失败也计入最终失败。 */
+    private RestaurantPageVo list(RestaurantListQuery query, RestaurantSearchStatus status) {
         RestaurantPageVo result;
         if (status.getEngine().equals("ES")) {
             try {
-                result = mysql.searchList(query, searchEs(query, false));
+                var projection = searchEs(query, false);
+                result = new RestaurantPageVo();
+                result.setRecords(projection.getRecords());
+                result.setTotal(projection.getTotal());
+                result.setPage(query.getPage());
+                result.setPageSize(query.getPageSize());
+                result.setTotalPages(
+                        projection.getTotal() / query.getPageSize()
+                                + (projection.getTotal() % query.getPageSize() == 0 ? 0 : 1));
             } catch (CallNotPermittedException open) {
-                fallback(status, "ES_CIRCUIT_OPEN");
-                result = mysql.list(sqlQuery(query));
-            } catch (RestaurantSearchStaleException changed) {
-                fallback(status, "DATA_CHANGED");
+                fallback(status, "ES_CIRCUIT_OPEN", false);
                 result = mysql.list(sqlQuery(query));
             } catch (IOException | RuntimeException unavailable) {
-                fallback(status, "ES_UNAVAILABLE");
+                fallback(status, "ES_UNAVAILABLE", false);
                 result = mysql.list(sqlQuery(query));
             }
         } else {
@@ -57,9 +76,7 @@ public class RestaurantQueryService {
         if (result != null) {
             result.setSearch(status);
             result.setAccessiblePages(
-                    query.getKeyword().strip().isEmpty()
-                            ? result.getTotalPages()
-                            : Math.min(result.getTotalPages(), 10000 / query.getPageSize()));
+                    Math.min(result.getTotalPages(), 10000 / query.getPageSize()));
         }
         return result;
     }
@@ -67,19 +84,19 @@ public class RestaurantQueryService {
     /** 地图保留完整视口及100点上限，不把列表当前页冒充完整点位。 */
     public RestaurantMapPointsVo mapPoints(RestaurantListQuery query) {
         validate(query, true);
-        var status = status(query);
+        var status = status(query, true);
         RestaurantMapPointsVo result;
         if (status.getEngine().equals("ES")) {
             try {
                 result = mysql.searchMap(query, searchEs(query, true));
             } catch (CallNotPermittedException open) {
-                fallback(status, "ES_CIRCUIT_OPEN");
+                fallback(status, "ES_CIRCUIT_OPEN", true);
                 result = mysql.mapPoints(sqlQuery(query));
             } catch (RestaurantSearchStaleException changed) {
-                fallback(status, "DATA_CHANGED");
+                fallback(status, "DATA_CHANGED", true);
                 result = mysql.mapPoints(sqlQuery(query));
             } catch (IOException | RuntimeException unavailable) {
-                fallback(status, "ES_UNAVAILABLE");
+                fallback(status, "ES_UNAVAILABLE", true);
                 result = mysql.mapPoints(sqlQuery(query));
             }
         } else {
@@ -109,21 +126,18 @@ public class RestaurantQueryService {
         if (map && (query.getWest() == null || !query.isBoundsValid())) {
             throw new BusinessException(RestaurantErrorCode.INVALID_INPUT, "地图查询必须提供完整有效视口");
         }
-        if (!map
-                && !query.getKeyword().strip().isEmpty()
-                && query.getOffset() + query.getPageSize() > 10000) {
-            throw new BusinessException(
-                    RestaurantErrorCode.INVALID_INPUT, "关键词搜索最多访问前10000条，请缩小条件");
+        if (!map && query.getOffset() + query.getPageSize() > 10000) {
+            throw new BusinessException(RestaurantErrorCode.INVALID_INPUT, "列表最多访问前10000条，请缩小条件");
         }
     }
 
-    private RestaurantSearchStatus status(RestaurantListQuery query) {
+    private RestaurantSearchStatus status(RestaurantListQuery query, boolean map) {
         var result = new RestaurantSearchStatus();
         result.setEngine("MYSQL");
         String sort = query.getEffectiveSort();
         result.setEffectiveSort(sort);
         String keyword = query.getKeyword().strip();
-        if (keyword.isEmpty()) {
+        if (map && keyword.isEmpty()) {
             result.setReason("CATALOG");
         } else {
             result.setResultWindow(10000);
@@ -133,12 +147,12 @@ public class RestaurantQueryService {
             } else if (!properties.isEnabled()) {
                 result.setReason("DISABLED");
             } else if (readers.getIfAvailable() == null) {
-                fallback(result, "ES_UNAVAILABLE");
-            } else if (mysql.hasUnsyncedSearchChanges()) {
-                fallback(result, "SYNC_PENDING");
+                fallback(result, "ES_UNAVAILABLE", map);
+            } else if (map && mysql.hasUnsyncedSearchChanges()) {
+                fallback(result, "SYNC_PENDING", map);
             } else {
                 result.setEngine("ES");
-                result.setReason("SEARCH");
+                result.setReason(keyword.isEmpty() ? "CATALOG" : "SEARCH");
             }
         }
         if (result.getEngine().equals("MYSQL") && sort.equals("relevance")) {
@@ -147,9 +161,9 @@ public class RestaurantQueryService {
         return result;
     }
 
-    private void fallback(RestaurantSearchStatus status, String reason) {
+    private void fallback(RestaurantSearchStatus status, String reason, boolean map) {
         // reason仅来自固定分支，不记录关键词、商户ID或异常正文，保持指标标签数量有界。
-        meters.counter("restaurant.search.fallbacks", "reason", reason).increment();
+        RestaurantSearchMetrics.fallback(meters, reason, map);
         status.setEngine("MYSQL");
         status.setDegraded(true);
         status.setReason(reason);

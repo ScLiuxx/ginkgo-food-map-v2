@@ -174,15 +174,14 @@ class RestaurantSearchCircuitBreakerTest {
 
     @Test
     void staleVersionsAndMysqlReadFailuresNeverTripEsBreaker() {
-        when(mysql.searchList(any(), any())).thenThrow(new RestaurantSearchStaleException());
+        when(mysql.searchMap(any(), any())).thenThrow(new RestaurantSearchStaleException());
         for (int i = 0; i < 12; i++) {
-            assertThat(queries.list(query()).getSearch().getReason()).isEqualTo("DATA_CHANGED");
+            assertThat(queries.mapPoints(query()).getSearch().getReason())
+                    .isEqualTo("DATA_CHANGED");
         }
-        doThrow(new IllegalStateException("mysql unavailable"))
-                .when(mysql)
-                .searchList(any(), any());
+        doThrow(new IllegalStateException("mysql unavailable")).when(mysql).searchMap(any(), any());
         for (int i = 0; i < 12; i++) {
-            queries.list(query());
+            queries.mapPoints(query());
         }
         assertThat(breaker.getMetrics().getNumberOfFailedCalls()).isZero();
         assertThat(breaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
@@ -192,11 +191,12 @@ class RestaurantSearchCircuitBreakerTest {
     void syncPendingCatalogAndDisabledRequestsDoNotEnterEsSampleWindow() {
         when(mysql.hasUnsyncedSearchChanges()).thenReturn(true);
         for (int i = 0; i < 12; i++) {
-            assertThat(queries.list(query()).getSearch().getReason()).isEqualTo("SYNC_PENDING");
+            assertThat(queries.mapPoints(query()).getSearch().getReason())
+                    .isEqualTo("SYNC_PENDING");
         }
         var catalog = query();
         catalog.setKeyword("");
-        queries.list(catalog);
+        queries.mapPoints(catalog);
         properties.setEnabled(false);
         queries.list(query());
         assertThat(breaker.getMetrics().getNumberOfBufferedCalls()).isZero();

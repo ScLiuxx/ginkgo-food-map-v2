@@ -1,0 +1,19 @@
+# 首期只采集应用：JVM默认指标及已埋点的列表检索指标，不额外部署集群Exporter。
+global:
+  scrape_interval: 30s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+
+# 仅加载本地规则；本阶段在Alerts页面观察，不配置消息发送目标。
+rule_files:
+  - /etc/prometheus/alerts/restaurant-search.yml
+
+scrape_configs:
+  - job_name: ginkgo-backend
+    metrics_path: /actuator/prometheus
+    scheme: http
+    basic_auth:
+      username: prometheus
+      password_file: /run/secrets/metrics_password
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
