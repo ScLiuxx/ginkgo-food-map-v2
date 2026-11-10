@@ -1,0 +1,2759 @@
+{
+  "uid": "ginkgo-es-search",
+  "title": "Ginkgo · ES 检索与同步监控",
+  "tags": [
+    "ginkgo",
+    "elasticsearch"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "version": 3,
+  "editable": false,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "30s",
+      "1m",
+      "5m"
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "instance",
+        "label": "后端实例",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "ginkgo-prometheus"
+        },
+        "refresh": 1,
+        "query": {
+          "query": "label_values(up{job=\"ginkgo-backend\"}, instance)",
+          "refId": "instances"
+        },
+        "definition": "label_values(up{job=\"ginkgo-backend\"}, instance)",
+        "multi": false,
+        "includeAll": false,
+        "sort": 1,
+        "options": [],
+        "current": {}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "ES 检索监控",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "首页列表检索 · 每 30 秒采集/刷新 · 默认查看最近 1 小时。**比例和分位数需要窗口内有请求；无流量时显示暂无数据。** 累计次数是当前后端进程值，重启会归零；熔断器由列表和地图共享。\n\n告警显示所选范围**结束时刻**的状态，默认现在；0或无明细不代表采集及规则健康。[查看告警规则与排查信息](http://127.0.0.1:9090/alerts)。"
+      }
+    },
+    {
+      "id": 17,
+      "type": "stat",
+      "title": "已触发告警",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 4,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "description": "只统计本实例的八条既有告警，显示所选范围结束时刻状态，不是累计次数。0只表示未查询到该状态；仍需核对采集状态和Prometheus规则健康，数据源异常应显示错误或暂无数据。",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(ALERTS{job=\"ginkgo-backend\",instance=\"$instance\",alertname=~\"GinkgoBackendScrapeUnavailable|GinkgoSearchCircuitOpen|GinkgoSearchFallbackHigh|GinkgoSearchFailureHigh|GinkgoSearchLatencyHigh|GinkgoSyncBacklogOld|GinkgoSyncFailedTasks|GinkgoSyncObservationStale\",alertstate=\"firing\"}) or (0 * count(up{job=\"ginkgo-backend\",instance=\"$instance\"}))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "legendFormat": "告警数量"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "links": [
+            {
+              "title": "查看Prometheus告警规则",
+              "url": "http://127.0.0.1:9090/alerts",
+              "targetBlank": true
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "id": 18,
+      "type": "stat",
+      "title": "等待确认告警",
+      "gridPos": {
+        "x": 4,
+        "y": 4,
+        "w": 4,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "description": "只统计本实例的八条既有告警，显示所选范围结束时刻状态，不是累计次数。0只表示未查询到该状态；仍需核对采集状态和Prometheus规则健康，数据源异常应显示错误或暂无数据。",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(ALERTS{job=\"ginkgo-backend\",instance=\"$instance\",alertname=~\"GinkgoBackendScrapeUnavailable|GinkgoSearchCircuitOpen|GinkgoSearchFallbackHigh|GinkgoSearchFailureHigh|GinkgoSearchLatencyHigh|GinkgoSyncBacklogOld|GinkgoSyncFailedTasks|GinkgoSyncObservationStale\",alertstate=\"pending\"}) or (0 * count(up{job=\"ginkgo-backend\",instance=\"$instance\"}))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "legendFormat": "告警数量"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "links": [
+            {
+              "title": "查看Prometheus告警规则",
+              "url": "http://127.0.0.1:9090/alerts",
+              "targetBlank": true
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "id": 19,
+      "type": "table",
+      "title": "告警明细（触发 / 等待）",
+      "gridPos": {
+        "x": 8,
+        "y": 4,
+        "w": 16,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "description": "只列出所选范围结束时刻的Firing/Pending告警。没有行表示未查询到活跃告警，不代表规则已加载或采集正常；规则健康与排查说明请点击告警名称查看Prometheus规则页。",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "ALERTS{job=\"ginkgo-backend\",instance=\"$instance\",alertname=~\"GinkgoBackendScrapeUnavailable|GinkgoSearchCircuitOpen|GinkgoSearchFallbackHigh|GinkgoSearchFailureHigh|GinkgoSearchLatencyHigh|GinkgoSyncBacklogOld|GinkgoSyncFailedTasks|GinkgoSyncObservationStale\",alertstate=~\"firing|pending\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "job": true,
+              "scope": true,
+              "status": true
+            },
+            "indexByName": {
+              "alertname": 0,
+              "instance": 1,
+              "severity": 2,
+              "alertstate": 3
+            },
+            "renameByName": {
+              "alertname": "告警",
+              "instance": "实例",
+              "severity": "级别",
+              "alertstate": "状态"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          },
+          "noValue": "—"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "告警"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "GinkgoBackendScrapeUnavailable": {
+                        "text": "后端采集失败"
+                      },
+                      "GinkgoSearchCircuitOpen": {
+                        "text": "检索熔断持续打开"
+                      },
+                      "GinkgoSearchFallbackHigh": {
+                        "text": "列表检索频繁降级"
+                      },
+                      "GinkgoSearchFailureHigh": {
+                        "text": "列表检索最终失败"
+                      },
+                      "GinkgoSearchLatencyHigh": {
+                        "text": "列表检索响应变慢"
+                      },
+                      "GinkgoSyncBacklogOld": {
+                        "text": "搜索同步持续积压"
+                      },
+                      "GinkgoSyncFailedTasks": {
+                        "text": "搜索同步存在失败任务"
+                      },
+                      "GinkgoSyncObservationStale": {
+                        "text": "同步快照或心跳陈旧"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "查看规则与排查说明",
+                    "url": "http://127.0.0.1:9090/alerts",
+                    "targetBlank": true
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 230
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "实例"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 220
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "级别"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "critical": {
+                        "text": "严重",
+                        "color": "red"
+                      },
+                      "warning": {
+                        "text": "警告",
+                        "color": "orange"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "状态"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "firing": {
+                        "text": "已触发",
+                        "color": "red"
+                      },
+                      "pending": {
+                        "text": "等待确认",
+                        "color": "orange"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "状态",
+            "desc": false
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "title": "采集状态",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 4,
+        "h": 4
+      },
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "采集异常",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "采集正常",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=\"ginkgo-backend\",instance=\"$instance\"}",
+          "legendFormat": "状态",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "range": false,
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "title": "查询 QPS",
+      "type": "stat",
+      "gridPos": {
+        "x": 4,
+        "y": 11,
+        "w": 4,
+        "h": 4
+      },
+      "description": "列表服务入口请求速率，含失败及服务内校验失败。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(restaurant_search_requests_total{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "查询/秒",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "range": false,
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "title": "本次启动累计查询",
+      "type": "stat",
+      "gridPos": {
+        "x": 8,
+        "y": 11,
+        "w": 4,
+        "h": 4
+      },
+      "description": "当前后端进程的计数器合计，重启归零，不是所选时段的新增次数。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(restaurant_search_requests_total{job=\"ginkgo-backend\",instance=\"$instance\"})",
+          "legendFormat": "次数",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "range": false,
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "title": "ES 承担比例",
+      "type": "stat",
+      "gridPos": {
+        "x": 12,
+        "y": 11,
+        "w": 4,
+        "h": 4
+      },
+      "description": "成功返回中由ES提供数据的比例，SQL降级成功包含在分母中。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "((sum(rate(restaurant_search_requests_total{job=\"ginkgo-backend\",instance=\"$instance\",source=\"es\",outcome=\"success\"}[$__rate_interval])) or vector(0)) / sum(rate(restaurant_search_requests_total{job=\"ginkgo-backend\",instance=\"$instance\",outcome=\"success\"}[$__rate_interval]))) and on() (sum(rate(restaurant_search_requests_total{job=\"ginkgo-backend\",instance=\"$instance\",outcome=\"success\"}[$__rate_interval])) > 0)",
+          "legendFormat": "ES 比例",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "range": false,
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 6,
+      "title": "降级比例",
+      "type": "stat",
+      "gridPos": {
+        "x": 16,
+        "y": 11,
+        "w": 4,
+        "h": 4
+      },
+      "description": "计划走ES的列表请求中转SQL的比例；主动SQL不计降级。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "((sum(rate(restaurant_search_fallbacks_total{job=\"ginkgo-backend\",instance=\"$instance\",scope=\"list\"}[$__rate_interval])) or vector(0)) / sum(rate(restaurant_search_requests_total{job=\"ginkgo-backend\",instance=\"$instance\",route=\"es\"}[$__rate_interval]))) and on() (sum(rate(restaurant_search_requests_total{job=\"ginkgo-backend\",instance=\"$instance\",route=\"es\"}[$__rate_interval])) > 0)",
+          "legendFormat": "降级比例",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "range": false,
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 7,
+      "title": "最终失败率",
+      "type": "stat",
+      "gridPos": {
+        "x": 20,
+        "y": 11,
+        "w": 4,
+        "h": 4
+      },
+      "description": "排除未完成路线判断的校验错误；ES失败但SQL成功不算最终失败。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "((sum(rate(restaurant_search_requests_total{job=\"ginkgo-backend\",instance=\"$instance\",outcome=\"error\",route!=\"none\"}[$__rate_interval])) or vector(0)) / sum(rate(restaurant_search_requests_total{job=\"ginkgo-backend\",instance=\"$instance\",route!=\"none\"}[$__rate_interval]))) and on() (sum(rate(restaurant_search_requests_total{job=\"ginkgo-backend\",instance=\"$instance\",route!=\"none\"}[$__rate_interval])) > 0)",
+          "legendFormat": "失败比例",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "range": false,
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 8,
+      "title": "查询流量",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 12,
+        "h": 8
+      },
+      "description": "browse为无关键词浏览，keyword为关键词搜索。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (query_type) (rate(restaurant_search_requests_total{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "{{query_type}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "range": true,
+          "instant": false
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "列表查询耗时",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 15,
+        "w": 12,
+        "h": 8
+      },
+      "description": "服务入口至返回/异常，含ES及SQL兜底；低流量下直方图分位数仅供参考。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(restaurant_search_duration_seconds_bucket{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "P50",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(restaurant_search_duration_seconds_bucket{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "P95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "C",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(restaurant_search_duration_seconds_bucket{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "P99",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "range": true,
+          "instant": false
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "ES 阶段耗时",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 12,
+        "h": 8
+      },
+      "description": "包含能力检查、分析、搜索和响应解析；未访问Reader的熔断拒绝不计。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(restaurant_search_es_duration_seconds_bucket{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "P50",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(restaurant_search_es_duration_seconds_bucket{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "P95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "C",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(restaurant_search_es_duration_seconds_bucket{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "P99",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "range": true,
+          "instant": false
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "实际返回来源与失败",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 23,
+        "w": 12,
+        "h": 8
+      },
+      "description": "es/sql是实际返回来源，none表示未返回结果的最终失败。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (source, outcome) (rate(restaurant_search_requests_total{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "{{source}} / {{outcome}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "range": true,
+          "instant": false
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "降级原因",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 31,
+        "w": 12,
+        "h": 8
+      },
+      "description": "仅列表；没有降级事件时序列可能尚未创建，不伪造降级事件。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (reason) (rate(restaurant_search_fallbacks_total{job=\"ginkgo-backend\",instance=\"$instance\",scope=\"list\"}[$__rate_interval]))",
+          "legendFormat": "{{reason}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "range": true,
+          "instant": false
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "title": "关键词零结果比例",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 31,
+        "w": 12,
+        "h": 8
+      },
+      "description": "成功关键词查询中完整匹配总数为0的比例，不代表搜索准确率。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "((sum(rate(restaurant_search_results_total{job=\"ginkgo-backend\",instance=\"$instance\",query_type=\"keyword\",empty=\"true\"}[$__rate_interval])) or vector(0)) / sum(rate(restaurant_search_results_total{job=\"ginkgo-backend\",instance=\"$instance\",query_type=\"keyword\"}[$__rate_interval]))) and on() (sum(rate(restaurant_search_results_total{job=\"ginkgo-backend\",instance=\"$instance\",query_type=\"keyword\"}[$__rate_interval])) > 0)",
+          "legendFormat": "零结果比例",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "range": true,
+          "instant": false
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "title": "每次 ES 阶段平均 SDK 调用数",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 39,
+        "w": 8,
+        "h": 8
+      },
+      "description": "包含失败阶段；统计SDK调用尝试，不包含客户端内部HTTP重试。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(restaurant_search_es_requests_per_query_sum{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval])) / sum(rate(restaurant_search_es_requests_per_query_count{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "调用数/阶段",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "range": true,
+          "instant": false
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "title": "ES 调用类型",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 8,
+        "y": 39,
+        "w": 8,
+        "h": 8
+      },
+      "description": "field_caps检查、analyze分析、search搜索，仅列表。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (operation) (rate(restaurant_search_es_requests_total{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "{{operation}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "range": true,
+          "instant": false
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 16,
+      "title": "共享熔断状态",
+      "type": "stat",
+      "gridPos": {
+        "x": 16,
+        "y": 39,
+        "w": 8,
+        "h": 8
+      },
+      "description": "列表与地图共享；0正常、1打开、2半开、3其他。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "正常",
+                  "color": "green"
+                },
+                "1": {
+                  "text": "熔断打开",
+                  "color": "red"
+                },
+                "2": {
+                  "text": "半开探测",
+                  "color": "orange"
+                },
+                "3": {
+                  "text": "其他状态",
+                  "color": "blue"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "restaurant_search_es_circuit_state{job=\"ginkgo-backend\",instance=\"$instance\"}",
+          "legendFormat": "状态",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "range": false,
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 20,
+      "type": "text",
+      "title": "ES 数据同步（Outbox）",
+      "gridPos": {
+        "x": 0,
+        "y": 47,
+        "w": 24,
+        "h": 3
+      },
+      "description": "",
+      "options": {
+        "mode": "markdown",
+        "content": "同步消费默认关闭；启用后每 30 秒汇总积压，抓取指标不查数据库。最老等待时间包含重试等待；版本冲突也可能是正常幂等重放。**快照过旧时，下列存量可能已过期；未启用或尚未采到数据时显示暂无数据。**"
+      }
+    },
+    {
+      "id": 21,
+      "type": "stat",
+      "title": "同步消费",
+      "gridPos": {
+        "x": 0,
+        "y": 50,
+        "w": 4,
+        "h": 4
+      },
+      "description": "指标仅在同步开启时注册；不存在时不能推断积压为0。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "restaurant_search_sync_enabled{job=\"ginkgo-backend\",instance=\"$instance\"}",
+          "legendFormat": "消费开关",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "已启用",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 22,
+      "type": "stat",
+      "title": "待同步任务",
+      "gridPos": {
+        "x": 4,
+        "y": 50,
+        "w": 4,
+        "h": 4
+      },
+      "description": "全部PENDING任务，包括尚未到重试时间的任务；不是商户数量。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "restaurant_search_sync_queue_tasks{job=\"ginkgo-backend\",instance=\"$instance\",status=\"pending\"}",
+          "legendFormat": "待同步",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "blue",
+                "value": 1
+              }
+            ]
+          },
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 23,
+      "type": "stat",
+      "title": "已失败任务",
+      "gridPos": {
+        "x": 8,
+        "y": 50,
+        "w": 4,
+        "h": 4
+      },
+      "description": "FAILED存量，达到重试上限后保留；不会自动重放。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "restaurant_search_sync_queue_tasks{job=\"ginkgo-backend\",instance=\"$instance\",status=\"failed\"}",
+          "legendFormat": "达到重试上限",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 24,
+      "type": "stat",
+      "title": "最老待同步时间",
+      "gridPos": {
+        "x": 12,
+        "y": 50,
+        "w": 4,
+        "h": 4
+      },
+      "description": "数据库采样时最老PENDING任务从创建到现在的年龄，包含重试等待；空队列为0，不是同步端到端延迟。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "restaurant_search_sync_oldest_pending_age_seconds{job=\"ginkgo-backend\",instance=\"$instance\"}",
+          "legendFormat": "最老等待",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 120
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 25,
+      "type": "stat",
+      "title": "到期待处理任务",
+      "gridPos": {
+        "x": 16,
+        "y": 50,
+        "w": 4,
+        "h": 4
+      },
+      "description": "PENDING、失败次数低于上限且next_attempt_at已到期；不代表PROCESSING或已领取。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "restaurant_search_sync_due_tasks{job=\"ginkgo-backend\",instance=\"$instance\"}",
+          "legendFormat": "到期待处理",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "blue",
+                "value": 1
+              }
+            ]
+          },
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 26,
+      "type": "stat",
+      "title": "同步快照距今",
+      "gridPos": {
+        "x": 20,
+        "y": 50,
+        "w": 4,
+        "h": 4
+      },
+      "description": "上次成功数据库汇总距所选范围结束时刻的秒数。首次成功前暂无数据；失败保留旧快照，勿把旧值当当前状态。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - (restaurant_search_sync_snapshot_timestamp_seconds{job=\"ginkgo-backend\",instance=\"$instance\"} > 0)",
+          "legendFormat": "快照年龄",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 27,
+      "type": "stat",
+      "title": "等待重试任务",
+      "gridPos": {
+        "x": 0,
+        "y": 54,
+        "w": 4,
+        "h": 7
+      },
+      "description": "PENDING且已持久记录至少一次失败；包括已到期与尚未到期，不涵盖失败次数仍为0的确认失败重放。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "restaurant_search_sync_retry_pending_tasks{job=\"ginkgo-backend\",instance=\"$instance\"}",
+          "legendFormat": "失败后待处理",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 28,
+      "type": "stat",
+      "title": "成功扫描批次距今",
+      "gridPos": {
+        "x": 4,
+        "y": 54,
+        "w": 4,
+        "h": 7
+      },
+      "description": "批次完成扫描和逐条处理即更新，空批次也更新；不表示批内所有任务成功。长批次/共享调度线程会使心跳和快照延后。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - (restaurant_search_sync_last_batch_success_timestamp_seconds{job=\"ginkgo-backend\",instance=\"$instance\"} > 0)",
+          "legendFormat": "批次心跳",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 29,
+      "type": "timeseries",
+      "title": "同步任务处理结果",
+      "gridPos": {
+        "x": 8,
+        "y": 54,
+        "w": 16,
+        "h": 7
+      },
+      "description": "success=ES处理且数据库确认成功；write_error=投影或写ES失败；ack_error=ES成功但数据库确认失败。每次实际消费记录一次。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome) (rate(restaurant_search_sync_tasks_total{job=\"ginkgo-backend\",instance=\"$instance\"}[5m]))",
+          "legendFormat": "{{outcome}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "success"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "成功确认"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "write_error"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "投影或ES写入失败"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ack_error"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "数据库确认失败"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 30,
+      "type": "timeseries",
+      "title": "重试与版本冲突",
+      "gridPos": {
+        "x": 0,
+        "y": 61,
+        "w": 12,
+        "h": 8
+      },
+      "description": "重试按消费前attempts>0计数；409也包括同版本正文一致与更新版本覆盖，不等同于最终失败。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(restaurant_search_sync_retries_total{job=\"ginkgo-backend\",instance=\"$instance\"}[5m])",
+          "legendFormat": "已有失败次数的再次消费",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": false,
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "rate(restaurant_search_sync_version_conflicts_total{job=\"ginkgo-backend\",instance=\"$instance\"}[5m])",
+          "legendFormat": "ES返回409",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "单次同步处理耗时",
+      "gridPos": {
+        "x": 12,
+        "y": 61,
+        "w": 12,
+        "h": 8
+      },
+      "description": "按原任务记录耗时，包含同批其他餐厅准备、共享Bulk及按顺序确认的等待；不含Outbox排队和200毫秒合并窗口，不等同于物理ES请求耗时。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(restaurant_search_sync_task_duration_seconds_bucket{job=\"ginkgo-backend\",instance=\"$instance\"}[5m])))",
+          "legendFormat": "P50",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": false,
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(restaurant_search_sync_task_duration_seconds_bucket{job=\"ginkgo-backend\",instance=\"$instance\"}[5m])))",
+          "legendFormat": "P95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": false,
+          "range": true
+        },
+        {
+          "refId": "C",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(restaurant_search_sync_task_duration_seconds_bucket{job=\"ginkgo-backend\",instance=\"$instance\"}[5m])))",
+          "legendFormat": "P99",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "同步状态与观测异常",
+      "gridPos": {
+        "x": 0,
+        "y": 69,
+        "w": 12,
+        "h": 8
+      },
+      "description": "状态落库失败包括抛错和影响行数不为1；这些故障不能被ES写入成功掩盖。快照失败保留旧值，结合快照距今判断。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (state) (rate(restaurant_search_sync_state_update_failures_total{job=\"ginkgo-backend\",instance=\"$instance\"}[5m]))",
+          "legendFormat": "状态落库失败 {{state}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": false,
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "rate(restaurant_search_sync_snapshot_errors_total{job=\"ginkgo-backend\",instance=\"$instance\"}[5m])",
+          "legendFormat": "积压快照失败",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": false,
+          "range": true
+        },
+        {
+          "refId": "C",
+          "expr": "rate(restaurant_search_sync_batches_total{job=\"ginkgo-backend\",instance=\"$instance\",outcome=\"error\"}[5m])",
+          "legendFormat": "批次扫描失败",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "状态落库失败 success"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "成功状态落库失败"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "状态落库失败 failure"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "失败状态落库失败"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 33,
+      "type": "timeseries",
+      "title": "Outbox 积压趋势",
+      "gridPos": {
+        "x": 12,
+        "y": 69,
+        "w": 12,
+        "h": 8
+      },
+      "description": "每30秒数据库存量快照，连接采样点仅为展示，不等于每个中间时刻都已测量。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "restaurant_search_sync_queue_tasks{job=\"ginkgo-backend\",instance=\"$instance\"}",
+          "legendFormat": "{{status}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": false,
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "restaurant_search_sync_due_tasks{job=\"ginkgo-backend\",instance=\"$instance\"}",
+          "legendFormat": "到期待处理",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "pending"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "待同步"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "failed"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "已失败"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 34,
+      "type": "timeseries",
+      "title": "同餐厅任务合并",
+      "gridPos": {
+        "x": 0,
+        "y": 77,
+        "w": 24,
+        "h": 8
+      },
+      "description": "每批按餐厅分组的处理速率及被合并任务速率。合并数为各组任务数减一；包含写入失败组，不等同于物理HTTP请求节省量。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(restaurant_search_sync_groups_total{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval])",
+          "legendFormat": "餐厅分组 / 秒",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": false,
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "rate(restaurant_search_sync_coalesced_tasks_total{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval])",
+          "legendFormat": "合并任务 / 秒",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 35,
+      "type": "timeseries",
+      "title": "Bulk 请求速率",
+      "gridPos": {
+        "x": 0,
+        "y": 85,
+        "w": 8,
+        "h": 8
+      },
+      "description": "response表示收到条数完整的响应，可能包含失败item；error表示传输或响应条数异常。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(restaurant_search_sync_bulk_requests_total{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval])",
+          "legendFormat": "{{outcome}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 36,
+      "type": "timeseries",
+      "title": "Bulk 请求耗时 P95",
+      "gridPos": {
+        "x": 8,
+        "y": 85,
+        "w": 8,
+        "h": 8
+      },
+      "description": "客户端Bulk调用耗时，包含网络等待；不含投影组装、409读取校验或数据库确认。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95,sum by(le,outcome) (rate(restaurant_search_sync_bulk_duration_seconds_bucket{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "{{outcome}} P95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 37,
+      "type": "timeseries",
+      "title": "Bulk 文档结果与429",
+      "gridPos": {
+        "x": 16,
+        "y": 85,
+        "w": 8,
+        "h": 8
+      },
+      "description": "实际发送文档的结果，success包含409核对通过；error包含传输结果未知。429是error的子集，不可相加。发送前校验失败不计入。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(restaurant_search_sync_bulk_items_total{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval])",
+          "legendFormat": "{{outcome}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": false,
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "rate(restaurant_search_sync_bulk_rejected_items_total{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval])",
+          "legendFormat": "明确返回429",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 38,
+      "type": "timeseries",
+      "title": "平均每次 Bulk 文档数",
+      "gridPos": {
+        "x": 0,
+        "y": 93,
+        "w": 12,
+        "h": 8
+      },
+      "description": "按实际请求计数，包括传输失败请求；无请求时不伪装成0。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum(rate(restaurant_search_sync_bulk_documents_sum{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval])) / sum(rate(restaurant_search_sync_bulk_documents_count{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval]))) and (sum(rate(restaurant_search_sync_bulk_documents_count{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval])) > 0)",
+          "legendFormat": "文档 / 请求",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 39,
+      "type": "timeseries",
+      "title": "平均 Bulk 请求体大小",
+      "gridPos": {
+        "x": 12,
+        "y": 93,
+        "w": 12,
+        "h": 8
+      },
+      "description": "按SDK mapper序列化的UTF-8元数据、正文及换行计算，大小限制默认1MiB；不含HTTP头。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ginkgo-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum(rate(restaurant_search_sync_bulk_bytes_sum{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval])) / sum(rate(restaurant_search_sync_bulk_bytes_count{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval]))) and (sum(rate(restaurant_search_sync_bulk_bytes_count{job=\"ginkgo-backend\",instance=\"$instance\"}[$__rate_interval])) > 0)",
+          "legendFormat": "未压缩 NDJSON 字节",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "ginkgo-prometheus"
+          },
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "noValue": "暂无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    }
+  ]
+}

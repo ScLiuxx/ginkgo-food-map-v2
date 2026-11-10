@@ -2,6 +2,10 @@
 
 物理索引`restaurant-search-v003`，别名`restaurant-search`。每家普通餐厅或食堂对应一份文档，`_id`为商户ID的十进制字符串，正文id为long。字段定义来源于[索引定义JSON](../../backend/src/main/resources/elasticsearch/restaurant-search-v003.json)。
 
+## 当前读取边界
+
+列表接口直接读取现有投影：普通浏览使用match_all，关键词使用既有匹配规则，不再回查MySQL或Outbox；资料、评分及删除/恢复允许同步延迟。coverPhotoId用于组装同源图片地址，图片读取仍校验实际状态。四维及审计时间未在索引中，列表返回null，详情独立读取MySQL。地图点位仍使用身份/版本回查。字段和mapping不变，无需因本次读取改造重建索引。
+
 ## 索引设置
 
 | 项目 | 当前定义 | 含义 |

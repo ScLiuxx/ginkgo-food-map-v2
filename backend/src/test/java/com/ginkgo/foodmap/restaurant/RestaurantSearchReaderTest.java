@@ -26,7 +26,8 @@ class RestaurantSearchReaderTest {
                 new RestaurantSearchReader(
                         mock(ElasticsearchClient.class),
                         new ObjectMapper(),
-                        new RestaurantSearchQueryProperties());
+                        new RestaurantSearchQueryProperties(),
+                        new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
         var q = new RestaurantListQuery();
         q.setKeyword(" 𠀀 ");
         var request = reader.request(q, false, "");
@@ -46,7 +47,10 @@ class RestaurantSearchReaderTest {
         var client = mock(ElasticsearchClient.class);
         var reader =
                 new RestaurantSearchReader(
-                        client, new ObjectMapper(), new RestaurantSearchQueryProperties());
+                        client,
+                        new ObjectMapper(),
+                        new RestaurantSearchQueryProperties(),
+                        new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
         var q = new RestaurantListQuery();
         q.setKeyword("咖啡");
         q.setSort("price");
@@ -84,7 +88,10 @@ class RestaurantSearchReaderTest {
         var client = mock(ElasticsearchClient.class);
         var reader =
                 new RestaurantSearchReader(
-                        client, new ObjectMapper(), new RestaurantSearchQueryProperties());
+                        client,
+                        new ObjectMapper(),
+                        new RestaurantSearchQueryProperties(),
+                        new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
         var q = new RestaurantListQuery();
         q.setKeyword("咖啡");
         q.setSort("reviews");
@@ -130,5 +137,56 @@ class RestaurantSearchReaderTest {
                                                                                                         .Eq))));
         when(client.search(any(SearchRequest.class), eq(JsonData.class))).thenReturn(missing);
         assertThatThrownBy(() -> reader.search(q, false)).isInstanceOf(IllegalStateException.class);
+    }
+
+    /** 完整_source直接转换列表，不依赖资料回查；空关键词必须match_all而非空文本检索。 */
+    @Test
+    void catalogFetchesFullProjectionAndReturnsPublicRecords() throws Exception {
+        var client = mock(ElasticsearchClient.class);
+        var mapper = new ObjectMapper();
+        var reader =
+                new RestaurantSearchReader(
+                        client,
+                        mapper,
+                        new RestaurantSearchQueryProperties(),
+                        new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+        var query = new RestaurantListQuery();
+        var request = reader.request(query, false, "");
+        assertThat(request.query().bool().must().getFirst().isMatchAll()).isTrue();
+        assertThat(request.query().bool().should()).isEmpty();
+        assertThat(request.source().filter().includes())
+                .contains("name", "coverPhotoId", "ratingScore");
+        SearchResponse<JsonData> response =
+                SearchResponse.of(
+                        b ->
+                                b.took(1)
+                                        .timedOut(false)
+                                        .shards(s -> s.total(1).successful(1).failed(0))
+                                        .hits(
+                                                h ->
+                                                        h.total(
+                                                                        t ->
+                                                                                t.value(1)
+                                                                                        .relation(
+                                                                                                TotalHitsRelation
+                                                                                                        .Eq))
+                                                                .hits(
+                                                                        hit ->
+                                                                                hit.index("test")
+                                                                                        .id("42")
+                                                                                        .version(3L)
+                                                                                        .source(
+                                                                                                JsonData
+                                                                                                        .fromJson(
+                                                                                                                mapper
+                                                                                                                        .writeValueAsString(
+                                                                                                                                RestaurantSearchListPolicyTest
+                                                                                                                                        .document()))))));
+        when(client.search(any(SearchRequest.class), eq(JsonData.class))).thenReturn(response);
+        var result = reader.search(query, false);
+        assertThat(result.getRecords()).hasSize(1);
+        assertThat(result.getRecords().getFirst().getName()).isEqualTo("索引餐厅");
+        verify(client).search(any(SearchRequest.class), eq(JsonData.class));
+        verifyNoMoreInteractions(client);
     }
 }

@@ -83,6 +83,13 @@ public class SecurityConfiguration {
                 .authorizeHttpRequests(
                         authorize ->
                                 authorize
+                                        // 指标包含内部运行信息；仅GET允许管理员读取，沿用JWT及Redis会话校验。
+                                        .requestMatchers(HttpMethod.GET, "/actuator/prometheus")
+                                        .hasRole("ADMIN")
+                                        // 禁止其他方法绕过GET规则进入默认的“已登录即可访问”分支。
+                                        .requestMatchers(
+                                                "/actuator/prometheus", "/actuator/prometheus/**")
+                                        .denyAll()
                                         // 管理命名空间统一要求数据库当前管理员角色，避免仅凭前端入口隐藏授权。
                                         .requestMatchers("/api/admin/**")
                                         .hasRole("ADMIN")

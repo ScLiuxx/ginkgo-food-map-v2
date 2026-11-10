@@ -1,24 +1,26 @@
 package com.ginkgo.foodmap.restaurant.dto;
 
-import jakarta.validation.constraints.Max;
+import com.ginkgo.foodmap.restaurant.policy.RestaurantSearchQueryPolicy;
+
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+
 import lombok.Data;
-import com.ginkgo.foodmap.restaurant.policy.RestaurantSearchQueryPolicy;
 
 import java.math.BigDecimal;
 
 /**
  * 公开目录的查询参数，自动选择默认意图，显式业务排序不被相关度覆盖。
  *
- * <p>分页在数据库执行；每页上限用于限制单次读取成本。派生属性没有 Setter，不能由 HTTP
- * 输入覆盖 SQL 条件；LIKE 使用 ! 转义，用户输入的百分号、下划线和反斜杠都按字面量搜索。</p>
+ * <p>分页在数据库执行；每页上限用于限制单次读取成本。派生属性没有 Setter，不能由 HTTP 输入覆盖 SQL 条件；LIKE 使用 !
+ * 转义，用户输入的百分号、下划线和反斜杠都按字面量搜索。
  */
 @Data
 public class RestaurantListQuery {
@@ -41,9 +43,12 @@ public class RestaurantListQuery {
     private String diningMode = "";
 
     /** 用户单次授权取得的GCJ-02位置，仅用于本次查询，不写入数据库。 */
-    @DecimalMin("-90") @DecimalMax("90")
+    @DecimalMin("-90")
+    @DecimalMax("90")
     private BigDecimal latitude;
-    @DecimalMin("-180") @DecimalMax("180")
+
+    @DecimalMin("-180")
+    @DecimalMax("180")
     private BigDecimal longitude;
 
     @AssertTrue(message = "用户经纬度必须同时提供")
@@ -60,13 +65,15 @@ public class RestaurantListQuery {
 
     /** 单字及普通目录默认综合分，多字默认相关度；显式排序不受默认意图影响。 */
     public String getEffectiveSort() {
+        if (keyword.strip().isEmpty() && "relevance".equals(sort)) return "score";
         return "auto".equals(sort)
-                ? (keyword.strip().isEmpty() || RestaurantSearchQueryPolicy.isSingleHan(keyword) ? "score" : "relevance")
+                ? (keyword.strip().isEmpty() || RestaurantSearchQueryPolicy.isSingleHan(keyword)
+                        ? "score"
+                        : "relevance")
                 : sort;
     }
 
-    @NotNull
-    private Boolean hideClosed = false;
+    @NotNull private Boolean hideClosed = false;
 
     /** 人均上限含边界，空值表示不限；未知价格由SQL排除，精度沿用金额字段。 */
     @DecimalMin(value = "0.01", message = "人均上限必须大于0")
@@ -88,21 +95,32 @@ public class RestaurantListQuery {
     private Integer pageSize = 8;
 
     /** 可选GCJ-02视口；四边必须同时提供，普通目录不传时仍查询完整集合。 */
-    @DecimalMin("-180") @DecimalMax("180")
+    @DecimalMin("-180")
+    @DecimalMax("180")
     private BigDecimal west;
-    @DecimalMin("-180") @DecimalMax("180")
+
+    @DecimalMin("-180")
+    @DecimalMax("180")
     private BigDecimal east;
-    @DecimalMin("-90") @DecimalMax("90")
+
+    @DecimalMin("-90")
+    @DecimalMax("90")
     private BigDecimal south;
-    @DecimalMin("-90") @DecimalMax("90")
+
+    @DecimalMin("-90")
+    @DecimalMax("90")
     private BigDecimal north;
 
     /** 首版不支持跨日期变更线，拒绝缺边、反向或零面积，不能静默放宽查询。 */
     @AssertTrue(message = "地图范围必须完整且西小于东、南小于北")
     public boolean isBoundsValid() {
         if (west == null && east == null && south == null && north == null) return true;
-        return west != null && east != null && south != null && north != null
-                && west.compareTo(east) < 0 && south.compareTo(north) < 0;
+        return west != null
+                && east != null
+                && south != null
+                && north != null
+                && west.compareTo(east) < 0
+                && south.compareTo(north) < 0;
     }
 
     /** 先转换为 long 再乘，较大但合法的页码不能发生 int 溢出后读取错误页。 */
@@ -112,8 +130,6 @@ public class RestaurantListQuery {
 
     /** 参数绑定与 LIKE 转义分别防止 SQL 注入和通配符扩大搜索，不拼接用户 SQL。 */
     public String getKeywordPattern() {
-        return "%" + keyword.strip().replace("!", "!!").replace("%", "!%")
-                .replace("_", "!_") + "%";
+        return "%" + keyword.strip().replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
     }
-
 }

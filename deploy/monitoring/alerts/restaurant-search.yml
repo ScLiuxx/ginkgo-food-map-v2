@@ -1,0 +1,151 @@
+# 本地演练初始阈值，不代表生产SLO；所有聚合保留job/instance，避免混合多个实例。
+# 比例和延迟使用5分钟窗口及最低20次完成请求，短时波动由for过滤。
+groups:
+  - name: restaurant-search
+    interval: 15s
+    rules:
+      - alert: GinkgoBackendScrapeUnavailable
+        expr: up{job="ginkgo-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          scope: backend
+        annotations:
+          summary: 后端指标持续无法采集
+          description: '实例 {{ $labels.instance }} 已连续1分钟采集失败，up={{ $value }}；检查进程、网络、指标认证和Targets错误，不能仅凭此认定业务宕机。'
+          dashboard_url: http://127.0.0.1:3000/d/ginkgo-es-search/
+          runbook: docs/operations/search-alerts.md#采集失败
+
+      # 半开探测由真实请求驱动；无流量时停留OPEN不代表持续探测确认ES不可用。
+      - alert: GinkgoSearchCircuitOpen
+        expr: |
+          (restaurant_search_es_circuit_state{job="ginkgo-backend"} == 1)
+          and on (job, instance) (up{job="ginkgo-backend"} == 1)
+        for: 1m
+        labels:
+          severity: warning
+          scope: list_map
+        annotations:
+          summary: 检索熔断持续打开
+          description: '实例 {{ $labels.instance }} 的列表/地图共享熔断已打开至少1分钟，state={{ $value }}；检查ES连接及调用错误。恢复探测依赖真实请求，无流量时不会自动关闭。'
+          dashboard_url: http://127.0.0.1:3000/d/ginkgo-es-search/
+          runbook: docs/operations/search-alerts.md#熔断持续打开
+
+      # 分母仅含计划使用ES的列表请求，主动SQL不稀释ES故障降级比例。
+      - alert: GinkgoSearchFallbackHigh
+        expr: |
+          (
+            sum by (job, instance) (increase(restaurant_search_fallbacks_total{job="ginkgo-backend",scope="list"}[5m]))
+            /
+            sum by (job, instance) (increase(restaurant_search_requests_total{job="ginkgo-backend",route="es"}[5m]))
+            > 0.20
+          )
+          and on (job, instance)
+          (sum by (job, instance) (increase(restaurant_search_requests_total{job="ginkgo-backend",route="es"}[5m])) >= 20)
+          and on (job, instance) (up{job="ginkgo-backend"} == 1)
+        for: 2m
+        labels:
+          severity: warning
+          scope: list
+        annotations:
+          summary: 列表检索频繁降级
+          description: '实例 {{ $labels.instance }} 最近5分钟计划走ES的请求至少20次，降级比例 {{ $value | humanizePercentage }} 持续2分钟超过20%；检查降级原因、熔断及ES调用面板。'
+          dashboard_url: http://127.0.0.1:3000/d/ginkgo-es-search/
+          runbook: docs/operations/search-alerts.md#降级比例偏高
+
+      # 只看最终失败：ES失败但SQL兜底成功仍属于success，不触发该告警。
+      - alert: GinkgoSearchFailureHigh
+        expr: |
+          (
+            sum by (job, instance) (increase(restaurant_search_requests_total{job="ginkgo-backend",outcome="error"}[5m]))
+            /
+            sum by (job, instance) (increase(restaurant_search_requests_total{job="ginkgo-backend"}[5m]))
+            > 0.05
+          )
+          and on (job, instance)
+          (sum by (job, instance) (increase(restaurant_search_requests_total{job="ginkgo-backend"}[5m])) >= 20)
+          and on (job, instance) (up{job="ginkgo-backend"} == 1)
+        for: 1m
+        labels:
+          severity: critical
+          scope: list
+        annotations:
+          summary: 列表检索最终失败比例偏高
+          description: '实例 {{ $labels.instance }} 最近5分钟至少20次查询，最终失败比例 {{ $value | humanizePercentage }} 持续1分钟超过5%；用户未获得正常结果，优先检查后端与数据库。SQL兜底成功不算失败。'
+          dashboard_url: http://127.0.0.1:3000/d/ginkgo-es-search/
+          runbook: docs/operations/search-alerts.md#最终失败比例偏高
+
+      # 覆盖成功与失败、ES与SQL的整体列表耗时；桶先聚合再计算分位数。
+      - alert: GinkgoSearchLatencyHigh
+        expr: |
+          (
+            histogram_quantile(0.95,
+              sum by (job, instance, le) (rate(restaurant_search_duration_seconds_bucket{job="ginkgo-backend"}[5m]))
+            ) > 1
+          )
+          and on (job, instance)
+          (sum by (job, instance) (increase(restaurant_search_duration_seconds_count{job="ginkgo-backend"}[5m])) >= 20)
+          and on (job, instance) (up{job="ginkgo-backend"} == 1)
+        for: 2m
+        labels:
+          severity: warning
+          scope: list
+        annotations:
+          summary: 列表检索延迟持续偏高
+          description: '实例 {{ $labels.instance }} 最近5分钟至少20次查询，整体P95={{ $value | humanizeDuration }} 持续2分钟超过1秒；对照整体/ES耗时、降级与数据库情况排查。'
+          dashboard_url: http://127.0.0.1:3000/d/ginkgo-es-search/
+          runbook: docs/operations/search-alerts.md#查询延迟偏高
+
+      # 同步存量告警只使用90秒内的成功快照，避免数据库采样失败后反复解读旧值。
+      - alert: GinkgoSyncBacklogOld
+        expr: |
+          (restaurant_search_sync_oldest_pending_age_seconds{job="ginkgo-backend"} > 120)
+          and on (job, instance)
+          (restaurant_search_sync_queue_tasks{job="ginkgo-backend",status="pending"} > 0)
+          and on (job, instance)
+          ((time() - restaurant_search_sync_snapshot_timestamp_seconds{job="ginkgo-backend"}) < 90)
+          and on (job, instance) (up{job="ginkgo-backend"} == 1)
+        for: 2m
+        labels:
+          severity: warning
+          scope: sync
+        annotations:
+          summary: 搜索同步任务持续积压
+          description: '实例 {{ $labels.instance }} 最老待同步任务已等待 {{ $value | humanizeDuration }}，超过120秒并持续2分钟；检查消费心跳、ES写入与重试。仅使用90秒内的快照。'
+          dashboard_url: http://127.0.0.1:3000/d/ginkgo-es-search/
+          runbook: docs/operations/search-alerts.md#同步积压与失败
+
+      - alert: GinkgoSyncFailedTasks
+        expr: |
+          (restaurant_search_sync_queue_tasks{job="ginkgo-backend",status="failed"} > 0)
+          and on (job, instance)
+          ((time() - restaurant_search_sync_snapshot_timestamp_seconds{job="ginkgo-backend"}) < 90)
+          and on (job, instance) (up{job="ginkgo-backend"} == 1)
+        for: 1m
+        labels:
+          severity: warning
+          scope: sync
+        annotations:
+          summary: 搜索同步存在失败任务
+          description: '实例 {{ $labels.instance }} 有 {{ $value }} 个达到重试上限的任务，持续1分钟；FAILED不会自动重放，需排查错误与数据后处理，不能只清除记录。'
+          dashboard_url: http://127.0.0.1:3000/d/ginkgo-es-search/
+          runbook: docs/operations/search-alerts.md#同步积压与失败
+
+      - alert: GinkgoSyncObservationStale
+        expr: |
+          (
+            (time() - restaurant_search_sync_snapshot_timestamp_seconds{job="ginkgo-backend"} > 90)
+            or
+            (time() - restaurant_search_sync_last_batch_success_timestamp_seconds{job="ginkgo-backend"} > 90)
+          )
+          and on (job, instance) (restaurant_search_sync_enabled{job="ginkgo-backend"} == 1)
+          and on (job, instance) (up{job="ginkgo-backend"} == 1)
+        for: 1m
+        labels:
+          severity: warning
+          scope: sync
+        annotations:
+          summary: 搜索同步快照或消费心跳陈旧
+          description: '实例 {{ $labels.instance }} 同步已启用，但快照或成功扫描批次距今 {{ $value | humanizeDuration }}，超过90秒并持续1分钟；检查数据库、长批次和共享调度线程。启动时尚未成功采样的时间戳为0。'
+          dashboard_url: http://127.0.0.1:3000/d/ginkgo-es-search/
+          runbook: docs/operations/search-alerts.md#同步观测陈旧

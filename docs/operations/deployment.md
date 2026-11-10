@@ -48,6 +48,22 @@
 
 服务器运行配置中的数据库、Redis、SMTP、验证码 HMAC 及 JWT 密钥不进入 Git、构建产物或部署日志。RSA 和 HMAC 密钥由服务器独立生成。Runner 与后端 systemd 服务均已设置开机启动，首次发布后后端服务已运行。
 
+## Prometheus指标采集端点
+
+后端提供`GET /actuator/prometheus`，与业务服务共用端口（默认8080），返回Prometheus文本，不使用业务JSON封装；无请求参数、无业务数据写入。已接入Prometheus Registry，Actuator只暴露health、info、prometheus，不暴露env、metrics等其他管理端点。
+
+管理员读取携带`Authorization: Bearer <管理员accessToken>`，沿用现有JWT、Redis会话及数据库当前角色校验。匿名或无效Bearer返回401 `AUTH_UNAUTHENTICATED`，普通用户返回403 `AUTH_FORBIDDEN`；认证服务暂不可用时可返回503 `AUTH_SERVICE_UNAVAILABLE`。其他请求方法被拒绝。可选机器Basic采集使用独立凭据，仅能读取指标，无业务权限，配置及认证响应见[Prometheus接入](prometheus.md#独立采集认证)。
+
+本机可在后端重启后验证（令牌通过当前PowerShell会话中的`$env:METRICS_ADMIN_TOKEN`提供，不写入仓库）：
+
+```powershell
+Invoke-WebRequest -Uri http://127.0.0.1:8080/actuator/prometheus -Headers @{ Authorization = "Bearer $env:METRICS_ADMIN_TOKEN" }
+```
+
+返回内容应包含`jvm_memory_used_bytes`等默认指标；部分指标在对应活动发生后才出现。列表检索专项指标和既有共享熔断指标一起导出，名称及计算口径见[ES列表检索指标](elasticsearch-metrics.md)。
+
+采集端点供内部运维使用，不新增公网Nginx转发。自动采集采用独立凭据，避免管理员JWT过期或注销影响监控；Prometheus本地部署见[运行说明](prometheus.md)，Grafana独立看板访问及启动见[看板说明](grafana.md)。
+
 ## 图片存储目录
 
 同一私有OSS Bucket下统一使用三个同级目录：

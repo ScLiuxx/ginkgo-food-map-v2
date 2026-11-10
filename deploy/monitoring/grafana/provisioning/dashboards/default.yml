@@ -1,0 +1,13 @@
+apiVersion: 1
+
+# 看板以仓库JSON为准，重建容器后自动恢复；UI不能覆盖配置源。
+providers:
+  - name: ginkgo-search
+    orgId: 1
+    folder: Ginkgo
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards

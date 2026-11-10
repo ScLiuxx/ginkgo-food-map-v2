@@ -1,0 +1,431 @@
+# 真实生产阈值的离线回归：不缩短for，不依赖外部ES或业务写入。
+# 使用ALERTS向量检查等待、触发和解除；同时检查没有意外的其他告警。
+rule_files:
+  - restaurant-search.yml
+evaluation_interval: 15s
+tests:
+  - name: 正常浏览和主动SQL无告警
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_requests_total{job="ginkgo-backend",instance="test:8080",route="es",source="es",outcome="success",query_type="browse"}'
+        values: '0+10x16'
+      - series: 'restaurant_search_requests_total{job="ginkgo-backend",instance="test:8080",route="sql",source="sql",outcome="success",query_type="keyword"}'
+        values: '0+100x16'
+      - series: 'restaurant_search_fallbacks_total{job="ginkgo-backend",instance="test:8080",scope="list",reason="ES_UNAVAILABLE"}'
+        values: '0+0x16'
+      - series: 'restaurant_search_es_circuit_state{job="ginkgo-backend",instance="test:8080"}'
+        values: '0x16'
+      - series: 'restaurant_search_duration_seconds_count{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es"}'
+        values: '0+10x16'
+      - series: 'restaurant_search_duration_seconds_bucket{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es",le="0.5"}'
+        values: '0+10x16'
+      - series: 'restaurant_search_duration_seconds_bucket{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es",le="1"}'
+        values: '0+10x16'
+      - series: 'restaurant_search_duration_seconds_bucket{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es",le="2"}'
+        values: '0+10x16'
+      - series: 'restaurant_search_duration_seconds_bucket{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es",le="+Inf"}'
+        values: '0+10x16'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 7m
+        exp_samples: []
+  - name: 采集失败经历等待触发与恢复
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '0x3 1x12'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 45s
+        exp_samples: []
+      - expr: 'ALERTS{alertstate="pending"}'
+        eval_time: 45s
+        exp_samples:
+          - labels: '{__name__="ALERTS",alertname="GinkgoBackendScrapeUnavailable",alertstate="pending",instance="test:8080",job="ginkgo-backend",scope="backend",severity="critical"}'
+            value: 1
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 1m
+        exp_samples:
+          - labels: '{__name__="ALERTS",alertname="GinkgoBackendScrapeUnavailable",alertstate="firing",instance="test:8080",job="ginkgo-backend",scope="backend",severity="critical"}'
+            value: 1
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 2m
+        exp_samples: []
+  - name: 熔断持续打开触发并在关闭后解除
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_es_circuit_state{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x3 0x12'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 45s
+        exp_samples: []
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 1m
+        exp_samples:
+          - labels: '{__name__="ALERTS",alertname="GinkgoSearchCircuitOpen",alertstate="firing",instance="test:8080",job="ginkgo-backend",scope="list_map",severity="warning"}'
+            value: 1
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 2m
+        exp_samples: []
+  - name: 短暂采集和熔断异常不触发
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '0x1 1x14'
+      - series: 'restaurant_search_es_circuit_state{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x1 0x14'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 45s
+        exp_samples: []
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 1m
+        exp_samples: []
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 7m
+        exp_samples: []
+  - name: 降级按计划ES流量计算且排除地图
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_requests_total{job="ginkgo-backend",instance="test:8080",route="es",source="es",outcome="success",query_type="browse"}'
+        values: '0+10x16'
+      - series: 'restaurant_search_requests_total{job="ginkgo-backend",instance="test:8080",route="sql",source="sql",outcome="success",query_type="keyword"}'
+        values: '0+100x16'
+      - series: 'restaurant_search_fallbacks_total{job="ginkgo-backend",instance="test:8080",scope="list",reason="ES_UNAVAILABLE"}'
+        values: '0+3x16'
+      - series: 'restaurant_search_fallbacks_total{job="ginkgo-backend",instance="test:8080",scope="map",reason="ES_UNAVAILABLE"}'
+        values: '0+100x16'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 1m
+        exp_samples: []
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 7m
+        exp_samples:
+          - labels: '{__name__="ALERTS",alertname="GinkgoSearchFallbackHigh",alertstate="firing",instance="test:8080",job="ginkgo-backend",scope="list",severity="warning"}'
+            value: 1
+  - name: 低流量即使全部降级也不触发
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_requests_total{job="ginkgo-backend",instance="test:8080",route="es",source="es",outcome="success",query_type="browse"}'
+        values: '0+1x16'
+      - series: 'restaurant_search_fallbacks_total{job="ginkgo-backend",instance="test:8080",scope="list",reason="ES_UNAVAILABLE"}'
+        values: '0+1x16'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 7m
+        exp_samples: []
+  - name: 最终失败比例超标
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_requests_total{job="ginkgo-backend",instance="test:8080",route="es",source="es",outcome="success",query_type="browse"}'
+        values: '0+9x16'
+      - series: 'restaurant_search_requests_total{job="ginkgo-backend",instance="test:8080",route="es",source="none",outcome="error",query_type="keyword"}'
+        values: '0+1x16'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 1m
+        exp_samples: []
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 7m
+        exp_samples:
+          - labels: '{__name__="ALERTS",alertname="GinkgoSearchFailureHigh",alertstate="firing",instance="test:8080",job="ginkgo-backend",scope="list",severity="critical"}'
+            value: 1
+  - name: 低流量最终失败不触发比例告警
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_requests_total{job="ginkgo-backend",instance="test:8080",route="es",source="none",outcome="error",query_type="keyword"}'
+        values: '0+1x16'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 7m
+        exp_samples: []
+  - name: 整体P95超标达到持续时间后触发
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_duration_seconds_count{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es"}'
+        values: '0+10x16'
+      - series: 'restaurant_search_duration_seconds_bucket{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es",le="0.5"}'
+        values: '0+0x16'
+      - series: 'restaurant_search_duration_seconds_bucket{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es",le="1"}'
+        values: '0+0x16'
+      - series: 'restaurant_search_duration_seconds_bucket{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es",le="2"}'
+        values: '0+10x16'
+      - series: 'restaurant_search_duration_seconds_bucket{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es",le="+Inf"}'
+        values: '0+10x16'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 1m
+        exp_samples: []
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 7m
+        exp_samples:
+          - labels: '{__name__="ALERTS",alertname="GinkgoSearchLatencyHigh",alertstate="firing",instance="test:8080",job="ginkgo-backend",scope="list",severity="warning"}'
+            value: 1
+  - name: 低流量慢查询不触发
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_duration_seconds_count{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es"}'
+        values: '0+1x16'
+      - series: 'restaurant_search_duration_seconds_bucket{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es",le="0.5"}'
+        values: '0+0x16'
+      - series: 'restaurant_search_duration_seconds_bucket{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es",le="1"}'
+        values: '0+0x16'
+      - series: 'restaurant_search_duration_seconds_bucket{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es",le="2"}'
+        values: '0+1x16'
+      - series: 'restaurant_search_duration_seconds_bucket{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es",le="+Inf"}'
+        values: '0+1x16'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 7m
+        exp_samples: []
+  - name: 无流量与没有业务序列均不触发
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_requests_total{job="ginkgo-backend",instance="test:8080",route="es",source="es",outcome="success",query_type="browse"}'
+        values: '0+0x16'
+      - series: 'restaurant_search_fallbacks_total{job="ginkgo-backend",instance="test:8080",scope="list",reason="ES_UNAVAILABLE"}'
+        values: '0+0x16'
+      - series: 'restaurant_search_duration_seconds_count{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es"}'
+        values: '0+0x16'
+      - series: 'restaurant_search_duration_seconds_bucket{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es",le="0.5"}'
+        values: '0+0x16'
+      - series: 'restaurant_search_duration_seconds_bucket{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es",le="1"}'
+        values: '0+0x16'
+      - series: 'restaurant_search_duration_seconds_bucket{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es",le="2"}'
+        values: '0+0x16'
+      - series: 'restaurant_search_duration_seconds_bucket{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es",le="+Inf"}'
+        values: '0+0x16'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 7m
+        exp_samples: []
+  - name: 采集失败期间抑制可能陈旧的业务告警
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '0x16'
+      - series: 'restaurant_search_es_circuit_state{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_requests_total{job="ginkgo-backend",instance="test:8080",route="es",source="es",outcome="success",query_type="browse"}'
+        values: '0+9x16'
+      - series: 'restaurant_search_requests_total{job="ginkgo-backend",instance="test:8080",route="es",source="none",outcome="error",query_type="keyword"}'
+        values: '0+1x16'
+      - series: 'restaurant_search_fallbacks_total{job="ginkgo-backend",instance="test:8080",scope="list",reason="ES_UNAVAILABLE"}'
+        values: '0+3x16'
+      - series: 'restaurant_search_duration_seconds_count{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es"}'
+        values: '0+10x16'
+      - series: 'restaurant_search_duration_seconds_bucket{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es",le="0.5"}'
+        values: '0+0x16'
+      - series: 'restaurant_search_duration_seconds_bucket{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es",le="1"}'
+        values: '0+0x16'
+      - series: 'restaurant_search_duration_seconds_bucket{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es",le="2"}'
+        values: '0+10x16'
+      - series: 'restaurant_search_duration_seconds_bucket{job="ginkgo-backend",instance="test:8080",query_type="browse",source="es",outcome="success",route="es",le="+Inf"}'
+        values: '0+10x16'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 7m
+        exp_samples:
+          - labels: '{__name__="ALERTS",alertname="GinkgoBackendScrapeUnavailable",alertstate="firing",instance="test:8080",job="ginkgo-backend",scope="backend",severity="critical"}'
+            value: 1
+  - name: 多个实例独立判断不混合分母
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_requests_total{job="ginkgo-backend",instance="test:8080",route="es",source="es",outcome="success",query_type="browse"}'
+        values: '0+10x16'
+      - series: 'restaurant_search_fallbacks_total{job="ginkgo-backend",instance="test:8080",scope="list",reason="ES_UNAVAILABLE"}'
+        values: '0+3x16'
+      - series: 'up{job="ginkgo-backend",instance="quiet:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_requests_total{job="ginkgo-backend",instance="quiet:8080",route="es",source="es",outcome="success",query_type="browse"}'
+        values: '0+1x16'
+      - series: 'restaurant_search_fallbacks_total{job="ginkgo-backend",instance="quiet:8080",scope="list",reason="ES_UNAVAILABLE"}'
+        values: '0+1x16'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 7m
+        exp_samples:
+          - labels: '{__name__="ALERTS",alertname="GinkgoSearchFallbackHigh",alertstate="firing",instance="test:8080",job="ginkgo-backend",scope="list",severity="warning"}'
+            value: 1
+  - name: 计数器重置后仍正确计算降级比例
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_requests_total{job="ginkgo-backend",instance="test:8080",route="es",source="es",outcome="success",query_type="browse"}'
+        values: '0+10x5 0+10x10'
+      - series: 'restaurant_search_fallbacks_total{job="ginkgo-backend",instance="test:8080",scope="list",reason="ES_UNAVAILABLE"}'
+        values: '0+3x5 0+3x10'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 7m
+        exp_samples:
+          - labels: '{__name__="ALERTS",alertname="GinkgoSearchFallbackHigh",alertstate="firing",instance="test:8080",job="ginkgo-backend",scope="list",severity="warning"}'
+            value: 1
+  - name: 降级停止且旧样本退出窗口后解除
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x30'
+      - series: 'restaurant_search_requests_total{job="ginkgo-backend",instance="test:8080",route="es",source="es",outcome="success",query_type="browse"}'
+        values: '0+10x30'
+      - series: 'restaurant_search_fallbacks_total{job="ginkgo-backend",instance="test:8080",scope="list",reason="ES_UNAVAILABLE"}'
+        values: '0+3x8 24x22'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 4m
+        exp_samples:
+          - labels: '{__name__="ALERTS",alertname="GinkgoSearchFallbackHigh",alertstate="firing",instance="test:8080",job="ginkgo-backend",scope="list",severity="warning"}'
+            value: 1
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 12m
+        exp_samples: []
+  - name: 同步健康且没有积压
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_sync_enabled{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_sync_snapshot_timestamp_seconds{job="ginkgo-backend",instance="test:8080"}'
+        values: '0+30x16'
+      - series: 'restaurant_search_sync_last_batch_success_timestamp_seconds{job="ginkgo-backend",instance="test:8080"}'
+        values: '0+30x16'
+      - series: 'restaurant_search_sync_queue_tasks{job="ginkgo-backend",instance="test:8080",status="pending"}'
+        values: '0x16'
+      - series: 'restaurant_search_sync_queue_tasks{job="ginkgo-backend",instance="test:8080",status="failed"}'
+        values: '0x16'
+      - series: 'restaurant_search_sync_oldest_pending_age_seconds{job="ginkgo-backend",instance="test:8080"}'
+        values: '0x16'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 7m
+        exp_samples: []
+  - name: 同步最老积压持续超时
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_sync_enabled{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_sync_snapshot_timestamp_seconds{job="ginkgo-backend",instance="test:8080"}'
+        values: '0+30x16'
+      - series: 'restaurant_search_sync_last_batch_success_timestamp_seconds{job="ginkgo-backend",instance="test:8080"}'
+        values: '0+30x16'
+      - series: 'restaurant_search_sync_queue_tasks{job="ginkgo-backend",instance="test:8080",status="pending"}'
+        values: '3x16'
+      - series: 'restaurant_search_sync_oldest_pending_age_seconds{job="ginkgo-backend",instance="test:8080"}'
+        values: '180x16'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 1m
+        exp_samples: []
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 7m
+        exp_samples:
+          - labels: '{__name__="ALERTS",alertname="GinkgoSyncBacklogOld",alertstate="firing",instance="test:8080",job="ginkgo-backend",scope="sync",severity="warning"}'
+            value: 1
+  - name: 同步失败任务恢复后解除
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_sync_enabled{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_sync_snapshot_timestamp_seconds{job="ginkgo-backend",instance="test:8080"}'
+        values: '0+30x16'
+      - series: 'restaurant_search_sync_last_batch_success_timestamp_seconds{job="ginkgo-backend",instance="test:8080"}'
+        values: '0+30x16'
+      - series: 'restaurant_search_sync_queue_tasks{job="ginkgo-backend",instance="test:8080",status="failed"}'
+        values: '2x7 0x8'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 1m
+        exp_samples:
+          - labels: '{__name__="ALERTS",alertname="GinkgoSyncFailedTasks",alertstate="firing",instance="test:8080",job="ginkgo-backend",scope="sync",severity="warning",status="failed"}'
+            value: 1
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 4m
+        exp_samples: []
+  - name: 陈旧快照抑制积压和失败存量告警
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_sync_enabled{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_sync_snapshot_timestamp_seconds{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_sync_last_batch_success_timestamp_seconds{job="ginkgo-backend",instance="test:8080"}'
+        values: '0+30x16'
+      - series: 'restaurant_search_sync_queue_tasks{job="ginkgo-backend",instance="test:8080",status="pending"}'
+        values: '3x16'
+      - series: 'restaurant_search_sync_queue_tasks{job="ginkgo-backend",instance="test:8080",status="failed"}'
+        values: '2x16'
+      - series: 'restaurant_search_sync_oldest_pending_age_seconds{job="ginkgo-backend",instance="test:8080"}'
+        values: '180x16'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 7m
+        exp_samples:
+          - labels: '{__name__="ALERTS",alertname="GinkgoSyncObservationStale",alertstate="firing",instance="test:8080",job="ginkgo-backend",scope="sync",severity="warning"}'
+            value: 1
+  - name: 消费心跳不再更新但快照正常
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_sync_enabled{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_sync_snapshot_timestamp_seconds{job="ginkgo-backend",instance="test:8080"}'
+        values: '0+30x16'
+      - series: 'restaurant_search_sync_last_batch_success_timestamp_seconds{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 7m
+        exp_samples:
+          - labels: '{__name__="ALERTS",alertname="GinkgoSyncObservationStale",alertstate="firing",instance="test:8080",job="ginkgo-backend",scope="sync",severity="warning"}'
+            value: 1
+  - name: 快照恢复新鲜后观测告警解除
+    interval: 30s
+    input_series:
+      - series: 'up{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_sync_enabled{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x16'
+      - series: 'restaurant_search_sync_snapshot_timestamp_seconds{job="ginkgo-backend",instance="test:8080"}'
+        values: '1x7 240+30x8'
+      - series: 'restaurant_search_sync_last_batch_success_timestamp_seconds{job="ginkgo-backend",instance="test:8080"}'
+        values: '0+30x16'
+    promql_expr_test:
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 3m
+        exp_samples:
+          - labels: '{__name__="ALERTS",alertname="GinkgoSyncObservationStale",alertstate="firing",instance="test:8080",job="ginkgo-backend",scope="sync",severity="warning"}'
+            value: 1
+      - expr: 'ALERTS{alertstate="firing"}'
+        eval_time: 4m
+        exp_samples: []
