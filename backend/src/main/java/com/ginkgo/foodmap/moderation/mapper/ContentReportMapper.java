@@ -55,33 +55,32 @@ public interface ContentReportMapper {
     ContentReportEntity findById(@Param("id") long id);
 
     /**
-     * 同一内容的所有待处理举报一并驳回（RISK-026）。
+     * 锁定同一内容下全部待处理举报，串行化并发处置并取得通知收件人（RISK-026）。
      *
-     * <p>只更新PENDING行，重复驳回或并发处理返回0，不会覆盖已删除内容的终态。
+     * <p>先锁定再结案，保证结案与举报结果通知在同一事务内完成；已被其他事务处理的举报不再返回。
      */
-    @Update(
-            "UPDATE content_reports SET status='DISMISSED',handled_by=#{handler},"
-                    + "handled_at=#{handledAt},decision_note=#{note,jdbcType=VARCHAR}"
-                    + " WHERE target_type=#{type} AND target_id=#{target} AND status='PENDING'")
-    int dismissPendingTarget(
-            @Param("type") String type,
-            @Param("target") long target,
-            @Param("handler") long handler,
-            @Param("handledAt") Instant handledAt,
-            @Param("note") String note);
+    @Select(
+            "SELECT "
+                    + COLUMNS
+                    + " FROM content_reports WHERE target_type=#{type} AND target_id=#{target}"
+                    + " AND status='PENDING' ORDER BY id FOR UPDATE")
+    List<ContentReportEntity> lockPendingTarget(
+            @Param("type") String type, @Param("target") long target);
 
     /**
-     * 内容永久删除后，把同一内容下所有待处理举报结案（RISK-026）。
+     * 按已锁定的举报编号统一写入终态和处理记录。
      *
-     * <p>只更新PENDING行，已驳回或已结案的举报保持不变；并发删除时后到事务返回0。
+     * <p>仍附带PENDING条件，避免并发事务覆盖他人已完成的处置；影响行数必须与锁定行数一致。
      */
     @Update(
-            "UPDATE content_reports SET status='RESOLVED',handled_by=#{handler},"
+            "<script>UPDATE content_reports SET status=#{status},handled_by=#{handler},"
                     + "handled_at=#{handledAt},decision_note=#{note,jdbcType=VARCHAR}"
-                    + " WHERE target_type=#{type} AND target_id=#{target} AND status='PENDING'")
-    int resolvePendingTarget(
-            @Param("type") String type,
-            @Param("target") long target,
+                    + " WHERE status='PENDING' AND id IN"
+                    + " <foreach collection='ids' item='id' open='(' separator=',' close=')'>#{id}</foreach>"
+                    + "</script>")
+    int settlePending(
+            @Param("ids") List<Long> ids,
+            @Param("status") String status,
             @Param("handler") long handler,
             @Param("handledAt") Instant handledAt,
             @Param("note") String note);

@@ -895,6 +895,12 @@ Detail为统一响应的data：
 | 503 | AUTH_SERVICE_UNAVAILABLE | 认证基础设施暂时不可用。 |
 | 500 | COMMON_INTERNAL_SERVER_ERROR | 其他读写失败，事务回滚，不伪装成成功。 |
 
+### 17.10 举报处理结果通知
+
+举报被驳回或确认违规后，每位原举报者收到一条SYSTEM消息：`notificationType=REPORT_RESULT`，`sourceId`为该举报编号，`reviewId`为所属点评（回复举报填写父点评），`decision`为`DISMISSED`（未认定违规）或`REMOVED`（已删除内容），`category=SYSTEM`，其余审核字段为null。同一内容的多份举报分别通知各自举报者，不合并、不暴露其他举报者、处理人或内部备注。
+
+举报结果计入SYSTEM分类总数、未读数和`latestSystem`；逐条已读、单条删除和分类全部已读与其他系统消息一致。重复驳回或重复删除不重复发送；通知与举报结案同事务提交，通知写入失败时结案回滚。点击通知只展示处理结果，不跳转到已删除内容。
+
 ## 18. 点评与回复点赞
 
 ### 18.1 设置点赞状态
@@ -1155,7 +1161,7 @@ reason必填，大小写精确，取值为SPAM、ABUSE、PORNOGRAPHY、ILLEGAL�
 
 `POST /api/admin/content-reports/{id}/dismiss`需管理员，请求体可省略，或为`{"note":"未认定违规"}`；note选填，去首尾空白后最多200码点，空白视为未填写。同一内容（target_type与target_id相同）下所有PENDING举报一并改为DISMISSED，记录相同处理人、时间和备注，避免逐条重复处理（RISK-026）。
 
-首次与重复驳回均200，data为`{"reportId":"1","status":"DISMISSED","affectedReports":2,"handledAt":"2026-11-10T08:05:00Z"}`；重复驳回时affectedReports为0。不存在404 `REPORT_NOT_FOUND`；举报已因内容删除变为RESOLVED时409 `REPORT_STATE_CONFLICT`，不能反向改写处置结果。驳回不改变内容可见性、评分或作者状态，也不发送通知。
+首次与重复驳回均200，data为`{"reportId":"1","status":"DISMISSED","affectedReports":2,"handledAt":"2026-11-10T08:05:00Z"}`；重复驳回时affectedReports为0。不存在404 `REPORT_NOT_FOUND`；举报已因内容删除变为RESOLVED时409 `REPORT_STATE_CONFLICT`，不能反向改写处置结果。驳回不改变内容可见性、评分或作者状态；结案后每位举报者收到一条`DISMISSED`结果通知，重复驳回不重复发送。
 
 ### 23.4 删除违规内容
 
@@ -1169,8 +1175,8 @@ reason必填，大小写精确，取值为SPAM、ABUSE、PORNOGRAPHY、ILLEGAL�
 {"reportId":"1","targetType":"REVIEW","targetId":"101","status":"RESOLVED","affectedReports":2,"contentDeleted":true,"handledAt":"2026-11-10T08:10:00Z"}
 ```
 
-重复删除同一举报返回200、status=RESOLVED、contentDeleted=false、affectedReports=0；内容此前已被作者删除时同样只完成结案。举报已驳回409 `REPORT_STATE_CONFLICT`；举报不存在404 `REPORT_NOT_FOUND`；目标点评或回复无法定位404对应内容错误码；事务冲突或超时409/503沿用review模块的`BUSY`语义。删除不发送通知，也不执行账号处罚。
+重复删除同一举报返回200、status=RESOLVED、contentDeleted=false、affectedReports=0；内容此前已被作者删除时同样只完成结案。举报已驳回409 `REPORT_STATE_CONFLICT`；举报不存在404 `REPORT_NOT_FOUND`；目标点评或回复无法定位404对应内容错误码；事务冲突或超时409/503沿用review模块的`BUSY`语义。结案后每位举报者收到一条`REMOVED`结果通知，重复删除不重复发送；删除不通知被处置作者，也不执行账号处罚。
 
 ### 23.5 尚未实现的处置能力
 
-举报结果通知仍待实现（RISK-012）；账号处罚、禁言、停用和申诉不在本轮范围。
+账号处罚、禁言、停用和申诉不在本轮范围；普通用户举报入口与管理端页面尚待实现。

@@ -16,7 +16,7 @@ public interface NotificationMapper {
     // 分类枚举由绑定校验和服务共同限制，所有查询复用同一条件，禁止漏掉已读或计数过滤。
     String SCOPE =
             " AND (#{category}='ALL' OR (#{category}='SYSTEM' AND notification_type IN"
-                    + " ('RESTAURANT_DECISION','ANNOUNCEMENT')) OR (#{category}='COMMENTS' AND"
+                    + " ('RESTAURANT_DECISION','ANNOUNCEMENT','REPORT_RESULT')) OR (#{category}='COMMENTS' AND"
                     + " notification_type='REVIEW_REPLY') OR (#{category}='FOLLOWERS' AND"
                     + " notification_type='USER_FOLLOWED') OR (#{category}='LIKES' AND"
                     + " notification_type IN ('REVIEW_LIKED','REPLY_LIKED')))";
@@ -69,6 +69,14 @@ public interface NotificationMapper {
                 + " VALUES(#{recipientUserId},'USER_FOLLOWED',#{sourceId},#{actorUserId}) ON"
                 + " DUPLICATE KEY UPDATE id=id")
     int insertFollow(NotificationEntity row);
+
+    /** 每条举报只通知原举报者一次；重试不覆盖首次结果或已读时间。 */
+    @Insert(
+            "INSERT INTO"
+                + " notification_messages(recipient_user_id,notification_type,source_id,review_id,decision)"
+                + " VALUES(#{recipientUserId},'REPORT_RESULT',#{sourceId},#{reviewId},#{decision})"
+                + " ON DUPLICATE KEY UPDATE id=id")
+    int insertReportResult(NotificationEntity row);
 
     @Select(
             "SELECT "
@@ -134,7 +142,8 @@ public interface NotificationMapper {
     @Select(
             "SELECT * FROM "
                     + INBOX
-                    + " WHERE notification_type IN ('RESTAURANT_DECISION','ANNOUNCEMENT') ORDER BY"
+                    + " WHERE notification_type IN"
+                    + " ('RESTAURANT_DECISION','ANNOUNCEMENT','REPORT_RESULT') ORDER BY"
                     + " created_at DESC,id DESC,notification_type DESC LIMIT 1")
     NotificationEntity latestSystem(long owner);
 

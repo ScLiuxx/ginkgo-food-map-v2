@@ -95,6 +95,7 @@ class ContentReportApiIntegrationTest {
         reset(sessions);
         for (String table :
                 List.of(
+                        "notification_messages",
                         "content_reports",
                         "content_likes",
                         "growth_rewards",
@@ -351,6 +352,26 @@ class ContentReportApiIntegrationTest {
                 .isEqualTo(2L);
         assertThat(
                         jdbc.queryForObject(
+                                "SELECT COUNT(*) FROM notification_messages"
+                                        + " WHERE notification_type='REPORT_RESULT'"
+                                        + " AND decision='REMOVED'",
+                                Long.class))
+                .isEqualTo(2L);
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT COUNT(DISTINCT recipient_user_id) FROM notification_messages"
+                                        + " WHERE notification_type='REPORT_RESULT'",
+                                Long.class))
+                .isEqualTo(2L);
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT review_id FROM notification_messages"
+                                        + " WHERE notification_type='REPORT_RESULT' AND source_id=?",
+                                Long.class,
+                                Long.valueOf(first)))
+                .isEqualTo(100L);
+        assertThat(
+                        jdbc.queryForObject(
                                 "SELECT review_count FROM restaurant_review_statistics"
                                         + " WHERE restaurant_id=1",
                                 Long.class))
@@ -369,6 +390,12 @@ class ContentReportApiIntegrationTest {
                 .andExpect(jsonPath("$.data.status").value("RESOLVED"))
                 .andExpect(jsonPath("$.data.contentDeleted").value(false))
                 .andExpect(jsonPath("$.data.affectedReports").value(0));
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT COUNT(*) FROM notification_messages"
+                                        + " WHERE notification_type='REPORT_RESULT'",
+                                Long.class))
+                .isEqualTo(1L);
 
         review(101, 1, 22, "第二条被举报点评");
         String dismissed = createReport(other, "/api/reviews/101/reports", "SPAM", null);
@@ -396,6 +423,13 @@ class ContentReportApiIntegrationTest {
                                 "SELECT deleted_at FROM reply_request_receipts WHERE reply_id=200",
                                 java.sql.Timestamp.class))
                 .isNotNull();
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT review_id FROM notification_messages"
+                                        + " WHERE notification_type='REPORT_RESULT'"
+                                        + " AND recipient_user_id=11 AND decision='REMOVED'",
+                                Long.class))
+                .isEqualTo(100L);
     }
 
     @Test
@@ -417,6 +451,20 @@ class ContentReportApiIntegrationTest {
                                         + " AND decision_note='未认定违规'",
                                 Long.class))
                 .isEqualTo(2L);
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT COUNT(*) FROM notification_messages"
+                                        + " WHERE notification_type='REPORT_RESULT'"
+                                        + " AND decision='DISMISSED'",
+                                Long.class))
+                .isEqualTo(2L);
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT COUNT(*) FROM notification_messages"
+                                        + " WHERE notification_type='REPORT_RESULT'"
+                                        + " AND actor_user_id IS NOT NULL",
+                                Long.class))
+                .isZero();
     }
 
     @Test

@@ -648,11 +648,11 @@ notification模块拥有`notification_messages`、`notification_announcements`�
 | --- | --- | --- | --- |
 | `id` | `bigint unsigned` | 否 | 自增主键，消息ID。 |
 | `recipient_user_id` | `bigint unsigned` | 否 | 收件人用户逻辑ID。 |
-| `notification_type` | `varchar(24)`，ASCII | 否 | 默认RESTAURANT_DECISION；RESTAURANT_DECISION审核结果、REVIEW_REPLY点评回复、REVIEW_LIKED点评获赞、REPLY_LIKED回复获赞、USER_FOLLOWED首次关注。 |
-| `source_id` | `bigint unsigned` | 否 | 来源ID；审核消息为申请ID，回复消息为回复ID，获赞消息为点赞关系ID，关注消息为关注关系ID。 |
+| `notification_type` | `varchar(24)`，ASCII | 否 | 默认RESTAURANT_DECISION；RESTAURANT_DECISION审核结果、REVIEW_REPLY点评回复、REVIEW_LIKED点评获赞、REPLY_LIKED回复获赞、USER_FOLLOWED首次关注、REPORT_RESULT举报处理结果。 |
+| `source_id` | `bigint unsigned` | 否 | 来源ID；审核消息为申请ID，回复消息为回复ID，获赞消息为点赞关系ID，关注消息为关注关系ID，举报结果消息为举报ID。 |
 | `request_id` | `bigint unsigned` | 是 | 审核申请逻辑ID。 |
 | `request_type` | `varchar(8)`，ASCII | 是 | CREATE新店投稿、UPDATE纠错。 |
-| `decision` | `varchar(8)`，ASCII | 是 | APPROVED审核通过、REJECTED驳回。 |
+| `decision` | `varchar(16)`，ASCII | 是 | APPROVED审核通过、REJECTED驳回、REMOVED举报成立且内容已删除、DISMISSED举报未认定违规。 |
 | `restaurant_name` | `varchar(120)` | 是 | 审核时店名快照。 |
 | `reject_reason` | `varchar(200)` | 是 | 驳回原因快照。 |
 | `review_id` | `bigint unsigned` | 是 | 回复或被赞内容所属点评逻辑ID。 |

@@ -117,6 +117,35 @@ public class NotificationPublicationService {
         }
     }
 
+    /** 举报结果只通知举报者；不保存处理人、举报人或内部备注，避免二次泄露身份。 */
+    public void reportResult(com.ginkgo.foodmap.notification.dto.ReportResultNotification input) {
+        requireTransaction();
+        if (input == null
+                || input.getRecipientUserId() <= 0
+                || input.getReportId() <= 0
+                || input.getReviewId() <= 0
+                || !("REMOVED".equals(input.getDecision())
+                        || "DISMISSED".equals(input.getDecision()))) {
+            throw new IllegalArgumentException("Invalid report result notification");
+        }
+        var row = new NotificationEntity();
+        row.setRecipientUserId(input.getRecipientUserId());
+        row.setNotificationType("REPORT_RESULT");
+        row.setSourceId(input.getReportId());
+        row.setReviewId(input.getReviewId());
+        row.setDecision(input.getDecision());
+        messages.insertReportResult(row);
+        changes.changed(row.getRecipientUserId());
+        var saved =
+                messages.bySource(
+                        row.getRecipientUserId(), "REPORT_RESULT", row.getSourceId());
+        if (saved == null
+                || !Objects.equals(saved.getReviewId(), row.getReviewId())
+                || !Objects.equals(saved.getDecision(), row.getDecision())) {
+            throw new IllegalStateException("Report result notification source conflicts");
+        }
+    }
+
     /** 首次关注与关系同事务写入，失败则回滚整笔关注，不在提交后异步发消息。 */
     public void follow(com.ginkgo.foodmap.notification.dto.FollowNotification input) {
         requireTransaction();
