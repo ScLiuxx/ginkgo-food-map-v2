@@ -59,6 +59,7 @@
 | GET | `/api/admin/content-reports` | 管理员 | 200 | 举报分页 |
 | GET | `/api/admin/content-reports/{id}` | 管理员 | 200 | 举报详情与正文快照 |
 | POST | `/api/admin/content-reports/{id}/dismiss` | 管理员 | 200 | 驳回同内容待处理举报 |
+| POST | `/api/admin/content-reports/{id}/remove` | 管理员 | 200 | 永久删除违规内容并结案 |
 | GET | `/api/restaurant-categories` | 公开 | 200 | 分类字典 |
 | GET | `/api/restaurants/{id}/windows` | 公开 | 200 | 食堂完整窗口集合 |
 | GET | `/api/canteen-windows/{id}` | 公开 | 200 | 独立窗口详情 |
@@ -1118,7 +1119,7 @@ DELETE只解除本窗口的图片关联，并提交媒体待回收状态；云�
 
 ## 23. 内容举报
 
-第一版只受理点评和回复。被举报内容在核查前继续公开（RISK-003）；当前已完成举报提交、管理员查询和驳回，删除违规内容尚未实现。
+第一版只受理点评和回复。被举报内容在核查前继续公开（RISK-003）；当前已完成举报提交、管理员查询、驳回和永久删除，举报结果通知尚未实现。
 
 ### 23.1 提交举报
 
@@ -1156,6 +1157,20 @@ reason必填，大小写精确，取值为SPAM、ABUSE、PORNOGRAPHY、ILLEGAL�
 
 首次与重复驳回均200，data为`{"reportId":"1","status":"DISMISSED","affectedReports":2,"handledAt":"2026-11-10T08:05:00Z"}`；重复驳回时affectedReports为0。不存在404 `REPORT_NOT_FOUND`；举报已因内容删除变为RESOLVED时409 `REPORT_STATE_CONFLICT`，不能反向改写处置结果。驳回不改变内容可见性、评分或作者状态，也不发送通知。
 
-### 23.4 尚未实现的处置能力
+### 23.4 删除违规内容
 
-删除违规内容仍待实现。已确认规则为确认违规后永久删除且不恢复（RISK-004），并向举报者发送结果系统消息（RISK-012）；账号处罚、禁言、停用和申诉不在本轮范围。
+`POST /api/admin/content-reports/{id}/remove`需管理员，请求体可省略，或为`{"note":"确认违规"}`；note规则与驳回相同。确认违规后永久删除被举报的点评或回复（RISK-004），不提供恢复；点评删除时关联回复、点评图片一并移除，商户评分按同作者最新有效点评重算（RISK-005），被删内容的点赞不再计入获赞（INT-015）。回复删除只移除该条回复，不改变父点评和评分。
+
+同一内容（target_type与target_id相同）下所有PENDING举报一并改为RESOLVED，记录相同处理人、时间和备注（RISK-026）。内容删除与举报结案分属两个事务：若结案阶段失败，管理员重试会得到contentDeleted=false并完成结案，不重复删除。
+
+首次200，data示例：
+
+```json
+{"reportId":"1","targetType":"REVIEW","targetId":"101","status":"RESOLVED","affectedReports":2,"contentDeleted":true,"handledAt":"2026-11-10T08:10:00Z"}
+```
+
+重复删除同一举报返回200、status=RESOLVED、contentDeleted=false、affectedReports=0；内容此前已被作者删除时同样只完成结案。举报已驳回409 `REPORT_STATE_CONFLICT`；举报不存在404 `REPORT_NOT_FOUND`；目标点评或回复无法定位404对应内容错误码；事务冲突或超时409/503沿用review模块的`BUSY`语义。删除不发送通知，也不执行账号处罚。
+
+### 23.5 尚未实现的处置能力
+
+举报结果通知仍待实现（RISK-012）；账号处罚、禁言、停用和申诉不在本轮范围。

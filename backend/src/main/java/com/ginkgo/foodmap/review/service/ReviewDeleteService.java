@@ -41,19 +41,33 @@ public class ReviewDeleteService {
     private final CurrentActorService actors;
     private final PlatformTransactionManager transactions;
 
-    /** 身份仅来自安全上下文；与发布相同锁顺序和有界事务重试，不开放管理员代删。 */
+    /** 身份仅来自安全上下文；与发布相同锁顺序和有界事务重试。 */
     @PreAuthorize("isAuthenticated()")
     public void remove(String value) {
         long id = ReviewReadPolicy.restaurantId(value);
-        long owner = actors.requireActor().getUserId();
-        for (int attempt = 0; attempt < 3; attempt++) {
+        delete(id, actors.requireActor().getUserId());
+    }
+
+    /**
+     * 管理员处置违规点评：跳过作者归属校验，但沿用同一父锁、回执、子资源和评分重算。
+     *
+     * <p>返回true表示本次删除，false表示此前已删除；删除回执继续阻止原发布请求重放，不能借此
+     * 恢复内容。权限由管理安全链和方法注解双重校验。
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    public boolean removeForModeration(long id) {
+        return delete(id, null);
+    }
+
+    /** owner为null表示管理员处置；重试、超时和锁顺序与作者删除完全一致。 */
+    private boolean delete(long id, Long owner) {
+        for (int attempt = 0; ; attempt++) {
             var tx = new TransactionTemplate(transactions);
             tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             tx.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
             tx.setTimeout(10);
             try {
-                tx.executeWithoutResult(status -> removeTransaction(id, owner));
-                return;
+                return Boolean.TRUE.equals(tx.execute(status -> removeTransaction(id, owner)));
             } catch (PessimisticLockingFailureException
                     | QueryTimeoutException
                     | TransactionTimedOutException e) {
@@ -64,11 +78,11 @@ public class ReviewDeleteService {
         }
     }
 
-    private void removeTransaction(long id, long owner) {
+    private boolean removeTransaction(long id, Long owner) {
         var row = deletion.find(id);
         if (row == null) {
             requireDeletedOwner(id, owner);
-            return;
+            return false;
         }
         // 父店锁先于子资源锁，和发评、回复、删店统一顺序。
         if (row.getWindowId() == null) {
@@ -79,20 +93,23 @@ public class ReviewDeleteService {
         row = deletion.find(id);
         if (row == null) {
             requireDeletedOwner(id, owner);
-            return;
+            return false;
         }
-        if (row.getAuthorUserId() != owner) {
+        // 代表点评、图片归属和统计重算都取内容作者；管理员身份不能替换作者。
+        long author = row.getAuthorUserId();
+        if (owner != null && author != owner.longValue()) {
             throw new BusinessException(ReviewErrorCode.FORBIDDEN);
         }
         var previous =
                 (row.getWindowId() == null
-                        ? reviews.latest(row.getRestaurantId(), owner)
-                        : reviews.latestWindow(row.getWindowId(), owner));
+                        ? reviews.latest(row.getRestaurantId(), author)
+                        : reviews.latestWindow(row.getWindowId(), author));
         var fileIds = photos.ids(id);
         if (deletion.tombstone(id) != 1) {
             throw new IllegalStateException("Missing review request receipt");
         }
-        media.releaseBound(fileIds, owner);
+        // 图片登记始终属于内容作者，管理员处置也不能把作者的上传记录改成处理人。
+        media.releaseBound(fileIds, author);
         replyReceipts.tombstoneReview(id);
         deletion.replies(id);
         deletion.photos(id);
@@ -101,22 +118,23 @@ public class ReviewDeleteService {
         }
         var next =
                 (row.getWindowId() == null
-                        ? reviews.latest(row.getRestaurantId(), owner)
-                        : reviews.latestWindow(row.getWindowId(), owner));
+                        ? reviews.latest(row.getRestaurantId(), author)
+                        : reviews.latestWindow(row.getWindowId(), author));
         if (row.getWindowId() == null) {
             restaurants.applyDelta(row.getRestaurantId(), delta(previous, next));
         } else {
             windows.applyDelta(row.getWindowId(), delta(previous, next));
         }
+        return true;
     }
 
-    /** 原作者重试已完成的删除得到204；其他账号仍403，未知ID为404。 */
-    private void requireDeletedOwner(long id, long owner) {
+    /** 原作者重试已完成的删除得到204；其他账号仍403，未知ID为404；管理员跳过归属校验。 */
+    private void requireDeletedOwner(long id, Long owner) {
         Long deletedOwner = deletion.deletedOwner(id);
         if (deletedOwner == null) {
             throw new BusinessException(ReviewErrorCode.NOT_FOUND);
         }
-        if (deletedOwner != owner) {
+        if (owner != null && deletedOwner.longValue() != owner) {
             throw new BusinessException(ReviewErrorCode.FORBIDDEN);
         }
     }

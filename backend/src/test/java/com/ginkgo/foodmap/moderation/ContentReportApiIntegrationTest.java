@@ -100,6 +100,7 @@ class ContentReportApiIntegrationTest {
                         "growth_rewards",
                         "growth_accounts",
                         "restaurant_search_outbox",
+                        "reply_request_receipts",
                         "review_replies",
                         "review_photos",
                         "review_request_receipts",
@@ -127,6 +128,11 @@ class ContentReportApiIntegrationTest {
                 "INSERT INTO restaurants(id,name,category_code,created_by) VALUES(1,'举报测试店','OTHER',11)");
         review(100, 1, 22, "被举报点评正文内容");
         reply(200, 100, 22, "被举报回复正文");
+        // 点评直接插入时未经过发布服务，这里补齐与之一致的累计值，保证删除差额不会变成负数。
+        jdbc.update(
+                "INSERT INTO restaurant_review_statistics(restaurant_id,review_count,"
+                        + "participant_count,recommend_count,taste_sum,value_sum,service_sum,"
+                        + "ambience_sum,overall_score_sum) VALUES(1,1,1,1,8,8,8,8,8)");
         when(sessions.isActive(anyString(), anyLong(), anyLong())).thenReturn(true);
         reporter = token(11);
         author = token(22);
@@ -307,9 +313,89 @@ class ContentReportApiIntegrationTest {
                         post("/api/admin/content-reports/" + id + "/dismiss")
                                 .header("Authorization", "Bearer " + other))
                 .andExpect(status().isForbidden());
+        mvc.perform(
+                        post("/api/admin/content-reports/" + id + "/remove")
+                                .header("Authorization", "Bearer " + other))
+                .andExpect(status().isForbidden());
 
         assertThat(jdbc.queryForObject("SELECT status FROM content_reports", String.class))
                 .isEqualTo("PENDING");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM reviews", Long.class)).isEqualTo(1L);
+    }
+
+    @Test
+    void removeReviewDeletesContentAndResolvesAllReports() throws Exception {
+        String first = createReport(reporter, "/api/reviews/100/reports", "ABUSE", null);
+        createReport(other, "/api/reviews/100/reports", "SPAM", "另一位同学举报");
+
+        remove(first, "{\"note\":\" 确认违规 \"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("RESOLVED"))
+                .andExpect(jsonPath("$.data.targetType").value("REVIEW"))
+                .andExpect(jsonPath("$.data.targetId").value("100"))
+                .andExpect(jsonPath("$.data.affectedReports").value(2))
+                .andExpect(jsonPath("$.data.contentDeleted").value(true));
+
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM reviews", Long.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM review_replies", Long.class)).isZero();
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT deleted_at FROM review_request_receipts WHERE review_id=100",
+                                java.sql.Timestamp.class))
+                .isNotNull();
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT COUNT(*) FROM content_reports WHERE status='RESOLVED'"
+                                        + " AND handled_by=33 AND decision_note='确认违规'",
+                                Long.class))
+                .isEqualTo(2L);
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT review_count FROM restaurant_review_statistics"
+                                        + " WHERE restaurant_id=1",
+                                Long.class))
+                .isZero();
+    }
+
+    @Test
+    void removeIsIdempotentAndRejectsDismissedReport() throws Exception {
+        String id = createReport(reporter, "/api/reviews/100/reports", "ABUSE", null);
+        remove(id, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.contentDeleted").value(true))
+                .andExpect(jsonPath("$.data.affectedReports").value(1));
+        remove(id, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("RESOLVED"))
+                .andExpect(jsonPath("$.data.contentDeleted").value(false))
+                .andExpect(jsonPath("$.data.affectedReports").value(0));
+
+        review(101, 1, 22, "第二条被举报点评");
+        String dismissed = createReport(other, "/api/reviews/101/reports", "SPAM", null);
+        dismiss(dismissed, null).andExpect(status().isOk());
+        remove(dismissed, null)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("REPORT_STATE_CONFLICT"));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM reviews WHERE id=101", Long.class))
+                .isEqualTo(1L);
+    }
+
+    @Test
+    void removeReplyDeletesOnlyReportedReply() throws Exception {
+        String id = createReport(reporter, "/api/review-replies/200/reports", "IRRELEVANT", null);
+
+        remove(id, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.targetType").value("REPLY"))
+                .andExpect(jsonPath("$.data.contentDeleted").value(true));
+
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM review_replies", Long.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM reviews", Long.class)).isEqualTo(1L);
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT deleted_at FROM reply_request_receipts WHERE reply_id=200",
+                                java.sql.Timestamp.class))
+                .isNotNull();
     }
 
     @Test
@@ -389,6 +475,16 @@ class ContentReportApiIntegrationTest {
         return mvc.perform(request);
     }
 
+    private ResultActions remove(String id, String body) throws Exception {
+        var request =
+                post("/api/admin/content-reports/" + id + "/remove")
+                        .header("Authorization", "Bearer " + admin);
+        if (body != null) {
+            request.contentType(MediaType.APPLICATION_JSON).content(body);
+        }
+        return mvc.perform(request);
+    }
+
     private ResultActions report(String token, String path, String reason, String detail)
             throws Exception {
         Map<String, Object> body = new HashMap<>();
@@ -404,6 +500,7 @@ class ContentReportApiIntegrationTest {
     }
 
     private void review(long id, long restaurant, long author, String body) {
+        String requestId = UUID.randomUUID().toString();
         jdbc.update(
                 "INSERT INTO reviews(id,restaurant_id,author_user_id,taste_score,value_score,"
                         + "service_score,ambience_score,is_recommended,body,client_request_id,"
@@ -417,10 +514,19 @@ class ContentReportApiIntegrationTest {
                 8,
                 8,
                 body,
-                UUID.randomUUID().toString());
+                requestId);
+        // 删除服务要求发布回执存在并标记deleted_at，直接构造数据时必须同步回执。
+        jdbc.update(
+                "INSERT INTO review_request_receipts(author_user_id,client_request_id,review_id,"
+                        + "restaurant_id,window_id) VALUES(?,UUID_TO_BIN(?),?,?,NULL)",
+                author,
+                requestId,
+                id,
+                restaurant);
     }
 
     private void reply(long id, long review, long author, String body) {
+        String requestId = UUID.randomUUID().toString();
         jdbc.update(
                 "INSERT INTO review_replies(id,review_id,author_user_id,body,client_request_id,"
                         + "request_hash) VALUES(?,?,?,?,UUID_TO_BIN(?),"
@@ -429,7 +535,14 @@ class ContentReportApiIntegrationTest {
                 review,
                 author,
                 body,
-                UUID.randomUUID().toString());
+                requestId);
+        jdbc.update(
+                "INSERT INTO reply_request_receipts(author_user_id,client_request_id,reply_id,"
+                        + "review_id) VALUES(?,UUID_TO_BIN(?),?,?)",
+                author,
+                requestId,
+                id,
+                review);
     }
 
     private static long number(Object value) {

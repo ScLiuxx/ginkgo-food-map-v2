@@ -3,11 +3,13 @@ package com.ginkgo.foodmap.moderation.service;
 import com.ginkgo.foodmap.common.exception.BusinessException;
 import com.ginkgo.foodmap.moderation.dto.ContentReportDismissRequest;
 import com.ginkgo.foodmap.moderation.dto.ContentReportQuery;
+import com.ginkgo.foodmap.moderation.dto.ContentReportRemoveRequest;
 import com.ginkgo.foodmap.moderation.entity.ContentReportEntity;
 import com.ginkgo.foodmap.moderation.exception.ModerationErrorCode;
 import com.ginkgo.foodmap.moderation.mapper.ContentReportMapper;
 import com.ginkgo.foodmap.moderation.policy.ContentReportPolicy;
 import com.ginkgo.foodmap.moderation.vo.ContentReportViews;
+import com.ginkgo.foodmap.review.service.ReviewModerationService;
 import com.ginkgo.foodmap.security.service.CurrentActorService;
 
 import lombok.RequiredArgsConstructor;
@@ -30,6 +32,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ContentReportAdminService {
     private final ContentReportMapper reports;
+    private final ReviewModerationService reviewModeration;
     private final CurrentActorService actors;
 
     /** 状态筛选和分页均有界；count与records在同一只读事务内取得。 */
@@ -101,6 +104,58 @@ public class ContentReportAdminService {
             throw new BusinessException(ModerationErrorCode.STATE_CONFLICT);
         }
         return receipt(saved, affected);
+    }
+
+    /**
+     * 确认违规并永久删除点评或回复，再把同一内容下所有待处理举报结案。
+     *
+     * <p>内容删除在review模块自己的有界事务中提交，举报结案随后独立提交，不引入跨模块分布式事务。
+     * 两步之间失败时内容已删除但举报仍为PENDING；管理员重试会得到contentDeleted=false并完成结案，
+     * 因此该顺序是可补偿且幂等的。
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    public ContentReportViews.Removed remove(
+            String value, ContentReportRemoveRequest request) {
+        long id = ContentReportPolicy.reportId(value);
+        String note =
+                ContentReportPolicy.decisionNote(request == null ? null : request.getNote());
+        long handler = actors.requireActor().getUserId();
+
+        var row = reports.findById(id);
+        if (row == null) {
+            throw new BusinessException(ModerationErrorCode.NOT_FOUND);
+        }
+        if ("DISMISSED".equals(row.getStatus())) {
+            throw new BusinessException(ModerationErrorCode.STATE_CONFLICT);
+        }
+        if ("RESOLVED".equals(row.getStatus())) {
+            return removalReceipt(row, 0, false);
+        }
+
+        // 永久删除不可恢复；作者已先删除时返回false，不影响后续举报结案。
+        boolean deleted = reviewModeration.remove(row.getTargetType(), row.getTargetId());
+        Instant handledAt = Instant.now();
+        int affected =
+                reports.resolvePendingTarget(
+                        row.getTargetType(), row.getTargetId(), handler, handledAt, note);
+        var saved = reports.findById(id);
+        if (saved == null) {
+            throw new IllegalStateException("Missing content report after removal");
+        }
+        return removalReceipt(saved, affected, deleted);
+    }
+
+    private ContentReportViews.Removed removalReceipt(
+            ContentReportEntity row, int affected, boolean deleted) {
+        var result = new ContentReportViews.Removed();
+        result.setReportId(Long.toString(row.getId()));
+        result.setTargetType(row.getTargetType());
+        result.setTargetId(Long.toString(row.getTargetId()));
+        result.setStatus(row.getStatus());
+        result.setAffectedReports(affected);
+        result.setContentDeleted(deleted);
+        result.setHandledAt(row.getHandledAt());
+        return result;
     }
 
     private ContentReportViews.Dismissed receipt(ContentReportEntity row, int affected) {

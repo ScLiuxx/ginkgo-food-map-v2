@@ -15,7 +15,7 @@ public enum ModerationErrorCode implements ErrorCode {
     TARGET_NOT_FOUND("REPORT_TARGET_NOT_FOUND", HttpStatus.NOT_FOUND, "举报内容已失效或不可访问"),
     SELF("REPORT_SELF_NOT_ALLOWED", HttpStatus.FORBIDDEN, "不能举报自己发布的内容"),
     NOT_FOUND("REPORT_NOT_FOUND", HttpStatus.NOT_FOUND, "举报记录不存在"),
-    STATE_CONFLICT("REPORT_STATE_CONFLICT", HttpStatus.CONFLICT, "举报已处理，不能驳回");
+    STATE_CONFLICT("REPORT_STATE_CONFLICT", HttpStatus.CONFLICT, "举报已处理，不能重复处置");
 
     private final String code;
     private final HttpStatus httpStatus;

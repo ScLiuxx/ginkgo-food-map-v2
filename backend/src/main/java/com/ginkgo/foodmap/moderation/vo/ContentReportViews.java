@@ -57,4 +57,16 @@ public final class ContentReportViews {
         private int affectedReports;
         private Instant handledAt;
     }
+
+    /** 删除回执；contentDeleted为false表示内容此前已删除，本次只完成举报结案。 */
+    @Data
+    public static class Removed {
+        private String reportId;
+        private String targetType;
+        private String targetId;
+        private String status;
+        private int affectedReports;
+        private boolean contentDeleted;
+        private Instant handledAt;
+    }
 }

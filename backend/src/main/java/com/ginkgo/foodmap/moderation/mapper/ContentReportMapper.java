@@ -69,4 +69,20 @@ public interface ContentReportMapper {
             @Param("handler") long handler,
             @Param("handledAt") Instant handledAt,
             @Param("note") String note);
+
+    /**
+     * 内容永久删除后，把同一内容下所有待处理举报结案（RISK-026）。
+     *
+     * <p>只更新PENDING行，已驳回或已结案的举报保持不变；并发删除时后到事务返回0。
+     */
+    @Update(
+            "UPDATE content_reports SET status='RESOLVED',handled_by=#{handler},"
+                    + "handled_at=#{handledAt},decision_note=#{note,jdbcType=VARCHAR}"
+                    + " WHERE target_type=#{type} AND target_id=#{target} AND status='PENDING'")
+    int resolvePendingTarget(
+            @Param("type") String type,
+            @Param("target") long target,
+            @Param("handler") long handler,
+            @Param("handledAt") Instant handledAt,
+            @Param("note") String note);
 }

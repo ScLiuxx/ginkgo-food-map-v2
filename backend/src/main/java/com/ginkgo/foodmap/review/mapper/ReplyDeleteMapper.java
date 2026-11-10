@@ -46,4 +46,8 @@ public interface ReplyDeleteMapper {
     /** 防御性重复核验作者，回复没有子回复；点赞关系与原通知保留用于历史定位。 */
     @Delete("DELETE FROM review_replies WHERE id=#{id} AND author_user_id=#{author}")
     int remove(@Param("id") long id, @Param("author") long author);
+
+    /** 管理员处置路径不做作者过滤；父锁、回执和可见性校验仍由服务层先行完成。 */
+    @Delete("DELETE FROM review_replies WHERE id=#{id}")
+    int removeAny(@Param("id") long id);
 }

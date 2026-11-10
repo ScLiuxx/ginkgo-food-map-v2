@@ -3,6 +3,7 @@ package com.ginkgo.foodmap.moderation.controller;
 import com.ginkgo.foodmap.common.api.ApiResponse;
 import com.ginkgo.foodmap.moderation.dto.ContentReportDismissRequest;
 import com.ginkgo.foodmap.moderation.dto.ContentReportQuery;
+import com.ginkgo.foodmap.moderation.dto.ContentReportRemoveRequest;
 import com.ginkgo.foodmap.moderation.service.ContentReportAdminService;
 import com.ginkgo.foodmap.moderation.vo.ContentReportViews;
 
@@ -37,6 +38,16 @@ public class AdminContentReportController {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(ApiResponse.ok(service.detail(id)));
+    }
+
+    /** 永久删除违规内容并把同一内容下的待处理举报结案；重复删除返回200且contentDeleted为false。 */
+    @PostMapping("/{id}/remove")
+    public ResponseEntity<ApiResponse<ContentReportViews.Removed>> remove(
+            @PathVariable String id,
+            @Valid @RequestBody(required = false) ContentReportRemoveRequest request) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(ApiResponse.ok(service.remove(id, request)));
     }
 
     /** 驳回同一内容下的全部待处理举报；备注选填，首次和重复驳回均返回200。 */
