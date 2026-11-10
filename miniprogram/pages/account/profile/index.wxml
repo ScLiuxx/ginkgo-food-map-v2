@@ -1,0 +1,62 @@
+<view class="page profile-page">
+  <view class="ambient">
+    <view class="ambient-blob ambient-a"></view>
+    <view class="ambient-blob ambient-b"></view>
+    <view class="ambient-blob ambient-c"></view>
+  </view>
+
+  <view wx:if="{{!loggedIn}}" class="card content-state">
+    <view class="state-title">登录后编辑资料</view>
+    <view class="state-copy">个人资料与网页端共用，登录后即可修改简介。</view>
+    <view class="primary-button state-action" bindtap="login">去登录</view>
+  </view>
+
+  <view wx:elif="{{loading}}" class="card content-state">
+    <view class="state-copy">正在加载…</view>
+  </view>
+
+  <view wx:elif="{{errorMessage}}" class="card content-state">
+    <view class="state-title">读取失败</view>
+    <view class="state-copy">{{errorMessage}}</view>
+    <view class="ghost-button state-action" bindtap="load">重新加载</view>
+  </view>
+
+  <block wx:elif="{{profile}}">
+    <view class="card profile-card">
+      <view class="profile-row">
+        <text class="profile-label">用户名</text>
+        <text class="profile-value">{{profile.username}}</text>
+      </view>
+      <view class="profile-row">
+        <text class="profile-label">绑定邮箱</text>
+        <text class="profile-value">{{profile.maskedEmail}}</text>
+      </view>
+      <view class="profile-note">邮箱与用户名由账号决定，小程序不支持改名或换绑。</view>
+    </view>
+
+    <view class="card bio-card">
+      <view class="bio-head">
+        <text class="section-title">个人简介</text>
+        <text class="bio-count {{bioTooLong ? 'bio-count-error' : ''}}">{{bioCount}} / 100</text>
+      </view>
+      <textarea
+        class="bio-input"
+        value="{{bioDraft}}"
+        maxlength="-1"
+        auto-height
+        placeholder="介绍一下你自己，最多 100 字"
+        bindinput="onBioInput"
+        disabled="{{saving}}"
+      />
+      <view wx:if="{{bioTooLong}}" class="field-error">简介最多 100 字，请删减后再保存。</view>
+      <view wx:if="{{saveError}}" class="field-error">{{saveError}}</view>
+      <view class="bio-actions">
+        <view class="ghost-button bio-clear" wx:if="{{profile.bio}}" bindtap="clearBio">清空简介</view>
+        <view class="primary-button bio-save {{saving || bioTooLong || !dirty ? 'disabled' : ''}}" bindtap="save">
+          {{saving ? '保存中…' : '保存简介'}}
+        </view>
+      </view>
+      <view class="profile-note">请勿填写手机号、微信、QQ 或网址；保存后立即对其他用户可见。</view>
+    </view>
+  </block>
+</view>

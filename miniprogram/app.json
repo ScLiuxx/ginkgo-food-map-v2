@@ -8,6 +8,8 @@
     "pages/account/content/index",
     "pages/account/contributions/index",
     "pages/account/contributions/detail/index",
+    "pages/account/growth/index",
+    "pages/account/profile/index",
     "pages/review/compose/index",
     "pages/login/index"
   ],

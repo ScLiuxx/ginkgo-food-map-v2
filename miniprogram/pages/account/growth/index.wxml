@@ -1,0 +1,54 @@
+<view class="page growth-page">
+  <view class="ambient">
+    <view class="ambient-blob ambient-a"></view>
+    <view class="ambient-blob ambient-b"></view>
+    <view class="ambient-blob ambient-c"></view>
+  </view>
+
+  <view wx:if="{{!loggedIn}}" class="card content-state">
+    <view class="state-title">登录后查看成长等级</view>
+    <view class="state-copy">成长经验与网页端共用，登录即可查看当前等级。</view>
+    <view class="primary-button state-action" bindtap="login">去登录</view>
+  </view>
+
+  <view wx:elif="{{loading}}" class="card content-state">
+    <view class="state-copy">正在加载…</view>
+  </view>
+
+  <view wx:elif="{{errorMessage}}" class="card content-state">
+    <view class="state-title">读取失败</view>
+    <view class="state-copy">{{errorMessage}}</view>
+    <view class="ghost-button state-action" bindtap="load">重新加载</view>
+  </view>
+
+  <block wx:elif="{{growth}}">
+    <view class="card growth-hero">
+      <view class="growth-level-row">
+        <view class="growth-level">{{growth.levelLabel}}</view>
+        <view class="growth-experience">{{growth.experience}} 经验</view>
+      </view>
+      <view class="growth-bar">
+        <view class="growth-bar-fill" style="width: {{growth.progressPercent}}%;"></view>
+      </view>
+      <view class="growth-progress">
+        <text>{{growth.progressText}}</text>
+        <text>{{growth.nextText}}</text>
+      </view>
+      <view class="growth-threshold">
+        当前等级累计门槛 {{growth.currentThreshold}} 经验<block wx:if="{{growth.nextThreshold !== null}}">，下一级门槛 {{growth.nextThreshold}} 经验</block>
+      </view>
+    </view>
+
+    <view class="card growth-rules">
+      <view class="section-title">经验规则</view>
+      <view class="rule-row">首次点评某家餐厅或窗口：<text class="rule-value">+5</text></view>
+      <view class="rule-row">新店投稿通过审核：<text class="rule-value">+20</text></view>
+      <view class="rule-row">纠错通过审核：<text class="rule-value">+10</text></view>
+      <view class="rule-row">点评获赞：<text class="rule-value">+1</text>，每日最多 5 点</view>
+      <view class="rule-row">普通删评或取消点赞不扣回已获得经验。</view>
+      <view class="rule-note">同一奖励不重复领取；升级不消耗经验，等级以服务端数据为准。</view>
+    </view>
+
+    <view class="ghost-button refresh-button" bindtap="load">刷新成长数据</view>
+  </block>
+</view>
