@@ -50,6 +50,7 @@ type DetailData = {
   reviewLoading: boolean
   reviewError: string
   hasMoreReviews: boolean
+  reviewLoaded: boolean
   loading: boolean
   errorMessage: string
   loggedIn: boolean
@@ -60,12 +61,16 @@ type DetailData = {
 
 type DetailCustom = {
   requestSequence: number
+  /** 登录前点击“写点评”的意图，登录返回后自动打开编辑器。 */
+  pendingWriteReview: boolean
   load(): Promise<void>
   loadAlbumMore(): Promise<void>
   loadWindows(): Promise<void>
   loadReviews(reset: boolean): Promise<void>
   loadFavorite(): Promise<void>
   toggleFavorite(): Promise<void>
+  writeReview(): void
+  openCompose(): void
   login(): void
 }
 
@@ -97,6 +102,7 @@ Page<DetailData, DetailCustom>({
     reviewLoading: false,
     reviewError: '',
     hasMoreReviews: false,
+    reviewLoaded: false,
     loading: true,
     errorMessage: '',
     loggedIn: false,
@@ -106,6 +112,7 @@ Page<DetailData, DetailCustom>({
   },
 
   requestSequence: 0,
+  pendingWriteReview: false,
 
   onLoad(query) {
     const rawId = query.id ? decodeURIComponent(query.id) : ''
@@ -120,13 +127,21 @@ Page<DetailData, DetailCustom>({
   onShow() {
     const loggedIn = isLoggedIn()
     this.setData({ loggedIn })
-    if (this.data.restaurant) void this.loadFavorite()
+    if (this.data.restaurant) {
+      void this.loadFavorite()
+      // 从发布页返回时重读点评，让新点评与评分及时出现；首次进入由 load 负责。
+      if (this.data.reviewLoaded) void this.loadReviews(true)
+    }
+    if (loggedIn && this.pendingWriteReview) {
+      this.pendingWriteReview = false
+      this.openCompose()
+    }
   },
 
   async load() {
     const id = this.data.restaurantId
     const sequence = ++this.requestSequence
-    this.setData({ loading: true, errorMessage: '' })
+    this.setData({ loading: true, errorMessage: '', reviewLoaded: false })
     try {
       const [row, albumPage] = await Promise.all([
         fetchRestaurantDetail(id),
@@ -224,6 +239,7 @@ Page<DetailData, DetailCustom>({
         reviewTotalReviews: result.totalReviews,
         reviewTotalPages: result.totalPages,
         hasMoreReviews: result.page < result.totalPages,
+        reviewLoaded: true,
         reviewLoading: false,
       })
     } catch (reason) {
@@ -277,6 +293,29 @@ Page<DetailData, DetailCustom>({
     } finally {
       this.setData({ favoriteBusy: false })
     }
+  },
+
+  writeReview() {
+    if (!this.data.restaurant) return
+    if (this.data.isCanteen) {
+      wx.showToast({ title: '窗口点评暂未开放', icon: 'none' })
+      return
+    }
+    if (!isLoggedIn()) {
+      this.setData({ loggedIn: false })
+      this.pendingWriteReview = true
+      this.login()
+      return
+    }
+    this.openCompose()
+  },
+
+  /** 评价对象由详情页固定，发布前不允许换店，避免误评到其他店铺。 */
+  openCompose() {
+    const name = this.data.restaurant ? this.data.restaurant.name : ''
+    wx.navigateTo({
+      url: `/pages/review/compose/index?id=${encodeURIComponent(this.data.restaurantId)}&name=${encodeURIComponent(name)}`,
+    })
   },
 
   login() {

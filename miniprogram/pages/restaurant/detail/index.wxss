@@ -63,9 +63,17 @@
   font-size: 24rpx;
 }
 
+.summary-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: stretch;
+  margin-left: 18rpx;
+}
+
 .favorite-button {
   flex: 0 0 auto;
-  margin-left: 18rpx;
+  margin-left: 0;
   padding: 14rpx 28rpx;
   border: 1rpx solid rgba(255, 255, 255, 0.82);
   border-radius: 999rpx;
@@ -87,6 +95,18 @@
 
 .favorite-hint {
   margin-top: 14rpx;
+}
+
+.write-button {
+  margin-top: 12rpx;
+  padding: 14rpx 28rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, #37a9ff, #0a84ff 58%, #0066cc);
+  box-shadow: 0 10rpx 24rpx rgba(10, 132, 255, 0.26), inset 0 1rpx 0 rgba(255, 255, 255, 0.5);
+  color: #ffffff;
+  font-size: 24rpx;
+  font-weight: 700;
+  text-align: center;
 }
 
 .summary-rating {

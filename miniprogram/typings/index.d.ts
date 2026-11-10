@@ -124,6 +124,11 @@ interface Wx {
   getLocation(options: WxLocationOptions): void
   getSetting(options: { success?: (result: WxSettingResult) => void }): void
   openSetting(options?: { success?: (result: WxSettingResult) => void }): void
+  chooseMedia(options: WxChooseMediaOptions): void
+  compressImage(options: WxCompressImageOptions): void
+  getImageInfo(options: WxGetImageInfoOptions): void
+  uploadFile(options: WxUploadFileOptions): void
+  getFileSystemManager(): WxFileSystemManager
 }
 
 declare const wx: Wx
@@ -139,6 +144,65 @@ interface WxInputEvent {
 
 interface WxPickerEvent {
   detail: { value: string }
+}
+
+/** 评分滑杆与推荐开关只读取数值，不再重复声明整个事件对象。 */
+interface WxSliderEvent {
+  currentTarget: { dataset: Record<string, string | number | boolean | undefined> }
+  detail: { value: number }
+}
+
+interface WxSwitchEvent {
+  detail: { value: boolean }
+}
+
+interface WxChooseMediaFile {
+  tempFilePath: string
+  size: number
+  fileType?: string
+}
+
+interface WxChooseMediaOptions {
+  count: number
+  mediaType: Array<'image' | 'video' | 'mix'>
+  sizeType?: Array<'original' | 'compressed'>
+  sourceType?: Array<'album' | 'camera'>
+  success?: (result: { tempFiles: WxChooseMediaFile[] }) => void
+  fail?: (error: { errMsg: string }) => void
+}
+
+interface WxCompressImageOptions {
+  src: string
+  quality?: number
+  compressedWidth?: number
+  compressedHeight?: number
+  success?: (result: { tempFilePath: string }) => void
+  fail?: (error: { errMsg: string }) => void
+}
+
+interface WxUploadFileOptions {
+  url: string
+  filePath: string
+  name: string
+  header?: Record<string, string>
+  timeout?: number
+  success?: (result: { statusCode: number; data: string }) => void
+  fail?: (error: { errMsg: string }) => void
+}
+
+interface WxImageInfoResult {
+  width: number
+  height: number
+}
+
+interface WxGetImageInfoOptions {
+  src: string
+  success?: (result: WxImageInfoResult) => void
+  fail?: (error: { errMsg: string }) => void
+}
+
+interface WxFileSystemManager {
+  getFileInfoSync(filePath: string): { size: number }
 }
 
 /** 页面实例能力；ThisType 让 Page 方法中的 this.data / this.setData 获得类型提示。 */

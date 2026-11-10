@@ -1,0 +1,111 @@
+<view class="page">
+  <view class="ambient">
+    <view class="ambient-blob ambient-a"></view>
+    <view class="ambient-blob ambient-b"></view>
+    <view class="ambient-blob ambient-c"></view>
+  </view>
+
+  <view class="compose-hero">
+    <view class="hero-eyebrow">写点评</view>
+    <view class="hero-title">{{restaurantName || '店铺点评'}}</view>
+    <view class="hero-copy">评分按十分制提交，页面展示会换算为五分制。发布后立即计入店铺统计。</view>
+  </view>
+
+  <view wx:if="{{!loggedIn}}" class="card login-card">
+    <view class="login-title">登录后发布点评</view>
+    <view class="login-copy">点评会署名为当前账号，不读取微信头像、昵称或手机号。</view>
+    <view wx:if="{{errorMessage}}" class="error-text login-error">{{errorMessage}}</view>
+    <view class="primary-button" bindtap="login">使用邮箱登录</view>
+  </view>
+
+  <block wx:else>
+    <view class="card">
+      <view class="section-label">评分</view>
+      <view wx:for="{{scoreRows}}" wx:key="key" class="score-row">
+        <view class="score-head">
+          <text class="score-label">{{item.label}}</text>
+          <text class="score-value">{{item.value}}</text>
+        </view>
+        <slider
+          class="score-slider"
+          min="0"
+          max="10"
+          step="0.5"
+          value="{{item.value}}"
+          data-key="{{item.key}}"
+          bindchange="changeScore"
+          activeColor="#0a84ff"
+          backgroundColor="rgba(8, 25, 43, 0.12)"
+          block-color="#ffffff"
+          block-size="20"
+        />
+      </view>
+
+      <view class="divider"></view>
+
+      <view class="recommend-row">
+        <view class="flex-1">
+          <view class="recommend-title">推荐这家店</view>
+          <view class="recommend-copy">关闭表示不推荐，会体现在推荐率中。</view>
+        </view>
+        <switch checked="{{recommended}}" color="#0a84ff" bindchange="changeRecommended" />
+      </view>
+    </view>
+
+    <view class="card body-card">
+      <view class="body-head">
+        <text class="section-label">点评正文</text>
+        <text class="body-count {{bodyCount > maxBody ? 'over-limit' : ''}}">{{bodyCount}} / {{maxBody}}</text>
+      </view>
+      <textarea
+        class="body-input"
+        value="{{body}}"
+        maxlength="-1"
+        placeholder="说说口味、分量、服务和环境，5–500 字。"
+        placeholder-class="body-placeholder"
+        bindinput="changeBody"
+        auto-height
+      />
+      <view class="body-hint">正文首尾空白不计入长度，按纯文本展示。</view>
+    </view>
+
+    <view class="card">
+      <view class="photo-head">
+        <text class="section-label">照片</text>
+        <text class="muted">{{photos.length}} / {{maxPhotos}}</text>
+      </view>
+      <view class="photo-grid">
+        <view wx:for="{{photos}}" wx:key="key" class="photo-item">
+          <image
+            class="photo-image"
+            src="{{item.previewPath}}"
+            mode="aspectFill"
+            data-index="{{index}}"
+            bindtap="previewPhotos"
+          />
+          <view wx:if="{{item.status === 'uploading'}}" class="photo-mask">上传中…</view>
+          <view
+            wx:elif="{{item.status === 'failed'}}"
+            class="photo-mask failed"
+            data-index="{{index}}"
+            bindtap="retryPhoto"
+          >上传失败，点此重试</view>
+          <view class="photo-remove" data-index="{{index}}" catchtap="removePhoto">×</view>
+        </view>
+        <view wx:if="{{photos.length < maxPhotos}}" class="photo-add" bindtap="choosePhotos">
+          <text class="photo-add-plus">＋</text>
+          <text class="photo-add-text">添加照片</text>
+        </view>
+      </view>
+      <view class="photo-hint">最多 5 张，上传前自动压缩；失败照片需重试或移除后才能发布。</view>
+    </view>
+
+    <view wx:if="{{errorMessage}}" class="error-text form-error">{{errorMessage}}</view>
+
+    <view
+      class="primary-button submit-button {{submitting || uploading ? 'is-disabled' : ''}}"
+      bindtap="submit"
+    >{{submitting ? '正在发布…' : '发布点评'}}</view>
+    <view class="submit-hint">同一家店只有最新一条有效点评参与评分，历史点评会保留。</view>
+  </block>
+</view>

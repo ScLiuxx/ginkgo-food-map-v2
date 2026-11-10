@@ -45,14 +45,15 @@ const FRIENDLY_MESSAGES: Record<string, string> = {
   NETWORK_ERROR: '网络连接失败，请检查网络后重试。',
 }
 
-function asEnvelope(value: unknown): ApiEnvelope<unknown> | null {
+/** 上传等自建请求也要复用同一套响应体识别与错误文案。 */
+export function asEnvelope(value: unknown): ApiEnvelope<unknown> | null {
   if (!value || typeof value !== 'object') return null
   const row = value as Partial<ApiEnvelope<unknown>>
   if (typeof row.success !== 'boolean' || typeof row.code !== 'string') return null
   return row as ApiEnvelope<unknown>
 }
 
-function messageFrom(body: ApiEnvelope<unknown> | null, status: number): string {
+export function messageFrom(body: ApiEnvelope<unknown> | null, status: number): string {
   const serverMessage = body && typeof body.message === 'string' ? body.message.trim() : ''
   if (serverMessage) return serverMessage
   const codeMessage = body ? FRIENDLY_MESSAGES[body.code] : ''

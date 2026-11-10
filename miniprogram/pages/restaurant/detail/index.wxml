@@ -43,10 +43,13 @@
             {{restaurant.typeLabel}} · {{restaurant.categoryLabel}}<text wx:if="{{restaurant.businessText}}"> · {{restaurant.businessText}}</text>
           </view>
         </view>
-        <view
-          class="favorite-button {{favorited ? 'active' : ''}}"
-          bindtap="toggleFavorite"
-        >{{favoriteBusy ? '处理中' : (favorited ? '已收藏' : '收藏')}}</view>
+        <view class="summary-actions">
+          <view
+            class="favorite-button {{favorited ? 'active' : ''}}"
+            bindtap="toggleFavorite"
+          >{{favoriteBusy ? '处理中' : (favorited ? '已收藏' : '收藏')}}</view>
+          <view wx:if="{{!isCanteen}}" class="write-button" bindtap="writeReview">写点评</view>
+        </view>
       </view>
 
       <view wx:if="{{favoriteHint}}" class="error-text favorite-hint">{{favoriteHint}}</view>
