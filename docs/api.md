@@ -92,6 +92,8 @@
 | DELETE | `/api/reviews/{reviewId}` | 原作者 | 204 | 删除点评 |
 | POST | `/api/reviews/{reviewId}/replies` | Bearer | 201 / 200重放 | 单层回复 |
 | GET | `/api/reviews/{reviewId}/replies` | 公开 | 200 | 回复游标分页 |
+| POST | `/api/reviews/{reviewId}/reports` | Bearer | 201 / 200重复 | 举报点评 |
+| POST | `/api/review-replies/{replyId}/reports` | Bearer | 201 / 200重复 | 举报回复 |
 | GET | `/api/public/status` | 公开 | 200 | 应用状态 |
 | GET | `/actuator/health` | 公开 | 200 / 503 | 依赖健康状态 |
 
@@ -1110,3 +1112,31 @@ POST只接受`{"fileId":"501"}`，fileId为正Long字符串。相同窗口和文
 DELETE只解除本窗口的图片关联，并提交媒体待回收状态；云端文件由后台删除，失败继续重试。同窗口重复删除已移除的图片仍204，不操作其他窗口文件。删除首张后下一张接替封面，最后一张删除后coverUrl为null。窗口软删除保留相册，恢复后重新可读；窗口或父食堂已删除时公开相册及单图均404，管理员写入前也必须恢复。
 
 匿名管理操作401、普通用户403；非法ID或请求字段400；窗口/父食堂不可见或图片不属于窗口404；文件不可绑定409 `FILE_NOT_BINDABLE`；第六张409 `RESTAURANT_STATE_CONFLICT`；私有图片读取故障503 `FILE_STORAGE_UNAVAILABLE`。窗口停业仍允许管理员维护相册；相册不改变点评、评分或成长经验。当前不提供手动封面选择、重排、菜品图片或普通用户窗口资料上传。
+
+## 23. 内容举报
+
+第一版只受理点评和回复。被举报内容在核查前继续公开（RISK-003）；当前仅完成举报提交与正文快照保存，管理员后台处置尚未实现。
+
+### 23.1 提交举报
+
+`POST /api/reviews/{reviewId}/reports`或`POST /api/review-replies/{replyId}/reports`，需Bearer。路径决定目标类型，举报人只取当前认证身份，不能指定其他举报人。请求体示例：
+
+```json
+{"reason":"ABUSE","detail":"包含人身攻击"}
+```
+
+reason必填，大小写精确，取值为SPAM、ABUSE、PORNOGRAPHY、ILLEGAL、PRIVACY、IRRELEVANT、OTHER。detail选填，去首尾空白后为空视为未填写，最多200码点；未知字段返回400通用请求错误。
+
+首次提交201，data示例：
+
+```json
+{"reportId":"1","targetType":"REVIEW","targetId":"101","status":"PENDING","duplicate":false,"createdAt":"2026-11-10T08:00:00Z"}
+```
+
+同一用户对同一内容再次提交返回200、duplicate=true和原记录，不新增行，也不覆盖首次原因、说明和正文快照。服务端在提交时读取并保存正文及作者快照，普通接口不回显快照。
+
+目标不存在或父店/窗口不可见统一404 `REPORT_TARGET_NOT_FOUND`；举报自己发布的内容403 `REPORT_SELF_NOT_ALLOWED`；原因非法、编号非法或说明超长400 `REPORT_INVALID_INPUT`；未登录401。举报不改变内容可见性、商户评分、点赞或成长经验。
+
+### 23.2 尚未实现的处置能力
+
+管理员举报列表、详情、驳回和删除内容仍待实现。已确认规则为确认违规后永久删除且不恢复（RISK-004），并向举报者发送结果系统消息（RISK-012）；账号处罚、禁言、停用和申诉不在本轮范围。
