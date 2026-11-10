@@ -506,7 +506,8 @@ class CanteenWindowApiIntegrationTest {
                     org.flywaydb.core.Flyway.configure()
                             .dataSource(url(isolated), "root", password())
                             .load();
-            org.junit.jupiter.api.Assertions.assertEquals(3, flyway.migrate().migrationsExecuted);
+            // V37–V40为V36之后新增的迁移；V40增加本人申请撤回与重提关联，不改变窗口结构。
+            org.junit.jupiter.api.Assertions.assertEquals(4, flyway.migrate().migrationsExecuted);
             org.junit.jupiter.api.Assertions.assertEquals(0, flyway.migrate().migrationsExecuted);
             org.junit.jupiter.api.Assertions.assertEquals(
                     2,

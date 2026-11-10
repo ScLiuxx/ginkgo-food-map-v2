@@ -84,6 +84,8 @@ class MyRestaurantRequestApiIntegrationTest {
     @BeforeEach
     void setup() {
         reset(sessions, storage, requests);
+        // 重提申请通过自关联指向原驳回记录，清理夹具必须先断开自引用再删除父行。
+        jdbc.update("UPDATE restaurant_change_requests SET previous_request_id=NULL");
         for (String table :
                 List.of(
                         "restaurant_change_photos",
@@ -427,7 +429,7 @@ class MyRestaurantRequestApiIntegrationTest {
                                 String.class))
                 .isNotEqualTo(beforeHash);
         getOwn("/101")
-                .andExpect(jsonPath("$.data.status").value("PENDING"))
+                .andExpect(jsonPath("$.data.application.status").value("PENDING"))
                 .andExpect(jsonPath("$.data.proposed.name").value("修改后的店名"));
 
         // 已通过、已驳回、目标失效和其他人的申请都不能修改，且不泄漏申请是否存在。
@@ -501,15 +503,17 @@ class MyRestaurantRequestApiIntegrationTest {
                         .get("data")
                         .get("id")
                         .asString();
-        assertThat(
-                        jdbc.queryForMap(
-                                "SELECT status,request_type,restaurant_id,previous_request_id,submitted_by FROM restaurant_change_requests WHERE id=?",
-                                Long.parseLong(newId)))
+        var saved =
+                jdbc.queryForMap(
+                        "SELECT status,request_type,restaurant_id,previous_request_id,submitted_by FROM restaurant_change_requests WHERE id=?",
+                        Long.parseLong(newId));
+        assertThat(saved)
                 .containsEntry("status", "PENDING")
-                .containsEntry("request_type", "UPDATE")
-                .containsEntry("restaurant_id", 501L)
-                .containsEntry("previous_request_id", 103L)
-                .containsEntry("submitted_by", 11L);
+                .containsEntry("request_type", "UPDATE");
+        // MySQL驱动可能按列宽度返回Integer，统一转long比较，避免夹具受驱动数值类型影响。
+        assertThat(((Number) saved.get("restaurant_id")).longValue()).isEqualTo(501L);
+        assertThat(((Number) saved.get("previous_request_id")).longValue()).isEqualTo(103L);
+        assertThat(((Number) saved.get("submitted_by")).longValue()).isEqualTo(11L);
         assertThat(
                         jdbc.queryForMap(
                                 "SELECT status,reject_reason FROM restaurant_change_requests WHERE id=103"))
@@ -548,13 +552,15 @@ class MyRestaurantRequestApiIntegrationTest {
                         .get("data")
                         .get("id")
                         .asString();
-        assertThat(
-                        jdbc.queryForMap(
-                                "SELECT status,request_type,restaurant_id,previous_request_id FROM restaurant_change_requests WHERE id=?",
-                                Long.parseLong(createdId)))
+        var createdRow =
+                jdbc.queryForMap(
+                        "SELECT status,request_type,restaurant_id,previous_request_id FROM restaurant_change_requests WHERE id=?",
+                        Long.parseLong(createdId));
+        assertThat(createdRow)
                 .containsEntry("status", "PENDING")
-                .containsEntry("request_type", "CREATE")
-                .containsEntry("previous_request_id", 105L);
+                .containsEntry("request_type", "CREATE");
+        // 驱动可能将窄整型映射为Integer，统一按long比较。
+        assertThat(((Number) createdRow.get("previous_request_id")).longValue()).isEqualTo(105L);
         assertThat(
                         jdbc.queryForObject(
                                 "SELECT restaurant_id FROM restaurant_change_requests WHERE id=?",
