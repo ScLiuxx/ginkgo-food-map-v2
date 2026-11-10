@@ -262,7 +262,8 @@ class RegistrationApiIntegrationTest {
         postRegistration(email, "login_flow_user", activeCode(email), "Ginkgo2026")
                 .andExpect(status().isCreated());
         rememberLoginKeys("login_flow_user");
-        String first = loginToken("LOGIN_FLOW_USER");
+        // 用户名在V11后区分大小写，两次登录都必须使用注册时的原始拼写。
+        String first = loginToken("login_flow_user");
         String second = loginToken("login_flow_user");
         mockMvc.perform(get("/auth/me").header("Authorization", "Bearer " + first))
                 .andExpect(status().isOk())
@@ -279,22 +280,31 @@ class RegistrationApiIntegrationTest {
                 .isBetween(1L, 300L);
     }
 
-    /** MySQL 大小写和重音不敏感的用户名变体共享同一个账号限流键，不能更换写法绕过锁定。 */
+    /**
+     * 用户名在V11后区分大小写：同一拼写连续失败仍按账号ID累计并锁定，换大小写既不能命中原账号，
+     * 也不能借变体绕过锁定。变体请求按未知用户名单独计数，因此只返回401而不是429。
+     */
     @Test
-    void shouldShareLoginLimitAcrossDatabaseUsernameAliases() throws Exception {
+    void shouldLockExactUsernameAndRejectCaseVariantsAsUnknownAccounts() throws Exception {
         String email = "loginlimit@std.uestc.edu.cn";
         postRegistration(email, "limited_login_user", activeCode(email), "Ginkgo2026")
                 .andExpect(status().isCreated());
         rememberLoginKeys("limited_login_user");
-        String[] aliases = {"limited_login_user", "LIMITED_LOGIN_USER", "límited_login_user"};
+        // 大小写变体落到“未知用户名”的独立限流键，测试结束前一并清理，避免污染其他用例。
+        String aliasKey = loginProtection.key(null, "LIMITED_LOGIN_USER");
+        authKeys.addAll(List.of(aliasKey + ":failures", aliasKey + ":lock"));
         for (int index = 0; index < 5; index++) {
-            postLogin(aliases[index % aliases.length], "wrongPassword1")
+            postLogin("limited_login_user", "wrongPassword1")
                     .andExpect(
                             index < 4 ? status().isUnauthorized() : status().isTooManyRequests());
         }
         postLogin("limited_login_user", "Ginkgo2026")
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.code").value("AUTH_LOGIN_LOCKED"));
+        // 变体不再与账号等价：正确密码也无法登录，避免误以为可跨拼写复用同一账号。
+        postLogin("LIMITED_LOGIN_USER", "Ginkgo2026")
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_INVALID_CREDENTIALS"));
     }
 
     /** 真实验证码只能改密一次，两个旧会话同时失效，新密码能重新登录。 */
@@ -308,7 +318,7 @@ class RegistrationApiIntegrationTest {
         String code = activeCode(VerificationCodePurpose.PASSWORD_RESET, email);
         postPasswordReset(email, code, "NewPassword2026")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data").doesNotExist());
+                .andExpect(jsonPath("$.data.username").value("reset_flow_user"));
         assertThat(
                         jdbcTemplate.queryForObject(
                                 "SELECT credential_version FROM users WHERE email = ?",

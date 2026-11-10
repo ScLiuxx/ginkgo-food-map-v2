@@ -2423,10 +2423,12 @@ class RestaurantWriteApiIntegrationTest {
             perform(get("/api/me/notifications").param(key, "0"), other, null)
                     .andExpect(status().isBadRequest());
         }
+        // FOLLOWERS 已是合法分类：空列表可正常读取，批量已读也不能影响该用户的 SYSTEM 未读数。
         perform(get("/api/me/notifications").param("category", "FOLLOWERS"), other, null)
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
         perform(post("/api/me/notifications/read-all").param("category", "FOLLOWERS"), other, null)
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isNoContent());
         assertThat(notificationPage(other, "ALL").get("unreadCount").asLong()).isEqualTo(1);
     }
 
