@@ -201,6 +201,8 @@ public class RestaurantRequestReadService {
         result.setName(name == null ? "未命名商户" : name);
         result.setRestaurantId(
                 row.getRestaurantId() == null ? null : row.getRestaurantId().toString());
+        result.setPreviousRequestId(
+                row.getPreviousRequestId() == null ? null : row.getPreviousRequestId().toString());
         result.setSubmittedBy(row.getSubmittedBy().toString());
         var author = names.get(row.getSubmittedBy().toString());
         result.setSubmitterName(author == null ? "用户不可用" : author.getUsername());

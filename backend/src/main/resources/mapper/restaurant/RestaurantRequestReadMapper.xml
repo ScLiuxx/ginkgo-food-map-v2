@@ -9,7 +9,7 @@
         </if>
     </sql>
     <select id="page" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantRequestListEntity">
-        SELECT r.id,r.restaurant_id,r.request_type,r.status,r.submitted_by,r.created_at,
+        SELECT r.id,r.restaurant_id,r.previous_request_id,r.request_type,r.status,r.submitted_by,r.created_at,
             JSON_UNQUOTE(JSON_EXTRACT(r.proposed_data,'$.name')) AS request_name,
             (SELECT COUNT(*) FROM restaurant_change_photos p WHERE p.request_id=r.id) AS photo_count
         FROM restaurant_change_requests r WHERE r.status=#{query.status}
@@ -17,7 +17,8 @@
         ORDER BY r.created_at ASC,r.id ASC LIMIT #{query.pageSize} OFFSET #{offset}
     </select>
     <select id="counts" resultType="com.ginkgo.foodmap.restaurant.vo.RestaurantRequestViews$StatusCount">
-        SELECT r.status,COUNT(*) AS total FROM restaurant_change_requests r WHERE 1=1
+        SELECT r.status,COUNT(*) AS total FROM restaurant_change_requests r
+        WHERE r.status IN ('PENDING','APPROVED','REJECTED')
         <include refid="keyword"/>
         GROUP BY r.status
     </select>

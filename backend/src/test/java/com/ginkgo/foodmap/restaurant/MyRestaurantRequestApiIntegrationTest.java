@@ -405,6 +405,260 @@ class MyRestaurantRequestApiIntegrationTest {
         }
     }
 
+    @Test
+    void pendingRequestCanBeEditedWithFullReplacementAndOwnerBoundary() throws Exception {
+        String beforeHash =
+                jdbc.queryForObject(
+                        "SELECT HEX(request_hash) FROM restaurant_change_requests WHERE id=101",
+                        String.class);
+        write(put(BASE + "/101"), editBody("修改后的店名"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.data.id").value("101"))
+                .andExpect(jsonPath("$.data.status").value("PENDING"));
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT JSON_UNQUOTE(JSON_EXTRACT(proposed_data,'$.name')) FROM restaurant_change_requests WHERE id=101",
+                                String.class))
+                .isEqualTo("修改后的店名");
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT HEX(request_hash) FROM restaurant_change_requests WHERE id=101",
+                                String.class))
+                .isNotEqualTo(beforeHash);
+        getOwn("/101")
+                .andExpect(jsonPath("$.data.status").value("PENDING"))
+                .andExpect(jsonPath("$.data.proposed.name").value("修改后的店名"));
+
+        // 已通过、已驳回、目标失效和其他人的申请都不能修改，且不泄漏申请是否存在。
+        write(put(BASE + "/102"), editBody("不能修改已通过"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RESTAURANT_STATE_CONFLICT"));
+        write(put(BASE + "/103"), editBody("不能修改已驳回"))
+                .andExpect(status().isConflict());
+        write(put(BASE + "/104"), editBody("不能修改失效目标"))
+                .andExpect(status().isNotFound());
+        mvc.perform(
+                        put(BASE + "/201")
+                                .header("Authorization", "Bearer " + owner)
+                                .contentType("application/json")
+                                .content(json.writeValueAsString(editBody("不能修改他人申请"))))
+                .andExpect(status().isNotFound());
+        write(put(BASE + "/101"), editBody(" "))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void withdrawIsIdempotentForOwnerAndRejectsReviewedOrForeignRequests() throws Exception {
+        write(post(BASE + "/101/withdraw"), null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WITHDRAWN"));
+        var withdrawnAt =
+                jdbc.queryForObject(
+                        "SELECT withdrawn_at FROM restaurant_change_requests WHERE id=101",
+                        Timestamp.class);
+        assertThat(withdrawnAt).isNotNull();
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT COUNT(*) FROM restaurant_change_requests WHERE id=101 AND reviewed_by IS NULL",
+                                Long.class))
+                .isEqualTo(1L);
+        write(post(BASE + "/101/withdraw"), null).andExpect(status().isOk());
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT withdrawn_at FROM restaurant_change_requests WHERE id=101",
+                                Timestamp.class))
+                .isEqualTo(withdrawnAt);
+
+        write(put(BASE + "/101"), editBody("撤回后不能修改"))
+                .andExpect(status().isConflict());
+        write(post(BASE + "/101/resubmit"), submission("撤回后不能重提"))
+                .andExpect(status().isConflict());
+        write(post(BASE + "/102/withdraw"), null).andExpect(status().isConflict());
+        write(post(BASE + "/103/withdraw"), null).andExpect(status().isConflict());
+        mvc.perform(
+                        post(BASE + "/201/withdraw")
+                                .header("Authorization", "Bearer " + owner))
+                .andExpect(status().isNotFound());
+        getOwn("?status=WITHDRAWN")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.counts.WITHDRAWN").value(1))
+                .andExpect(jsonPath("$.data.records[0].withdrawnAt").isNotEmpty());
+    }
+
+    @Test
+    void rejectedRequestCanBeResubmittedWithPreviousLinkAndOriginalPreserved() throws Exception {
+        var body = submission("重提修订店名");
+        var first =
+                write(post(BASE + "/103/resubmit"), body)
+                        .andExpect(status().isCreated())
+                        .andExpect(header().string("Cache-Control", "no-store"))
+                        .andExpect(jsonPath("$.data.status").value("PENDING"))
+                        .andReturn();
+        String newId =
+                json.readTree(first.getResponse().getContentAsString())
+                        .get("data")
+                        .get("id")
+                        .asString();
+        assertThat(
+                        jdbc.queryForMap(
+                                "SELECT status,request_type,restaurant_id,previous_request_id,submitted_by FROM restaurant_change_requests WHERE id=?",
+                                Long.parseLong(newId)))
+                .containsEntry("status", "PENDING")
+                .containsEntry("request_type", "UPDATE")
+                .containsEntry("restaurant_id", 501L)
+                .containsEntry("previous_request_id", 103L)
+                .containsEntry("submitted_by", 11L);
+        assertThat(
+                        jdbc.queryForMap(
+                                "SELECT status,reject_reason FROM restaurant_change_requests WHERE id=103"))
+                .containsEntry("status", "REJECTED")
+                .containsEntry("reject_reason", "地址需要补充，\n请核对店名");
+        // 相同请求UUID和相同内容重试返回新申请，不重复创建。
+        write(post(BASE + "/103/resubmit"), body)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.id").value(newId));
+        getOwn("/" + newId)
+                .andExpect(jsonPath("$.data.application.previousRequestId").value("103"))
+                .andExpect(jsonPath("$.data.proposed.name").value("重提修订店名"));
+        // 同一个UUID不能用于不同内容或另一个目标。
+        var changed = submission("另一种内容");
+        changed.put("clientRequestId", body.get("clientRequestId"));
+        write(post(BASE + "/103/resubmit"), changed).andExpect(status().isConflict());
+        write(post(BASE + "/101/resubmit"), submission("待审不能重提"))
+                .andExpect(status().isConflict());
+        mvc.perform(
+                        post(BASE + "/201/resubmit")
+                                .header("Authorization", "Bearer " + owner)
+                                .contentType("application/json")
+                                .content(json.writeValueAsString(submission("他人不能重提"))))
+                .andExpect(status().isNotFound());
+
+        // 新店驳回后重提仍为CREATE且不携带目标ID。
+        jdbc.update(
+                "INSERT INTO restaurant_change_requests(id,request_type,submitted_by,client_request_id,request_hash,proposed_data,status,reviewed_by,reviewed_at,reject_reason) VALUES(105,'CREATE',11,?,UNHEX(SHA2('fixture',256)),JSON_OBJECT('name','驳回新店'),'REJECTED',33,CURRENT_TIMESTAMP(6),'资料不足')",
+                UUID.randomUUID().toString());
+        var created =
+                write(post(BASE + "/105/resubmit"), submission("重提新店"))
+                        .andExpect(status().isCreated())
+                        .andReturn();
+        String createdId =
+                json.readTree(created.getResponse().getContentAsString())
+                        .get("data")
+                        .get("id")
+                        .asString();
+        assertThat(
+                        jdbc.queryForMap(
+                                "SELECT status,request_type,restaurant_id,previous_request_id FROM restaurant_change_requests WHERE id=?",
+                                Long.parseLong(createdId)))
+                .containsEntry("status", "PENDING")
+                .containsEntry("request_type", "CREATE")
+                .containsEntry("previous_request_id", 105L);
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT restaurant_id FROM restaurant_change_requests WHERE id=?",
+                                Long.class,
+                                Long.parseLong(createdId)))
+                .isNull();
+    }
+
+    @Test
+    void editingPhotosReleasesRemovedFilesAndRebindsOnlyNewOnes() throws Exception {
+        long first = temporaryPhoto(1001);
+        long second = temporaryPhoto(1002);
+        write(put(BASE + "/101"), editBody("保留两张图", Long.toString(first), Long.toString(second)))
+                .andExpect(status().isOk());
+        assertThat(
+                        jdbc.queryForList(
+                                "SELECT media_file_id FROM restaurant_change_photos WHERE request_id=101 ORDER BY position",
+                                Long.class))
+                .containsExactly(first, second);
+
+        long replacement = temporaryPhoto(1003);
+        write(put(BASE + "/101"), editBody("替换第二张", Long.toString(first), Long.toString(replacement)))
+                .andExpect(status().isOk());
+        assertThat(
+                        jdbc.queryForList(
+                                "SELECT media_file_id FROM restaurant_change_photos WHERE request_id=101 ORDER BY position",
+                                Long.class))
+                .containsExactly(first, replacement);
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT status FROM media_files WHERE id=?", String.class, second))
+                .isEqualTo("PENDING_DELETE");
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT status FROM media_files WHERE id=?", String.class, replacement))
+                .isEqualTo("BOUND");
+
+        write(put(BASE + "/101"), editBody("清空图片"))
+                .andExpect(status().isOk());
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT COUNT(*) FROM restaurant_change_photos WHERE request_id=101",
+                                Long.class))
+                .isZero();
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT status FROM media_files WHERE id=?", String.class, first))
+                .isEqualTo("PENDING_DELETE");
+    }
+
+    @Test
+    void anonymousWritesAreRejected() throws Exception {
+        for (String path : List.of("/101/withdraw", "/101/resubmit")) {
+            mvc.perform(post(BASE + path).contentType("application/json").content("{}"))
+                    .andExpect(status().isUnauthorized());
+        }
+        mvc.perform(
+                        put(BASE + "/101")
+                                .contentType("application/json")
+                                .content(json.writeValueAsString(editBody("匿名修改"))))
+                .andExpect(status().isUnauthorized());
+    }
+
+    private ResultActions write(
+            org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder builder,
+            Map<String, ?> body)
+            throws Exception {
+        builder.header("Authorization", "Bearer " + owner);
+        if (body != null) {
+            builder.contentType("application/json").content(json.writeValueAsString(body));
+        }
+        return mvc.perform(builder);
+    }
+
+    /** 修改与重提共用的完整业务内容，分类使用已启用的OTHER。 */
+    private Map<String, Object> editBody(String name, String... photoIds) {
+        var body = new LinkedHashMap<String, Object>();
+        body.put("name", name);
+        body.put("categoryCode", "OTHER");
+        body.put("restaurantType", "REGULAR");
+        body.put("priceKind", "UNKNOWN");
+        body.put("latitude", 30.75);
+        body.put("longitude", 103.93);
+        body.put("locationConfirmed", true);
+        body.put("businessStatus", "OPERATING");
+        body.put("tags", List.of("测试"));
+        body.put("photoIds", List.of(photoIds));
+        return body;
+    }
+
+    private Map<String, Object> submission(String name) {
+        var body = editBody(name);
+        body.put("clientRequestId", UUID.randomUUID().toString());
+        return body;
+    }
+
+    private long temporaryPhoto(long file) {
+        jdbc.update(
+                "INSERT INTO media_files(id,uploader_user_id,bucket_name,storage_key,content_type,byte_size,width,height,sha256,status,purpose,expires_at) VALUES(?,11,'private-test',?,'image/jpeg',4,1,1,UNHEX(SHA2('photo',256)),'TEMPORARY','RESTAURANT',TIMESTAMPADD(DAY,1,CURRENT_TIMESTAMP(6)))",
+                file,
+                "restaurant-images/" + file + ".jpg");
+        return file;
+    }
+
     private ResultActions getOwn(String suffix) throws Exception {
         return mvc.perform(get(BASE + suffix).header("Authorization", "Bearer " + owner));
     }

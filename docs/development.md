@@ -2,6 +2,13 @@
 
 之前的开发记录见[开发记录03](history/development-03.md)，更早记录见[文档导航](README.md#历史追溯)。
 
+## 2026-11-10：本人待审申请修改、撤回与驳回重提
+
+- 按MY-014/MY-015实现本人申请写流程：PENDING可整体修改业务内容与0–5张附图，修改后仍为PENDING；PENDING可撤回为WITHDRAWN并记录撤回时间；REJECTED可携带新clientRequestId重提，生成PENDING新申请并通过previous_request_id关联原驳回记录，原记录状态、驳回原因和审核字段不变。APPROVED、REJECTED、WITHDRAWN不可修改，仅REJECTED可重提。
+- 新增Flyway V40：补充previous_request_id与withdrawn_at，重建状态、目标与审核字段约束，增加自关联外键；撤回不写审核人/通过快照，CREATE撤回仍无商户ID，UPDATE撤回保留原商户ID。所有写入按本人范围校验，他人申请与不存在统一404。
+- 并发控制：修改和撤回锁定申请行，与管理员审核使用同一行锁，状态在锁内复核；重提锁定本人被驳回申请后创建新申请。附图替换只释放新列表移除的旧图，交集图片复用原绑定，旧图释放、关联重建、新图绑定和内容更新同事务回滚。管理员已打开旧页面后的并发提示仍按MY-016暂缓。
+- 验证：`mvn test`与`mvn verify`均执行673项，246项通过、427项按既有MySQL/Redis开关跳过，0失败，BUILD SUCCESS。当前沙箱没有MySQL，新增的MySQL集成测试（修改、撤回、重提、附图替换及匿名写入）未被实际执行，V40也未在真实MySQL上迁移验证；相关断言保留在`MyRestaurantRequestApiIntegrationTest`，需在有MySQL的环境用既定系统属性复跑。未提交、推送或部署。
+
 ## 2026-11-08：全站评分统一五分制展示
 
 - 首页、地图列表/浮层/点位、随机推荐、普通及历史点评和独立预览统一按五分制显示，满分5分。共用评分格式化函数保留零分与未知值；详情和窗口既有五星显示保持正确，避免二次换算。

@@ -8,6 +8,8 @@ import java.time.Instant;
 public class RestaurantChangeEntity {
     private Long id;
     private Long restaurantId;
+    /** 驳回后重提指向的原申请ID；普通首次提交为空，用于保留新旧申请关联。 */
+    private Long previousRequestId;
     /** CREATE/UPDATE由提交入口确定；新店通过回填商户ID后仍保持CREATE。 */
     private String requestType;
     private Long submittedBy;
@@ -19,6 +21,8 @@ public class RestaurantChangeEntity {
     /** 审核写入字段；用户原始proposedData与摘要保持不变，终态不可再次改写。 */
     private Long reviewedBy;
     private Instant reviewedAt;
+    /** 本人撤回待审申请的时间；撤回不写审核人和通过/驳回资料。 */
+    private Instant withdrawnAt;
     private String rejectReason;
     private String approvedData;
     private String beforeData;

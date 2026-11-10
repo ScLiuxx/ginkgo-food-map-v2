@@ -206,36 +206,40 @@ position范围0～7；同一餐厅内标签及位置分别唯一。
 | 字段 | 类型 | 可空 | 说明 |
 | --- | --- | --- | --- |
 | `id` | `bigint unsigned` | 否 | 自增主键，申请编号 |
-| `restaurant_id` | `bigint unsigned` | 是 | UPDATE始终为原商户ID；CREATE待审/驳回为空，通过时填入新建的正式商户ID |
+| `restaurant_id` | `bigint unsigned` | 是 | UPDATE始终为原商户ID；CREATE待审/驳回/撤回为空，通过时填入新建的正式商户ID |
+| `previous_request_id` | `bigint unsigned` | 是 | 驳回后重提所依据的原申请ID；首次提交为空，普通重试不改变 |
 | `request_type` | `varchar(16)`，ascii_bin | 否 | CREATE新店投稿、UPDATE已有商户纠错；无默认值，由服务端提交入口确定，审核后保持不变 |
 | `submitted_by` | `bigint unsigned` | 否 | 提交账号逻辑ID，由服务端填写 |
 | `client_request_id` | `char(36)` | 否 | 客户端UUID，同账号内唯一 |
 | `request_hash` | `binary(32)` | 否 | 规范化申请内容的SHA-256，判断重试内容一致性 |
 | `proposed_data` | `json` | 否 | 用户原始业务申请快照，管理员修订不得覆盖；原始图片顺序和提交摘要继续用于重试核对 |
-| `status` | `varchar(16)`，ascii_bin | 否 | PENDING待审、APPROVED通过、REJECTED驳回；默认PENDING |
+| `status` | `varchar(16)`，ascii_bin | 否 | PENDING待审、APPROVED通过、REJECTED驳回、WITHDRAWN本人撤回；默认PENDING |
 | `created_at` | `timestamp(6)` | 否 | 提交时间；默认CURRENT_TIMESTAMP(6) |
 | `reviewed_by` | `bigint unsigned` | 是 | 审核人逻辑ID；已处理时必填且大于0，由服务端身份确定 |
 | `reviewed_at` | `timestamp(6)` | 是 | 审核完成时间，由服务端填写 |
+| `withdrawn_at` | `timestamp(6)` | 是 | 本人撤回待审申请的时间；仅WITHDRAWN必填 |
 | `reject_reason` | `varchar(200)` | 是 | 仅驳回时必填，禁止空字符串及纯空白 |
 | `approved_data` | `json` | 是 | 仅通过时必填的JSON对象：实际生效的完整业务资料，保留管理员修订；不写密码、权限或评分统计 |
 | `before_data` | `json` | 是 | 仅UPDATE通过时必填的JSON对象：更新前实际正式业务资料，CREATE没有旧资料 |
 
-主键`(id)`；唯一索引`(submitted_by,client_request_id)`；普通索引`(status,created_at,id)`、`(restaurant_id,created_at,id)`、`(status,reviewed_at,id)`、`(submitted_by,created_at,id)`。
+主键`(id)`；唯一索引`(submitted_by,client_request_id)`；普通索引`(status,created_at,id)`、`(restaurant_id,created_at,id)`、`(status,reviewed_at,id)`、`(submitted_by,created_at,id)`；外键列`previous_request_id`由外键自动建立索引。
 
-外键：restaurant_id → restaurants.id，删除/更新RESTRICT；submitted_by、reviewed_by为用户逻辑ID，无跨模块外键。
+外键：restaurant_id → restaurants.id，previous_request_id → restaurant_change_requests.id，删除/更新RESTRICT；submitted_by、reviewed_by为用户逻辑ID，无跨模块外键。
 
 #### 状态与字段约束
 
-| 状态 | 商户ID | 审核人/时间 | 驳回原因 | 通过快照 | 更新前快照 |
-| --- | --- | --- | --- | --- | --- |
-| CREATE + PENDING | 必须NULL | 必须NULL | NULL | NULL | NULL |
-| UPDATE + PENDING | 原商户ID | 必须NULL | NULL | NULL | NULL |
-| CREATE + APPROVED | 必填，新建商户ID | 必填 | NULL | 必填JSON对象 | NULL |
-| UPDATE + APPROVED | 必填，原商户ID | 必填 | NULL | 必填JSON对象 | 必填JSON对象 |
-| CREATE + REJECTED | 必须NULL | 必填 | 必填非空白 | NULL | NULL |
-| UPDATE + REJECTED | 原商户ID | 必填 | 必填非空白 | NULL | NULL |
+| 状态 | 商户ID | 审核人/时间 | 撤回时间 | 驳回原因 | 通过快照 | 更新前快照 |
+| --- | --- | --- | --- | --- | --- | --- |
+| CREATE + PENDING | 必须NULL | 必须NULL | NULL | NULL | NULL | NULL |
+| UPDATE + PENDING | 原商户ID | 必须NULL | NULL | NULL | NULL | NULL |
+| CREATE + APPROVED | 必填，新建商户ID | 必填 | NULL | NULL | 必填JSON对象 | NULL |
+| UPDATE + APPROVED | 必填，原商户ID | 必填 | NULL | NULL | 必填JSON对象 | 必填JSON对象 |
+| CREATE + REJECTED | 必须NULL | 必填 | NULL | 必填非空白 | NULL | NULL |
+| UPDATE + REJECTED | 原商户ID | 必填 | NULL | 必填非空白 | NULL | NULL |
+| CREATE + WITHDRAWN | 必须NULL | 必须NULL | 必填 | NULL | NULL | NULL |
+| UPDATE + WITHDRAWN | 原商户ID | 必须NULL | 必填 | NULL | NULL | NULL |
 
-类型和状态使用精确编码；proposed_data保存原始申请资料，approved_data保存通过后的资料，before_data保存纠错前资料。
+类型和状态使用精确编码；proposed_data保存原始申请资料，approved_data保存通过后的资料，before_data保存纠错前资料。previous_request_id只指向另一条历史申请且不参与审核状态约束，原驳回记录保持REJECTED不变。
 
 ### `restaurant_change_photos`：商户申请图片
 

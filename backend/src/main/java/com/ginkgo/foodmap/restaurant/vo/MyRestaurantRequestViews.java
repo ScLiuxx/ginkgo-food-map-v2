@@ -13,11 +13,15 @@ public final class MyRestaurantRequestViews {
     public static class Item {
         private String id;
         private String restaurantId;
+        /** 驳回后重提形成的新申请指向原申请；首次提交为null。 */
+        private String previousRequestId;
         private String requestType;
         private String status;
         private String name;
         private Instant createdAt;
         private Instant reviewedAt;
+        /** 本人撤回时间；仅WITHDRAWN有值。 */
+        private Instant withdrawnAt;
         private int photoCount;
     }
 

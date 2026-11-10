@@ -171,6 +171,9 @@ public class RestaurantWriteService {
             return approved.getRestaurantType();
         if (request instanceof com.ginkgo.foodmap.restaurant.dto.RestaurantChangeRequest changed)
             return changed.getRestaurantType();
+        // 本人修改待审申请沿用相同类型语义，仍由服务端按请求体类型区分分类规则。
+        if (request instanceof com.ginkgo.foodmap.restaurant.dto.RestaurantChangeEditRequest edited)
+            return edited.getRestaurantType();
         return "REGULAR";
     }
 
