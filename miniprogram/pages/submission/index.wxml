@@ -1,0 +1,203 @@
+<view class="page">
+  <view class="ambient">
+    <view class="ambient-blob ambient-a"></view>
+    <view class="ambient-blob ambient-b"></view>
+    <view class="ambient-blob ambient-c"></view>
+  </view>
+
+  <view class="submission-hero">
+    <view class="hero-eyebrow">社区共建</view>
+    <view class="hero-title">新店投稿</view>
+    <view class="hero-copy">提交后进入审核队列，通过后才会出现在找店列表。请尽量填写真实资料并在地图中确认位置。</view>
+  </view>
+
+  <view wx:if="{{!loggedIn}}" class="card login-card">
+    <view class="login-title">登录后提交投稿</view>
+    <view class="login-copy">投稿会记录当前账号，不读取微信头像、昵称或手机号；草稿只保留在当前页面。</view>
+    <view wx:if="{{errorMessage}}" class="error-text login-error">{{errorMessage}}</view>
+    <view class="primary-button" bindtap="login">使用邮箱登录</view>
+  </view>
+
+  <block wx:else>
+    <view class="card form-card">
+      <view class="section-label">基础资料</view>
+
+      <view class="field-block">
+        <view class="field-label">店名</view>
+        <view class="field-shell">
+          <input
+            class="field-input"
+            value="{{name}}"
+            maxlength="40"
+            placeholder="填写店铺或窗口名称"
+            placeholder-class="field-placeholder"
+            bindinput="changeName"
+          />
+        </view>
+      </view>
+
+      <view class="field-block">
+        <view class="field-label">类型</view>
+        <picker range="{{typeLabels}}" value="{{typeIndex}}" bindchange="changeType">
+          <view class="field-shell picker-shell">
+            <text class="picker-value">{{typeLabels[typeIndex]}}</text>
+            <text class="picker-arrow">›</text>
+          </view>
+        </picker>
+      </view>
+
+      <view wx:if="{{typeIndex === 0}}" class="field-block">
+        <view class="field-label">分类</view>
+        <picker
+          range="{{categoryLabels}}"
+          value="{{categoryIndex}}"
+          disabled="{{categoriesLoading}}"
+          bindchange="changeCategory"
+        >
+          <view class="field-shell picker-shell">
+            <text class="picker-value {{categoryIndex === 0 ? 'is-placeholder' : ''}}">{{categoryLabels[categoryIndex]}}</text>
+            <text class="picker-arrow">›</text>
+          </view>
+        </picker>
+        <view wx:if="{{!categoriesLoading && categoryCodes.length === 0}}" class="field-hint">当前没有可用分类，请稍后重试或联系管理员。</view>
+      </view>
+
+      <view class="field-block">
+        <view class="field-label">参考人均</view>
+        <picker range="{{priceLabels}}" value="{{priceIndex}}" bindchange="changePriceKind">
+          <view class="field-shell picker-shell">
+            <text class="picker-value">{{priceLabels[priceIndex]}}</text>
+            <text class="picker-arrow">›</text>
+          </view>
+        </picker>
+      </view>
+
+      <view wx:if="{{priceIndex !== 0}}" class="field-block">
+        <view class="field-label">金额（元）</view>
+        <view class="field-shell">
+          <input
+            class="field-input"
+            type="number"
+            value="{{priceText}}"
+            maxlength="4"
+            placeholder="1–5000 的整数"
+            placeholder-class="field-placeholder"
+            bindinput="changePrice"
+          />
+        </view>
+      </view>
+
+      <view class="field-block">
+        <view class="field-label">地址</view>
+        <view class="field-shell">
+          <input
+            class="field-input"
+            value="{{address}}"
+            maxlength="80"
+            placeholder="楼栋、楼层或门牌号"
+            placeholder-class="field-placeholder"
+            bindinput="changeAddress"
+          />
+        </view>
+      </view>
+
+      <view class="field-block">
+        <view class="field-label">位置</view>
+        <view class="location-row">
+          <view class="location-copy">
+            <view class="location-title">{{locationConfirmed ? '已确认位置' : '尚未选择位置'}}</view>
+            <view class="location-detail">{{locationText || '需要在地图中选择店铺所在位置'}}</view>
+          </view>
+          <view class="ghost-button location-button" bindtap="chooseLocation">选择位置</view>
+        </view>
+      </view>
+
+      <view class="field-block">
+        <view class="field-label">营业状态</view>
+        <picker range="{{businessLabels}}" value="{{businessIndex}}" bindchange="changeBusiness">
+          <view class="field-shell picker-shell">
+            <text class="picker-value">{{businessLabels[businessIndex]}}</text>
+            <text class="picker-arrow">›</text>
+          </view>
+        </picker>
+      </view>
+    </view>
+
+    <view class="card form-card">
+      <view class="section-label">服务与标签</view>
+
+      <view class="field-block">
+        <view class="field-label">堂食</view>
+        <picker range="{{triLabels}}" value="{{dineIndex}}" bindchange="changeDineIn">
+          <view class="field-shell picker-shell">
+            <text class="picker-value">{{triLabels[dineIndex]}}</text>
+            <text class="picker-arrow">›</text>
+          </view>
+        </picker>
+      </view>
+
+      <view class="field-block">
+        <view class="field-label">外卖</view>
+        <picker range="{{triLabels}}" value="{{deliveryIndex}}" bindchange="changeDelivery">
+          <view class="field-shell picker-shell">
+            <text class="picker-value">{{triLabels[deliveryIndex]}}</text>
+            <text class="picker-arrow">›</text>
+          </view>
+        </picker>
+      </view>
+
+      <view class="field-block">
+        <view class="field-label">标签</view>
+        <textarea
+          class="tag-input"
+          value="{{tagsText}}"
+          maxlength="160"
+          placeholder="每行一个，最多 8 个，例如：川菜&#10;适合聚餐"
+          placeholder-class="field-placeholder"
+          bindinput="changeTags"
+          auto-height
+        />
+        <view class="field-hint">空行会被忽略，标签总长度最多 80 个字符。</view>
+      </view>
+    </view>
+
+    <view class="card form-card">
+      <view class="photo-head">
+        <text class="section-label">照片</text>
+        <text class="muted">{{photos.length}} / {{maxPhotos}}</text>
+      </view>
+      <view class="photo-grid">
+        <view wx:for="{{photos}}" wx:key="key" class="photo-item">
+          <image
+            class="photo-image"
+            src="{{item.previewPath}}"
+            mode="aspectFill"
+            data-index="{{index}}"
+            bindtap="previewPhotos"
+          />
+          <view wx:if="{{item.status === 'uploading'}}" class="photo-mask">上传中…</view>
+          <view
+            wx:elif="{{item.status === 'failed'}}"
+            class="photo-mask failed"
+            data-index="{{index}}"
+            bindtap="retryPhoto"
+          >上传失败，点此重试</view>
+          <view class="photo-remove" data-index="{{index}}" catchtap="removePhoto">×</view>
+        </view>
+        <view wx:if="{{photos.length < maxPhotos}}" class="photo-add" bindtap="choosePhotos">
+          <text class="photo-add-plus">＋</text>
+          <text class="photo-add-text">添加照片</text>
+        </view>
+      </view>
+      <view class="field-hint">最多 5 张，上传前自动压缩；失败照片需重试或移除后才能提交。</view>
+    </view>
+
+    <view wx:if="{{errorMessage}}" class="error-text form-error">{{errorMessage}}</view>
+
+    <view
+      class="primary-button submit-button {{submitting || uploading ? 'is-disabled' : ''}}"
+      bindtap="submit"
+    >{{submitting ? '正在提交…' : '提交审核'}}</view>
+    <view class="submit-hint">提交只代表申请已受理，审核结果请到“我的投稿”查看。</view>
+  </block>
+</view>

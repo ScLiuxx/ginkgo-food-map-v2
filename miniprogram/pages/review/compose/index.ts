@@ -1,20 +1,19 @@
 import { ApiError, toErrorMessage } from '../../../shared/api/request'
+import { cancelImage, uploadImage } from '../../../shared/api/files'
 import { isLoggedIn } from '../../../shared/auth/session'
 import {
   MAX_REVIEW_BODY,
   MAX_REVIEW_PHOTOS,
-  cancelReviewPhoto,
   isValidScores,
   normalizeReviewBody,
-  prepareReviewPhoto,
   publishReview,
   publishWindowReview,
   reviewBodyLength,
-  uploadReviewPhoto,
   type ReviewScores,
   type ScoreKey,
 } from '../../../modules/review/compose'
 import { createRequestId } from '../../../shared/lib/id'
+import { prepareImage } from '../../../shared/lib/image'
 
 type PhotoStatus = 'uploading' | 'ready' | 'failed'
 
@@ -219,10 +218,10 @@ Page<ComposeData, ComposeCustom>({
     this.patchPhoto(key, { status: 'uploading', error: '' })
     this.refreshUploadingState()
     try {
-      const prepared = await prepareReviewPhoto(photo.sourcePath)
+      const prepared = await prepareImage(photo.sourcePath)
       if (generation !== pageGeneration) return
       this.patchPhoto(key, { previewPath: prepared })
-      const uploaded = await uploadReviewPhoto(prepared)
+      const uploaded = await uploadImage(prepared, 'REVIEW')
       if (generation !== pageGeneration) return
       this.patchPhoto(key, { status: 'ready', fileId: uploaded.fileId, error: '' })
     } catch (reason) {
@@ -250,7 +249,7 @@ Page<ComposeData, ComposeCustom>({
     this.refreshUploadingState()
     if (photo.fileId) {
       // 取消未绑定图片失败不影响界面移除，临时文件到期后由服务端清理。
-      void cancelReviewPhoto(photo.fileId).catch(() => undefined)
+      void cancelImage(photo.fileId).catch(() => undefined)
     }
   },
 

@@ -12,6 +12,7 @@
     "pages/account/profile/index",
     "pages/account/privacy/index",
     "pages/review/compose/index",
+    "pages/submission/index",
     "pages/login/index",
     "pages/register/index",
     "pages/password-reset/index"
@@ -58,11 +59,12 @@
   },
   "permission": {
     "scope.userLocation": {
-      "desc": "用于在地图中定位并查看附近餐厅"
+      "desc": "用于在地图中定位、查看附近餐厅并选择投稿店铺位置"
     }
   },
   "requiredPrivateInfos": [
-    "getLocation"
+    "getLocation",
+    "chooseLocation"
   ],
   "sitemapLocation": "sitemap.json",
   "lazyCodeLoading": "requiredComponents"

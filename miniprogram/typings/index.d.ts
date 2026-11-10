@@ -85,6 +85,20 @@ interface WxLocationOptions {
   fail?: (error: { errMsg: string }) => void
 }
 
+interface WxChooseLocationResult {
+  name?: string
+  address?: string
+  latitude: number
+  longitude: number
+}
+
+interface WxChooseLocationOptions {
+  latitude?: number
+  longitude?: number
+  success?: (result: WxChooseLocationResult) => void
+  fail?: (error: { errMsg: string }) => void
+}
+
 interface WxMapCoordinate {
   latitude: number
   longitude: number
@@ -105,6 +119,7 @@ interface WxSettingResult {
 
 interface Wx {
   request(options: WxRequestOptions): WxRequestTask
+  chooseLocation(options: WxChooseLocationOptions): void
   getStorageSync(key: string): unknown
   setStorageSync(key: string, value: unknown): void
   removeStorageSync(key: string): void

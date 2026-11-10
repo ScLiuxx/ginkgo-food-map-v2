@@ -1,14 +1,8 @@
-import { API_BASE_URL } from '../../config/env'
-import { clearSession, getToken } from '../../shared/auth/session'
-import {
-  ApiError,
-  asEnvelope,
-  messageFrom,
-  request,
-} from '../../shared/api/request'
+import { ApiError, request } from '../../shared/api/request'
+import { isLongId } from '../../shared/lib/id'
 
 /**
- * 点评发布：评分提交、图片压缩上传与幂等请求号。
+ * 点评发布：评分提交与幂等请求号；图片压缩上传由共用的文件能力提供。
  *
  * 约束来自后端发布接口：
  * - 四维评分 0–10，步进 0.5；
@@ -20,8 +14,6 @@ import {
 export const MAX_REVIEW_PHOTOS = 5
 export const MAX_REVIEW_BODY = 500
 const MIN_REVIEW_BODY = 5
-const MAX_UPLOAD_BYTES = 300 * 1024
-const QUALITY_STEPS = [80, 62, 45]
 
 export type ScoreKey = 'taste' | 'value' | 'service' | 'ambience'
 
@@ -30,13 +22,6 @@ export interface ReviewScores {
   value: number
   service: number
   ambience: number
-}
-
-export interface UploadedPhoto {
-  fileId: string
-  byteSize: number | null
-  width: number | null
-  height: number | null
 }
 
 /** 发布输入；餐厅与窗口共用同一套评分、正文和照片约束。 */
@@ -61,13 +46,6 @@ export interface ReviewPublishReceipt {
   replayed: boolean
 }
 
-const ID_PATTERN = /^[1-9]\d{0,18}$/
-const MAX_ID = 9223372036854775807n
-
-function isId(value: unknown): value is string {
-  return typeof value === 'string' && ID_PATTERN.test(value) && BigInt(value) <= MAX_ID
-}
-
 /** 去掉首尾空白后按 Unicode 码点计数，与后端“码点”口径一致。 */
 export function reviewBodyLength(value: string): number {
   return Array.from(value.trim()).length
@@ -85,127 +63,6 @@ export function isValidScores(scores: ReviewScores): boolean {
   return (['taste', 'value', 'service', 'ambience'] as ScoreKey[]).every((key) =>
     isValidScore(scores[key]),
   )
-}
-
-function readFileSize(filePath: string): number | null {
-  try {
-    const info = wx.getFileSystemManager().getFileInfoSync(filePath)
-    return typeof info.size === 'number' ? info.size : null
-  } catch {
-    return null
-  }
-}
-
-function readImageSize(filePath: string): Promise<{ width: number; height: number } | null> {
-  return new Promise((resolve) => {
-    wx.getImageInfo({
-      src: filePath,
-      success: (result) =>
-        resolve(
-          result.width > 0 && result.height > 0
-            ? { width: result.width, height: result.height }
-            : null,
-        ),
-      fail: () => resolve(null),
-    })
-  })
-}
-
-function compress(
-  filePath: string,
-  quality: number,
-  landscape: boolean,
-): Promise<string> {
-  return new Promise((resolve) => {
-    wx.compressImage({
-      src: filePath,
-      quality,
-      // 只限制最长边，避免竖图按宽度压缩后高度仍超过 1200px。
-      ...(landscape ? { compressedWidth: 1200 } : { compressedHeight: 1200 }),
-      success: (result) => resolve(result.tempFilePath || filePath),
-      // 压缩失败时仍尝试原图，最终由服务端校验格式与大小。
-      fail: () => resolve(filePath),
-    })
-  })
-}
-
-/**
- * 逐级压缩到 300KiB 以内。
- *
- * 先读取宽高决定限制长边还是短边；读不到尺寸时按宽度限制。
- * 读不到文件大小时交给服务端做最终校验，不在前端伪报成功；
- * 仍超限时明确要求更换照片，避免把 413 解释成登录或网络问题。
- */
-export async function prepareReviewPhoto(filePath: string): Promise<string> {
-  const size = await readImageSize(filePath)
-  const landscape = !size || size.width >= size.height
-  let candidate = filePath
-  for (const quality of QUALITY_STEPS) {
-    candidate = await compress(filePath, quality, landscape)
-    const bytes = readFileSize(candidate)
-    if (bytes === null || bytes <= MAX_UPLOAD_BYTES) return candidate
-  }
-  throw new Error('照片压缩后仍超过 300KB，请更换更小的照片。')
-}
-
-/** 上传单张点评临时图；401 只清理本次上传使用的令牌。 */
-export function uploadReviewPhoto(filePath: string): Promise<UploadedPhoto> {
-  const token = getToken()
-  if (!token) {
-    return Promise.reject(new ApiError('请先登录。', 'AUTH_UNAUTHENTICATED', 401))
-  }
-  return new Promise((resolve, reject) => {
-    wx.uploadFile({
-      url: `${API_BASE_URL}/api/files/images?purpose=REVIEW`,
-      filePath,
-      name: 'file',
-      header: { Authorization: `Bearer ${token}` },
-      timeout: 30000,
-      success(result) {
-        let body: ReturnType<typeof asEnvelope> = null
-        try {
-          body = asEnvelope(JSON.parse(result.data))
-        } catch {
-          body = null
-        }
-        if (result.statusCode >= 200 && result.statusCode < 300) {
-          const data = body && body.success ? (body.data as Partial<UploadedPhoto> | null) : null
-          if (!data || !isId(data.fileId)) {
-            reject(new ApiError('上传响应格式异常，请重试。', 'INVALID_RESPONSE', result.statusCode))
-            return
-          }
-          resolve({
-            fileId: data.fileId,
-            byteSize: typeof data.byteSize === 'number' ? data.byteSize : null,
-            width: typeof data.width === 'number' ? data.width : null,
-            height: typeof data.height === 'number' ? data.height : null,
-          })
-          return
-        }
-        if (result.statusCode === 401) clearSession(token)
-        reject(
-          new ApiError(
-            messageFrom(body, result.statusCode),
-            body?.code ?? 'HTTP_ERROR',
-            result.statusCode,
-          ),
-        )
-      },
-      fail() {
-        reject(new ApiError('图片上传失败，请检查网络后重试。', 'NETWORK_ERROR', 0))
-      },
-    })
-  })
-}
-
-/** 取消未绑定的临时图；删除意图已保存的 202 也算成功，失败由到期清理兜底。 */
-export async function cancelReviewPhoto(fileId: string): Promise<void> {
-  if (!isId(fileId)) return
-  await request<undefined>({
-    path: `/api/files/images/${encodeURIComponent(fileId)}`,
-    method: 'DELETE',
-    auth: 'required',
-  })
 }
 
 /**
@@ -232,7 +89,7 @@ function validatePublishInput(input: ReviewPublishInput): string {
   if (
     input.photoIds.length > MAX_REVIEW_PHOTOS ||
     new Set(input.photoIds).size !== input.photoIds.length ||
-    input.photoIds.some((id) => !isId(id))
+    input.photoIds.some((id) => !isLongId(id))
   ) {
     throw new Error('点评照片数量或编号不符合要求。')
   }
@@ -266,7 +123,7 @@ export async function publishReview(
   input: ReviewPublishInput,
 ): Promise<ReviewPublishReceipt> {
   const body = validatePublishInput(input)
-  if (!isId(restaurantId)) {
+  if (!isLongId(restaurantId)) {
     throw new Error('店铺编号无效，无法发布点评。')
   }
 
@@ -283,7 +140,7 @@ export async function publishReview(
   })
   if (
     !raw ||
-    !isId(raw.reviewId) ||
+    !isLongId(raw.reviewId) ||
     raw.restaurantId !== restaurantId ||
     raw.windowId != null ||
     typeof raw.replayed !== 'boolean'
@@ -309,7 +166,7 @@ export async function publishWindowReview(
   input: ReviewPublishInput,
 ): Promise<ReviewPublishReceipt> {
   const body = validatePublishInput(input)
-  if (!isId(windowId)) {
+  if (!isLongId(windowId)) {
     throw new Error('窗口编号无效，无法发布点评。')
   }
 
@@ -326,7 +183,7 @@ export async function publishWindowReview(
   })
   if (
     !raw ||
-    !isId(raw.reviewId) ||
+    !isLongId(raw.reviewId) ||
     raw.windowId !== windowId ||
     raw.restaurantId != null ||
     typeof raw.replayed !== 'boolean'

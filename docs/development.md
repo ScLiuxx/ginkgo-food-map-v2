@@ -1,5 +1,15 @@
 # 当前开发记录
 
+## 2026-11-11：小程序新店投稿
+
+- 找店页新增“添加店铺”入口，新建投稿页支持店名、普通餐厅/食堂、分类、人均类型与金额、地址、微信地图选点、营业状态、堂食/外卖三态、标签和最多 5 张照片；未登录只显示登录卡片，不渲染表单。
+- 投稿页按后端 `RestaurantChangeRequest` 白名单组装字段：食堂显式提交空分类，未知人均提交 `null`，位置必须经 `wx.chooseLocation` 确认并记录 `locationConfirmed`。本地先校验名称、坐标、金额、标签和图片编号，服务端仍是最终判定来源。
+- 新增 `modules/restaurant/submission.ts` 承载草稿校验、请求组装和 `POST /api/restaurant-submissions`；成功只代表待审申请已受理，跳转“我的投稿”查看进度。提交沿用内容指纹与 `clientRequestId`，内容不变重试复用原编号。
+- 图片压缩与临时图上传抽到 `shared/lib/image` 和 `shared/api/files`，点评与投稿共用压缩规则，分别使用 `REVIEW`、`RESTAURANT` 用途；长期编号校验抽到 `shared/lib/id` 的 `isLongId`，点评发布改为复用。
+- `app.json` 注册投稿页并将 `chooseLocation` 加入 `requiredPrivateInfos`，定位权限说明补充选点用途；typings 增加 `chooseLocation` 最小签名。
+- 验证：`tsc --noEmit -p miniprogram/tsconfig.json` 通过，全部 JSON 可解析，全部 WXML 标签闭合检查通过，`git diff --check` 通过。当前环境没有微信开发者工具，未执行真实选点、图片上传、投稿提交与审核联动，不能视为运行验收通过。
+- 未接入：纠错提交、待审修改/撤回/驳回重提；纠错入口在网页端仍可用。
+
 ## 2026-11-11：小程序发布窗口点评
 
 - 独立窗口详情新增“写点评”入口，复用点评编辑页并通过 `windowId` 指定目标；窗口与餐厅编号可能相同，因此不能把窗口编号塞进 `id` 参数。登录回跳同样保留 `windowId`，登录后仍回到原窗口。

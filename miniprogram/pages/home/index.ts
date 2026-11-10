@@ -34,6 +34,7 @@ type HomeCustom = {
   loadPage(reset: boolean): Promise<void>
   loadMore(): void
   refresh(): Promise<void>
+  openSubmission(): void
 }
 
 const PAGE_SIZE = 8
@@ -87,6 +88,11 @@ Page<HomeData, HomeCustom>({
 
   onReachBottom() {
     this.loadMore()
+  },
+
+  /** 投稿页自行处理未登录状态，不在首页提前拦截，避免丢失当前浏览位置。 */
+  openSubmission() {
+    wx.navigateTo({ url: '/pages/submission/index' })
   },
 
   /** 分类失败不阻塞餐厅列表；页面会保留“全部”并继续展示可浏览内容。 */
