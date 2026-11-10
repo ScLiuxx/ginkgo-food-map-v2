@@ -138,3 +138,97 @@ export async function saveProfile(bio: string): Promise<ProfileView> {
   })
   return toProfile(raw)
 }
+
+export interface PrivacyView {
+  favoritesPublic: boolean
+  followingPublic: boolean
+  followersPublic: boolean
+}
+
+const invalidPrivacy = new Error('隐私设置无法确认，请重新加载。')
+
+function isUserId(value: unknown): value is string {
+  return typeof value === 'string' && /^[1-9]\d*$/.test(value)
+}
+
+/** 收藏与关注名单是两套独立接口，任一回执都不能作为另一项的来源。 */
+export async function fetchPrivacy(): Promise<PrivacyView> {
+  const [favorites, follows] = await Promise.all([
+    request<{ userId: string; favoritesPublic: boolean }>({
+      path: '/api/me/favorites/visibility',
+      auth: 'required',
+    }),
+    request<{ userId: string; followingPublic: boolean; followersPublic: boolean }>({
+      path: '/api/me/follows/privacy',
+      auth: 'required',
+    }),
+  ])
+  if (
+    !favorites ||
+    !follows ||
+    !isUserId(favorites.userId) ||
+    !isUserId(follows.userId) ||
+    typeof favorites.favoritesPublic !== 'boolean' ||
+    typeof follows.followingPublic !== 'boolean' ||
+    typeof follows.followersPublic !== 'boolean'
+  ) {
+    throw invalidPrivacy
+  }
+  ensureCurrentUser(favorites.userId)
+  ensureCurrentUser(follows.userId)
+  return {
+    favoritesPublic: favorites.favoritesPublic,
+    followingPublic: follows.followingPublic,
+    followersPublic: follows.followersPublic,
+  }
+}
+
+/** 保存收藏列表可见性；只提交该字段，不改动关注与粉丝名单设置。 */
+export async function saveFavoritesVisibility(favoritesPublic: boolean): Promise<boolean> {
+  const raw = await request<{ userId: string; favoritesPublic: boolean }>({
+    path: '/api/me/favorites/visibility',
+    method: 'PATCH',
+    auth: 'required',
+    data: { favoritesPublic },
+  })
+  if (!raw || !isUserId(raw.userId) || typeof raw.favoritesPublic !== 'boolean') {
+    throw invalidPrivacy
+  }
+  ensureCurrentUser(raw.userId)
+  return raw.favoritesPublic
+}
+
+/**
+ * 保存关注与粉丝名单可见性。
+ *
+ * 服务端要求完整提交两个显式布尔值，缺少字段会被视为通用校验错误；
+ * 因此调用方必须同时传入当前两个开关，不能只提交被点击的一项。
+ */
+export async function saveFollowPrivacy(
+  followingPublic: boolean,
+  followersPublic: boolean,
+): Promise<{ followingPublic: boolean; followersPublic: boolean }> {
+  const raw = await request<{
+    userId: string
+    followingPublic: boolean
+    followersPublic: boolean
+  }>({
+    path: '/api/me/follows/privacy',
+    method: 'PATCH',
+    auth: 'required',
+    data: { followingPublic, followersPublic },
+  })
+  if (
+    !raw ||
+    !isUserId(raw.userId) ||
+    typeof raw.followingPublic !== 'boolean' ||
+    typeof raw.followersPublic !== 'boolean'
+  ) {
+    throw invalidPrivacy
+  }
+  ensureCurrentUser(raw.userId)
+  return {
+    followingPublic: raw.followingPublic,
+    followersPublic: raw.followersPublic,
+  }
+}

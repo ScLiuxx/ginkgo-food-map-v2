@@ -12,7 +12,7 @@ type AccountData = {
 /**
  * 个人中心展示账号状态、我的点评与收藏入口以及退出登录。
  *
- * 投稿提交与隐私设置仍待后续步骤接入；
+ * 投稿提交仍待后续步骤接入；
  * 投稿与纠错记录当前只支持查看，不放置点击无效的编辑入口。
  */
 type AccountCustom = {
@@ -21,6 +21,7 @@ type AccountCustom = {
   openContributions(): void
   openGrowth(): void
   openProfile(): void
+  openPrivacy(): void
 }
 
 Page<AccountData, AccountCustom>({
@@ -74,6 +75,10 @@ Page<AccountData, AccountCustom>({
 
   openProfile() {
     wx.navigateTo({ url: '/pages/account/profile/index' })
+  },
+
+  openPrivacy() {
+    wx.navigateTo({ url: '/pages/account/privacy/index' })
   },
 
   confirmLogout() {

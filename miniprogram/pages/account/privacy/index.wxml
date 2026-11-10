@@ -1,0 +1,85 @@
+<view class="page privacy-page">
+  <view class="ambient">
+    <view class="ambient-blob ambient-a"></view>
+    <view class="ambient-blob ambient-b"></view>
+    <view class="ambient-blob ambient-c"></view>
+  </view>
+
+  <view class="privacy-head">
+    <view class="privacy-title">名单可见性</view>
+    <view class="privacy-desc">
+      关闭后名单仅自己可见；已发布的内容不会因为修改设置而自动撤回。
+    </view>
+  </view>
+
+  <view wx:if="{{!loggedIn}}" class="card privacy-login">
+    <view class="privacy-login-title">登录后管理隐私设置</view>
+    <view class="privacy-login-text">设置保存在服务端，网页端和小程序共用。</view>
+    <view class="primary-button" bindtap="login">登录账号</view>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{errorMessage}}" class="privacy-error">
+      <text class="privacy-error-text">{{errorMessage}}</text>
+      <text wx:if="{{!loading}}" class="privacy-error-action" bindtap="retry">重新读取</text>
+    </view>
+
+    <view class="card privacy-card">
+      <view class="privacy-row">
+        <view class="privacy-row-copy">
+          <view class="privacy-row-label">公开我的收藏</view>
+          <view class="privacy-row-sub">其他登录用户可查看你收藏的餐厅和食堂</view>
+        </view>
+        <switch
+          class="privacy-switch"
+          color="#0a84ff"
+          checked="{{favoritesPublic}}"
+          disabled="{{loading || saving}}"
+          data-key="favorites"
+          bindchange="toggle"
+        />
+      </view>
+
+      <view class="privacy-divider"></view>
+
+      <view class="privacy-row">
+        <view class="privacy-row-copy">
+          <view class="privacy-row-label">公开我的关注</view>
+          <view class="privacy-row-sub">其他登录用户可查看你关注了谁</view>
+        </view>
+        <switch
+          class="privacy-switch"
+          color="#0a84ff"
+          checked="{{followingPublic}}"
+          disabled="{{loading || saving}}"
+          data-key="following"
+          bindchange="toggle"
+        />
+      </view>
+
+      <view class="privacy-divider"></view>
+
+      <view class="privacy-row">
+        <view class="privacy-row-copy">
+          <view class="privacy-row-label">公开我的粉丝</view>
+          <view class="privacy-row-sub">其他登录用户可查看谁关注了你</view>
+        </view>
+        <switch
+          class="privacy-switch"
+          color="#0a84ff"
+          checked="{{followersPublic}}"
+          disabled="{{loading || saving}}"
+          data-key="followers"
+          bindchange="toggle"
+        />
+      </view>
+    </view>
+
+    <view wx:if="{{loading}}" class="privacy-status">正在读取服务端设置…</view>
+    <view wx:elif="{{saving}}" class="privacy-status">正在保存…</view>
+  </block>
+
+  <view class="privacy-note">
+    粉丝与关注人数始终可查看，本设置只影响名单明细；关注、收藏本身不受影响。
+  </view>
+</view>

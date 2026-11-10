@@ -24,7 +24,7 @@
   <view wx:else class="card account-card">
     <view class="account-title">账号已登录</view>
     <view class="account-copy-text">
-      当前小程序已接入店铺浏览、点评发布与互动、收藏、消息、投稿记录以及成长与资料；账号信息与网页端共用。
+      当前小程序已接入店铺浏览、点评发布与互动、收藏、消息、投稿记录以及成长、资料与隐私设置；账号信息与网页端共用。
     </view>
 
     <view class="account-menu" data-tab="reviews" bindtap="openMyContent">
@@ -63,6 +63,14 @@
       <view class="account-menu-copy">
         <view class="account-menu-label">资料设置</view>
         <view class="account-menu-sub">查看脱敏邮箱、编辑个人简介</view>
+      </view>
+      <view class="account-menu-arrow">›</view>
+    </view>
+
+    <view class="account-menu" bindtap="openPrivacy">
+      <view class="account-menu-copy">
+        <view class="account-menu-label">隐私设置</view>
+        <view class="account-menu-sub">设置收藏、关注与粉丝名单可见性</view>
       </view>
       <view class="account-menu-arrow">›</view>
     </view>

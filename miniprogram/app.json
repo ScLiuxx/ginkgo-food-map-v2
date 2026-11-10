@@ -10,6 +10,7 @@
     "pages/account/contributions/detail/index",
     "pages/account/growth/index",
     "pages/account/profile/index",
+    "pages/account/privacy/index",
     "pages/review/compose/index",
     "pages/login/index",
     "pages/register/index",

@@ -155,6 +155,7 @@ interface WxSliderEvent {
 }
 
 interface WxSwitchEvent {
+  currentTarget: { dataset: Record<string, string | number | boolean | undefined> }
   detail: { value: boolean }
 }
 
