@@ -428,6 +428,7 @@ export interface ReplyTarget {
   reviewId: string
   replyId: string
   restaurantId: string | null
+  windowId: string | null
   reviewAuthor: string
   replyAuthor: string
   reviewBody: string
@@ -468,6 +469,9 @@ export async function fetchReplyTarget(
     raw.replyId !== replyId ||
     raw.reviewId !== reviewId ||
     (raw.restaurantId !== null && !isId(raw.restaurantId)) ||
+    (raw.windowId !== undefined &&
+      raw.windowId !== null &&
+      !isId(raw.windowId)) ||
     !raw.review ||
     raw.review.id !== reviewId ||
     typeof raw.review.body !== 'string' ||
@@ -486,6 +490,7 @@ export async function fetchReplyTarget(
     reviewId,
     replyId,
     restaurantId: raw.restaurantId,
+    windowId: raw.windowId ?? null,
     reviewAuthor: raw.reviewAuthor.username,
     replyAuthor: raw.replyAuthor.username,
     reviewBody: raw.review.body,

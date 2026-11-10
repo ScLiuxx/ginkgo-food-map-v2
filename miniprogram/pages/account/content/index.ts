@@ -211,9 +211,18 @@ Page<ContentData, ContentCustom>({
       const target = this.data.favorites.find((row) => row.restaurantId === id)
       // 失效占位没有可打开的详情，点击卡片不跳转。
       if (!target || !target.available) return
+      wx.navigateTo({
+        url: `/pages/restaurant/detail/index?id=${encodeURIComponent(id)}`,
+      })
+      return
     }
+    const review = this.data.reviews.find((row) => row.restaurantId === id)
+    if (!review) return
+    // 窗口点评的分组编号属于 canteen-windows，不能当作餐厅编号打开。
     wx.navigateTo({
-      url: `/pages/restaurant/detail/index?id=${encodeURIComponent(id)}`,
+      url: review.isWindow
+        ? `/pages/restaurant/detail/index?windowId=${encodeURIComponent(review.windowId)}`
+        : `/pages/restaurant/detail/index?id=${encodeURIComponent(id)}`,
     })
   },
 

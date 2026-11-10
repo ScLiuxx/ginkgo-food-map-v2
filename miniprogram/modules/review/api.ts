@@ -27,6 +27,19 @@ export async function fetchReviewGroups(
   return toReviewPageView(raw, page)
 }
 
+/** 独立窗口使用同一评价格式，但路径与对象编号属于 canteen-windows。 */
+export async function fetchWindowReviewGroups(
+  windowId: string,
+  page: number,
+  sort: ReviewSort,
+): Promise<ReviewPageView> {
+  const raw = await request<ReviewGroupPageRaw>({
+    path: `/api/canteen-windows/${encodeURIComponent(windowId)}/reviews?page=${page}&pageSize=8&sort=${sort}`,
+    auth: 'none',
+  })
+  return toReviewPageView(raw, page)
+}
+
 /**
  * 读取本人点评（按店铺分组）。
  *

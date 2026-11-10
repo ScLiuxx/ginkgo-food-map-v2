@@ -2,6 +2,8 @@ import { ApiError, toErrorMessage } from '../../../shared/api/request'
 import { getCurrentUser, isLoggedIn } from '../../../shared/auth/session'
 import { absoluteUrl } from '../../../config/env'
 import {
+  fetchCanteenWindowDetail,
+  fetchCanteenWindowPhotos,
   fetchCanteenWindows,
   fetchFavoriteState,
   fetchRestaurantAlbum,
@@ -12,7 +14,7 @@ import {
   toRestaurantView,
   type RestaurantView,
 } from '../../../modules/restaurant/types'
-import { fetchReviewGroups } from '../../../modules/review/api'
+import { fetchReviewGroups, fetchWindowReviewGroups } from '../../../modules/review/api'
 import {
   REPORT_REASONS,
   createReply,
@@ -130,8 +132,12 @@ type DetailData = {
   restaurantId: string
   restaurant: RestaurantView | null
   isCanteen: boolean
+  /** 独立食堂窗口复用本页的点评与互动，但资料、相册和收藏语义不同。 */
+  isWindow: boolean
+  windowDescription: string
   album: AlbumItem[]
   albumUrls: string[]
+  albumEmptyText: string
   albumNextCursor: string
   albumLoadingMore: boolean
   windows: WindowItem[]
@@ -175,6 +181,7 @@ type DetailCustom = {
   /** 回复请求号按点评缓存；正文变化后丢弃，保证幂等重试只在内容一致时生效。 */
   replyRequestIds: Record<string, string>
   load(): Promise<void>
+  loadWindow(id: string, sequence: number): Promise<void>
   loadAlbumMore(): Promise<void>
   loadWindows(): Promise<void>
   loadReviews(reset: boolean): Promise<void>
@@ -208,6 +215,7 @@ type DetailCustom = {
   onReportReasonChange(event: WxPickerEvent): void
   onReportDetailInput(event: WxInputEvent): void
   submitReport(): Promise<void>
+  openWindow(event: WxTapEvent): void
 }
 
 /**
@@ -221,8 +229,11 @@ Page<DetailData, DetailCustom>({
     restaurantId: '',
     restaurant: null,
     isCanteen: false,
+    isWindow: false,
+    windowDescription: '',
     album: [],
     albumUrls: [],
+    albumEmptyText: '暂无店铺照片',
     albumNextCursor: '',
     albumLoadingMore: false,
     windows: [],
@@ -264,6 +275,25 @@ Page<DetailData, DetailCustom>({
   replyRequestIds: {},
 
   onLoad(query) {
+    /*
+     * 独立窗口通过 windowId 复用本页：点评、回复、点赞与举报都以点评编号为入口，
+     * 与所属店铺类型无关；资料、相册与收藏则按窗口分支读取。
+     */
+    const windowId = query.windowId ? decodeURIComponent(query.windowId) : ''
+    if (windowId) {
+      if (!/^[1-9]\d*$/.test(windowId)) {
+        this.setData({ loading: false, errorMessage: '窗口编号无效，无法打开详情。' })
+        return
+      }
+      this.setData({
+        restaurantId: windowId,
+        isWindow: true,
+        loggedIn: isLoggedIn(),
+        currentUserId: getCurrentUser()?.id.toString() ?? '',
+      })
+      void this.load()
+      return
+    }
     const rawId = query.id ? decodeURIComponent(query.id) : ''
     if (!/^[1-9]\d*$/.test(rawId)) {
       this.setData({ loading: false, errorMessage: '店铺编号无效，无法打开详情。' })
@@ -285,7 +315,8 @@ Page<DetailData, DetailCustom>({
       currentUserId: getCurrentUser()?.id.toString() ?? '',
     })
     if (this.data.restaurant) {
-      void this.loadFavorite()
+      // 窗口不支持收藏，不请求收藏状态；点评仍按原逻辑刷新。
+      if (!this.data.isWindow) void this.loadFavorite()
       // 从发布页返回时重读点评，让新点评与评分及时出现；首次进入由 load 负责。
       if (this.data.reviewLoaded) void this.loadReviews(true)
     }
@@ -299,6 +330,10 @@ Page<DetailData, DetailCustom>({
     const id = this.data.restaurantId
     const sequence = ++this.requestSequence
     this.setData({ loading: true, errorMessage: '', reviewLoaded: false })
+    if (this.data.isWindow) {
+      await this.loadWindow(id, sequence)
+      return
+    }
     try {
       const [row, albumPage] = await Promise.all([
         fetchRestaurantDetail(id),
@@ -324,6 +359,44 @@ Page<DetailData, DetailCustom>({
       void this.loadReviews(true)
       void this.loadFavorite()
       if (row.restaurantType === 'CANTEEN') void this.loadWindows()
+    } catch (reason) {
+      if (sequence !== this.requestSequence) return
+      this.setData({ loading: false, errorMessage: toErrorMessage(reason) })
+    }
+  },
+
+  /**
+   * 窗口资料与相册独立读取。
+   *
+   * 相册最多 5 张且读取失败不能阻止资料展示；失败时明确提示，不伪造空相册为真实结果。
+   * 窗口本身不支持收藏，也不在这里请求收藏状态。
+   */
+  async loadWindow(id: string, sequence: number) {
+    try {
+      const detail = await fetchCanteenWindowDetail(id)
+      if (sequence !== this.requestSequence) return
+      let album: AlbumItem[] = []
+      let albumEmptyText = '暂无窗口照片'
+      try {
+        const photos = await fetchCanteenWindowPhotos(id)
+        if (sequence !== this.requestSequence) return
+        album = photos.map((photo) => ({ id: photo.id, url: photo.url }))
+      } catch {
+        if (sequence !== this.requestSequence) return
+        albumEmptyText = '窗口相册暂时无法读取。'
+      }
+      this.setData({
+        restaurant: detail.view,
+        isCanteen: false,
+        windowDescription: detail.description,
+        album,
+        albumUrls: album.map((item) => item.url),
+        albumEmptyText,
+        albumNextCursor: '',
+        loading: false,
+      })
+      wx.setNavigationBarTitle({ title: detail.view.name })
+      void this.loadReviews(true)
     } catch (reason) {
       if (sequence !== this.requestSequence) return
       this.setData({ loading: false, errorMessage: toErrorMessage(reason) })
@@ -383,11 +456,9 @@ Page<DetailData, DetailCustom>({
     const page = reset ? 1 : this.data.reviewPage + 1
     this.setData({ reviewLoading: true, reviewError: '' })
     try {
-      const result = await fetchReviewGroups(
-        this.data.restaurantId,
-        page,
-        this.data.reviewSort,
-      )
+      const result = this.data.isWindow
+        ? await fetchWindowReviewGroups(this.data.restaurantId, page, this.data.reviewSort)
+        : await fetchReviewGroups(this.data.restaurantId, page, this.data.reviewSort)
       const records = result.records.map((review) =>
         toReviewCard(review, this.data.currentUserId, this.data.loggedIn),
       )
@@ -412,6 +483,8 @@ Page<DetailData, DetailCustom>({
   },
 
   async loadFavorite() {
+    // 窗口没有收藏概念；即使误调用也不能读取餐厅收藏接口。
+    if (this.data.isWindow) return
     if (!isLoggedIn()) {
       this.setData({ favorited: false, favoriteHint: '' })
       return
@@ -433,6 +506,7 @@ Page<DetailData, DetailCustom>({
   },
 
   async toggleFavorite() {
+    if (this.data.isWindow) return
     if (this.data.favoriteBusy || !this.data.restaurant) return
     if (!this.data.loggedIn) {
       this.login()
@@ -461,6 +535,10 @@ Page<DetailData, DetailCustom>({
 
   writeReview() {
     if (!this.data.restaurant) return
+    if (this.data.isWindow) {
+      wx.showToast({ title: '窗口点评暂未开放', icon: 'none' })
+      return
+    }
     if (this.data.isCanteen) {
       wx.showToast({ title: '窗口点评暂未开放', icon: 'none' })
       return
@@ -483,8 +561,9 @@ Page<DetailData, DetailCustom>({
   },
 
   login() {
-    const id = this.data.restaurantId
-    const redirect = `/pages/restaurant/detail/index?id=${encodeURIComponent(id)}`
+    const redirect = this.data.isWindow
+      ? `/pages/restaurant/detail/index?windowId=${encodeURIComponent(this.data.restaurantId)}`
+      : `/pages/restaurant/detail/index?id=${encodeURIComponent(this.data.restaurantId)}`
     wx.navigateTo({ url: `/pages/login/index?redirect=${encodeURIComponent(redirect)}` })
   },
 
@@ -976,11 +1055,31 @@ Page<DetailData, DetailCustom>({
     void this.load()
   },
 
+  /** 从食堂窗口列表进入独立窗口详情；同页通过 windowId 分支复用点评与互动。 */
+  openWindow(event: WxTapEvent) {
+    const id = String(event.currentTarget.dataset.id ?? '')
+    if (!/^[1-9]\d*$/.test(id)) return
+    wx.navigateTo({
+      url: `/pages/restaurant/detail/index?windowId=${encodeURIComponent(id)}`,
+    })
+  },
+
   onShareAppMessage() {
     const name = this.data.restaurant?.name ?? '泥电美食地图'
     return {
       title: `${name} · 泥电美食地图`,
-      path: `/pages/restaurant/detail/index?id=${encodeURIComponent(this.data.restaurantId)}`,
+      path: this.data.isWindow
+        ? `/pages/restaurant/detail/index?windowId=${encodeURIComponent(this.data.restaurantId)}`
+        : `/pages/restaurant/detail/index?id=${encodeURIComponent(this.data.restaurantId)}`,
+    }
+  },
+
+  onShareTimeline() {
+    return {
+      title: this.data.restaurant?.name ?? '泥电美食地图',
+      query: this.data.isWindow
+        ? `windowId=${encodeURIComponent(this.data.restaurantId)}`
+        : `id=${encodeURIComponent(this.data.restaurantId)}`,
     }
   },
 

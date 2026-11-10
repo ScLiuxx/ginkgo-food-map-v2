@@ -300,6 +300,13 @@
   font-size: 22rpx;
 }
 
+.window-arrow {
+  margin-left: 12rpx;
+  color: var(--ink-muted);
+  font-size: 34rpx;
+  line-height: 1;
+}
+
 .empty-window {
   color: var(--ink-muted);
   font-size: 24rpx;

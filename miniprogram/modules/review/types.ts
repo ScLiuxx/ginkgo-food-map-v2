@@ -157,7 +157,14 @@ export function toReviewPageView(raw: ReviewGroupPageRaw, expectedPage: number):
  * 分组单位是店铺，因此没有作者字段，也不需要头像文案。
  */
 export interface MyReviewGroupRaw {
-  restaurant: { id: string; name: string; businessStatus: 'OPERATING' | 'CLOSED' }
+  restaurant: {
+    id: string
+    name: string
+    businessStatus: 'OPERATING' | 'CLOSED'
+    /** 窗口点评的分组 id 为窗口编号；缺少类型时按普通餐厅处理。 */
+    targetType?: 'RESTAURANT' | 'WINDOW'
+    windowId?: string | null
+  }
   currentReview: CurrentReviewRaw
   historyCount: number
   nextHistoryCursor?: string | null
@@ -178,6 +185,9 @@ export interface MyReviewCard {
   reviewId: string
   restaurantId: string
   restaurantName: string
+  /** 窗口点评进入独立窗口详情；普通餐厅继续使用 restaurantId。 */
+  isWindow: boolean
+  windowId: string
   businessText: string
   closed: boolean
   overallScoreText: string
@@ -233,6 +243,12 @@ export function toMyReviewPageView(raw: MyReviewPageRaw, expectedPage: number): 
       typeof restaurant.name !== 'string' ||
       !restaurant.name.trim() ||
       (restaurant.businessStatus !== 'OPERATING' && restaurant.businessStatus !== 'CLOSED') ||
+      (restaurant.targetType !== undefined &&
+        restaurant.targetType !== 'RESTAURANT' &&
+        restaurant.targetType !== 'WINDOW') ||
+      (restaurant.windowId !== undefined &&
+        restaurant.windowId !== null &&
+        !validId(restaurant.windowId)) ||
       restaurantIds.has(restaurant.id) ||
       !review ||
       !validId(review.id) ||
@@ -257,6 +273,12 @@ export function toMyReviewPageView(raw: MyReviewPageRaw, expectedPage: number): 
       reviewId: review.id,
       restaurantId: restaurant.id,
       restaurantName: restaurant.name,
+      isWindow: restaurant.targetType === 'WINDOW',
+      // 窗口分组 id 即窗口编号；缺少显式 windowId 时沿用分组 id。
+      windowId:
+        restaurant.targetType === 'WINDOW'
+          ? (restaurant.windowId ?? restaurant.id)
+          : '',
       businessText: businessLabel(restaurant.businessStatus),
       closed: restaurant.businessStatus === 'CLOSED',
       overallScoreText: formatRating(review.overallScore),

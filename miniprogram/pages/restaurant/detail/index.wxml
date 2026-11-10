@@ -30,7 +30,7 @@
         />
       </swiper-item>
     </swiper>
-    <view wx:else class="album-empty">暂无店铺照片</view>
+    <view wx:else class="album-empty">{{albumEmptyText}}</view>
     <view wx:if="{{albumNextCursor}}" class="album-more" bindtap="loadAlbumMore">
       {{albumLoadingMore ? '正在加载照片…' : '加载更多照片'}}
     </view>
@@ -45,10 +45,11 @@
         </view>
         <view class="summary-actions">
           <view
+            wx:if="{{!isWindow}}"
             class="favorite-button {{favorited ? 'active' : ''}}"
             bindtap="toggleFavorite"
           >{{favoriteBusy ? '处理中' : (favorited ? '已收藏' : '收藏')}}</view>
-          <view wx:if="{{!isCanteen}}" class="write-button" bindtap="writeReview">写点评</view>
+          <view wx:if="{{!isCanteen && !isWindow}}" class="write-button" bindtap="writeReview">写点评</view>
         </view>
       </view>
 
@@ -78,6 +79,10 @@
         <text class="info-label">地址</text>
         <text class="info-value">{{restaurant.addressText}}</text>
       </view>
+      <view wx:if="{{isWindow && windowDescription}}" class="info-row">
+        <text class="info-label">介绍</text>
+        <text class="info-value">{{windowDescription}}</text>
+      </view>
       <view wx:if="{{restaurant.distanceText}}" class="info-row">
         <text class="info-label">距离</text>
         <text class="info-value">{{restaurant.distanceText}}</text>
@@ -91,7 +96,7 @@
         <text wx:for="{{restaurant.tags}}" wx:key="*this" class="tag">{{item}}</text>
       </view>
 
-      <view class="map-tip">地图定位与导航将在后续步骤接入，当前可先通过地址前往。</view>
+      <view class="map-tip">{{isWindow ? '窗口位于所属食堂内，可按食堂地址前往。' : '地图定位与导航将在后续步骤接入，当前可先通过地址前往。'}}</view>
     </view>
 
     <view wx:if="{{isCanteen}}" class="section">
@@ -100,7 +105,13 @@
         <view class="section-meta">{{windows.length}} 个窗口</view>
       </view>
       <view wx:if="{{windows.length}}" class="card window-card">
-        <view wx:for="{{windows}}" wx:key="id" class="window-row">
+        <view
+          wx:for="{{windows}}"
+          wx:key="id"
+          class="window-row"
+          data-id="{{item.id}}"
+          bindtap="openWindow"
+        >
           <view class="window-cover">
             <image wx:if="{{item.coverUrl}}" class="window-image" src="{{item.coverUrl}}" mode="aspectFill" lazy-load />
             <view wx:else class="window-placeholder">窗口</view>
@@ -111,6 +122,7 @@
             <view class="window-score">{{item.scoreText}} <text class="muted">{{item.reviewCountText}}</text></view>
           </view>
           <view wx:if="{{item.closed}}" class="window-closed">停业</view>
+          <view wx:else class="window-arrow">›</view>
         </view>
       </view>
       <view wx:else class="card empty-window">窗口信息暂未补充。</view>

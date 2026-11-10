@@ -46,6 +46,8 @@ type MessagesData = {
   detailMeta: string
   detailBlocks: DetailBlock[]
   detailTargetId: string
+  /** 回复目标可能是食堂窗口；窗口没有餐厅资料，跳转参数和文案需区分。 */
+  detailIsWindow: boolean
 }
 
 type MessagesCustom = {
@@ -136,6 +138,7 @@ Page<MessagesData, MessagesCustom>({
     detailMeta: '',
     detailBlocks: [],
     detailTargetId: '',
+    detailIsWindow: false,
   },
 
   onShow() {
@@ -308,6 +311,7 @@ Page<MessagesData, MessagesCustom>({
       detailError: '',
       detailLoading: false,
       detailTargetId: '',
+      detailIsWindow: false,
     })
     if (item.notificationType === 'ANNOUNCEMENT') {
       const announcementId = item.announcementId
@@ -372,7 +376,8 @@ Page<MessagesData, MessagesCustom>({
             { label: `原点评 · ${target.reviewAuthor}`, text: target.reviewBody },
             { label: '回复', text: `${target.replyAuthor}：${target.replyBody}` },
           ],
-          detailTargetId: target.restaurantId ?? '',
+          detailTargetId: target.restaurantId ?? target.windowId ?? '',
+          detailIsWindow: target.restaurantId === null && target.windowId !== null,
         })
       } catch (reason) {
         this.setData({ detailLoading: false, detailError: messageErrorText(reason) })
@@ -410,6 +415,7 @@ Page<MessagesData, MessagesCustom>({
       detailMeta: '',
       detailBlocks: [],
       detailTargetId: '',
+      detailIsWindow: false,
     })
   },
 
@@ -462,8 +468,13 @@ Page<MessagesData, MessagesCustom>({
   openRestaurant() {
     const id = this.data.detailTargetId
     if (!id) return
+    const isWindow = this.data.detailIsWindow
     this.closeDetail()
-    wx.navigateTo({ url: `/pages/restaurant/detail/index?id=${encodeURIComponent(id)}` })
+    wx.navigateTo({
+      url: isWindow
+        ? `/pages/restaurant/detail/index?windowId=${encodeURIComponent(id)}`
+        : `/pages/restaurant/detail/index?id=${encodeURIComponent(id)}`,
+    })
   },
 
   login() {

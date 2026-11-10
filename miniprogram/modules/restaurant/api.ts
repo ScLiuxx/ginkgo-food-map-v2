@@ -1,4 +1,11 @@
 import { request } from '../../shared/api/request'
+import { absoluteUrl } from '../../config/env'
+import {
+  businessLabel,
+  formatPrice,
+  formatRating,
+  formatRecommendRate,
+} from '../../shared/lib/format'
 import {
   toFavoritePageView,
   type CatalogQuery,
@@ -7,6 +14,7 @@ import {
   type RestaurantCategory,
   type RestaurantPage,
   type RestaurantResponse,
+  type RestaurantView,
 } from './types'
 
 /** 分类字典包含停用分类，前台只过滤 enabled；不在客户端补造分类。 */
@@ -121,5 +129,166 @@ export function fetchCanteenWindows(canteenId: string): Promise<CanteenWindowRes
   return request<CanteenWindowResponse[]>({
     path: `/api/restaurants/${encodeURIComponent(canteenId)}/windows`,
     auth: 'none',
+  })
+}
+
+export interface CanteenWindowDetailView {
+  view: RestaurantView
+  description: string
+}
+
+interface CanteenWindowDetailRaw {
+  id: string
+  canteenId: string
+  canteenName: string
+  name: string
+  floorNumber: number
+  description: string | null
+  priceKind: 'UNKNOWN' | 'EXACT' | 'ESTIMATE'
+  pricePerPerson: number | null
+  businessStatus: 'OPERATING' | 'CLOSED'
+  score: number | null
+  taste: number | null
+  value: number | null
+  service: number | null
+  ambience: number | null
+  recommendRate: number | null
+  reviewCount: number
+  participantCount: number
+  address: string | null
+}
+
+function isId(value: unknown): value is string {
+  return typeof value === 'string' && /^[1-9]\d*$/.test(value)
+}
+
+function inRange(value: unknown, min: number, max: number): boolean {
+  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
+}
+
+/**
+ * 读取独立窗口详情。
+ *
+ * 窗口评分、四维与推荐率由父食堂和窗口统计提供；推荐率在窗口接口是 0–100 的百分数，
+ * 与餐厅目录的 0–1 比例不同，这里统一换算为比例后再展示，不能直接套用餐厅口径。
+ * 响应必须回指请求的窗口编号，避免错误路由把其他窗口资料显示在当前页。
+ */
+export async function fetchCanteenWindowDetail(
+  windowId: string,
+): Promise<CanteenWindowDetailView> {
+  const row = await request<CanteenWindowDetailRaw>({
+    path: `/api/canteen-windows/${encodeURIComponent(windowId)}`,
+    auth: 'none',
+  })
+  if (
+    !row ||
+    row.id !== windowId ||
+    !isId(row.canteenId) ||
+    typeof row.canteenName !== 'string' ||
+    !row.canteenName.trim() ||
+    typeof row.name !== 'string' ||
+    !row.name.trim() ||
+    !Number.isSafeInteger(row.floorNumber) ||
+    row.floorNumber < -10 ||
+    row.floorNumber > 100 ||
+    !(row.description === null || typeof row.description === 'string') ||
+    (row.priceKind !== 'UNKNOWN' && row.priceKind !== 'EXACT' && row.priceKind !== 'ESTIMATE') ||
+    !(
+      row.pricePerPerson === null ||
+      (typeof row.pricePerPerson === 'number' &&
+        Number.isSafeInteger(row.pricePerPerson) &&
+        row.pricePerPerson >= 1 &&
+        row.pricePerPerson <= 5000)
+    ) ||
+    (row.businessStatus !== 'OPERATING' && row.businessStatus !== 'CLOSED') ||
+    !(
+      row.recommendRate === null ||
+      (typeof row.recommendRate === 'number' &&
+        Number.isFinite(row.recommendRate) &&
+        row.recommendRate >= 0 &&
+        row.recommendRate <= 100)
+    ) ||
+    !Number.isSafeInteger(row.reviewCount) ||
+    row.reviewCount < 0 ||
+    !Number.isSafeInteger(row.participantCount) ||
+    row.participantCount < 0 ||
+    row.participantCount > row.reviewCount ||
+    !(row.address === null || typeof row.address === 'string')
+  ) {
+    throw new Error('窗口资料无法确认，请重新加载。')
+  }
+  const dimensionsOk = [row.score, row.taste, row.value, row.service, row.ambience].every(
+    (value) => value === null || inRange(value, 0, 10),
+  )
+  if (!dimensionsOk) {
+    throw new Error('窗口资料无法确认，请重新加载。')
+  }
+
+  const rate = row.recommendRate === null ? null : row.recommendRate / 100
+  return {
+    description: row.description?.trim() ?? '',
+    view: {
+      id: row.id,
+      name: row.name,
+      categoryLabel: `${row.canteenName} · ${row.floorNumber} 层`,
+      typeLabel: '食堂窗口',
+      scoreText: formatRating(row.score),
+      reviewCountText: `${row.reviewCount} 条点评`,
+      participantCountText: `${row.participantCount} 人评分`,
+      recommendText: formatRecommendRate(rate),
+      priceText: formatPrice(row.pricePerPerson, row.priceKind),
+      addressText: row.address?.trim() || '地址待补充',
+      distanceText: '',
+      businessText: businessLabel(row.businessStatus),
+      supportsText: '',
+      closed: row.businessStatus === 'CLOSED',
+      tags: [],
+      coverUrl: '',
+      dimensions: [
+        { key: 'taste', label: '味道', value: formatRating(row.taste) },
+        { key: 'value', label: '性价比', value: formatRating(row.value) },
+        { key: 'service', label: '服务', value: formatRating(row.service) },
+        { key: 'ambience', label: '环境', value: formatRating(row.ambience) },
+      ],
+    },
+  }
+}
+
+export interface CanteenWindowPhoto {
+  id: string
+  url: string
+}
+
+interface CanteenWindowPhotoRaw {
+  id: string
+  cover: boolean
+}
+
+/**
+ * 读取窗口相册。
+ *
+ * 窗口相册最多 5 张且没有分页游标；图片地址由窗口编号和文件编号重新生成，
+ * 不直接信任响应中的路径，避免跨域或错误资源被当作窗口照片。
+ */
+export async function fetchCanteenWindowPhotos(windowId: string): Promise<CanteenWindowPhoto[]> {
+  const rows = await request<CanteenWindowPhotoRaw[]>({
+    path: `/api/canteen-windows/${encodeURIComponent(windowId)}/photos`,
+    auth: 'none',
+  })
+  if (!Array.isArray(rows) || rows.length > 5) {
+    throw new Error('窗口相册无法确认，请重新加载。')
+  }
+  const seen = new Set<string>()
+  return rows.map((row) => {
+    if (!row || !isId(row.id) || seen.has(row.id) || typeof row.cover !== 'boolean') {
+      throw new Error('窗口相册无法确认，请重新加载。')
+    }
+    seen.add(row.id)
+    return {
+      id: row.id,
+      url: absoluteUrl(
+        `/api/canteen-windows/${encodeURIComponent(windowId)}/photos/${encodeURIComponent(row.id)}`,
+      ),
+    }
   })
 }
