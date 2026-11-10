@@ -1,9 +1,12 @@
 import { request } from '../../shared/api/request'
-import type {
-  CatalogQuery,
-  RestaurantCategory,
-  RestaurantPage,
-  RestaurantResponse,
+import {
+  toFavoritePageView,
+  type CatalogQuery,
+  type FavoritePageRaw,
+  type FavoritePageView,
+  type RestaurantCategory,
+  type RestaurantPage,
+  type RestaurantResponse,
 } from './types'
 
 /** 分类字典包含停用分类，前台只过滤 enabled；不在客户端补造分类。 */
@@ -83,6 +86,20 @@ export function setFavorite(id: string, active: boolean): Promise<FavoriteState>
     method: active ? 'PUT' : 'DELETE',
     auth: 'required',
   })
+}
+
+/**
+ * 读取本人收藏分页。
+ *
+ * 只绑定 page/pageSize，不能通过参数查看他人收藏；
+ * 失效店铺由服务端保留占位，页面仍可据此取消收藏。
+ */
+export async function fetchMyFavorites(page: number): Promise<FavoritePageView> {
+  const raw = await request<FavoritePageRaw>({
+    path: `/api/me/favorites?page=${page}&pageSize=8`,
+    auth: 'required',
+  })
+  return toFavoritePageView(raw, page)
 }
 
 /** 食堂窗口公开集合；窗口详情尚未在小程序第一批接入，仅展示窗口摘要。 */

@@ -10,13 +10,14 @@ type AccountData = {
 }
 
 /**
- * 个人中心第一批只展示账号状态与退出登录。
+ * 个人中心展示账号状态、我的点评与收藏入口以及退出登录。
  *
- * 我的点评、收藏列表、投稿和资料设置在后续步骤接入；
+ * 投稿、成长等级和资料设置仍待后续步骤接入；
  * 这里不放置点击无效的菜单，避免让用户误以为功能已经可用。
  */
 type AccountCustom = {
   performLogout(): Promise<void>
+  openMyContent(event: WxTapEvent): void
 }
 
 Page<AccountData, AccountCustom>({
@@ -45,6 +46,15 @@ Page<AccountData, AccountCustom>({
   login() {
     wx.navigateTo({
       url: `/pages/login/index?redirect=${encodeURIComponent('/pages/account/index')}`,
+    })
+  },
+
+  /** 我的点评与收藏共用一个受保护页面，通过 tab 参数决定首屏分类。 */
+  openMyContent(event: WxTapEvent) {
+    const tab = event.currentTarget.dataset.tab
+    if (tab !== 'reviews' && tab !== 'favorites') return
+    wx.navigateTo({
+      url: `/pages/account/content/index?tab=${tab}`,
     })
   },
 

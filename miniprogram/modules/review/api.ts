@@ -1,5 +1,13 @@
 import { request } from '../../shared/api/request'
-import { toReviewPageView, type ReviewGroupPageRaw, type ReviewPageView, type ReviewSort } from './types'
+import {
+  toMyReviewPageView,
+  toReviewPageView,
+  type MyReviewPageRaw,
+  type MyReviewPageView,
+  type ReviewGroupPageRaw,
+  type ReviewPageView,
+  type ReviewSort,
+} from './types'
 
 /**
  * 读取一页作者组点评。
@@ -17,4 +25,18 @@ export async function fetchReviewGroups(
     auth: 'none',
   })
   return toReviewPageView(raw, page)
+}
+
+/**
+ * 读取本人点评（按店铺分组）。
+ *
+ * 作者只由服务端当前身份确定；不能通过参数查看其他用户。
+ * 私有数据必须携带登录令牌，异常响应由校验层拒绝而不是降级成空列表。
+ */
+export async function fetchMyReviewGroups(page: number): Promise<MyReviewPageView> {
+  const raw = await request<MyReviewPageRaw>({
+    path: `/api/me/reviews?page=${page}&pageSize=8`,
+    auth: 'required',
+  })
+  return toMyReviewPageView(raw, page)
 }

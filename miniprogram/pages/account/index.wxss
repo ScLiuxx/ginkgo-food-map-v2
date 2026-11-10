@@ -58,8 +58,42 @@
   line-height: 1.8;
 }
 
+.account-menu {
+  display: flex;
+  align-items: center;
+  margin-bottom: 18rpx;
+  padding: 22rpx 24rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.72);
+  border-radius: 26rpx;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.account-menu-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.account-menu-label {
+  color: var(--ink);
+  font-size: 27rpx;
+  font-weight: 600;
+}
+
+.account-menu-sub {
+  margin-top: 6rpx;
+  color: var(--ink-muted);
+  font-size: 22rpx;
+}
+
+.account-menu-arrow {
+  margin-left: 18rpx;
+  color: var(--ink-muted);
+  font-size: 32rpx;
+}
+
 .logout-button {
   width: 100%;
+  margin-top: 10rpx;
 }
 
 .account-note {

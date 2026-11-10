@@ -1,5 +1,12 @@
 import { absoluteUrl } from '../../config/env'
-import { businessLabel, formatDistance, formatPrice, formatRating, formatRecommendRate } from '../../shared/lib/format'
+import {
+  businessLabel,
+  formatDate,
+  formatDistance,
+  formatPrice,
+  formatRating,
+  formatRecommendRate,
+} from '../../shared/lib/format'
 
 /** 后端公开餐厅字段；保留 null 语义，未知不能被转换成 0。 */
 export interface RestaurantResponse {
@@ -115,5 +122,116 @@ export function toRestaurantView(row: RestaurantResponse): RestaurantView {
       label: dimension.label,
       value: formatRating(row.dimensions?.[dimension.key]),
     })),
+  }
+}
+
+/** 本人收藏列表保留失效占位；失效项不能伪造店名和营业状态。 */
+export interface FavoriteRecordRaw {
+  restaurantId: string
+  name: string | null
+  restaurantType: 'REGULAR' | 'CANTEEN' | null
+  businessStatus: 'OPERATING' | 'CLOSED' | null
+  available: boolean
+  createdAt: string
+}
+
+export interface FavoritePageRaw {
+  userId: string
+  records: FavoriteRecordRaw[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export interface FavoriteCard {
+  restaurantId: string
+  name: string
+  metaText: string
+  createdAtText: string
+  available: boolean
+  closed: boolean
+}
+
+export interface FavoritePageView {
+  records: FavoriteCard[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+const FAVORITE_PAGE_SIZE = 8
+
+/**
+ * 校验本人收藏分页并生成展示模型。
+ *
+ * 失效店铺仍可取消收藏，但服务端把名称与状态置空；
+ * 这里不允许用历史资料补全，避免展示已删除店铺的误导信息。
+ */
+export function toFavoritePageView(raw: FavoritePageRaw, expectedPage: number): FavoritePageView {
+  const invalid = () => new Error('收藏列表无法确认，请重新加载。')
+  if (
+    !raw ||
+    !Array.isArray(raw.records) ||
+    raw.records.length > FAVORITE_PAGE_SIZE ||
+    raw.page !== expectedPage ||
+    raw.pageSize !== FAVORITE_PAGE_SIZE ||
+    !Number.isSafeInteger(raw.total) ||
+    raw.total < 0 ||
+    !Number.isSafeInteger(raw.totalPages) ||
+    raw.totalPages !== Math.ceil(raw.total / FAVORITE_PAGE_SIZE)
+  ) {
+    throw invalid()
+  }
+
+  const ids = new Set<string>()
+  const records = raw.records.map((row): FavoriteCard => {
+    if (
+      !row ||
+      typeof row.restaurantId !== 'string' ||
+      !/^[1-9]\d*$/.test(row.restaurantId) ||
+      ids.has(row.restaurantId) ||
+      typeof row.available !== 'boolean' ||
+      !Number.isFinite(Date.parse(row.createdAt))
+    ) {
+      throw invalid()
+    }
+    ids.add(row.restaurantId)
+    if (!row.available) {
+      return {
+        restaurantId: row.restaurantId,
+        name: '店铺已不可用',
+        metaText: '已删除或暂不可见，可移除收藏',
+        createdAtText: formatDate(row.createdAt),
+        available: false,
+        closed: false,
+      }
+    }
+    if (
+      typeof row.name !== 'string' ||
+      !row.name.trim() ||
+      (row.restaurantType !== 'REGULAR' && row.restaurantType !== 'CANTEEN') ||
+      (row.businessStatus !== 'OPERATING' && row.businessStatus !== 'CLOSED')
+    ) {
+      throw invalid()
+    }
+    const typeText = row.restaurantType === 'CANTEEN' ? '食堂' : '餐厅'
+    return {
+      restaurantId: row.restaurantId,
+      name: row.name,
+      metaText: `${typeText} · ${businessLabel(row.businessStatus)}`,
+      createdAtText: formatDate(row.createdAt),
+      available: true,
+      closed: row.businessStatus === 'CLOSED',
+    }
+  })
+
+  return {
+    records,
+    total: raw.total,
+    page: raw.page,
+    pageSize: raw.pageSize,
+    totalPages: raw.totalPages,
   }
 }

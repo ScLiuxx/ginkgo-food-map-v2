@@ -24,8 +24,25 @@
   <view wx:else class="card account-card">
     <view class="account-title">账号已登录</view>
     <view class="account-copy-text">
-      当前小程序已接入店铺浏览、点评查看与收藏。我的点评、收藏列表、投稿和资料设置将在后续步骤接入。
+      当前小程序已接入店铺浏览、点评发布与互动、收藏和消息；账号信息与网页端共用。
     </view>
+
+    <view class="account-menu" data-tab="reviews" bindtap="openMyContent">
+      <view class="account-menu-copy">
+        <view class="account-menu-label">我的点评</view>
+        <view class="account-menu-sub">查看已发布点评与对应店铺</view>
+      </view>
+      <view class="account-menu-arrow">›</view>
+    </view>
+
+    <view class="account-menu" data-tab="favorites" bindtap="openMyContent">
+      <view class="account-menu-copy">
+        <view class="account-menu-label">我的收藏</view>
+        <view class="account-menu-sub">查看收藏的餐厅与食堂</view>
+      </view>
+      <view class="account-menu-arrow">›</view>
+    </view>
+
     <view class="ghost-button logout-button" bindtap="confirmLogout">
       {{loggingOut ? '退出中…' : '退出登录'}}
     </view>

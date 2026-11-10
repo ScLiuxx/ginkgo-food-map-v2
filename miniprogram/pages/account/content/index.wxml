@@ -1,0 +1,131 @@
+<view class="page content-page">
+  <view class="ambient">
+    <view class="ambient-blob ambient-a"></view>
+    <view class="ambient-blob ambient-b"></view>
+    <view class="ambient-blob ambient-c"></view>
+  </view>
+
+  <view class="content-head">
+    <view class="content-title">我的内容</view>
+    <view class="content-sub">{{tab === 'reviews' ? '按店铺查看自己发布的有效点评' : '收藏的餐厅与食堂'}}</view>
+  </view>
+
+  <view wx:if="{{!loggedIn}}" class="card content-state">
+    <view class="state-title">登录后查看个人内容</view>
+    <view class="state-copy">使用注册邮箱登录，即可查看自己的点评和收藏列表。</view>
+    <view class="primary-button state-action" bindtap="login">去登录</view>
+  </view>
+
+  <block wx:else>
+    <view class="segmented">
+      <view
+        class="segment {{tab === 'reviews' ? 'active' : ''}}"
+        data-tab="reviews"
+        bindtap="switchTab"
+      >我的点评</view>
+      <view
+        class="segment {{tab === 'favorites' ? 'active' : ''}}"
+        data-tab="favorites"
+        bindtap="switchTab"
+      >我的收藏</view>
+    </view>
+
+    <view class="content-meta">
+      <block wx:if="{{tab === 'reviews'}}">
+        <text wx:if="{{reviewLoaded}}">共 {{reviewTotalGroups}} 家店铺 · {{reviewTotalReviews}} 条点评</text>
+      </block>
+      <block wx:else>
+        <text wx:if="{{favoriteLoaded}}">共 {{favoriteTotal}} 个收藏</text>
+      </block>
+    </view>
+
+    <view wx:if="{{hint}}" class="error-text content-hint">{{hint}}</view>
+
+    <view wx:if="{{loading}}" class="card content-state">
+      <view class="state-copy">正在加载…</view>
+    </view>
+
+    <view wx:elif="{{errorMessage}}" class="card content-state">
+      <view class="state-title">读取失败</view>
+      <view class="state-copy">{{errorMessage}}</view>
+      <view class="ghost-button state-action" bindtap="reload">重新加载</view>
+    </view>
+
+    <block wx:elif="{{tab === 'reviews'}}">
+      <view wx:if="{{!reviews.length}}" class="card content-state">
+        <view class="state-title">还没有发布过点评</view>
+        <view class="state-copy">在店铺详情选择“写点评”，发布后会显示在这里。</view>
+        <view class="primary-button state-action" bindtap="goHome">去找店</view>
+      </view>
+
+      <view
+        wx:for="{{reviews}}"
+        wx:key="reviewId"
+        class="card content-card"
+        data-id="{{item.restaurantId}}"
+        bindtap="openRestaurant"
+      >
+        <view class="content-card-head">
+          <view class="content-card-title {{item.closed ? 'title-closed' : ''}}">{{item.restaurantName}}</view>
+          <view class="content-score">{{item.overallScoreText}}</view>
+        </view>
+        <view class="content-card-meta">
+          <text>{{item.businessText}}</text>
+          <text wx:if="{{item.createdAtText}}"> · {{item.createdAtText}}</text>
+        </view>
+        <view class="content-card-body">{{item.body}}</view>
+        <view class="content-card-foot">
+          <view class="content-badges">
+            <text class="badge {{item.recommended ? 'badge-good' : 'badge-plain'}}">{{item.recommendationText}}</text>
+            <text wx:if="{{item.historyText}}" class="badge badge-plain">{{item.historyText}}</text>
+            <text wx:if="{{item.photoCountText}}" class="badge badge-plain">{{item.photoCountText}}</text>
+          </view>
+          <view class="content-link">查看店铺 ›</view>
+        </view>
+      </view>
+
+      <view
+        wx:if="{{reviewPage < reviewTotalPages}}"
+        class="load-more"
+        bindtap="loadMore"
+      >{{loadingMore ? '加载中…' : '加载更多'}}</view>
+    </block>
+
+    <block wx:else>
+      <view wx:if="{{!favorites.length}}" class="card content-state">
+        <view class="state-title">还没有收藏店铺</view>
+        <view class="state-copy">在店铺详情点击收藏，之后可以在这里快速找到。</view>
+        <view class="primary-button state-action" bindtap="goHome">去逛逛</view>
+      </view>
+
+      <view
+        wx:for="{{favorites}}"
+        wx:key="restaurantId"
+        class="card content-card favorite-card"
+        data-id="{{item.restaurantId}}"
+        bindtap="openRestaurant"
+      >
+        <view class="favorite-row">
+          <view class="favorite-copy">
+            <view class="content-card-title {{item.closed ? 'title-closed' : ''}}">{{item.name}}</view>
+            <view class="content-card-meta">{{item.metaText}} · {{item.createdAtText}}</view>
+          </view>
+          <view
+            class="favorite-remove"
+            catchtap="unfavorite"
+            data-id="{{item.restaurantId}}"
+          >{{removingId === item.restaurantId ? '移除中…' : '取消收藏'}}</view>
+        </view>
+        <view class="content-card-foot">
+          <view class="content-link">{{item.available ? '查看店铺 ›' : '无法打开详情'}}</view>
+        </view>
+      </view>
+
+      <view
+        wx:if="{{favoritePage < favoriteTotalPages}}"
+        class="load-more"
+        bindtap="loadMore"
+      >{{loadingMore ? '加载中…' : '加载更多'}}</view>
+    </block>
+  </block>
+</view>

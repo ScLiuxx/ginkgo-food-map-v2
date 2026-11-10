@@ -5,6 +5,7 @@
     "pages/messages/index",
     "pages/account/index",
     "pages/restaurant/detail/index",
+    "pages/account/content/index",
     "pages/review/compose/index",
     "pages/login/index"
   ],
