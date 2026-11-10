@@ -1,6 +1,6 @@
 # MySQL 表结构
 
-本文集中维护 MySQL 业务表的当前字段、类型、默认值、枚举、主键、索引、外键与字段约束。覆盖当前迁移定义的 30 张应用表，按下列分组查阅；Flyway 自建的迁移历史表不属于应用表。
+本文集中维护 MySQL 业务表的当前字段、类型、默认值、枚举、主键、索引、外键与字段约束。覆盖当前迁移定义的 31 张应用表，按下列分组查阅；Flyway 自建的迁移历史表不属于应用表。
 
 ## 目录
 
@@ -14,6 +14,7 @@
 - [内容点赞表结构](#content-likes)
 - [成长经验表结构](#growth-schema)
 - [通知表结构](#notification-inbox)
+- [内容举报表结构](#content-reports)
 
 <a id="app-metadata"></a>
 
@@ -206,36 +207,40 @@ position范围0～7；同一餐厅内标签及位置分别唯一。
 | 字段 | 类型 | 可空 | 说明 |
 | --- | --- | --- | --- |
 | `id` | `bigint unsigned` | 否 | 自增主键，申请编号 |
-| `restaurant_id` | `bigint unsigned` | 是 | UPDATE始终为原商户ID；CREATE待审/驳回为空，通过时填入新建的正式商户ID |
+| `restaurant_id` | `bigint unsigned` | 是 | UPDATE始终为原商户ID；CREATE待审/驳回/撤回为空，通过时填入新建的正式商户ID |
+| `previous_request_id` | `bigint unsigned` | 是 | 驳回后重提所依据的原申请ID；首次提交为空，普通重试不改变 |
 | `request_type` | `varchar(16)`，ascii_bin | 否 | CREATE新店投稿、UPDATE已有商户纠错；无默认值，由服务端提交入口确定，审核后保持不变 |
 | `submitted_by` | `bigint unsigned` | 否 | 提交账号逻辑ID，由服务端填写 |
 | `client_request_id` | `char(36)` | 否 | 客户端UUID，同账号内唯一 |
 | `request_hash` | `binary(32)` | 否 | 规范化申请内容的SHA-256，判断重试内容一致性 |
 | `proposed_data` | `json` | 否 | 用户原始业务申请快照，管理员修订不得覆盖；原始图片顺序和提交摘要继续用于重试核对 |
-| `status` | `varchar(16)`，ascii_bin | 否 | PENDING待审、APPROVED通过、REJECTED驳回；默认PENDING |
+| `status` | `varchar(16)`，ascii_bin | 否 | PENDING待审、APPROVED通过、REJECTED驳回、WITHDRAWN本人撤回；默认PENDING |
 | `created_at` | `timestamp(6)` | 否 | 提交时间；默认CURRENT_TIMESTAMP(6) |
 | `reviewed_by` | `bigint unsigned` | 是 | 审核人逻辑ID；已处理时必填且大于0，由服务端身份确定 |
 | `reviewed_at` | `timestamp(6)` | 是 | 审核完成时间，由服务端填写 |
+| `withdrawn_at` | `timestamp(6)` | 是 | 本人撤回待审申请的时间；仅WITHDRAWN必填 |
 | `reject_reason` | `varchar(200)` | 是 | 仅驳回时必填，禁止空字符串及纯空白 |
 | `approved_data` | `json` | 是 | 仅通过时必填的JSON对象：实际生效的完整业务资料，保留管理员修订；不写密码、权限或评分统计 |
 | `before_data` | `json` | 是 | 仅UPDATE通过时必填的JSON对象：更新前实际正式业务资料，CREATE没有旧资料 |
 
-主键`(id)`；唯一索引`(submitted_by,client_request_id)`；普通索引`(status,created_at,id)`、`(restaurant_id,created_at,id)`、`(status,reviewed_at,id)`、`(submitted_by,created_at,id)`。
+主键`(id)`；唯一索引`(submitted_by,client_request_id)`；普通索引`(status,created_at,id)`、`(restaurant_id,created_at,id)`、`(status,reviewed_at,id)`、`(submitted_by,created_at,id)`；外键列`previous_request_id`由外键自动建立索引。
 
-外键：restaurant_id → restaurants.id，删除/更新RESTRICT；submitted_by、reviewed_by为用户逻辑ID，无跨模块外键。
+外键：restaurant_id → restaurants.id，previous_request_id → restaurant_change_requests.id，删除/更新RESTRICT；submitted_by、reviewed_by为用户逻辑ID，无跨模块外键。
 
 #### 状态与字段约束
 
-| 状态 | 商户ID | 审核人/时间 | 驳回原因 | 通过快照 | 更新前快照 |
-| --- | --- | --- | --- | --- | --- |
-| CREATE + PENDING | 必须NULL | 必须NULL | NULL | NULL | NULL |
-| UPDATE + PENDING | 原商户ID | 必须NULL | NULL | NULL | NULL |
-| CREATE + APPROVED | 必填，新建商户ID | 必填 | NULL | 必填JSON对象 | NULL |
-| UPDATE + APPROVED | 必填，原商户ID | 必填 | NULL | 必填JSON对象 | 必填JSON对象 |
-| CREATE + REJECTED | 必须NULL | 必填 | 必填非空白 | NULL | NULL |
-| UPDATE + REJECTED | 原商户ID | 必填 | 必填非空白 | NULL | NULL |
+| 状态 | 商户ID | 审核人/时间 | 撤回时间 | 驳回原因 | 通过快照 | 更新前快照 |
+| --- | --- | --- | --- | --- | --- | --- |
+| CREATE + PENDING | 必须NULL | 必须NULL | NULL | NULL | NULL | NULL |
+| UPDATE + PENDING | 原商户ID | 必须NULL | NULL | NULL | NULL | NULL |
+| CREATE + APPROVED | 必填，新建商户ID | 必填 | NULL | NULL | 必填JSON对象 | NULL |
+| UPDATE + APPROVED | 必填，原商户ID | 必填 | NULL | NULL | 必填JSON对象 | 必填JSON对象 |
+| CREATE + REJECTED | 必须NULL | 必填 | NULL | 必填非空白 | NULL | NULL |
+| UPDATE + REJECTED | 原商户ID | 必填 | NULL | 必填非空白 | NULL | NULL |
+| CREATE + WITHDRAWN | 必须NULL | 必须NULL | 必填 | NULL | NULL | NULL |
+| UPDATE + WITHDRAWN | 原商户ID | 必须NULL | 必填 | NULL | NULL | NULL |
 
-类型和状态使用精确编码；proposed_data保存原始申请资料，approved_data保存通过后的资料，before_data保存纠错前资料。
+类型和状态使用精确编码；proposed_data保存原始申请资料，approved_data保存通过后的资料，before_data保存纠错前资料。previous_request_id只指向另一条历史申请且不参与审核状态约束，原驳回记录保持REJECTED不变。
 
 ### `restaurant_change_photos`：商户申请图片
 
@@ -643,11 +648,11 @@ notification模块拥有`notification_messages`、`notification_announcements`�
 | --- | --- | --- | --- |
 | `id` | `bigint unsigned` | 否 | 自增主键，消息ID。 |
 | `recipient_user_id` | `bigint unsigned` | 否 | 收件人用户逻辑ID。 |
-| `notification_type` | `varchar(24)`，ASCII | 否 | 默认RESTAURANT_DECISION；RESTAURANT_DECISION审核结果、REVIEW_REPLY点评回复、REVIEW_LIKED点评获赞、REPLY_LIKED回复获赞、USER_FOLLOWED首次关注。 |
-| `source_id` | `bigint unsigned` | 否 | 来源ID；审核消息为申请ID，回复消息为回复ID，获赞消息为点赞关系ID，关注消息为关注关系ID。 |
+| `notification_type` | `varchar(24)`，ASCII | 否 | 默认RESTAURANT_DECISION；RESTAURANT_DECISION审核结果、REVIEW_REPLY点评回复、REVIEW_LIKED点评获赞、REPLY_LIKED回复获赞、USER_FOLLOWED首次关注、REPORT_RESULT举报处理结果。 |
+| `source_id` | `bigint unsigned` | 否 | 来源ID；审核消息为申请ID，回复消息为回复ID，获赞消息为点赞关系ID，关注消息为关注关系ID，举报结果消息为举报ID。 |
 | `request_id` | `bigint unsigned` | 是 | 审核申请逻辑ID。 |
 | `request_type` | `varchar(8)`，ASCII | 是 | CREATE新店投稿、UPDATE纠错。 |
-| `decision` | `varchar(8)`，ASCII | 是 | APPROVED审核通过、REJECTED驳回。 |
+| `decision` | `varchar(16)`，ASCII | 是 | APPROVED审核通过、REJECTED驳回、REMOVED举报成立且内容已删除、DISMISSED举报未认定违规。 |
 | `restaurant_name` | `varchar(120)` | 是 | 审核时店名快照。 |
 | `reject_reason` | `varchar(200)` | 是 | 驳回原因快照。 |
 | `review_id` | `bigint unsigned` | 是 | 回复或被赞内容所属点评逻辑ID。 |
@@ -719,3 +724,42 @@ CHECK约束：
 - `chk_announcement_state_read`、`chk_announcement_state_deleted`：非空操作时间不能早于created_at。
 
 无个人状态记录表示未读；read_at非空表示已读，deleted_at非空表示本人删除。删除状态允许read_at为空。
+
+<a id="content-reports"></a>
+
+## 内容举报表结构
+
+moderation模块拥有`content_reports`，保存点评与回复举报、提交时的正文和作者快照以及管理员处置结果。存储引擎InnoDB，字符集utf8mb4，默认排序规则utf8mb4_0900_ai_ci；类型、原因和状态列采用ascii_bin区分大小写。
+
+### `content_reports`：点评与回复举报
+
+| 字段 | 类型 | 可空 | 默认值及含义 |
+| --- | --- | --- | --- |
+| `id` | `bigint unsigned` | 否 | 自增主键，举报ID。 |
+| `reporter_user_id` | `bigint unsigned` | 否 | 无默认值；举报人逻辑ID。 |
+| `target_type` | `varchar(8)` | 否 | 无默认值；REVIEW点评、REPLY回复。 |
+| `target_id` | `bigint unsigned` | 否 | 无默认值；被举报点评或回复逻辑ID。 |
+| `target_author_user_id` | `bigint unsigned` | 否 | 无默认值；举报时内容作者快照。 |
+| `review_id` | `bigint unsigned` | 否 | 无默认值；点评ID，举报回复时为父点评ID。 |
+| `content_snapshot` | `varchar(500)` | 否 | 无默认值；举报时正文快照，仅管理员可读。 |
+| `reason` | `varchar(16)` | 否 | 无默认值；SPAM、ABUSE、PORNOGRAPHY、ILLEGAL、PRIVACY、IRRELEVANT、OTHER。 |
+| `detail` | `varchar(200)` | 是 | 默认NULL；选填文字说明，去首尾空白后保存。 |
+| `status` | `varchar(16)` | 否 | 默认PENDING；PENDING待处理、RESOLVED已删除内容、DISMISSED未认定违规。 |
+| `handled_by` | `bigint unsigned` | 是 | 默认NULL；处理管理员逻辑ID。 |
+| `handled_at` | `timestamp(6)` | 是 | 默认NULL；首次处理时间。 |
+| `decision_note` | `varchar(200)` | 是 | 默认NULL；处理备注。 |
+| `created_at` | `timestamp(6)` | 否 | 默认CURRENT_TIMESTAMP(6)；提交时间。 |
+
+主键`(id)`；唯一键`uk_content_report_reporter_target(reporter_user_id,target_type,target_id)`限制同一用户对同一内容只有一条举报；普通索引`idx_content_report_queue(status,created_at,id)`支持待办分页，`idx_content_report_target(target_type,target_id,created_at,id)`支持同内容举报合并查看。用户、点评和回复ID均无跨模块物理外键。
+
+CHECK约束：
+
+- `chk_content_report_type`：target_type仅REVIEW或REPLY。
+- `chk_content_report_reason`：原因限定上述七个代码。
+- `chk_content_report_status`：状态限定PENDING、RESOLVED或DISMISSED。
+- `chk_content_report_ids`：举报人、目标、作者、父点评及处理人限定正Long范围。
+- `chk_content_report_target`：REVIEW的review_id等于target_id；REPLY不比较两者数值。
+- `chk_content_report_snapshot`：正文快照1～500字符，且首尾不能为空白。
+- `chk_content_report_detail`：说明为NULL，或1～200字符且首尾不能为空白。
+- `chk_content_report_handle`：PENDING不得填写处理人、处理时间和备注；终态必须填写处理人和处理时间，备注选填。
+- `chk_content_report_time`：处理时间不早于提交时间。

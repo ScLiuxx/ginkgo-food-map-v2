@@ -245,7 +245,7 @@ class MyReviewApiIntegrationTest {
                 .andExpect(jsonPath("$.data.totalPages").value(0))
                 .andExpect(jsonPath("$.data.pageSize").value(8));
         verifyNoInteractions(photos, targets);
-        verify(reads, never()).counts(anyLong(), anyList());
+        verify(reads, never()).mixedCounts(anyLong(), anyList(), anyList());
         review(101, 1, 11, 8, "2026-11-01 01:00:00");
         mvc.perform(
                         get("/api/me/reviews")
@@ -255,7 +255,7 @@ class MyReviewApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalGroups").value(1))
                 .andExpect(jsonPath("$.data.records").isEmpty());
-        verify(reads, never()).page(anyLong(), anyList(), anyInt(), anyLong());
+        verify(reads, never()).mixedPage(anyLong(), anyList(), anyList(), anyInt(), anyLong());
         verifyNoInteractions(photos);
         for (var pair :
                 List.of(
@@ -388,7 +388,7 @@ class MyReviewApiIntegrationTest {
                 .andExpect(jsonPath("$.data.totalGroups").value(501))
                 .andExpect(jsonPath("$.data.records.length()").value(8));
         verify(targets, times(2)).visible(anyList());
-        verify(reads, times(1)).page(eq(11L), anyList(), eq(8), eq(0L));
+        verify(reads, times(1)).mixedPage(eq(11L), anyList(), anyList(), eq(8), eq(0L));
         verify(photos, times(1)).references(anyList());
         String columns =
                 jdbc.queryForObject(

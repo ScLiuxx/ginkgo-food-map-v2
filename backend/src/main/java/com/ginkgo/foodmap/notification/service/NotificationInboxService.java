@@ -165,6 +165,7 @@ public class NotificationInboxService {
                         : "REVIEW_REPLY".equals(row.getNotificationType())
                                 ? "COMMENTS"
                                 : ("RESTAURANT_DECISION".equals(row.getNotificationType())
+                                                || "REPORT_RESULT".equals(row.getNotificationType())
                                                 || announcement)
                                         ? "SYSTEM"
                                         : "LIKES");

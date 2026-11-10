@@ -76,6 +76,26 @@ public class MediaFileService {
         bindPurpose(ids, owner, "RESTAURANT");
     }
 
+    /**
+     * 本人修改待审申请替换附图时释放旧图。
+     *
+     * <p>只允许释放本人上传且仍为RESTAURANT用途的已绑定图片；登记删除意图后由既有回收任务清理，
+     * 与申请修改处于同一事务，替换失败时一并回滚。调用方必须先核对申请归属和待审状态。
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void releaseRestaurantPhotos(List<Long> ids, long owner) {
+        for (long id : ids.stream().sorted().toList()) {
+            var row = files.lock(id);
+            if (row == null
+                    || row.getUploaderUserId() != owner
+                    || !"RESTAURANT".equals(row.getPurpose())
+                    || !"BOUND".equals(row.getStatus())
+                    || files.releaseBound(id, owner) != 1) {
+                throw new BusinessException(FileErrorCode.NOT_BINDABLE);
+            }
+        }
+    }
+
     /** 窗口服务先锁父食堂和窗口；仅允许绑定当前管理员本人上传的WINDOW用途图片。 */
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
     @Transactional(propagation = Propagation.MANDATORY)

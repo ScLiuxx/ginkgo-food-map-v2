@@ -204,6 +204,7 @@ const loginTarget = computed(() => ({
                   ><strong v-else-if="item.category === 'FOLLOWERS'"
                     >{{ item.actorUsername }} 关注了你</strong
                   ><strong v-else-if="item.notificationType === 'ANNOUNCEMENT'">系统公告</strong
+                  ><strong v-else-if="item.notificationType === 'REPORT_RESULT'">举报处理结果</strong
                   ><strong v-else
                     >{{ item.requestType === 'CREATE' ? '新店投稿' : '资料纠错'
                     }}{{ item.decision === 'APPROVED' ? '审核通过' : '审核未通过' }}</strong
@@ -212,7 +213,11 @@ const loginTarget = computed(() => ({
                 <span v-if="item.category === 'SYSTEM'" class="notification-name">{{
                   item.notificationType === 'ANNOUNCEMENT'
                     ? item.announcementTitle
-                    : item.restaurantName
+                    : item.notificationType === 'REPORT_RESULT'
+                      ? item.decision === 'REMOVED'
+                        ? '举报已处理：内容已删除'
+                        : '举报未认定违规'
+                      : item.restaurantName
                 }}</span>
                 <span v-if="item.rejectReason" class="notification-reason"
                   >驳回原因：{{ item.rejectReason }}</span
@@ -229,7 +234,9 @@ const loginTarget = computed(() => ({
                             ? '查看个人主页'
                             : item.notificationType === 'ANNOUNCEMENT'
                               ? '查看公告'
-                              : '查看申请'
+                              : item.notificationType === 'REPORT_RESULT'
+                                ? '查看处理结果'
+                                : '查看申请'
                     }}
                     ›</span
                   ></span

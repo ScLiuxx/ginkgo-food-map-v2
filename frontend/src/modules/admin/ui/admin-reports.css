@@ -1,0 +1,449 @@
+/* 举报处理页沿用管理端顶栏、侧栏和卡片节奏，不引入独立视觉体系。 */
+.report-workspace {
+  min-height: 100vh;
+  color: #242a30;
+  background: #faf9f7;
+  font-family: Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+.report-workspace * {
+  box-sizing: border-box;
+}
+.report-topbar {
+  height: 86px;
+  padding: 0 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  background: #fff;
+  border-bottom: 1px solid #e6e6e6;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: #151515;
+  white-space: nowrap;
+  font-size: 29px;
+  font-weight: 700;
+}
+.brand em {
+  color: #e97913;
+  font-size: 38px;
+  font-style: normal;
+}
+.brand small {
+  margin-left: 18px;
+  padding-left: 24px;
+  border-left: 1px solid #ddd;
+  font-size: 21px;
+  font-weight: 400;
+  color: #606060;
+}
+.admin-identity {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  font-size: 16px;
+  min-width: 0;
+}
+.admin-identity > span:nth-child(2) {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-avatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #fff0e0;
+  color: #ce6b16;
+}
+.admin-identity button {
+  white-space: nowrap;
+  flex-shrink: 0;
+  border: 0;
+  border-left: 1px solid #ddd;
+  border-radius: 0;
+  margin-left: 8px;
+  padding-left: 24px;
+  background: transparent;
+  color: #666;
+}
+.report-shell {
+  display: grid;
+  grid-template-columns: 204px minmax(0, 1fr);
+  min-height: calc(100vh - 86px);
+}
+.report-workspace main {
+  padding: 28px 48px 46px;
+  min-width: 0;
+}
+.report-breadcrumb {
+  color: #777;
+  font-size: 15px;
+  margin-bottom: 24px;
+}
+h1 {
+  font-size: 32px;
+  line-height: 1.3;
+  margin: 0 0 10px;
+  font-weight: 700;
+}
+.report-intro {
+  color: #818a94;
+  font-size: 14px;
+  margin: 0 0 20px;
+}
+.report-tabs {
+  display: flex;
+  gap: 28px;
+  border-bottom: 1px solid #dcdcdc;
+}
+.report-tabs button {
+  padding: 12px 12px 18px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: #666;
+  background: transparent;
+  font-size: 19px;
+}
+.report-tabs .active {
+  border-bottom-color: #e97913;
+  color: #e97913;
+  font-weight: 600;
+}
+.report-panel {
+  max-width: 1110px;
+  margin: 26px auto 0;
+  padding: 24px 32px;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  background: #fff;
+}
+.report-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  color: #777;
+  font-size: 13px;
+}
+button,
+select,
+textarea {
+  font: inherit;
+  font-size: 15px;
+  border: 1px solid #c7c7c7;
+  border-radius: 7px;
+  padding: 10px 20px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+button:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #bd6816;
+  outline-offset: 3px;
+}
+.report-list {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.report-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 18px;
+  padding: 20px 0;
+  border-bottom: 1px solid #ececec;
+}
+.report-row-main {
+  min-width: 0;
+}
+.report-row-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+}
+.report-row-head strong {
+  font-size: 16px;
+}
+.report-status {
+  display: inline-block;
+  font-size: 12px;
+  padding: 4px 9px;
+  color: #b46117;
+  background: #fff2e4;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.report-status.resolved {
+  color: #a0372b;
+  background: #fdecea;
+}
+.report-status.dismissed {
+  color: #777;
+  background: #f0f0f0;
+}
+.report-reason {
+  color: #888;
+  font-size: 12px;
+}
+.report-snapshot {
+  margin: 10px 0 0;
+  color: #444;
+  font-size: 14px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.report-snapshot.detail {
+  display: block;
+  padding: 14px;
+  border-radius: 6px;
+  background: #faf9f7;
+  white-space: pre-wrap;
+  max-height: 260px;
+  overflow: auto;
+}
+.report-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 9px 0 0;
+  color: #888;
+  font-size: 12px;
+}
+.report-meta.detail {
+  margin: 14px 0 20px;
+}
+.report-empty {
+  text-align: center;
+  color: #888;
+  padding: 50px 0;
+}
+.report-pagination {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+  font-size: 13px;
+  color: #777;
+}
+.report-pagination button,
+.report-list li > button {
+  font-size: 13px;
+  padding: 8px 12px;
+}
+.report-notice,
+.report-error {
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.report-notice {
+  color: #597242;
+  padding: 12px 0;
+}
+.report-error {
+  color: #b33d2e;
+}
+.report-dialog {
+  border: 1px solid #ddd;
+  border-radius: 9px;
+  padding: 30px;
+  width: min(720px, calc(100% - 32px));
+  max-height: 85vh;
+  color: #303030;
+  overflow: auto;
+}
+.report-dialog::backdrop {
+  background: rgb(30 25 20 / 30%);
+}
+.report-dialog p {
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.dialog-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  border: 0;
+  padding: 4px 10px;
+  font-size: 24px;
+}
+.report-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  color: #777;
+  font-size: 13px;
+}
+.report-detail-reason {
+  margin-top: 18px;
+}
+.report-detail-note {
+  color: #666;
+}
+.report-dialog h2 {
+  font-size: 18px;
+  margin: 22px 0 8px;
+}
+.report-dialog label {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.report-dialog label span {
+  color: #888;
+  font-size: 12px;
+  font-weight: 400;
+}
+.report-dialog textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 90px;
+  line-height: 1.8;
+}
+.report-count {
+  text-align: right;
+  margin: 6px 0 0;
+  color: #888;
+  font-size: 12px;
+}
+.report-count.invalid {
+  color: #b33d2e;
+}
+.report-decisions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  border-top: 1px solid #e2e2e2;
+  padding-top: 20px;
+  margin-top: 20px;
+}
+.report-decisions .danger {
+  border-color: #b33d2e;
+  background: #b33d2e;
+  color: #fff;
+  font-weight: 600;
+}
+.report-handled {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e2e2;
+  color: #777;
+  font-size: 13px;
+}
+.report-confirm {
+  width: min(520px, calc(100% - 32px));
+}
+.report-confirm-target {
+  padding: 12px;
+  border-radius: 6px;
+  background: #faf9f7;
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow: auto;
+}
+@media (max-width: 1000px) {
+  .brand {
+    font-size: 23px;
+  }
+  .brand small {
+    font-size: 16px;
+  }
+  .report-workspace main {
+    padding: 28px 24px;
+  }
+  .report-panel {
+    padding: 22px;
+  }
+}
+@media (max-width: 800px) {
+  .report-topbar {
+    height: 72px;
+    padding: 0 18px;
+  }
+  .brand {
+    font-size: 18px;
+    gap: 6px;
+  }
+  .brand em {
+    font-size: 29px;
+  }
+  .brand small {
+    display: none;
+  }
+  .admin-identity {
+    font-size: 12px;
+    gap: 7px;
+  }
+  .admin-avatar {
+    display: none;
+  }
+  .admin-identity > span:nth-child(2) {
+    max-width: 80px;
+  }
+  .admin-identity button {
+    font-size: 12px;
+    margin: 0;
+    padding: 6px 0 6px 10px;
+  }
+  .report-shell {
+    display: flex;
+    flex-direction: column;
+  }
+  .report-workspace main {
+    padding: 24px 16px;
+  }
+  .report-breadcrumb {
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+  h1 {
+    font-size: 27px;
+  }
+  .report-tabs button {
+    font-size: 16px;
+    padding: 10px 8px 14px;
+  }
+  .report-panel {
+    margin-top: 20px;
+    padding: 20px 16px;
+  }
+  .report-list li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .report-list li > button {
+    justify-self: end;
+  }
+  .report-dialog {
+    padding: 24px;
+  }
+  .report-decisions {
+    gap: 10px;
+  }
+}

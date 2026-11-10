@@ -46,7 +46,7 @@ public class RestaurantChangeService {
             throw new BusinessException(RestaurantErrorCode.NOT_FOUND);
         }
         validateSubmission(request, target.getCategoryCode());
-        return save(id, request);
+        return save(id, request, null);
     }
 
     /** 新店投稿不创建公开餐厅，仅保存无正式目标ID的待审申请，分类必须当前可用。 */
@@ -56,7 +56,41 @@ public class RestaurantChangeService {
             throw new BusinessException(RestaurantErrorCode.INVALID_INPUT);
         }
         validateSubmission(request, null);
-        return save(null, request);
+        return save(null, request, null);
+    }
+
+    /**
+     * 驳回后重提。
+     *
+     * <p>仅原申请人可以基于自己的被驳回申请创建新申请；原申请保持REJECTED及原驳回原因不变，
+     * 新申请写入previous_request_id并在同一事务完成内容校验、目标校验和图片绑定。
+     * 非驳回状态统一409，不能借重提恢复已撤回或已通过的申请。
+     */
+    @Transactional
+    public String resubmit(String previousId, RestaurantChangeRequest request) {
+        if (!validator.validate(request).isEmpty()) {
+            throw new BusinessException(RestaurantErrorCode.INVALID_INPUT);
+        }
+        long owner = actors.requireActor().getUserId();
+        long parentId = RestaurantIdentifiers.id(previousId);
+        var previous = mapper.lockOwn(parentId, owner);
+        // 不区分他人申请与不存在，避免用申请ID探测他人记录。
+        if (previous == null) {
+            throw new BusinessException(RestaurantErrorCode.REQUEST_NOT_FOUND);
+        }
+        if (!"REJECTED".equals(previous.getStatus())) {
+            throw new BusinessException(RestaurantErrorCode.STATE_CONFLICT, "仅被驳回申请可以重新提交");
+        }
+        if ("CREATE".equals(previous.getRequestType())) {
+            validateSubmission(request, null);
+            return save(null, request, parentId);
+        }
+        var target = mapper.lockTarget(previous.getRestaurantId());
+        if (target == null) {
+            throw new BusinessException(RestaurantErrorCode.NOT_FOUND);
+        }
+        validateSubmission(request, target.getCategoryCode());
+        return save(previous.getRestaurantId(), request, parentId);
     }
 
     /** 新食堂申请必须无分类；已有旧申请允许按原内容重试，不能因分类规则升级改写其摘要。 此处只放行到后面的完整摘要/目标比较，不允许借旧请求编号新增不符合规则的申请。 */
@@ -74,7 +108,7 @@ public class RestaurantChangeService {
     }
 
     /** 唯一键原子插入或取得旧回执，再锁定核对内容；避免首次并发投稿的检查再插入竞争。 */
-    private String save(Long targetId, RestaurantChangeRequest request) {
+    private String save(Long targetId, RestaurantChangeRequest request, Long previousRequestId) {
         var actor = actors.requireActor();
         // 类型来自服务端调用入口，不接收客户端自报；审核回填新商户ID后也不能改变申请类型。
         String requestType = targetId == null ? "CREATE" : "UPDATE";
@@ -99,6 +133,7 @@ public class RestaurantChangeService {
         }
         var row = new RestaurantChangeEntity();
         row.setRestaurantId(targetId);
+        row.setPreviousRequestId(previousRequestId);
         row.setSubmittedBy(actor.getUserId());
         row.setRequestType(requestType);
         row.setClientRequestId(request.getClientRequestId().toString());
@@ -110,8 +145,11 @@ public class RestaurantChangeService {
         // 纠错仍比较原商户ID，防止相同请求编号被复用于另一家店；原始摘要不随管理员修订而更新。
         boolean sameTarget =
                 "CREATE".equals(requestType) || Objects.equals(saved.getRestaurantId(), targetId);
+        // 重提回执还必须指向同一条被驳回申请，防止复用请求UUID把首次投稿误认成重提。
+        boolean samePrevious = Objects.equals(saved.getPreviousRequestId(), previousRequestId);
         if (!Objects.equals(saved.getRequestType(), requestType)
                 || !sameTarget
+                || !samePrevious
                 || !MessageDigest.isEqual(saved.getRequestHash(), hash)) {
             throw new BusinessException(RestaurantErrorCode.STATE_CONFLICT);
         }

@@ -16,6 +16,8 @@ public final class RestaurantRequestViews {
         private String status;
         private String name;
         private String restaurantId;
+        /** 驳回后重提的新申请指向原申请；首次提交为null，供管理员核对历史驳回原因。 */
+        private String previousRequestId;
         private String submittedBy;
         private String submitterName;
         private Instant createdAt;

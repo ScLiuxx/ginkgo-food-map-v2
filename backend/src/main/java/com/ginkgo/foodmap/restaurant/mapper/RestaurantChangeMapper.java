@@ -15,6 +15,10 @@ public interface RestaurantChangeMapper {
     @Select("SELECT media_file_id FROM restaurant_change_photos WHERE request_id=#{request} ORDER BY position")
     java.util.List<Long> photoIds(long request);
 
+    /** 驳回后重提先锁定本人原申请，防止同一驳回记录被并发重复重提；其他人的申请按不存在处理。 */
+    @Select("SELECT * FROM restaurant_change_requests WHERE id=#{id} AND submitted_by=#{owner} FOR UPDATE")
+    RestaurantChangeEntity lockOwn(@Param("id") long id, @Param("owner") long owner);
+
     @Select("SELECT id,category_code FROM restaurants WHERE id=#{id} AND deleted_at IS NULL FOR UPDATE")
     RestaurantEntity lockTarget(@Param("id") long id);
 
@@ -27,8 +31,8 @@ public interface RestaurantChangeMapper {
     RestaurantChangeEntity existingRequest(@Param("actor") long actor, @Param("request") String request);
 
     @Insert("""
-        INSERT INTO restaurant_change_requests(restaurant_id,request_type,submitted_by,client_request_id,request_hash,proposed_data)
-        VALUES(#{restaurantId},#{requestType},#{submittedBy},#{clientRequestId},#{requestHash},#{proposedData})
+        INSERT INTO restaurant_change_requests(restaurant_id,previous_request_id,request_type,submitted_by,client_request_id,request_hash,proposed_data)
+        VALUES(#{restaurantId},#{previousRequestId},#{requestType},#{submittedBy},#{clientRequestId},#{requestHash},#{proposedData})
         ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)
         """)
     @Options(useGeneratedKeys = true, keyProperty = "id")

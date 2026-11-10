@@ -47,6 +47,9 @@
 | GET | `/api/me/restaurant-requests` | Bearer | 200 | 本人投稿/纠错分页及状态计数 |
 | GET | `/api/me/restaurant-requests/{id}` | Bearer | 200 | 本人申请原内容及审核结果 |
 | GET | `/api/me/restaurant-requests/{id}/photos/{position}` | Bearer | 200 JPEG | 本人申请私有附图 |
+| PUT | `/api/me/restaurant-requests/{id}` | Bearer | 200 | 修改本人待审申请 |
+| POST | `/api/me/restaurant-requests/{id}/withdraw` | Bearer | 200 | 撤回本人待审申请 |
+| POST | `/api/me/restaurant-requests/{id}/resubmit` | Bearer | 201 | 驳回后重提为新申请 |
 | POST | `/auth/logout` | Bearer | 200 | 撤销当前会话 |
 | GET | `/api/admin/me` | 管理员 | 200 | 工作台身份校验 |
 | GET | `/api/admin/restaurant-requests` | 管理员 | 200 | 商户申请分页 |
@@ -54,6 +57,10 @@
 | GET | `/api/admin/restaurant-requests/{id}/photos/{position}` | 管理员 | 200 JPEG | 申请私有图片 |
 | POST | `/api/admin/restaurant-requests/{id}/approve` | 管理员 | 200 | 审核并发布资料及附图 |
 | POST | `/api/admin/restaurant-requests/{id}/reject` | 管理员 | 200 | 驳回申请 |
+| GET | `/api/admin/content-reports` | 管理员 | 200 | 举报分页 |
+| GET | `/api/admin/content-reports/{id}` | 管理员 | 200 | 举报详情与正文快照 |
+| POST | `/api/admin/content-reports/{id}/dismiss` | 管理员 | 200 | 驳回同内容待处理举报 |
+| POST | `/api/admin/content-reports/{id}/remove` | 管理员 | 200 | 永久删除违规内容并结案 |
 | GET | `/api/restaurant-categories` | 公开 | 200 | 分类字典 |
 | GET | `/api/restaurants/{id}/windows` | 公开 | 200 | 食堂完整窗口集合 |
 | GET | `/api/canteen-windows/{id}` | 公开 | 200 | 独立窗口详情 |
@@ -90,6 +97,8 @@
 | DELETE | `/api/reviews/{reviewId}` | 原作者 | 204 | 删除点评 |
 | POST | `/api/reviews/{reviewId}/replies` | Bearer | 201 / 200重放 | 单层回复 |
 | GET | `/api/reviews/{reviewId}/replies` | 公开 | 200 | 回复游标分页 |
+| POST | `/api/reviews/{reviewId}/reports` | Bearer | 201 / 200重复 | 举报点评 |
+| POST | `/api/review-replies/{replyId}/reports` | Bearer | 201 / 200重复 | 举报回复 |
 | GET | `/api/public/status` | 公开 | 200 | 应用状态 |
 | GET | `/actuator/health` | 公开 | 200 / 503 | 依赖健康状态 |
 
@@ -203,13 +212,13 @@
 
 ```json
 {
-  "records":[{"id":"51","requestType":"UPDATE","status":"PENDING","name":"商户名称","restaurantId":"101","submittedBy":"22","submitterName":"同学甲","createdAt":"2026-11-03T06:00:00Z","photoCount":1}],
+  "records":[{"id":"51","requestType":"UPDATE","status":"PENDING","name":"商户名称","restaurantId":"101","previousRequestId":"48","submittedBy":"22","submitterName":"同学甲","createdAt":"2026-11-03T06:00:00Z","photoCount":1}],
   "total":1,"totalPages":1,"page":1,"pageSize":20,
   "counts":{"PENDING":1,"APPROVED":0,"REJECTED":0}
 }
 ```
 
-`counts`为相同关键字条件下三个状态的数量，不受当前状态及分页限制；`total`为所选状态的完整数量。空结果200、空records、total/totalPages为0；越界页保留请求页码并返回空记录。分页、计数和批量署名在同一个只读快照内读取。署名缺失显示“用户不可用”，不返回邮箱、密码、请求摘要或OSS对象键。
+`counts`为相同关键字条件下三个状态的数量，不受当前状态及分页限制；`total`为所选状态的完整数量。本人撤回的WITHDRAWN申请不进入管理员队列和状态计数，但管理员仍可按ID读取其详情；`previousRequestId`仅驳回后重提的新申请有值，指向原驳回申请。空结果200、空records、total/totalPages为0；越界页保留请求页码并返回空记录。分页、计数和批量署名在同一个只读快照内读取。署名缺失显示“用户不可用”，不返回邮箱、密码、请求摘要或OSS对象键。
 
 ### 5.3 申请详情
 
@@ -666,49 +675,80 @@ PATCH只接受必填字符串bio，空字符串可清空；未知JSON字段（�
 
 ## 16. 本人投稿与纠错记录
 
-本节三个GET均需Bearer，仅查询当前认证身份提交的申请，返回`Cache-Control: no-store`。不复用管理员查询权限，也不接受userId/submittedBy选择其他申请人；额外身份、offset或排序参数不会改变服务端范围。没有新增修改、撤回、重提、审核、经验或通知写接口。
+本节接口均需Bearer，仅操作当前认证身份提交的申请，返回`Cache-Control: no-store`。不复用管理员查询或审核权限，也不接受userId/submittedBy选择其他申请人；额外身份、offset或排序参数不会改变服务端范围。本人只能修改或撤回待审申请，驳回后可基于原申请创建新申请；管理员队列、审核结果和公开商户资料不受这些操作直接影响。
 
 ### 16.1 本人列表
 
-`GET /api/me/restaurant-requests`参数：status默认ALL，可选ALL/PENDING/APPROVED/REJECTED；page默认1、范围1–1000000；pageSize默认20、范围1–50。前端每页10条。按createdAt、id依次降序，先按本人和所选状态筛选再分页；同一店铺的不同申请独立展示，不按店铺合并。
+`GET /api/me/restaurant-requests`参数：status默认ALL，可选ALL/PENDING/APPROVED/REJECTED/WITHDRAWN；page默认1、范围1–1000000；pageSize默认20、范围1–50。前端每页10条。按createdAt、id依次降序，先按本人和所选状态筛选再分页；同一店铺的不同申请独立展示，不按店铺合并。
 
 成功200，统一封装的data示例：
 
 ```json
-{"userId":"11","records":[{"id":"101","restaurantId":null,"requestType":"CREATE","status":"PENDING","name":"新店名","createdAt":"2026-11-07T05:00:00Z","reviewedAt":null,"photoCount":0}],"counts":{"PENDING":1,"APPROVED":0,"REJECTED":0,"ALL":1},"total":1,"totalPages":1,"page":1,"pageSize":20}
+{"userId":"11","records":[{"id":"101","restaurantId":null,"previousRequestId":null,"requestType":"CREATE","status":"PENDING","name":"新店名","createdAt":"2026-11-07T05:00:00Z","reviewedAt":null,"withdrawnAt":null,"photoCount":0}],"counts":{"PENDING":1,"APPROVED":0,"REJECTED":0,"WITHDRAWN":0,"ALL":1},"total":1,"totalPages":1,"page":1,"pageSize":20}
 ```
 
-userId为本人字符串ID；requestType为CREATE新店或UPDATE纠错，不因新店通过后回填restaurantId而改变。name为原提交店名，photoCount为原申请关联图数；待审reviewedAt为null。counts始终为本人全部申请的状态计数，不受当前status筛选影响；total为所选状态总数。真正无记录返回空records、零计数及totalPages=0；超出末页也可返回空records，但保留实际总数。列表和计数共用一次数据库快照，跨次查询时新增申请或审核状态变化可能改变分页。
+userId为本人字符串ID；requestType为CREATE新店或UPDATE纠错，不因新店通过后回填restaurantId而改变。previousRequestId仅在驳回后重提的新申请上有值，指向原驳回申请；withdrawnAt仅在本人撤回后有值。name为原提交店名，photoCount为原申请关联图数；待审reviewedAt为null。counts始终为本人全部申请的状态计数，不受当前status筛选影响；total为所选状态总数。真正无记录返回空records、零计数及totalPages=0；超出末页也可返回空records，但保留实际总数。列表和计数共用一次数据库快照，跨次查询时新增申请或审核状态变化可能改变分页。
 
 ### 16.2 本人详情
 
 `GET /api/me/restaurant-requests/{id}`成功200，data为：
 
 ```json
-{"userId":"11","application":{"id":"101","restaurantId":null,"requestType":"CREATE","status":"PENDING","name":"新店名","createdAt":"2026-11-07T05:00:00Z","reviewedAt":null,"photoCount":1},"proposed":{"name":"新店名","categoryCode":"OTHER","categoryName":"其他美食","restaurantType":"REGULAR","priceKind":"UNKNOWN","pricePerPerson":null,"address":"学校附近","latitude":30.75,"longitude":103.93,"locationConfirmed":true,"businessStatus":"OPERATING","supportsDineIn":null,"supportsDelivery":null,"tags":[]},"approved":null,"rejectReason":null,"targetAvailable":false,"photoPositions":[0]}
+{"userId":"11","application":{"id":"101","restaurantId":null,"previousRequestId":null,"requestType":"CREATE","status":"PENDING","name":"新店名","createdAt":"2026-11-07T05:00:00Z","reviewedAt":null,"withdrawnAt":null,"photoCount":1},"proposed":{"name":"新店名","categoryCode":"OTHER","categoryName":"其他美食","restaurantType":"REGULAR","priceKind":"UNKNOWN","pricePerPerson":null,"address":"学校附近","latitude":30.75,"longitude":103.93,"locationConfirmed":true,"businessStatus":"OPERATING","supportsDineIn":null,"supportsDelivery":null,"tags":[]},"approved":null,"rejectReason":null,"targetAvailable":false,"photoPositions":[0]}
 ```
 
 application字段同列表；proposed为原始提交业务快照，approved只在通过后返回实际生效业务快照（可包含管理员修订），否则null。两份快照均只包含示例中的业务字段，不含原始请求UUID、photoIds及旧内部字段；历史缺失字段可为null。rejectReason仅驳回有值；审核时间位于application.reviewedAt。不会返回审核人、纠错前before、管理端current资料、密码、邮箱、请求摘要或存储键。
 
 photoPositions是原申请内0–4的有序位置，不是文件ID；真正无图返回[]。targetAvailable表示关联店铺在本次读取时未删除；停业仍为true，新店尚未通过或关联目标失效为false。目标被删除不删除或隐藏本人申请快照；不可用时前端不提供可用店铺跳转。不存在与其他人的申请均404 `RESTAURANT_REQUEST_NOT_FOUND`，管理员通过本接口也不能读取别人的申请。
 
-### 16.3 本人申请图片与错误
+### 16.3 修改待审申请
 
-`GET /api/me/restaurant-requests/{id}/photos/{position}`按申请归属、关联位置及文件上传者/RESTAURANT用途/BOUND状态校验。待审、驳回及已通过的本人申请均可读原附图，不因读取而公开图片。成功200为原始JPEG字节，另含`X-Content-Type-Options: nosniff`；前端携带固定Bearer取得Blob，不使用匿名img或OSS签名地址。OSS读取不占数据库事务。
+`PUT /api/me/restaurant-requests/{id}`请求体为完整业务内容，整体替换原提交：
+
+```json
+{"name":"修改后的店名","categoryCode":"OTHER","restaurantType":"REGULAR","priceKind":"UNKNOWN","pricePerPerson":null,"address":"学校附近","latitude":30.75,"longitude":103.93,"locationConfirmed":true,"businessStatus":"OPERATING","supportsDineIn":null,"supportsDelivery":null,"tags":[],"photoIds":["1001","1002"]}
+```
+
+字段校验与首次投稿一致；`photoIds`为本人的0–5张RESTAURANT用途图片，按顺序整体替换，空数组表示不再附图。只允许PENDING申请；修改后仍为PENDING并重新等待审核，不产生新申请、不保留修改前的待审快照。关联目标已删除的UPDATE申请返回404；已通过、已驳回或已撤回返回409 `RESTAURANT_STATE_CONFLICT`。修改会更新原申请的业务快照与请求摘要，原clientRequestId不变；再次用旧内容重试首次投稿会因摘要不一致返回409。
+
+成功200，data为`{"id":"101","status":"PENDING"}`。相同完整内容重复提交结果一致；附图替换只释放新列表不再保留的旧图，仍保留的图片继续使用原绑定，新图与申请内容在同一事务内更新，任一步失败全部回滚。
+
+### 16.4 撤回待审申请
+
+`POST /api/me/restaurant-requests/{id}/withdraw`无请求体，成功200，data为`{"id":"101","status":"WITHDRAWN"}`。仅PENDING可撤回；撤回写入withdrawnAt，不写审核人、通过快照或驳回原因，申请从管理员待审队列移除，原附图仍仅本人和管理员可读。重复撤回同一申请返回相同成功结果；已通过或已驳回返回409 `RESTAURANT_STATE_CONFLICT`。撤回不可撤销，需重新投稿时走正常提交或驳回重提。
+
+### 16.5 驳回后重提
+
+`POST /api/me/restaurant-requests/{id}/resubmit`请求体与首次投稿相同，必须携带新的`clientRequestId`：
+
+```json
+{"clientRequestId":"2f8c0d62-7f4e-4f0e-9aa1-52f6b48b4e21","name":"重提修订店名","categoryCode":"OTHER","restaurantType":"REGULAR","priceKind":"UNKNOWN","address":"学校附近","latitude":30.75,"longitude":103.93,"locationConfirmed":true,"businessStatus":"OPERATING","tags":[],"photoIds":[]}
+```
+
+仅本人REJECTED申请可重提；新申请继承原申请的CREATE/UPDATE类型和UPDATE目标，写入previousRequestId指向原驳回申请，状态为PENDING。原申请保持REJECTED及原rejectReason，不重新进入待审，也不改审核字段。UPDATE目标已删除返回404；PENDING、APPROVED或WITHDRAWN返回409。相同clientRequestId和相同内容重试返回已创建的新申请ID；相同UUID改变内容或目标返回409 `RESTAURANT_STATE_CONFLICT`。原申请附图仍绑定在原申请上，重提需重新上传并提交新图片ID。
+
+成功201，data为`{"id":"106","status":"PENDING"}`。
+
+### 16.6 本人申请图片与错误
+
+`GET /api/me/restaurant-requests/{id}/photos/{position}`按申请归属、关联位置及文件上传者/RESTAURANT用途/BOUND状态校验。待审、驳回、已撤回及已通过的本人申请均可读原附图，不因读取而公开图片。成功200为原始JPEG字节，另含`X-Content-Type-Options: nosniff`；前端携带固定Bearer取得Blob，不使用匿名img或OSS签名地址。OSS读取不占数据库事务。
 
 | HTTP | 错误码 | 含义 |
 | --- | --- | --- |
-| 400 | COMMON_VALIDATION_FAILED | 状态或分页不合法。 |
+| 400 | COMMON_VALIDATION_FAILED | 状态、分页或修改/重提字段不合法。 |
 | 400 | RESTAURANT_INVALID_ID | 申请ID不是无前导零、未溢出的正整数字符串。 |
-| 400 | RESTAURANT_INVALID_INPUT | 图片位置不是0–4的单个数字。 |
+| 400 | RESTAURANT_INVALID_INPUT | 图片位置不是0–4的单个数字；修改内容或图片ID重复/越界。 |
 | 401 | AUTH_UNAUTHENTICATED | 缺少/失效凭证、账号不可用或会话失效。 |
-| 404 | RESTAURANT_REQUEST_NOT_FOUND | 申请不存在或不属于本人；图片入口同样先校验申请归属。 |
+| 404 | RESTAURANT_REQUEST_NOT_FOUND | 申请不存在或不属于本人；修改、撤回、重提和图片入口同样先校验归属。 |
+| 404 | RESTAURANT_NOT_FOUND | 修改或重提的UPDATE目标店铺已删除。 |
 | 404 | FILE_NOT_FOUND | 本人申请无对应图片位置，或文件归属、用途、绑定状态不符。 |
+| 409 | RESTAURANT_STATE_CONFLICT | 修改/撤回/重提的状态不允许，或重提UUID对应内容冲突。 |
+| 409 | FILE_NOT_BINDABLE | 修改附图时图片已过期、已绑定其他申请或不属于本人的RESTAURANT用途。 |
 | 503 | FILE_STORAGE_UNAVAILABLE | 图片存储暂不可用，可只重试单图。 |
 | 503 | AUTH_SERVICE_UNAVAILABLE | 认证依赖暂不可用，保留凭证供重试。 |
-| 500 | COMMON_INTERNAL_SERVER_ERROR | 未预期查询错误，不降级为空列表、空详情或成功。 |
+| 500 | COMMON_INTERNAL_SERVER_ERROR | 未预期查询或写入错误，不降级为空列表、空详情或成功。 |
 
-已通过认证但方法不匹配返回405 `COMMON_METHOD_NOT_ALLOWED`。所有接口只读，不改变审核状态、已读状态、经验、商户资料或图片绑定状态。
+已通过认证但方法不匹配返回405 `COMMON_METHOD_NOT_ALLOWED`。GET不改变审核状态、已读状态、经验、商户资料或图片绑定状态；PUT、撤回和重提只影响本人申请及其私有附图，不直接发布或修改公开商户资料。
 
 ## 17. 本人系统通知
 
@@ -855,6 +895,12 @@ Detail为统一响应的data：
 | 405 | COMMON_METHOD_NOT_ALLOWED | 已认证请求使用未提供的编辑等方法。 |
 | 503 | AUTH_SERVICE_UNAVAILABLE | 认证基础设施暂时不可用。 |
 | 500 | COMMON_INTERNAL_SERVER_ERROR | 其他读写失败，事务回滚，不伪装成成功。 |
+
+### 17.10 举报处理结果通知
+
+举报被驳回或确认违规后，每位原举报者收到一条SYSTEM消息：`notificationType=REPORT_RESULT`，`sourceId`为该举报编号，`reviewId`为所属点评（回复举报填写父点评），`decision`为`DISMISSED`（未认定违规）或`REMOVED`（已删除内容），`category=SYSTEM`，其余审核字段为null。同一内容的多份举报分别通知各自举报者，不合并、不暴露其他举报者、处理人或内部备注。
+
+举报结果计入SYSTEM分类总数、未读数和`latestSystem`；逐条已读、单条删除和分类全部已读与其他系统消息一致。重复驳回或重复删除不重复发送；通知与举报结案同事务提交，通知写入失败时结案回滚。点击通知只展示处理结果，不跳转到已删除内容。
 
 ## 18. 点评与回复点赞
 
@@ -1081,3 +1127,61 @@ DELETE只解除本窗口的图片关联，并提交媒体待回收状态；云�
 ### 搜索同步副作用
 
 影响搜索内容的成功事务提交后立即通知异步Outbox消费者，空闲唤醒后固定200毫秒合并窗口，30秒定时扫描兜底；批内同餐厅合并后通过Bulk写入，逐项确认本批捕获任务。HTTP不等待ES完成，搜索仍为最终一致性，不保证提交即刻可见；无接口参数或响应变更。调度与指标口径见[同步说明](operations/elasticsearch-sync-metrics.md)。
+
+## 23. 内容举报
+
+第一版只受理点评和回复。被举报内容在核查前继续公开（RISK-003）；当前已完成举报提交、管理员查询、驳回、永久删除和举报结果通知。
+
+### 23.1 提交举报
+
+`POST /api/reviews/{reviewId}/reports`或`POST /api/review-replies/{replyId}/reports`，需Bearer。路径决定目标类型，举报人只取当前认证身份，不能指定其他举报人。请求体示例：
+
+```json
+{"reason":"ABUSE","detail":"包含人身攻击"}
+```
+
+reason必填，大小写精确，取值为SPAM、ABUSE、PORNOGRAPHY、ILLEGAL、PRIVACY、IRRELEVANT、OTHER。detail选填，去首尾空白后为空视为未填写，最多200码点；未知字段返回400通用请求错误。
+
+首次提交201，data示例：
+
+```json
+{"reportId":"1","targetType":"REVIEW","targetId":"101","status":"PENDING","duplicate":false,"createdAt":"2026-11-10T08:00:00Z"}
+```
+
+同一用户对同一内容再次提交返回200、duplicate=true和原记录，不新增行，也不覆盖首次原因、说明和正文快照。服务端在提交时读取并保存正文及作者快照，普通接口不回显快照。
+
+目标不存在或父店/窗口不可见统一404 `REPORT_TARGET_NOT_FOUND`；举报自己发布的内容403 `REPORT_SELF_NOT_ALLOWED`；原因非法、编号非法或说明超长400 `REPORT_INVALID_INPUT`；未登录401。举报不改变内容可见性、商户评分、点赞或成长经验。
+
+### 23.2 管理员列表与详情
+
+`GET /api/admin/content-reports`需管理员。status默认PENDING，只接受PENDING、RESOLVED、DISMISSED；page默认1，pageSize默认20、范围1–50；按提交时间及ID升序。成功200、禁止缓存，data为：
+
+```json
+{"records":[{"id":"1","targetType":"REVIEW","targetId":"101","reviewId":"101","reporterUserId":"11","targetAuthorUserId":"22","contentSnapshot":"被举报正文","reason":"ABUSE","detail":"含攻击性内容","status":"PENDING","handledBy":null,"handledAt":null,"decisionNote":null,"createdAt":"2026-11-10T08:00:00Z"}],"total":1,"totalPages":1,"page":1,"pageSize":20}
+```
+
+`GET /api/admin/content-reports/{id}`返回同一单条结构。所有编号为字符串；contentSnapshot为提交时保存的正文，仅管理员可读。匿名401、普通用户403、状态或分页非法400、编号不存在404 `REPORT_NOT_FOUND`。
+
+### 23.3 驳回举报
+
+`POST /api/admin/content-reports/{id}/dismiss`需管理员，请求体可省略，或为`{"note":"未认定违规"}`；note选填，去首尾空白后最多200码点，空白视为未填写。同一内容（target_type与target_id相同）下所有PENDING举报一并改为DISMISSED，记录相同处理人、时间和备注，避免逐条重复处理（RISK-026）。
+
+首次与重复驳回均200，data为`{"reportId":"1","status":"DISMISSED","affectedReports":2,"handledAt":"2026-11-10T08:05:00Z"}`；重复驳回时affectedReports为0。不存在404 `REPORT_NOT_FOUND`；举报已因内容删除变为RESOLVED时409 `REPORT_STATE_CONFLICT`，不能反向改写处置结果。驳回不改变内容可见性、评分或作者状态；结案后每位举报者收到一条`DISMISSED`结果通知，重复驳回不重复发送。
+
+### 23.4 删除违规内容
+
+`POST /api/admin/content-reports/{id}/remove`需管理员，请求体可省略，或为`{"note":"确认违规"}`；note规则与驳回相同。确认违规后永久删除被举报的点评或回复（RISK-004），不提供恢复；点评删除时关联回复、点评图片一并移除，商户评分按同作者最新有效点评重算（RISK-005），被删内容的点赞不再计入获赞（INT-015）。回复删除只移除该条回复，不改变父点评和评分。
+
+同一内容（target_type与target_id相同）下所有PENDING举报一并改为RESOLVED，记录相同处理人、时间和备注（RISK-026）。内容删除与举报结案分属两个事务：若结案阶段失败，管理员重试会得到contentDeleted=false并完成结案，不重复删除。
+
+首次200，data示例：
+
+```json
+{"reportId":"1","targetType":"REVIEW","targetId":"101","status":"RESOLVED","affectedReports":2,"contentDeleted":true,"handledAt":"2026-11-10T08:10:00Z"}
+```
+
+重复删除同一举报返回200、status=RESOLVED、contentDeleted=false、affectedReports=0；内容此前已被作者删除时同样只完成结案。举报已驳回409 `REPORT_STATE_CONFLICT`；举报不存在404 `REPORT_NOT_FOUND`；目标点评或回复无法定位404对应内容错误码；事务冲突或超时409/503沿用review模块的`BUSY`语义。结案后每位举报者收到一条`REMOVED`结果通知，重复删除不重复发送；删除不通知被处置作者，也不执行账号处罚。
+
+### 23.5 范围边界
+
+普通用户在他人点评/回复操作区提交举报，管理员在`/admin/reports`查看与处置；账号处罚、禁言、停用和申诉不在本轮范围。

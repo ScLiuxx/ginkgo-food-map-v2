@@ -30,6 +30,7 @@ onBeforeUnmount(() => controller.abort())
 const items = [
   { name: '商户审核', path: '/admin/reviews', icon: 'review' },
   { name: '公告管理', path: '/admin/announcements', icon: 'announcement' },
+  { name: '举报处理', path: '/admin/reports', icon: 'report' },
   { name: '商户管理', path: '/admin/restaurants', icon: 'shop' },
   { name: '点评管理', icon: 'chat' },
   { name: '操作记录', icon: 'history' },
@@ -71,6 +72,10 @@ const items = [
         <path
           v-else-if="item.icon === 'announcement'"
           d="m4 10 15-6v16L4 14ZM4 10H2v4h2M7 15l2 6h3l-2-5"
+        />
+        <path
+          v-else-if="item.icon === 'report'"
+          d="M12 3 2 21h20L12 3Zm0 6v5M12 17h.01"
         />
         <path
           v-else-if="item.icon === 'shop'"
