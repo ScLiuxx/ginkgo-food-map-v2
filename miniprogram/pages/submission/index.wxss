@@ -125,7 +125,28 @@
 .location-button {
   flex: none;
   min-height: 68rpx;
+  padding: 0 26rpx;
+  font-size: 24rpx;
+}
+
+.location-actions {
+  display: flex;
+  flex: none;
+  flex-direction: column;
   margin-left: 18rpx;
+}
+
+.location-button-confirm {
+  margin-bottom: 12rpx;
+}
+
+.source-error {
+  margin-top: 14rpx;
+}
+
+.retry-source {
+  margin-top: 16rpx;
+  min-height: 68rpx;
   padding: 0 26rpx;
   font-size: 24rpx;
 }

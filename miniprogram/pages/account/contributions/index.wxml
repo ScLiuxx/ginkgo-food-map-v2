@@ -49,7 +49,7 @@
     <block wx:else>
       <view wx:if="{{!items.length}}" class="card content-state">
         <view class="state-title">暂无{{filter === 'ALL' ? '投稿' : '对应状态'}}记录</view>
-        <view class="state-copy">小程序当前只支持查看记录；新店投稿与纠错提交请在网页端完成。</view>
+        <view class="state-copy">小程序支持在找店页提交新店、在店铺详情提交资料纠错；待审修改、撤回与驳回重提请在网页端完成。</view>
       </view>
 
       <view

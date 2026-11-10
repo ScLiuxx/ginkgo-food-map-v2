@@ -1,8 +1,10 @@
-import { fetchCategories } from '../../modules/restaurant/api'
+import { fetchCategories, fetchRestaurantDetail } from '../../modules/restaurant/api'
 import {
   MAX_SUBMISSION_PHOTOS,
   buildSubmissionInput,
   submitNewRestaurant,
+  submitRestaurantCorrection,
+  toCorrectionDraft,
   validateSubmissionDraft,
   type RestaurantType,
   type SubmissionBusinessStatus,
@@ -30,6 +32,10 @@ type DraftPhoto = {
 
 type SubmissionData = {
   loggedIn: boolean
+  /** 纠错模式复用投稿表单，但目标、标题和提交接口不同。 */
+  isCorrection: boolean
+  sourceLoading: boolean
+  sourceError: string
   name: string
   typeLabels: string[]
   typeIndex: number
@@ -61,7 +67,14 @@ type SubmissionData = {
 type SubmissionCustom = {
   requestId: string
   submittedContent: string
+  /** 纠错目标店铺；新店投稿为空。 */
+  restaurantId: string
+  /** 分类尚未加载时暂存原分类编码，加载完成后按编码恢复选择。 */
+  pendingCategoryCode: string
   loadCategories(): Promise<void>
+  loadSource(): Promise<void>
+  selectCategoryCode(code: string): void
+  confirmLocation(): void
   changeName(event: WxInputEvent): void
   changeType(event: WxPickerEvent): void
   changeCategory(event: WxPickerEvent): void
@@ -110,15 +123,19 @@ function truncateText(value: string, limit: number): string {
 }
 
 /**
- * 新店投稿。
+ * 新店投稿与资料纠错。
  *
- * 只提交待审核申请，不直接创建公开店铺；所有字段在页面内存中编辑，
+ * 只提交待审核申请，不直接创建公开店铺或覆盖现有资料；所有字段在页面内存中编辑，
  * 不写入本地存储，也不读取微信头像、昵称或手机号。
- * 位置通过微信地图选择并显式确认，避免用户只填写文字地址导致坐标缺失。
+ * 位置通过微信地图选择并显式确认，避免用户只填写文字地址导致坐标缺失；
+ * 纠错模式会带入公开资料，但历史坐标仍需用户重新确认。
  */
 Page<SubmissionData, SubmissionCustom>({
   data: {
     loggedIn: false,
+    isCorrection: false,
+    sourceLoading: false,
+    sourceError: '',
     name: '',
     typeLabels: TYPE_LABELS,
     typeIndex: 0,
@@ -149,12 +166,27 @@ Page<SubmissionData, SubmissionCustom>({
 
   requestId: '',
   submittedContent: '',
+  restaurantId: '',
+  pendingCategoryCode: '',
 
-  onLoad() {
+  onLoad(query) {
     pageGeneration++
+    const restaurantId = query.id ? decodeURIComponent(query.id) : ''
     const loggedIn = isLoggedIn()
-    this.setData({ loggedIn })
-    wx.setNavigationBarTitle({ title: '新店投稿' })
+    if (restaurantId) {
+      // 纠错复用同一表单：先按公开资料回填，再等待用户核对位置后提交审核。
+      this.restaurantId = isLongId(restaurantId) ? restaurantId : ''
+      this.setData({
+        loggedIn,
+        isCorrection: true,
+        sourceError: this.restaurantId ? '' : '店铺编号无效，请返回详情后重试。',
+      })
+      wx.setNavigationBarTitle({ title: '补充 / 纠错' })
+      if (this.restaurantId) void this.loadSource()
+    } else {
+      this.setData({ loggedIn })
+      wx.setNavigationBarTitle({ title: '新店投稿' })
+    }
     // 分类是公开数据，未登录也先读取，登录后可直接继续填写。
     void this.loadCategories()
   },
@@ -194,7 +226,11 @@ Page<SubmissionData, SubmissionCustom>({
         .slice()
         .sort((left, right) => (Number(left.sortOrder) || 0) - (Number(right.sortOrder) || 0))
       const codes = enabled.map((row) => row.code)
-      const previous = this.data.categoryCodes[this.data.categoryIndex] || ''
+      // 纠错回填的分类优先于页面上次的临时选择，避免异步加载顺序把原分类覆盖掉。
+      const previous =
+        this.pendingCategoryCode ||
+        this.data.categoryCodes[this.data.categoryIndex] ||
+        ''
       const restored = previous ? codes.indexOf(previous) + 1 : 0
       this.setData({
         categoryCodes: codes,
@@ -202,10 +238,76 @@ Page<SubmissionData, SubmissionCustom>({
         categoryIndex: restored > 0 ? restored : 0,
         categoriesLoading: false,
       })
+      this.pendingCategoryCode = ''
     } catch (reason) {
       if (generation !== pageGeneration) return
       this.setData({ categoriesLoading: false, errorMessage: toErrorMessage(reason) })
     }
+  },
+
+  /**
+   * 读取纠错目标的公开资料并回填表单。
+   *
+   * 只接受与请求编号一致的响应；读取失败时保留空表单并阻止提交，
+   * 不能让用户在没有完整快照的情况下提交，覆盖掉未展示的字段。
+   */
+  async loadSource(): Promise<void> {
+    const id = this.restaurantId
+    if (!id) return
+    const generation = pageGeneration
+    this.setData({ sourceLoading: true, sourceError: '' })
+    try {
+      const row = await fetchRestaurantDetail(id)
+      if (generation !== pageGeneration) return
+      if (!row || row.id !== id) throw new Error('店铺资料无法确认，请返回详情后重试。')
+      const draft = toCorrectionDraft(row)
+      const typeIndex = TYPE_VALUES.indexOf(draft.restaurantType)
+      const priceIndex = PRICE_VALUES.indexOf(draft.priceKind)
+      const businessIndex = BUSINESS_VALUES.indexOf(draft.businessStatus)
+      const dineIndex = TRI_VALUES.indexOf(draft.supportsDineIn)
+      const deliveryIndex = TRI_VALUES.indexOf(draft.supportsDelivery)
+      this.pendingCategoryCode = draft.categoryCode
+      this.setData({
+        name: draft.name,
+        typeIndex: typeIndex >= 0 ? typeIndex : 0,
+        categoryIndex: 0,
+        priceIndex: priceIndex >= 0 ? priceIndex : 0,
+        priceText: draft.priceText,
+        address: draft.address,
+        latitude: draft.latitude,
+        longitude: draft.longitude,
+        locationText:
+          draft.latitude && draft.longitude
+            ? `${draft.latitude}, ${draft.longitude}`
+            : '',
+        locationConfirmed: false,
+        businessIndex: businessIndex >= 0 ? businessIndex : 0,
+        dineIndex: dineIndex >= 0 ? dineIndex : 0,
+        deliveryIndex: deliveryIndex >= 0 ? deliveryIndex : 0,
+        tagsText: draft.tagsText,
+        sourceLoading: false,
+      })
+      this.selectCategoryCode(draft.categoryCode)
+    } catch (reason) {
+      if (generation !== pageGeneration) return
+      this.setData({ sourceLoading: false, sourceError: toErrorMessage(reason) })
+    }
+  },
+
+  /** 分类可能先于资料加载；编码未匹配时保留待选项，不把选择错位到其他分类。 */
+  selectCategoryCode(code: string): void {
+    if (!code) {
+      this.setData({ categoryIndex: 0 })
+      return
+    }
+    const index = this.data.categoryCodes.indexOf(code)
+    this.setData({ categoryIndex: index >= 0 ? index + 1 : 0 })
+  },
+
+  /** 纠错带入的历史坐标必须由用户主动核对，不能默认视为本人已确认。 */
+  confirmLocation(): void {
+    if (!this.data.latitude || !this.data.longitude) return
+    this.setData({ locationConfirmed: true, errorMessage: '' })
   },
 
   changeName(event: WxInputEvent): void {
@@ -413,8 +515,23 @@ Page<SubmissionData, SubmissionCustom>({
   async submit(): Promise<void> {
     if (this.data.submitting) return
     if (!this.data.loggedIn) {
-      this.setData({ errorMessage: '请先登录后再提交投稿。' })
+      this.setData({
+        errorMessage: this.data.isCorrection
+          ? '请先登录后再提交纠错。'
+          : '请先登录后再提交投稿。',
+      })
       return
+    }
+    if (this.data.isCorrection) {
+      // 资料未读取成功时提交会漏掉未展示字段，必须等完整快照回填后再允许提交。
+      if (this.data.sourceLoading) {
+        this.setData({ errorMessage: '正在读取店铺资料，请稍候。' })
+        return
+      }
+      if (this.data.sourceError) {
+        this.setData({ errorMessage: '店铺资料未读取成功，请重新读取后再提交。' })
+        return
+      }
     }
     if (this.data.uploading || this.data.photos.some((item) => item.status !== 'ready')) {
       this.setData({ errorMessage: '照片尚未全部上传成功，请重试或移除失败照片。' })
@@ -433,7 +550,8 @@ Page<SubmissionData, SubmissionCustom>({
     }
 
     const base = buildSubmissionInput(draft, '')
-    const content = JSON.stringify(base)
+    // 纠错把目标编号也纳入指纹，避免同一页面切换店铺后复用旧请求号。
+    const content = JSON.stringify([this.data.isCorrection ? this.restaurantId : 'new', base])
     // 内容未变的重试沿用原请求号；改动后换新编号，避免服务端判定内容冲突。
     if (this.submittedContent && this.submittedContent !== content) {
       this.requestId = createRequestId()
@@ -443,10 +561,17 @@ Page<SubmissionData, SubmissionCustom>({
 
     this.setData({ submitting: true, errorMessage: '' })
     try {
-      await submitNewRestaurant({ ...base, clientRequestId: this.requestId })
+      if (this.data.isCorrection) {
+        await submitRestaurantCorrection(this.restaurantId, {
+          ...base,
+          clientRequestId: this.requestId,
+        })
+      } else {
+        await submitNewRestaurant({ ...base, clientRequestId: this.requestId })
+      }
       this.submittedContent = ''
       this.requestId = ''
-      wx.showToast({ title: '投稿已提交', icon: 'success' })
+      wx.showToast({ title: this.data.isCorrection ? '纠错已提交' : '投稿已提交', icon: 'success' })
       // 只代表申请已受理；引导到投稿记录查看审核进度，不直接打开未发布的店铺。
       setTimeout(() => {
         wx.redirectTo({ url: '/pages/account/contributions/index' })
@@ -472,8 +597,12 @@ Page<SubmissionData, SubmissionCustom>({
   },
 
   login(): void {
+    // 纠错登录后回到同一家店铺继续填写，不能退回新店投稿或丢失目标编号。
+    const target = this.data.isCorrection
+      ? `/pages/submission/index?id=${encodeURIComponent(this.restaurantId)}`
+      : '/pages/submission/index'
     wx.navigateTo({
-      url: `/pages/login/index?redirect=${encodeURIComponent('/pages/submission/index')}`,
+      url: `/pages/login/index?redirect=${encodeURIComponent(target)}`,
     })
   },
 })

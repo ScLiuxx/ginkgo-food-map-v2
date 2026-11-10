@@ -189,6 +189,7 @@ type DetailCustom = {
   toggleFavorite(): Promise<void>
   writeReview(): void
   openCompose(): void
+  openCorrection(): void
   login(): void
   loadReviewLikes(reviews: ReviewCardView[]): Promise<void>
   loadReplyLikes(reviewId: string, replies: ReplyCardView[]): Promise<void>
@@ -547,6 +548,19 @@ Page<DetailData, DetailCustom>({
       return
     }
     this.openCompose()
+  },
+
+  /**
+   * 打开纠错页并带上目标编号。
+   *
+   * 独立窗口没有对应纠错入口；登录由纠错页自行处理，
+   * 保持当前详情页不变，登录后可回到同一目标继续填写。
+   */
+  openCorrection() {
+    if (!this.data.restaurant || this.data.isWindow) return
+    wx.navigateTo({
+      url: `/pages/submission/index?id=${encodeURIComponent(this.data.restaurantId)}`,
+    })
   },
 
   /**

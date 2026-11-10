@@ -1,12 +1,13 @@
 import { request } from '../../shared/api/request'
 import { isLongId } from '../../shared/lib/id'
+import type { RestaurantResponse } from './types'
 
 /**
- * 新店投稿。
+ * 新店投稿与资料纠错。
  *
  * 只提交待审核申请，不直接创建或覆盖公开店铺；字段范围与后端
- * `POST /api/restaurant-submissions` 的维护白名单保持一致，
- * 不接受评分、作者、审核状态或未知字段。
+ * `POST /api/restaurant-submissions`、`POST /api/restaurants/{id}/change-requests`
+ * 的维护白名单保持一致，不接受评分、作者、审核状态或未知字段。
  */
 
 export type RestaurantType = 'REGULAR' | 'CANTEEN'
@@ -66,6 +67,38 @@ export function draftTags(value: string): string[] {
     .split(/\r?\n/)
     .map((tag) => tag.trim())
     .filter(Boolean)
+}
+
+/**
+ * 把公开店铺资料转成纠错草稿。
+ *
+ * 只带入公开可读字段，未知值保持空字符串或 null，不能用默认值补造资料。
+ * 位置虽然已有历史坐标，仍要求用户在新页面重新确认；已有公开照片不进入
+ * `photoIds`，纠错只提交本次新上传、审核通过后追加的图片。
+ */
+export function toCorrectionDraft(row: RestaurantResponse): SubmissionDraft {
+  const restaurantType: RestaurantType = row.restaurantType === 'CANTEEN' ? 'CANTEEN' : 'REGULAR'
+  const priceKind: SubmissionPriceKind =
+    row.priceKind === 'EXACT' || row.priceKind === 'ESTIMATE' ? row.priceKind : 'UNKNOWN'
+  const hasPrice = priceKind !== 'UNKNOWN' && typeof row.pricePerPerson === 'number'
+  return {
+    name: typeof row.name === 'string' ? row.name : '',
+    restaurantType,
+    // 食堂没有分类；普通餐厅按原分类带入，停用分类由服务端最终判定。
+    categoryCode: restaurantType === 'CANTEEN' ? '' : (row.categoryCode ?? ''),
+    priceKind,
+    priceText: hasPrice ? String(row.pricePerPerson) : '',
+    address: row.address ?? '',
+    latitude: typeof row.latitude === 'number' ? row.latitude.toFixed(6) : '',
+    longitude: typeof row.longitude === 'number' ? row.longitude.toFixed(6) : '',
+    locationConfirmed: false,
+    businessStatus: row.businessStatus === 'CLOSED' ? 'CLOSED' : 'OPERATING',
+    supportsDineIn: row.supportsDineIn === true ? true : row.supportsDineIn === false ? false : null,
+    supportsDelivery:
+      row.supportsDelivery === true ? true : row.supportsDelivery === false ? false : null,
+    tagsText: Array.isArray(row.tags) ? row.tags.join('\n') : '',
+    photoIds: [],
+  }
 }
 
 /** 坐标只接受普通十进制，不能用科学计数法或不明坐标系绕过位置确认。 */
@@ -168,6 +201,29 @@ export async function submitNewRestaurant(input: SubmissionInput): Promise<Submi
   })
   if (!raw || !isLongId(raw.id) || raw.status !== 'PENDING') {
     throw new Error('投稿结果无法确认，请到“我的投稿”核对待审记录。')
+  }
+  return { id: raw.id, status: 'PENDING' }
+}
+
+/**
+ * 提交资料纠错。
+ *
+ * 请求体仍是完整店铺快照，服务端按目标商户生成 UPDATE 申请；
+ * 成功只代表申请已受理，审核通过前不会修改公开资料。
+ */
+export async function submitRestaurantCorrection(
+  restaurantId: string,
+  input: SubmissionInput,
+): Promise<SubmissionReceipt> {
+  if (!isLongId(restaurantId)) throw new Error('店铺编号无法确认，请返回详情重试。')
+  const raw = await request<{ id: string; status: string }>({
+    path: `/api/restaurants/${encodeURIComponent(restaurantId)}/change-requests`,
+    method: 'POST',
+    auth: 'required',
+    data: input,
+  })
+  if (!raw || !isLongId(raw.id) || raw.status !== 'PENDING') {
+    throw new Error('纠错结果无法确认，请到“我的投稿”核对待审记录。')
   }
   return { id: raw.id, status: 'PENDING' }
 }
