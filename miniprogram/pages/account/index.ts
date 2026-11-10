@@ -29,6 +29,8 @@ Page<AccountData, AccountCustom>({
   },
 
   onShow() {
+    const tabBar = this.getTabBar?.()
+    if (tabBar) tabBar.setData({ selected: 3 })
     const loggedIn = isLoggedIn()
     const user = getCurrentUser()
     this.setData({

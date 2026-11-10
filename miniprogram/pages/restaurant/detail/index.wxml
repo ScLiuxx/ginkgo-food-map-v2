@@ -1,4 +1,10 @@
 <view class="page detail-page">
+  <view class="ambient">
+    <view class="ambient-blob ambient-a"></view>
+    <view class="ambient-blob ambient-b"></view>
+    <view class="ambient-blob ambient-c"></view>
+  </view>
+
   <view wx:if="{{loading}}" class="empty-state">正在加载店铺详情…</view>
   <view wx:elif="{{errorMessage}}" class="empty-state">
     <view class="error-text">{{errorMessage}}</view>

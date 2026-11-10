@@ -1,39 +1,49 @@
 <view class="page login-page">
+  <view class="ambient">
+    <view class="ambient-blob ambient-a"></view>
+    <view class="ambient-blob ambient-b"></view>
+    <view class="ambient-blob ambient-c"></view>
+  </view>
+
   <view class="login-hero">
     <view class="login-mark">G</view>
-    <view class="login-title">登录泥电美食地图</view>
-    <view class="login-subtitle">使用用户名或校园邮箱继续</view>
+    <view class="login-title">邮箱登录</view>
+    <view class="login-subtitle">使用注册邮箱继续，不获取微信账号信息</view>
   </view>
 
   <view class="card login-card">
     <view class="field">
-      <view class="field-label">用户名或邮箱</view>
-      <input
-        class="field-input"
-        type="text"
-        confirm-type="next"
-        placeholder="请输入用户名或注册邮箱"
-        placeholder-class="field-placeholder"
-        maxlength="254"
-        value="{{username}}"
-        bindinput="onUsernameInput"
-      />
+      <view class="field-label">注册邮箱</view>
+      <view class="field-shell">
+        <input
+          class="field-input"
+          type="text"
+          confirm-type="next"
+          placeholder="name@std.uestc.edu.cn"
+          placeholder-class="field-placeholder"
+          maxlength="254"
+          value="{{email}}"
+          bindinput="onEmailInput"
+        />
+      </view>
     </view>
 
     <view class="field">
       <view class="field-label">密码</view>
-      <input
-        class="field-input"
-        type="text"
-        password
-        confirm-type="done"
-        placeholder="请输入密码"
-        placeholder-class="field-placeholder"
-        maxlength="72"
-        value="{{password}}"
-        bindinput="onPasswordInput"
-        bindconfirm="submit"
-      />
+      <view class="field-shell">
+        <input
+          class="field-input"
+          type="text"
+          password
+          confirm-type="done"
+          placeholder="请输入密码"
+          placeholder-class="field-placeholder"
+          maxlength="72"
+          value="{{password}}"
+          bindinput="onPasswordInput"
+          bindconfirm="submit"
+        />
+      </view>
     </view>
 
     <view wx:if="{{errorMessage}}" class="error-text login-error">{{errorMessage}}</view>
@@ -49,6 +59,6 @@
   </view>
 
   <view class="login-note">
-    注册账号与找回密码需要校园邮箱验证码，暂未在小程序开放，请先在网页端完成。
+    注册账号与找回密码需要邮箱验证码，暂未在小程序开放，请先在网页端完成。
   </view>
 </view>

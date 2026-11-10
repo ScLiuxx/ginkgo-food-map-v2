@@ -1,13 +1,42 @@
-<view class="page">
-  <view class="placeholder-hero">
-    <view class="placeholder-icon">地图</view>
-    <view class="placeholder-title">地图找店</view>
-    <view class="placeholder-copy">{{planningNote}}</view>
+<view class="map-page">
+  <map
+    id="restaurantMap"
+    class="map-canvas"
+    latitude="{{latitude}}"
+    longitude="{{longitude}}"
+    scale="{{scale}}"
+    markers="{{markers}}"
+    show-location="{{showLocation}}"
+    bindmarkertap="onMarkerTap"
+    bindregionchange="onRegionChange"
+  ></map>
+
+  <view class="map-top">
+    <view class="map-title-row">
+      <view>
+        <view class="map-title">地图找店</view>
+        <view class="map-sub">{{located ? '已定位到当前位置' : '校园中心视野'}}</view>
+      </view>
+      <view wx:if="{{loading}}" class="map-loading">读取中…</view>
+    </view>
+    <view wx:if="{{locationHint}}" class="map-warn">{{locationHint}}</view>
   </view>
-  <view class="card planning-card">
-    <view class="planning-title">下一阶段计划</view>
-    <view class="planning-item">1. 接入微信定位授权与拒绝后的降级提示。</view>
-    <view class="planning-item">2. 按地图视野请求点位，拖动后节流刷新。</view>
-    <view class="planning-item">3. 点击标记进入店铺详情，并支持导航。</view>
+
+  <view class="map-sheet">
+    <view class="map-count-row">
+      <view class="map-count">{{matchedCount}}</view>
+      <view class="map-count-copy">家店铺在当前范围</view>
+    </view>
+    <view class="map-sheet-copy">
+      <text wx:if="{{truncated}}">点位较多，仅展示前 {{returnedCount}} 家，请放大地图查看更精确结果。</text>
+      <text wx:else>拖动或缩放地图自动更新店铺；点击蓝色标记查看详情。</text>
+    </view>
+    <view wx:if="{{errorMessage}}" class="error-text map-error">{{errorMessage}}</view>
+    <view class="map-actions">
+      <view class="ghost-button map-action" bindtap="onLocateTap">
+        {{locating ? '定位中…' : '回到我的位置'}}
+      </view>
+      <view class="ghost-button map-action" bindtap="retry">重新加载</view>
+    </view>
   </view>
 </view>

@@ -1,4 +1,9 @@
-<view class="page">
+<view class="page tab-page">
+  <view class="ambient">
+    <view class="ambient-blob ambient-a"></view>
+    <view class="ambient-blob ambient-b"></view>
+  </view>
+
   <view class="placeholder-hero">
     <view class="placeholder-icon">消息</view>
     <view class="placeholder-title">消息中心</view>

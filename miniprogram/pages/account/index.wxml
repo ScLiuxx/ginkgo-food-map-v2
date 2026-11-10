@@ -1,4 +1,10 @@
-<view class="page account-page">
+<view class="page tab-page account-page">
+  <view class="ambient">
+    <view class="ambient-blob ambient-a"></view>
+    <view class="ambient-blob ambient-b"></view>
+    <view class="ambient-blob ambient-c"></view>
+  </view>
+
   <view class="account-hero">
     <view class="account-avatar">{{initial}}</view>
     <view class="account-copy">
@@ -10,7 +16,7 @@
   <view wx:if="{{!loggedIn}}" class="card account-card">
     <view class="account-title">登录泥电美食地图</view>
     <view class="account-copy-text">
-      小程序沿用网页端账号体系，使用用户名或校园邮箱登录，无需重新注册。
+      小程序沿用网页端账号体系，使用注册邮箱登录，无需重新注册。
     </view>
     <view class="primary-button" bindtap="login">登录账号</view>
   </view>
@@ -26,6 +32,6 @@
   </view>
 
   <view class="account-note">
-    微信一键登录与账号绑定尚未接入；当前不会请求微信头像、昵称或手机号。
+    小程序不会获取微信头像、昵称、手机号或 openid；登录仅使用注册邮箱与密码。
   </view>
 </view>

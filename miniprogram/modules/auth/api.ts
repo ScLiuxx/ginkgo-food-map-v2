@@ -4,14 +4,15 @@ import type { AuthSession, CurrentUser } from '../../shared/auth/session'
 /**
  * 账号接口。
  *
- * 小程序第一批沿用现有用户名/邮箱 + 密码登录，不引入微信 openid 绑定；
+ * 小程序使用邮箱 + 密码登录，不引入微信 openid 绑定；
+ * 后端登录字段仍叫 username，但接受注册邮箱，因此这里只对字段名做适配。
  * 登录成功后只保存后端返回的正式 JWT 会话。
  */
-export function login(username: string, password: string): Promise<AuthSession> {
+export function login(email: string, password: string): Promise<AuthSession> {
   return request<AuthSession>({
     path: '/auth/login',
     method: 'POST',
-    data: { username, password },
+    data: { username: email, password },
     auth: 'none',
   })
 }

@@ -1,6 +1,6 @@
 {
   "navigationBarTitleText": "泥电美食地图",
-  "navigationBarBackgroundColor": "#fffdf8",
+  "navigationBarBackgroundColor": "#e9f4ff",
   "navigationBarTextStyle": "black",
   "enablePullDownRefresh": true,
   "backgroundTextStyle": "dark"

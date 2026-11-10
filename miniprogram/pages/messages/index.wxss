@@ -3,28 +3,30 @@
 }
 
 .placeholder-icon {
-  width: 120rpx;
-  height: 120rpx;
+  width: 124rpx;
+  height: 124rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 28rpx;
-  border: 1rpx solid #e4ddd1;
-  border-radius: 32rpx;
-  background: #fffdf8;
-  color: #625c52;
+  border: 1rpx solid rgba(255, 255, 255, 0.85);
+  border-radius: 36rpx;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.76), rgba(163, 216, 255, 0.5));
+  box-shadow: 0 18rpx 40rpx rgba(27, 63, 104, 0.14), inset 0 1rpx 0 rgba(255, 255, 255, 0.95);
+  color: #0a6fbf;
   font-size: 26rpx;
   font-weight: 700;
 }
 
 .placeholder-title {
-  font-size: 44rpx;
+  font-size: 46rpx;
   font-weight: 800;
+  letter-spacing: -1rpx;
 }
 
 .placeholder-copy {
   margin-top: 16rpx;
-  color: #7a7266;
+  color: var(--ink-muted);
   font-size: 26rpx;
   line-height: 1.8;
 }
@@ -36,7 +38,7 @@
 
 .login-copy {
   margin: 10rpx 0 26rpx;
-  color: #8a8175;
+  color: var(--ink-muted);
   font-size: 24rpx;
   line-height: 1.7;
 }
@@ -49,7 +51,7 @@
 
 .planning-item {
   padding: 8rpx 0;
-  color: #625c52;
+  color: var(--ink-soft);
   font-size: 25rpx;
   line-height: 1.7;
 }

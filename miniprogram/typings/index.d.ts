@@ -70,6 +70,38 @@ interface WxAccountInfo {
   }
 }
 
+interface WxLocationResult {
+  latitude: number
+  longitude: number
+  accuracy?: number
+}
+
+interface WxLocationOptions {
+  type?: 'wgs84' | 'gcj02'
+  isHighAccuracy?: boolean
+  highAccuracyExpireTime?: number
+  success?: (result: WxLocationResult) => void
+  fail?: (error: { errMsg: string }) => void
+}
+
+interface WxMapCoordinate {
+  latitude: number
+  longitude: number
+}
+
+interface WxMapRegion {
+  southwest: WxMapCoordinate
+  northeast: WxMapCoordinate
+}
+
+interface WxMapContext {
+  getRegion(options: { success: (region: WxMapRegion) => void; fail?: () => void }): void
+}
+
+interface WxSettingResult {
+  authSetting: Record<string, boolean | undefined>
+}
+
 interface Wx {
   request(options: WxRequestOptions): WxRequestTask
   getStorageSync(key: string): unknown
@@ -88,6 +120,10 @@ interface Wx {
   getSystemInfoSync(): WxSystemInfo
   getAccountInfoSync(): WxAccountInfo
   setNavigationBarTitle(options: { title: string }): void
+  createMapContext(id: string, component?: unknown): WxMapContext
+  getLocation(options: WxLocationOptions): void
+  getSetting(options: { success?: (result: WxSettingResult) => void }): void
+  openSetting(options?: { success?: (result: WxSettingResult) => void }): void
 }
 
 declare const wx: Wx
@@ -110,6 +146,7 @@ interface PageInstance<D extends object> {
   data: D
   route: string
   setData(data: Partial<D> | Record<string, unknown>, callback?: () => void): void
+  getTabBar?(): { setData(data: Record<string, unknown>): void } | undefined
 }
 
 interface PageOptions<D extends object, C extends object> {
@@ -140,6 +177,27 @@ interface AppOptions {
 declare function App(options: AppOptions): void
 declare function getApp<T = { globalData: Record<string, unknown> }>(): T
 declare function getCurrentPages(): Array<{ route: string; options: Record<string, string> }>
+
+/** 自定义 TabBar 等组件的最小声明，只覆盖项目实际使用的 data / methods / 生命周期。 */
+interface ComponentInstance<D extends object> {
+  data: D
+  setData(data: Partial<D> | Record<string, unknown>, callback?: () => void): void
+}
+
+interface ComponentOptions<D extends object, M extends object> {
+  data?: D
+  methods?: M & ThisType<ComponentInstance<D> & M>
+  lifetimes?: {
+    created?(): void
+    attached?(): void
+    ready?(): void
+    detached?(): void
+  }
+}
+
+declare function Component<D extends object, M extends object>(
+  options: ComponentOptions<D, M>,
+): void
 
 /** 小程序基础库提供定时器，但 ES 标准库不含浏览器声明，这里显式补充。 */
 declare function setTimeout(handler: () => void, timeout?: number): number

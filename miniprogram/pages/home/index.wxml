@@ -1,4 +1,10 @@
-<view class="page home-page">
+<view class="page tab-page home-page">
+  <view class="ambient">
+    <view class="ambient-blob ambient-a"></view>
+    <view class="ambient-blob ambient-b"></view>
+    <view class="ambient-blob ambient-c"></view>
+  </view>
+
   <view class="home-head">
     <view class="brand-row">
       <view class="brand-mark">G</view>
@@ -61,6 +67,8 @@
       wx:for="{{records}}"
       wx:key="id"
       class="restaurant-row"
+      hover-class="card-press"
+      hover-stay-time="80"
       data-id="{{item.id}}"
       bindtap="onRestaurantTap"
     >

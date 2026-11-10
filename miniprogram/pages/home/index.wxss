@@ -13,36 +13,39 @@
 }
 
 .brand-mark {
-  width: 76rpx;
-  height: 76rpx;
+  width: 80rpx;
+  height: 80rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-right: 20rpx;
-  border: 1rpx solid #f0dfb2;
-  border-radius: 22rpx;
-  background: #fdf3da;
-  color: #2b2a26;
-  font-size: 36rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.85);
+  border-radius: 24rpx;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(178, 222, 255, 0.55));
+  box-shadow: 0 12rpx 28rpx rgba(27, 63, 104, 0.12), inset 0 1rpx 0 rgba(255, 255, 255, 0.95);
+  color: #0a6fbf;
+  font-size: 38rpx;
   font-weight: 800;
 }
 
 .brand-name {
-  font-size: 36rpx;
+  font-size: 38rpx;
   font-weight: 800;
   letter-spacing: -1rpx;
 }
 
 .brand-sub {
   margin-top: 2rpx;
-  color: #8a8175;
+  color: var(--ink-muted);
   font-size: 22rpx;
 }
 
 .login-chip {
   padding: 12rpx 28rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.5);
   border-radius: 999rpx;
-  background: #2b2a26;
+  background: linear-gradient(135deg, #37a9ff, #0a84ff 55%, #0066cc);
+  box-shadow: 0 10rpx 24rpx rgba(10, 132, 255, 0.28);
   color: #ffffff;
   font-size: 25rpx;
   font-weight: 700;
@@ -51,22 +54,26 @@
 .search-box {
   display: flex;
   align-items: center;
-  height: 88rpx;
-  padding: 0 12rpx 0 28rpx;
-  border: 1rpx solid #e4ddd1;
+  height: 92rpx;
+  padding: 0 10rpx 0 30rpx;
+  border: 1rpx solid var(--glass-line);
   border-radius: 999rpx;
-  background: #fffdf8;
+  background: var(--glass-strong);
+  box-shadow: 0 18rpx 44rpx rgba(27, 63, 104, 0.12), inset 0 1rpx 0 rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(16px) saturate(170%);
+  -webkit-backdrop-filter: blur(16px) saturate(170%);
 }
 
 .search-input {
   flex: 1;
   min-width: 0;
-  height: 88rpx;
+  height: 92rpx;
+  color: var(--ink);
   font-size: 28rpx;
 }
 
 .search-placeholder {
-  color: #b3aa9d;
+  color: #91a3b4;
 }
 
 .search-clear {
@@ -75,15 +82,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #9a9184;
+  color: var(--ink-muted);
   font-size: 34rpx;
 }
 
 .search-action {
-  padding: 0 22rpx;
-  color: #986d08;
-  font-size: 26rpx;
-  font-weight: 700;
+  padding: 12rpx 24rpx;
+  border-radius: 999rpx;
+  background: rgba(10, 132, 255, 0.12);
+  color: var(--accent-deep);
+  font-size: 25rpx;
+  font-weight: 750;
 }
 
 .category-scroll {
@@ -94,19 +103,23 @@
 .category-chip {
   display: inline-flex;
   align-items: center;
-  height: 64rpx;
-  margin-right: 16rpx;
+  height: 66rpx;
+  margin-right: 14rpx;
   padding: 0 28rpx;
-  border: 1rpx solid #e4ddd1;
+  border: 1rpx solid rgba(255, 255, 255, 0.7);
   border-radius: 999rpx;
-  background: #fffdf8;
-  color: #625c52;
+  background: var(--glass-soft);
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.8);
+  color: var(--ink-soft);
   font-size: 25rpx;
+  backdrop-filter: blur(10px) saturate(150%);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
 }
 
 .category-chip.active {
-  border-color: #2b2a26;
-  background: #2b2a26;
+  border-color: rgba(255, 255, 255, 0.45);
+  background: linear-gradient(135deg, #37a9ff, #0a84ff 58%, #0066cc);
+  box-shadow: 0 10rpx 24rpx rgba(10, 132, 255, 0.25), inset 0 1rpx 0 rgba(255, 255, 255, 0.45);
   color: #ffffff;
   font-weight: 700;
 }
@@ -115,29 +128,40 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6rpx 6rpx 14rpx;
+  margin-bottom: 16rpx;
+  padding: 10rpx 20rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.55);
+  border-radius: 22rpx;
+  background: rgba(255, 255, 255, 0.28);
 }
 
 .result-count {
-  color: #8a8175;
+  color: var(--ink-muted);
   font-size: 24rpx;
 }
 
 .sort-picker {
-  color: #625c52;
+  color: var(--ink-soft);
   font-size: 25rpx;
-  font-weight: 600;
+  font-weight: 650;
 }
 
 .restaurant-list {
-  border-top: 1rpx solid #e4ddd1;
+  padding-top: 2rpx;
 }
 
 .restaurant-row {
   display: flex;
   align-items: flex-start;
-  padding: 28rpx 0;
-  border-bottom: 1rpx solid #ece6dc;
+  margin-bottom: 20rpx;
+  padding: 22rpx;
+  border: 1rpx solid var(--glass-line);
+  border-radius: 34rpx;
+  background: var(--glass);
+  box-shadow: var(--glass-shadow), var(--glass-inset);
+  backdrop-filter: blur(16px) saturate(165%);
+  -webkit-backdrop-filter: blur(16px) saturate(165%);
+  transition: transform 0.16s ease, opacity 0.16s ease;
 }
 
 .restaurant-cover {
@@ -146,9 +170,9 @@
   width: 196rpx;
   height: 176rpx;
   margin-right: 24rpx;
-  border-radius: 16rpx;
+  border-radius: 24rpx;
   overflow: hidden;
-  background: #eeeae2;
+  background: rgba(210, 226, 240, 0.7);
 }
 
 .cover-image {
@@ -163,17 +187,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #a49b8e;
+  color: var(--ink-muted);
   font-size: 22rpx;
 }
 
 .closed-badge {
   position: absolute;
   left: 0;
-  bottom: 0;
   right: 0;
+  bottom: 0;
   padding: 6rpx 10rpx;
-  background: #974e40dd;
+  background: rgba(184, 58, 52, 0.82);
   color: #ffffff;
   font-size: 20rpx;
   text-align: center;
@@ -187,7 +211,7 @@
 .restaurant-name {
   margin-bottom: 10rpx;
   font-size: 32rpx;
-  font-weight: 700;
+  font-weight: 750;
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
@@ -201,51 +225,51 @@
 
 .score {
   margin-right: 14rpx;
-  color: #ba5610;
+  color: #c4680a;
   font-size: 38rpx;
-  font-weight: 750;
+  font-weight: 800;
 }
 
 .rating-note {
   margin-right: 14rpx;
-  color: #7a7266;
+  color: var(--ink-muted);
   font-size: 23rpx;
 }
 
 .price {
   margin-left: auto;
-  color: #2b2a26;
+  color: var(--ink);
   font-size: 27rpx;
-  font-weight: 650;
+  font-weight: 700;
 }
 
 .meta-line {
   margin-bottom: 6rpx;
-  color: #6d6559;
+  color: var(--ink-muted);
   font-size: 23rpx;
 }
 
 .category {
-  color: #405b50;
-  font-weight: 650;
+  color: #166a7a;
+  font-weight: 700;
 }
 
 .meta-dot {
   margin: 0 8rpx;
-  color: #b3aa9d;
+  color: #a7b6c5;
 }
 
 .address-line {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  color: #7a7266;
+  color: var(--ink-muted);
   font-size: 23rpx;
 }
 
 .recommend-line {
   margin-top: 4rpx;
-  color: #8a8175;
+  color: var(--ink-muted);
   font-size: 22rpx;
 }
 
@@ -256,14 +280,14 @@
 
 .load-more {
   padding: 30rpx 0 10rpx;
-  color: #9a9184;
+  color: var(--ink-muted);
   font-size: 24rpx;
   text-align: center;
 }
 
 .home-footer {
   padding: 48rpx 0 12rpx;
-  color: #b3aa9d;
+  color: #8ea0b1;
   font-size: 22rpx;
   text-align: center;
 }

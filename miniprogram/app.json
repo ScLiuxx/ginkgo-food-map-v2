@@ -9,35 +9,52 @@
   ],
   "window": {
     "backgroundTextStyle": "dark",
-    "navigationBarBackgroundColor": "#fffdf8",
+    "navigationBarBackgroundColor": "#e9f4ff",
     "navigationBarTitleText": "泥电美食地图",
     "navigationBarTextStyle": "black",
-    "backgroundColor": "#f7f5f0"
+    "backgroundColor": "#e9f4ff"
   },
   "tabBar": {
-    "color": "#6a6155",
-    "selectedColor": "#2b2a26",
-    "backgroundColor": "#fffdf8",
-    "borderStyle": "black",
+    "custom": true,
+    "color": "#5f7183",
+    "selectedColor": "#0a84ff",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
     "list": [
       {
         "pagePath": "pages/home/index",
-        "text": "找店"
+        "text": "找店",
+        "iconPath": "assets/tabbar/home.png",
+        "selectedIconPath": "assets/tabbar/home-active.png"
       },
       {
         "pagePath": "pages/map/index",
-        "text": "地图"
+        "text": "地图",
+        "iconPath": "assets/tabbar/map.png",
+        "selectedIconPath": "assets/tabbar/map-active.png"
       },
       {
         "pagePath": "pages/messages/index",
-        "text": "消息"
+        "text": "消息",
+        "iconPath": "assets/tabbar/messages.png",
+        "selectedIconPath": "assets/tabbar/messages-active.png"
       },
       {
         "pagePath": "pages/account/index",
-        "text": "我的"
+        "text": "我的",
+        "iconPath": "assets/tabbar/account.png",
+        "selectedIconPath": "assets/tabbar/account-active.png"
       }
     ]
   },
+  "permission": {
+    "scope.userLocation": {
+      "desc": "用于在地图中定位并查看附近餐厅"
+    }
+  },
+  "requiredPrivateInfos": [
+    "getLocation"
+  ],
   "sitemapLocation": "sitemap.json",
   "lazyCodeLoading": "requiredComponents"
 }
