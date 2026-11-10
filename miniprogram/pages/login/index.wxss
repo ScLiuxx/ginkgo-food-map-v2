@@ -67,3 +67,21 @@
   line-height: 1.8;
   text-align: center;
 }
+
+.login-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 26rpx;
+}
+
+.login-link {
+  color: var(--accent-deep);
+  font-size: 24rpx;
+}
+
+.login-link-sep {
+  margin: 0 18rpx;
+  color: var(--ink-muted);
+  font-size: 20rpx;
+}

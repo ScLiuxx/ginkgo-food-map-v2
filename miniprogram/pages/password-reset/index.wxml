@@ -1,0 +1,106 @@
+<view class="page login-page">
+  <view class="ambient">
+    <view class="ambient-blob ambient-a"></view>
+    <view class="ambient-blob ambient-b"></view>
+    <view class="ambient-blob ambient-c"></view>
+  </view>
+
+  <view class="login-hero">
+    <view class="login-mark">G</view>
+    <view class="login-title">找回密码</view>
+    <view class="login-subtitle">通过学校邮箱验证码设置新密码</view>
+  </view>
+
+  <view class="card login-card">
+    <view class="field">
+      <view class="field-label">学校邮箱</view>
+      <view class="field-shell">
+        <input
+          class="field-input"
+          type="text"
+          confirm-type="next"
+          placeholder="name@std.uestc.edu.cn"
+          placeholder-class="field-placeholder"
+          maxlength="254"
+          value="{{email}}"
+          bindinput="onEmailInput"
+        />
+      </view>
+      <view class="field-hint">未注册但格式有效的邮箱也会返回相同结果，不会泄露账号是否存在。</view>
+    </view>
+
+    <view class="field">
+      <view class="field-label">邮箱验证码</view>
+      <view class="code-row">
+        <view class="field-shell code-input">
+          <input
+            class="field-input"
+            type="number"
+            confirm-type="next"
+            placeholder="6 位数字"
+            placeholder-class="field-placeholder"
+            maxlength="6"
+            value="{{verificationCode}}"
+            bindinput="onCodeInput"
+          />
+        </view>
+        <view
+          class="ghost-button code-button {{sendingCode || countdown > 0 ? 'code-button-disabled' : ''}}"
+          bindtap="sendCode"
+        >
+          {{sendingCode ? '发送中…' : countdown > 0 ? countdown + 's 后重发' : '获取验证码'}}
+        </view>
+      </view>
+    </view>
+
+    <view class="field">
+      <view class="field-label">新密码</view>
+      <view class="field-shell">
+        <input
+          class="field-input"
+          type="text"
+          password
+          confirm-type="next"
+          placeholder="4–32 位英文、数字或符号"
+          placeholder-class="field-placeholder"
+          maxlength="32"
+          value="{{newPassword}}"
+          bindinput="onPasswordInput"
+        />
+      </view>
+    </view>
+
+    <view class="field">
+      <view class="field-label">确认新密码</view>
+      <view class="field-shell">
+        <input
+          class="field-input"
+          type="text"
+          password
+          confirm-type="done"
+          placeholder="再次输入新密码"
+          placeholder-class="field-placeholder"
+          maxlength="32"
+          value="{{confirmPassword}}"
+          bindinput="onConfirmInput"
+          bindconfirm="submit"
+        />
+      </view>
+    </view>
+
+    <view wx:if="{{errorMessage}}" class="error-text login-error">{{errorMessage}}</view>
+
+    <button
+      class="primary-button login-button"
+      loading="{{submitting}}"
+      disabled="{{submitting}}"
+      bindtap="submit"
+    >
+      {{submitting ? '提交中…' : '重置密码'}}
+    </button>
+  </view>
+
+  <view class="login-note">
+    重置成功后，其他设备上的登录会失效，需要使用新密码重新登录。
+  </view>
+</view>

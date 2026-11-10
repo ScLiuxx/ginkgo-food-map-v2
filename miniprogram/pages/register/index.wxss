@@ -1,0 +1,36 @@
+@import "../login/index.wxss";
+
+.login-page {
+  padding-top: 40rpx;
+}
+
+.field-hint {
+  margin: 10rpx 4rpx 0;
+  color: var(--ink-muted);
+  font-size: 21rpx;
+  line-height: 1.6;
+}
+
+.code-row {
+  display: flex;
+  align-items: center;
+}
+
+.code-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.code-button {
+  height: 88rpx;
+  margin-left: 16rpx;
+  padding: 0 22rpx;
+  flex-shrink: 0;
+  font-size: 23rpx;
+  line-height: 88rpx;
+  white-space: nowrap;
+}
+
+.code-button-disabled {
+  opacity: 0.55;
+}

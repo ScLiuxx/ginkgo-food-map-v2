@@ -58,7 +58,13 @@
     </button>
   </view>
 
+  <view class="login-links">
+    <text class="login-link" bindtap="openRegister">注册账号</text>
+    <text class="login-link-sep">·</text>
+    <text class="login-link" bindtap="openPasswordReset">忘记密码</text>
+  </view>
+
   <view class="login-note">
-    注册账号与找回密码需要邮箱验证码，暂未在小程序开放，请先在网页端完成。
+    登录仅使用注册邮箱与密码；小程序不会获取微信头像、昵称、手机号或 openid。
   </view>
 </view>

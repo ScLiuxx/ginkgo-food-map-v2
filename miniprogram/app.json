@@ -11,7 +11,9 @@
     "pages/account/growth/index",
     "pages/account/profile/index",
     "pages/review/compose/index",
-    "pages/login/index"
+    "pages/login/index",
+    "pages/register/index",
+    "pages/password-reset/index"
   ],
   "window": {
     "backgroundTextStyle": "dark",

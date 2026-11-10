@@ -1,0 +1,5 @@
+@import "../register/index.wxss";
+
+.login-page {
+  padding-top: 40rpx;
+}

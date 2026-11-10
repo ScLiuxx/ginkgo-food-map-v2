@@ -1,6 +1,8 @@
 import { login } from '../../modules/auth/api'
+import { finishAuthNavigation } from '../../shared/auth/navigation'
 import { saveSession } from '../../shared/auth/session'
 import { toErrorMessage } from '../../shared/api/request'
+import { isValidEmail } from '../../shared/lib/credentials'
 
 interface LoginData {
   email: string
@@ -10,19 +12,13 @@ interface LoginData {
   redirectPath: string
 }
 
-interface LoginCustom {
-  finishLogin(): void
-}
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
 /**
  * 邮箱登录页。
  *
  * 小程序只使用账号体系中的注册邮箱登录，不请求微信头像、昵称、手机号或 openid；
  * 密码只保存在页面内存，提交后立即丢弃，不写入本地存储。
  */
-Page<LoginData, LoginCustom>({
+Page<LoginData>({
   data: {
     email: '',
     password: '',
@@ -33,7 +29,8 @@ Page<LoginData, LoginCustom>({
 
   onLoad(query) {
     const redirect = query.redirect ? decodeURIComponent(query.redirect) : ''
-    this.setData({ redirectPath: redirect })
+    const email = query.email ? decodeURIComponent(query.email) : ''
+    this.setData({ redirectPath: redirect, email: email.slice(0, 254) })
   },
 
   onEmailInput(event: WxInputEvent) {
@@ -52,7 +49,7 @@ Page<LoginData, LoginCustom>({
       this.setData({ errorMessage: '请输入注册邮箱。' })
       return
     }
-    if (email.length > 254 || !EMAIL_PATTERN.test(email)) {
+    if (!isValidEmail(email)) {
       this.setData({ errorMessage: '邮箱格式不正确，请检查后重试。' })
       return
     }
@@ -66,7 +63,7 @@ Page<LoginData, LoginCustom>({
       const session = await login(email, password)
       saveSession(session)
       wx.showToast({ title: '登录成功', icon: 'success', duration: 1200 })
-      setTimeout(() => this.finishLogin(), 300)
+      setTimeout(() => finishAuthNavigation(this.data.redirectPath), 300)
     } catch (reason) {
       this.setData({ errorMessage: toErrorMessage(reason) })
     } finally {
@@ -74,33 +71,17 @@ Page<LoginData, LoginCustom>({
     }
   },
 
-  /** 优先返回调用页；若调用页仍在栈中则直接返回，避免详情页重复入栈。 */
-  finishLogin() {
+  /** 使用 redirectTo 进入注册，避免登录页留在返回栈中造成重复跳转。 */
+  openRegister() {
     const redirect = this.data.redirectPath
-    if (redirect.startsWith('/pages/') && !redirect.startsWith('/pages/login/')) {
-      const tabPages = [
-        '/pages/home/index',
-        '/pages/map/index',
-        '/pages/messages/index',
-        '/pages/account/index',
-      ]
-      if (tabPages.includes(redirect)) {
-        wx.switchTab({ url: redirect })
-        return
-      }
-      const pages = getCurrentPages()
-      const previous = pages[pages.length - 2]
-      if (previous && `/${previous.route}` === redirect.split('?')[0]) {
-        wx.navigateBack()
-        return
-      }
-      wx.redirectTo({ url: redirect })
-      return
-    }
-    if (getCurrentPages().length > 1) {
-      wx.navigateBack()
-      return
-    }
-    wx.switchTab({ url: '/pages/home/index' })
+    const query = redirect ? `?redirect=${encodeURIComponent(redirect)}` : ''
+    wx.redirectTo({ url: `/pages/register/index${query}` })
+  },
+
+  /** 找回密码时带上当前输入的邮箱，重置成功后登录页可预填。 */
+  openPasswordReset() {
+    const email = this.data.email.trim()
+    const query = email ? `?email=${encodeURIComponent(email)}` : ''
+    wx.redirectTo({ url: `/pages/password-reset/index${query}` })
   },
 })

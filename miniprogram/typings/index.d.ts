@@ -281,4 +281,6 @@ declare function Component<D extends object, M extends object>(
 
 /** 小程序基础库提供定时器，但 ES 标准库不含浏览器声明，这里显式补充。 */
 declare function setTimeout(handler: () => void, timeout?: number): number
+declare function setInterval(handler: () => void, timeout?: number): number
+declare function clearInterval(timerId: number): void
 declare function clearTimeout(id: number): void
