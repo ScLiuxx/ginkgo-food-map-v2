@@ -24,6 +24,11 @@ const router = createRouter({
       meta: { title: '公告管理 · 管理工作台', layout: 'admin' },
     },
     {
+      path: '/admin/reports',
+      component: () => import('@/pages/admin/AdminReportPage.vue'),
+      meta: { title: '举报处理 · 管理工作台', layout: 'admin' },
+    },
+    {
       path: '/admin/restaurants',
       component: () => import('@/pages/admin/AdminRestaurantPage.vue'),
       meta: { title: '商户管理 · 管理工作台', layout: 'admin' },

@@ -9,8 +9,10 @@
 - 管理员侧实现举报分页、详情和驳回：列表按状态有界筛选，详情返回提交时的正文与作者快照；驳回将同一内容下全部PENDING举报一并置为DISMISSED并记录处理人、时间和备注，重复驳回幂等，已RESOLVED的举报返回409。驳回不删除、不隐藏内容，也不改变评分或作者状态。
 - 管理员确认违规后调用review模块公开处置入口，永久删除点评或回复：复用作者删除的父锁、回执、子资源清理、图片释放和商户评分重算，不复制删除逻辑；删除请求与举报结案分属两个事务，结案失败可由管理员重试补偿。同一内容下全部PENDING举报一并置为RESOLVED，已驳回的举报不能反向删除。
 - 按RISK-012新增举报结果系统消息：`REPORT_RESULT`归入SYSTEM分类，`decision`为`REMOVED`或`DISMISSED`，来源为举报编号，关联所属点评；只通知原举报者，不保存处理人、其他举报者或内部备注。驳回/删除先锁定同内容待处理举报，再在同一事务内结案并写通知，通知失败回滚结案；重复处置不重复发送。Flyway V42扩大`decision`长度并更新负载约束。
-- 前端入口尚未实现；账号处罚、禁言、停用和申诉不在本轮范围。
-- 验证：`ContentReportApiIntegrationTest`在MySQL 8.4上15项全部通过，覆盖提交、快照、重复提交、自举报、目标失效、非法输入、回复父点评、未登录、管理员权限、列表/详情、合并驳回、重复驳回、已处理冲突、点评删除、回复删除和删除幂等；`MyReviewApiIntegrationTest`与`ReplyApiIntegrationTest`共46项回归通过，确认作者删除路径未被重构破坏；`NotificationInboxIntegrationTest`与`AnnouncementApiIntegrationTest`共23项回归通过。
+- 前端新增moderation模块：他人点评与每条回复旁显示举报入口，原因固定枚举、说明最多200字，提交中禁用并按重复提交成功处理；切换账号、目标或卸载时取消在途请求并清空草稿。消息中心新增举报结果摘要和处理结果弹窗，点击只展示结论并标记已读，不跳转已删除内容。
+- 管理端新增`/admin/reports`与侧栏“举报处理”：按状态筛选、分页、查看正文快照与举报双方编号，驳回可填备注，删除需二次确认并提示不可恢复；成功后重读当前页，409提示已被其他管理员处理并刷新。
+- 账号处罚、禁言、停用和申诉不在本轮范围。
+- 验证：`ContentReportApiIntegrationTest`在MySQL 8.4上15项全部通过，覆盖提交、快照、重复提交、自举报、目标失效、非法输入、回复父点评、未登录、管理员权限、列表/详情、合并驳回、重复驳回、已处理冲突、点评删除、回复删除和删除幂等；`MyReviewApiIntegrationTest`与`ReplyApiIntegrationTest`共46项回归通过，确认作者删除路径未被重构破坏；`NotificationInboxIntegrationTest`与`AnnouncementApiIntegrationTest`共23项回归通过。前端`npm run typecheck`、`npm run lint`（0 error）、`npm test -- --run`（82个文件、587项）和`npm run build`全部通过。
 
 ## 2026-11-10：本人待审申请修改、撤回与驳回重提
 

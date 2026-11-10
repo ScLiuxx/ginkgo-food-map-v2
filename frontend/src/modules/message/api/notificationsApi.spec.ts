@@ -5,6 +5,7 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
   deleteNotification,
+  type NotificationItem,
   type NotificationPage,
 } from './notificationsApi'
 
@@ -190,6 +191,67 @@ describe('通知接口契约', () => {
     await expect(markNotificationRead('../42', 'token', signal)).rejects.toThrow('无法确认')
     expect(post).toHaveBeenCalledTimes(2)
   })
+})
+
+/** 举报结果复用系统分类，但只允许携带所属点评、举报来源和处置结论。 */
+it('举报结果接受REMOVED/DISMISSED并拒绝混入审核字段', async () => {
+  const source = page()
+  const reportResult: NotificationItem = {
+    ...source.records[0]!,
+    id: '7001',
+    sourceId: '55',
+    reviewId: '301',
+    notificationType: 'REPORT_RESULT',
+    requestId: null,
+    requestType: null,
+    decision: 'REMOVED',
+    restaurantName: null,
+    rejectReason: null,
+  }
+  source.records = [reportResult]
+  source.latestSystem = reportResult
+  const get = vi
+    .spyOn(httpClient, 'get')
+    .mockResolvedValue({ data: { success: true, data: source } })
+  const signal = new AbortController().signal
+  expect(await fetchNotifications('SYSTEM', 1, '42', 'token', signal)).toEqual(source)
+
+  get.mockResolvedValue({
+    data: {
+      success: true,
+      data: {
+        ...source,
+        records: [{ ...reportResult, decision: 'DISMISSED' }],
+        latestSystem: { ...reportResult, decision: 'DISMISSED' },
+      },
+    },
+  })
+  expect(
+    (await fetchNotifications('SYSTEM', 1, '42', 'token', signal)).records[0]?.decision,
+  ).toBe('DISMISSED')
+
+  for (const patch of [
+    { requestId: '9007199254740995' },
+    { requestType: 'UPDATE' },
+    { decision: 'APPROVED' },
+    { reviewId: null },
+    { restaurantName: '混入店名' },
+    { announcementId: '12' },
+  ]) {
+    get.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          ...source,
+          records: [{ ...reportResult, ...patch }],
+          latestSystem: { ...reportResult, ...patch },
+        },
+      },
+    })
+    await expect(fetchNotifications('SYSTEM', 1, '42', 'token', signal)).rejects.toThrow(
+      '无法确认',
+    )
+  }
 })
 
 /** 公告与业务通知使用不同ID空间，不能误调用审核或其他来源。 */

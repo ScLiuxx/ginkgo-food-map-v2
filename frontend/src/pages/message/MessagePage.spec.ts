@@ -9,6 +9,7 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
   deleteNotification,
+  type NotificationItem,
   type NotificationPage,
 } from '@/modules/message/api/notificationsApi'
 import MessagePage from './MessagePage.vue'
@@ -590,6 +591,43 @@ describe('审核通知页面', () => {
     await settle()
     expect(document.querySelector('.reply-notification-dialog')).toBeNull()
     expect(document.body.textContent).not.toContain('历史点评原文')
+  })
+  it.each([
+    ['REMOVED', '举报已处理：内容已删除', '被永久删除'],
+    ['DISMISSED', '举报未认定违规', '未认定该内容违规'],
+  ] as const)('举报结果%s展示摘要，点击只标记已读并展示说明', async (decision, summary, detail) => {
+    const source = page()
+    const report: NotificationItem = {
+      ...source.records[0]!,
+      id: '7001',
+      sourceId: '55',
+      reviewId: '301',
+      notificationType: 'REPORT_RESULT',
+      requestId: null,
+      requestType: null,
+      decision,
+      restaurantName: null,
+      rejectReason: null,
+    }
+    source.records = [report]
+    source.latestSystem = report
+    vi.mocked(fetchNotifications).mockResolvedValue(source)
+    const router = await mount('/messages')
+    expect(host.querySelector('.session-preview')?.textContent).toBe(summary)
+
+    await router.push('/messages/system')
+    await settle()
+    host.querySelector<HTMLButtonElement>('.notification-card')!.click()
+    await settle()
+    expect(markNotificationRead).toHaveBeenCalledWith('7001', 'session-42', expect.any(AbortSignal))
+    expect(router.currentRoute.value.path).toBe('/messages/system')
+    expect(document.querySelector('.report-result-dialog')?.textContent).toContain(detail)
+    expect(document.querySelector('.report-result-dialog')?.textContent).toContain(summary)
+    ;[...document.querySelectorAll<HTMLButtonElement>('.report-result-dialog button')]
+      .find((button) => button.textContent === '关闭')!
+      .click()
+    await settle()
+    expect(document.querySelector('.report-result-dialog')).toBeNull()
   })
   it('公告标题与正文按纯文本展示，已读使用带类型ID而不跳转申请', async () => {
     const source = page()

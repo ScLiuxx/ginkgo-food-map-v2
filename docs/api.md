@@ -1177,6 +1177,6 @@ reason必填，大小写精确，取值为SPAM、ABUSE、PORNOGRAPHY、ILLEGAL�
 
 重复删除同一举报返回200、status=RESOLVED、contentDeleted=false、affectedReports=0；内容此前已被作者删除时同样只完成结案。举报已驳回409 `REPORT_STATE_CONFLICT`；举报不存在404 `REPORT_NOT_FOUND`；目标点评或回复无法定位404对应内容错误码；事务冲突或超时409/503沿用review模块的`BUSY`语义。结案后每位举报者收到一条`REMOVED`结果通知，重复删除不重复发送；删除不通知被处置作者，也不执行账号处罚。
 
-### 23.5 尚未实现的处置能力
+### 23.5 范围边界
 
-账号处罚、禁言、停用和申诉不在本轮范围；普通用户举报入口与管理端页面尚待实现。
+普通用户在他人点评/回复操作区提交举报，管理员在`/admin/reports`查看与处置；账号处罚、禁言、停用和申诉不在本轮范围。

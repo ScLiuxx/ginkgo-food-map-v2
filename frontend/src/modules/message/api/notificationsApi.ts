@@ -14,7 +14,7 @@ export interface NotificationItem {
   actorUserId: string | null
   actorUsername: string | null
   requestType: 'CREATE' | 'UPDATE' | null
-  decision: 'APPROVED' | 'REJECTED' | null
+  decision: 'APPROVED' | 'REJECTED' | 'REMOVED' | 'DISMISSED' | null
   restaurantName: string | null
   rejectReason: string | null
   createdAt: string
@@ -46,6 +46,7 @@ const invalid = () => new Error('消息资料无法确认，请重新加载。')
 /** 按消息类型显式投影；回复不允许混入审核快照或正文，不执行响应中的任意链接。 */
 function item(row: NotificationItem): NotificationItem {
   const announcement = row?.notificationType === 'ANNOUNCEMENT'
+  const reportResult = row?.notificationType === 'REPORT_RESULT'
   if (
     !row ||
     !(announcement
@@ -74,6 +75,22 @@ function item(row: NotificationItem): NotificationItem {
         row.restaurantName,
         row.rejectReason,
       ].some((value) => value !== null)
+    )
+      throw invalid()
+  } else if (reportResult) {
+    // 举报结果只暴露所属点评、举报来源和处置结论；审核申请与身份字段必须全部为空。
+    if (
+      row.category !== 'SYSTEM' ||
+      !notificationId(row.reviewId) ||
+      !['REMOVED', 'DISMISSED'].includes(row.decision ?? '') ||
+      row.requestId !== null ||
+      row.requestType !== null ||
+      row.restaurantName !== null ||
+      row.rejectReason !== null ||
+      row.actorUserId !== null ||
+      row.actorUsername !== null ||
+      row.announcementId != null ||
+      row.announcementTitle != null
     )
       throw invalid()
   } else if (row.category === 'SYSTEM') {
