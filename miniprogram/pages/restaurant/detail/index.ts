@@ -535,12 +535,9 @@ Page<DetailData, DetailCustom>({
 
   writeReview() {
     if (!this.data.restaurant) return
-    if (this.data.isWindow) {
-      wx.showToast({ title: '窗口点评暂未开放', icon: 'none' })
-      return
-    }
-    if (this.data.isCanteen) {
-      wx.showToast({ title: '窗口点评暂未开放', icon: 'none' })
+    // 食堂主体本身不接收点评，需要进入具体窗口；独立窗口详情允许直接发布。
+    if (this.data.isCanteen && !this.data.isWindow) {
+      wx.showToast({ title: '请选择窗口后再写点评', icon: 'none' })
       return
     }
     if (!isLoggedIn()) {
@@ -552,11 +549,19 @@ Page<DetailData, DetailCustom>({
     this.openCompose()
   },
 
-  /** 评价对象由详情页固定，发布前不允许换店，避免误评到其他店铺。 */
+  /**
+   * 评价对象由详情页固定，发布前不允许换店，避免误评到其他店铺。
+   *
+   * 窗口与餐厅编号可能相同，必须分别使用 windowId 和 id 参数，
+   * 否则会把窗口点评发布到同号餐厅。
+   */
   openCompose() {
     const name = this.data.restaurant ? this.data.restaurant.name : ''
+    const target = this.data.isWindow
+      ? `windowId=${encodeURIComponent(this.data.restaurantId)}`
+      : `id=${encodeURIComponent(this.data.restaurantId)}`
     wx.navigateTo({
-      url: `/pages/review/compose/index?id=${encodeURIComponent(this.data.restaurantId)}&name=${encodeURIComponent(name)}`,
+      url: `/pages/review/compose/index?${target}&name=${encodeURIComponent(name)}`,
     })
   },
 

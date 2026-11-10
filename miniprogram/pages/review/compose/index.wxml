@@ -7,8 +7,8 @@
 
   <view class="compose-hero">
     <view class="hero-eyebrow">写点评</view>
-    <view class="hero-title">{{restaurantName || '店铺点评'}}</view>
-    <view class="hero-copy">评分按十分制提交，页面展示会换算为五分制。发布后立即计入店铺统计。</view>
+    <view class="hero-title">{{restaurantName || (isWindow ? '窗口点评' : '店铺点评')}}</view>
+    <view class="hero-copy">{{isWindow ? '评分按十分制提交，页面展示会换算为五分制。发布后立即计入窗口统计。' : '评分按十分制提交，页面展示会换算为五分制。发布后立即计入店铺统计。'}}</view>
   </view>
 
   <view wx:if="{{!loggedIn}}" class="card login-card">
@@ -45,7 +45,7 @@
 
       <view class="recommend-row">
         <view class="flex-1">
-          <view class="recommend-title">推荐这家店</view>
+          <view class="recommend-title">{{isWindow ? '推荐这个窗口' : '推荐这家店'}}</view>
           <view class="recommend-copy">关闭表示不推荐，会体现在推荐率中。</view>
         </view>
         <switch checked="{{recommended}}" color="#0a84ff" bindchange="changeRecommended" />
@@ -106,6 +106,6 @@
       class="primary-button submit-button {{submitting || uploading ? 'is-disabled' : ''}}"
       bindtap="submit"
     >{{submitting ? '正在发布…' : '发布点评'}}</view>
-    <view class="submit-hint">同一家店只有最新一条有效点评参与评分，历史点评会保留。</view>
+    <view class="submit-hint">{{isWindow ? '同一个窗口只有最新一条有效点评参与评分，历史点评会保留。' : '同一家店只有最新一条有效点评参与评分，历史点评会保留。'}}</view>
   </block>
 </view>

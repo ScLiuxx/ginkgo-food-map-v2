@@ -49,7 +49,7 @@
             class="favorite-button {{favorited ? 'active' : ''}}"
             bindtap="toggleFavorite"
           >{{favoriteBusy ? '处理中' : (favorited ? '已收藏' : '收藏')}}</view>
-          <view wx:if="{{!isCanteen && !isWindow}}" class="write-button" bindtap="writeReview">写点评</view>
+          <view wx:if="{{!isCanteen}}" class="write-button" bindtap="writeReview">写点评</view>
         </view>
       </view>
 

@@ -39,9 +39,25 @@ export interface UploadedPhoto {
   height: number | null
 }
 
+/** 发布输入；餐厅与窗口共用同一套评分、正文和照片约束。 */
+export interface ReviewPublishInput {
+  clientRequestId: string
+  scores: ReviewScores
+  recommended: boolean
+  body: string
+  photoIds: string[]
+}
+
+/**
+ * 发布回执。
+ *
+ * 餐厅与窗口互斥：餐厅发布返回 restaurantId，窗口发布返回 windowId，
+ * 另一个字段为 null。调用方必须按目标类型核对，避免把同号对象当成发布成功。
+ */
 export interface ReviewPublishReceipt {
   reviewId: string
-  restaurantId: string
+  restaurantId: string | null
+  windowId: string | null
   replayed: boolean
 }
 
@@ -193,21 +209,12 @@ export async function cancelReviewPhoto(fileId: string): Promise<void> {
 }
 
 /**
- * 发布点评。
+ * 发布前按服务端同一规则校验，返回规范化后的正文。
  *
- * 前端先按同一规则校验，减少无效请求；服务端仍是最终校验与授权来源。
- * 响应必须回指本次店铺，避免把其他店铺的回执当成发布成功。
+ * 这里只减少明显无效的请求，授权、窗口营业状态、图片归属和内容冲突
+ * 仍由服务端最终判定，前端不能因为本地通过就假定发布成功。
  */
-export async function publishReview(
-  restaurantId: string,
-  input: {
-    clientRequestId: string
-    scores: ReviewScores
-    recommended: boolean
-    body: string
-    photoIds: string[]
-  },
-): Promise<ReviewPublishReceipt> {
+function validatePublishInput(input: ReviewPublishInput): string {
   const body = normalizeReviewBody(input.body)
   const length = Array.from(body).length
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.clientRequestId)) {
@@ -229,35 +236,107 @@ export async function publishReview(
   ) {
     throw new Error('点评照片数量或编号不符合要求。')
   }
+  return body
+}
+
+/** 餐厅与窗口请求体完全一致，只有路径和目标类型不同。 */
+function publishPayload(input: ReviewPublishInput, body: string) {
+  return {
+    clientRequestId: input.clientRequestId,
+    scores: {
+      taste: input.scores.taste,
+      value: input.scores.value,
+      service: input.scores.service,
+      ambience: input.scores.ambience,
+    },
+    recommended: input.recommended,
+    body,
+    photoIds: input.photoIds,
+  }
+}
+
+/**
+ * 发布餐厅点评。
+ *
+ * 响应必须回指本次餐厅且不带窗口身份，避免把其他店铺或同号窗口的
+ * 回执当成发布成功；服务端仍是最终校验与授权来源。
+ */
+export async function publishReview(
+  restaurantId: string,
+  input: ReviewPublishInput,
+): Promise<ReviewPublishReceipt> {
+  const body = validatePublishInput(input)
+  if (!isId(restaurantId)) {
+    throw new Error('店铺编号无效，无法发布点评。')
+  }
 
   const raw = await request<{
     reviewId: string
-    restaurantId: string
+    restaurantId: string | null
+    windowId: string | null
     replayed: boolean
   }>({
     path: `/api/restaurants/${encodeURIComponent(restaurantId)}/reviews`,
     method: 'POST',
     auth: 'required',
-    data: {
-      clientRequestId: input.clientRequestId,
-      scores: {
-        taste: input.scores.taste,
-        value: input.scores.value,
-        service: input.scores.service,
-        ambience: input.scores.ambience,
-      },
-      recommended: input.recommended,
-      body,
-      photoIds: input.photoIds,
-    },
+    data: publishPayload(input, body),
   })
   if (
     !raw ||
     !isId(raw.reviewId) ||
     raw.restaurantId !== restaurantId ||
+    raw.windowId != null ||
     typeof raw.replayed !== 'boolean'
   ) {
     throw new ApiError('发布结果无法确认，请稍后核对点评列表。', 'INVALID_RESPONSE', 200)
   }
-  return { reviewId: raw.reviewId, restaurantId: raw.restaurantId, replayed: raw.replayed }
+  return {
+    reviewId: raw.reviewId,
+    restaurantId: raw.restaurantId,
+    windowId: null,
+    replayed: raw.replayed,
+  }
+}
+
+/**
+ * 发布食堂窗口点评。
+ *
+ * 窗口与餐厅可能使用相同数值编号，因此必须走 canteen-windows 路径，
+ * 并核对回执中的 windowId；餐厅字段必须为空，不能把餐厅点评回执混用。
+ */
+export async function publishWindowReview(
+  windowId: string,
+  input: ReviewPublishInput,
+): Promise<ReviewPublishReceipt> {
+  const body = validatePublishInput(input)
+  if (!isId(windowId)) {
+    throw new Error('窗口编号无效，无法发布点评。')
+  }
+
+  const raw = await request<{
+    reviewId: string
+    restaurantId: string | null
+    windowId: string | null
+    replayed: boolean
+  }>({
+    path: `/api/canteen-windows/${encodeURIComponent(windowId)}/reviews`,
+    method: 'POST',
+    auth: 'required',
+    data: publishPayload(input, body),
+  })
+  if (
+    !raw ||
+    !isId(raw.reviewId) ||
+    raw.windowId !== windowId ||
+    raw.restaurantId != null ||
+    typeof raw.replayed !== 'boolean'
+  ) {
+    throw new ApiError('发布结果无法确认，请稍后核对窗口点评列表。', 'INVALID_RESPONSE', 200)
+  }
+  return {
+    reviewId: raw.reviewId,
+    restaurantId: null,
+    windowId: raw.windowId,
+    replayed: raw.replayed,
+  }
 }

@@ -8,6 +8,7 @@ import {
   normalizeReviewBody,
   prepareReviewPhoto,
   publishReview,
+  publishWindowReview,
   reviewBodyLength,
   uploadReviewPhoto,
   type ReviewScores,
@@ -36,6 +37,9 @@ type ScoreRow = {
 
 type ComposeData = {
   restaurantId: string
+  /** 独立食堂窗口点评通过 windowId 区分；与餐厅编号可能数值相同。 */
+  windowId: string
+  isWindow: boolean
   restaurantName: string
   loggedIn: boolean
   scoreRows: ScoreRow[]
@@ -105,6 +109,8 @@ let pageGeneration = 0
 Page<ComposeData, ComposeCustom>({
   data: {
     restaurantId: '',
+    windowId: '',
+    isWindow: false,
     restaurantName: '',
     loggedIn: false,
     scoreRows: buildRows(defaultScores()),
@@ -122,14 +128,29 @@ Page<ComposeData, ComposeCustom>({
 
   onLoad(query) {
     pageGeneration++
+    /*
+     * 窗口详情通过 windowId 进入；窗口与餐厅编号可能相同，
+     * 因此不能把 windowId 塞进 id 参数，否则会发布到同号的餐厅。
+     */
+    const windowId = query.windowId ? decodeURIComponent(query.windowId) : ''
     const rawId = query.id ? decodeURIComponent(query.id) : ''
     const name = query.name ? decodeURIComponent(query.name) : ''
     const loggedIn = isLoggedIn()
-    if (!/^[1-9]\d*$/.test(rawId)) {
-      this.setData({ loggedIn, errorMessage: '店铺编号无效，无法写点评。' })
+    const targetId = windowId || rawId
+    if (!/^[1-9]\d*$/.test(targetId)) {
+      this.setData({
+        loggedIn,
+        errorMessage: `${windowId ? '窗口' : '店铺'}编号无效，无法写点评。`,
+      })
       return
     }
-    this.setData({ restaurantId: rawId, restaurantName: name, loggedIn })
+    this.setData({
+      restaurantId: windowId ? '' : targetId,
+      windowId,
+      isWindow: Boolean(windowId),
+      restaurantName: name,
+      loggedIn,
+    })
     wx.setNavigationBarTitle({ title: '写点评' })
   },
 
@@ -251,6 +272,11 @@ Page<ComposeData, ComposeCustom>({
       this.setData({ errorMessage: '照片尚未全部上传成功，请重试或移除失败照片。' })
       return
     }
+    const targetId = this.data.isWindow ? this.data.windowId : this.data.restaurantId
+    if (!/^[1-9]\d*$/.test(targetId)) {
+      this.setData({ errorMessage: '评价对象无效，请返回详情页重新进入。' })
+      return
+    }
     const body = normalizeReviewBody(this.data.body)
     const length = reviewBodyLength(this.data.body)
     if (length < 5 || length > MAX_REVIEW_BODY) {
@@ -263,8 +289,10 @@ Page<ComposeData, ComposeCustom>({
     }
 
     const photoIds = this.data.photos.map((item) => item.fileId)
+    // 类型和编号一起参与指纹：同号餐厅与窗口不能共用同一个幂等请求号。
     const content = JSON.stringify([
-      this.data.restaurantId,
+      this.data.isWindow ? 'WINDOW' : 'RESTAURANT',
+      targetId,
       this.data.scores,
       this.data.recommended,
       body,
@@ -279,13 +307,16 @@ Page<ComposeData, ComposeCustom>({
 
     this.setData({ submitting: true, errorMessage: '' })
     try {
-      const receipt = await publishReview(this.data.restaurantId, {
+      const input = {
         clientRequestId: this.requestId,
         scores: this.data.scores,
         recommended: this.data.recommended,
         body,
         photoIds,
-      })
+      }
+      const receipt = this.data.isWindow
+        ? await publishWindowReview(targetId, input)
+        : await publishReview(targetId, input)
       this.submittedContent = ''
       this.requestId = ''
       wx.showToast({ title: receipt.replayed ? '点评已存在' : '点评已发布', icon: 'success' })
@@ -312,9 +343,12 @@ Page<ComposeData, ComposeCustom>({
   },
 
   login() {
-    const id = this.data.restaurantId
+    // 回跳保留目标类型，窗口登录后仍回到窗口发布，而不是同号餐厅。
+    const target = this.data.isWindow
+      ? `windowId=${encodeURIComponent(this.data.windowId)}`
+      : `id=${encodeURIComponent(this.data.restaurantId)}`
     const name = this.data.restaurantName
-    const redirect = `/pages/review/compose/index?id=${encodeURIComponent(id)}${
+    const redirect = `/pages/review/compose/index?${target}${
       name ? `&name=${encodeURIComponent(name)}` : ''
     }`
     wx.navigateTo({ url: `/pages/login/index?redirect=${encodeURIComponent(redirect)}` })
