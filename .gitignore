@@ -10,6 +10,9 @@ frontend/node_modules/
 frontend/coverage/
 frontend/.vite/
 
+# 微信开发者工具的个人配置（窗口、编译模式等）因人而异，不纳入版本控制。
+miniprogram/project.private.config.json
+
 .env
 frontend/.env.local
 frontend/.env.*.local

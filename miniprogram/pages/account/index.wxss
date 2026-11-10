@@ -1,0 +1,63 @@
+.account-page {
+  padding-top: 36rpx;
+}
+
+.account-hero {
+  display: flex;
+  align-items: center;
+  padding: 20rpx 8rpx 44rpx;
+}
+
+.account-avatar {
+  width: 112rpx;
+  height: 112rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 24rpx;
+  border: 1rpx solid #f0dfb2;
+  border-radius: 34rpx;
+  background: #fdf3da;
+  color: #2b2a26;
+  font-size: 48rpx;
+  font-weight: 800;
+}
+
+.account-name {
+  font-size: 38rpx;
+  font-weight: 800;
+}
+
+.account-sub {
+  margin-top: 6rpx;
+  color: #8a8175;
+  font-size: 24rpx;
+}
+
+.account-card {
+  padding: 34rpx 30rpx;
+}
+
+.account-title {
+  font-size: 30rpx;
+  font-weight: 750;
+}
+
+.account-copy-text {
+  margin: 12rpx 0 26rpx;
+  color: #7a7266;
+  font-size: 25rpx;
+  line-height: 1.8;
+}
+
+.logout-button {
+  width: 100%;
+}
+
+.account-note {
+  margin-top: 28rpx;
+  padding: 0 12rpx;
+  color: #9a9184;
+  font-size: 22rpx;
+  line-height: 1.8;
+}

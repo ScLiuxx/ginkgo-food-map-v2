@@ -1,0 +1,43 @@
+{
+  "pages": [
+    "pages/home/index",
+    "pages/map/index",
+    "pages/messages/index",
+    "pages/account/index",
+    "pages/restaurant/detail/index",
+    "pages/login/index"
+  ],
+  "window": {
+    "backgroundTextStyle": "dark",
+    "navigationBarBackgroundColor": "#fffdf8",
+    "navigationBarTitleText": "泥电美食地图",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f7f5f0"
+  },
+  "tabBar": {
+    "color": "#6a6155",
+    "selectedColor": "#2b2a26",
+    "backgroundColor": "#fffdf8",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/home/index",
+        "text": "找店"
+      },
+      {
+        "pagePath": "pages/map/index",
+        "text": "地图"
+      },
+      {
+        "pagePath": "pages/messages/index",
+        "text": "消息"
+      },
+      {
+        "pagePath": "pages/account/index",
+        "text": "我的"
+      }
+    ]
+  },
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

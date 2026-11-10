@@ -1,0 +1,13 @@
+<view class="page">
+  <view class="placeholder-hero">
+    <view class="placeholder-icon">地图</view>
+    <view class="placeholder-title">地图找店</view>
+    <view class="placeholder-copy">{{planningNote}}</view>
+  </view>
+  <view class="card planning-card">
+    <view class="planning-title">下一阶段计划</view>
+    <view class="planning-item">1. 接入微信定位授权与拒绝后的降级提示。</view>
+    <view class="planning-item">2. 按地图视野请求点位，拖动后节流刷新。</view>
+    <view class="planning-item">3. 点击标记进入店铺详情，并支持导航。</view>
+  </view>
+</view>

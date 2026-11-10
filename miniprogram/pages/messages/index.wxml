@@ -1,0 +1,22 @@
+<view class="page">
+  <view class="placeholder-hero">
+    <view class="placeholder-icon">消息</view>
+    <view class="placeholder-title">消息中心</view>
+    <view class="placeholder-copy">
+      点评回复、点赞和系统通知将在下一阶段接入。当前小程序已支持账号登录，登录后可在“我的”查看账号状态。
+    </view>
+  </view>
+
+  <view wx:if="{{!loggedIn}}" class="card">
+    <view class="login-title">先登录，才能接收互动消息</view>
+    <view class="login-copy">消息属于账号私有数据，未登录时不会发起消息请求。</view>
+    <view class="primary-button" bindtap="login">登录账号</view>
+  </view>
+
+  <view wx:else class="card">
+    <view class="planning-title">消息功能规划</view>
+    <view class="planning-item">1. 分类查看回复、点赞与系统通知。</view>
+    <view class="planning-item">2. 单条已读、全部已读和删除。</view>
+    <view class="planning-item">3. 跳转到对应点评或店铺详情。</view>
+  </view>
+</view>

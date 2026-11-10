@@ -1,0 +1,55 @@
+.placeholder-hero {
+  padding: 72rpx 20rpx 40rpx;
+}
+
+.placeholder-icon {
+  width: 120rpx;
+  height: 120rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 28rpx;
+  border: 1rpx solid #e4ddd1;
+  border-radius: 32rpx;
+  background: #fffdf8;
+  color: #625c52;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.placeholder-title {
+  font-size: 44rpx;
+  font-weight: 800;
+}
+
+.placeholder-copy {
+  margin-top: 16rpx;
+  color: #7a7266;
+  font-size: 26rpx;
+  line-height: 1.8;
+}
+
+.login-title {
+  font-size: 30rpx;
+  font-weight: 750;
+}
+
+.login-copy {
+  margin: 10rpx 0 26rpx;
+  color: #8a8175;
+  font-size: 24rpx;
+  line-height: 1.7;
+}
+
+.planning-title {
+  margin-bottom: 16rpx;
+  font-size: 28rpx;
+  font-weight: 750;
+}
+
+.planning-item {
+  padding: 8rpx 0;
+  color: #625c52;
+  font-size: 25rpx;
+  line-height: 1.7;
+}

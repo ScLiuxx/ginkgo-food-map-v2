@@ -1,0 +1,121 @@
+/**
+ * 全局视觉基线。
+ *
+ * 颜色、圆角和间距与 Web 端保持同一套暖色纸张感：
+ * 深色文字 #2b2a26、银杏黄 #e9b949、浅纸色 #fffdf8；
+ * 小程序没有 Web 的全局 CSS 变量作用域，因此变量定义在 page 上，普通页面可直接复用。
+ */
+page {
+  --ink: #2b2a26;
+  --ink-soft: #625c52;
+  --ink-muted: #8a8175;
+  --paper: #f7f5f0;
+  --paper-raised: #fffdf8;
+  --line: #e4ddd1;
+  --gold: #e9b949;
+  --gold-deep: #986d08;
+  --danger: #8b2f29;
+  --success: #328455;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', sans-serif;
+  font-size: 28rpx;
+  line-height: 1.6;
+}
+
+.page {
+  min-height: 100vh;
+  padding: 28rpx 28rpx 56rpx;
+  box-sizing: border-box;
+}
+
+.card {
+  background: var(--paper-raised);
+  border: 1rpx solid var(--line);
+  border-radius: 24rpx;
+  padding: 28rpx;
+}
+
+.muted {
+  color: var(--ink-muted);
+}
+
+.strong {
+  font-weight: 700;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+}
+
+.between {
+  justify-content: space-between;
+}
+
+.wrap {
+  flex-wrap: wrap;
+}
+
+.flex-1 {
+  flex: 1;
+  min-width: 0;
+}
+
+.primary-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 88rpx;
+  padding: 0 40rpx;
+  border-radius: 999rpx;
+  background: var(--ink);
+  color: #ffffff;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.primary-button[disabled] {
+  opacity: 0.55;
+}
+
+.ghost-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 76rpx;
+  padding: 0 32rpx;
+  border: 1rpx solid var(--line);
+  border-radius: 999rpx;
+  background: var(--paper-raised);
+  color: var(--ink);
+  font-size: 27rpx;
+  font-weight: 600;
+}
+
+.error-text {
+  color: var(--danger);
+  font-size: 25rpx;
+  line-height: 1.6;
+}
+
+.empty-state {
+  padding: 80rpx 32rpx;
+  text-align: center;
+  color: var(--ink-muted);
+}
+
+.divider {
+  height: 1rpx;
+  background: var(--line);
+}
+
+.tag {
+  display: inline-block;
+  margin: 0 12rpx 12rpx 0;
+  padding: 6rpx 18rpx;
+  border-radius: 999rpx;
+  background: #f1ece2;
+  color: #5f574a;
+  font-size: 23rpx;
+}

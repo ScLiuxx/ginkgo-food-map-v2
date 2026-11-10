@@ -1,0 +1,31 @@
+<view class="page account-page">
+  <view class="account-hero">
+    <view class="account-avatar">{{initial}}</view>
+    <view class="account-copy">
+      <view class="account-name">{{loggedIn ? username : '未登录'}}</view>
+      <view class="account-sub">{{loggedIn ? roleText : '登录后可收藏店铺并管理个人内容'}}</view>
+    </view>
+  </view>
+
+  <view wx:if="{{!loggedIn}}" class="card account-card">
+    <view class="account-title">登录泥电美食地图</view>
+    <view class="account-copy-text">
+      小程序沿用网页端账号体系，使用用户名或校园邮箱登录，无需重新注册。
+    </view>
+    <view class="primary-button" bindtap="login">登录账号</view>
+  </view>
+
+  <view wx:else class="card account-card">
+    <view class="account-title">账号已登录</view>
+    <view class="account-copy-text">
+      当前小程序已接入店铺浏览、点评查看与收藏。我的点评、收藏列表、投稿和资料设置将在后续步骤接入。
+    </view>
+    <view class="ghost-button logout-button" bindtap="confirmLogout">
+      {{loggingOut ? '退出中…' : '退出登录'}}
+    </view>
+  </view>
+
+  <view class="account-note">
+    微信一键登录与账号绑定尚未接入；当前不会请求微信头像、昵称或手机号。
+  </view>
+</view>

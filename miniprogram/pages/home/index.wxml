@@ -1,0 +1,107 @@
+<view class="page home-page">
+  <view class="home-head">
+    <view class="brand-row">
+      <view class="brand-mark">G</view>
+      <view class="flex-1">
+        <view class="brand-name">泥电美食地图</view>
+        <view class="brand-sub">校园美食评价社区</view>
+      </view>
+      <view wx:if="{{!loggedIn}}" class="login-chip" bindtap="onLoginTap">登录</view>
+    </view>
+
+    <view class="search-box">
+      <input
+        class="search-input"
+        type="text"
+        confirm-type="search"
+        placeholder="搜索店名、地址、分类或标签"
+        placeholder-class="search-placeholder"
+        maxlength="100"
+        value="{{keyword}}"
+        bindinput="onKeywordInput"
+        bindconfirm="onSearchConfirm"
+      />
+      <view wx:if="{{keyword}}" class="search-clear" bindtap="onClearSearch">×</view>
+      <view class="search-action" bindtap="onSearchConfirm">搜索</view>
+    </view>
+  </view>
+
+  <scroll-view class="category-scroll" scroll-x enable-flex>
+    <view
+      class="category-chip {{activeCategory === '' ? 'active' : ''}}"
+      data-code=""
+      bindtap="onCategoryTap"
+    >全部</view>
+    <view
+      wx:for="{{categories}}"
+      wx:key="code"
+      class="category-chip {{activeCategory === item.code ? 'active' : ''}}"
+      data-code="{{item.code}}"
+      bindtap="onCategoryTap"
+    >{{item.name}}</view>
+  </scroll-view>
+
+  <view class="result-bar">
+    <view class="result-count">共 {{total}} 家</view>
+    <picker mode="selector" range="{{sortLabels}}" value="{{sortIndex}}" bindchange="onSortChange">
+      <view class="sort-picker">{{sortLabels[sortIndex]}} ▾</view>
+    </picker>
+  </view>
+
+  <view wx:if="{{loading}}" class="empty-state">正在加载店铺…</view>
+  <view wx:elif="{{errorMessage}}" class="empty-state">
+    <view class="error-text">{{errorMessage}}</view>
+    <view class="ghost-button retry-button" bindtap="onRetry">重新加载</view>
+  </view>
+  <view wx:elif="{{!records.length}}" class="empty-state">
+    没有找到符合条件的店铺，试试更换关键词或分类。
+  </view>
+  <view wx:else class="restaurant-list">
+    <view
+      wx:for="{{records}}"
+      wx:key="id"
+      class="restaurant-row"
+      data-id="{{item.id}}"
+      bindtap="onRestaurantTap"
+    >
+      <view class="restaurant-cover">
+        <image
+          wx:if="{{item.coverUrl}}"
+          class="cover-image"
+          src="{{item.coverUrl}}"
+          mode="aspectFill"
+          lazy-load
+        />
+        <view wx:else class="cover-placeholder">暂无图片</view>
+        <view wx:if="{{item.closed}}" class="closed-badge">停业</view>
+      </view>
+
+      <view class="restaurant-copy">
+        <view class="restaurant-name">{{item.name}}</view>
+        <view class="rating-line">
+          <text class="score">{{item.scoreText}}</text>
+          <text class="rating-note">{{item.reviewCountText}}</text>
+          <text class="price">{{item.priceText}}</text>
+        </view>
+        <view class="meta-line">
+          <text class="category">{{item.categoryLabel}}</text>
+          <text wx:if="{{item.supportsText}}" class="meta-dot">·</text>
+          <text wx:if="{{item.supportsText}}" class="meta">{{item.supportsText}}</text>
+          <text wx:if="{{item.distanceText}}" class="meta-dot">·</text>
+          <text wx:if="{{item.distanceText}}" class="meta">{{item.distanceText}}</text>
+        </view>
+        <view class="address-line">{{item.addressText}}</view>
+        <view wx:if="{{item.recommendText}}" class="recommend-line">
+          推荐率 {{item.recommendText}}
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{loadingMore}}" class="load-more">正在加载更多…</view>
+  <view wx:elif="{{!loading && records.length && !hasMore}}" class="load-more">
+    已展示当前可浏览范围
+  </view>
+
+  <view class="home-footer">泥电美食地图 · 校园美食评价社区</view>
+</view>

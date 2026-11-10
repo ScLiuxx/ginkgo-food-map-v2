@@ -1,0 +1,269 @@
+.home-page {
+  padding-top: 20rpx;
+}
+
+.home-head {
+  padding: 12rpx 4rpx 24rpx;
+}
+
+.brand-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 28rpx;
+}
+
+.brand-mark {
+  width: 76rpx;
+  height: 76rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 20rpx;
+  border: 1rpx solid #f0dfb2;
+  border-radius: 22rpx;
+  background: #fdf3da;
+  color: #2b2a26;
+  font-size: 36rpx;
+  font-weight: 800;
+}
+
+.brand-name {
+  font-size: 36rpx;
+  font-weight: 800;
+  letter-spacing: -1rpx;
+}
+
+.brand-sub {
+  margin-top: 2rpx;
+  color: #8a8175;
+  font-size: 22rpx;
+}
+
+.login-chip {
+  padding: 12rpx 28rpx;
+  border-radius: 999rpx;
+  background: #2b2a26;
+  color: #ffffff;
+  font-size: 25rpx;
+  font-weight: 700;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  height: 88rpx;
+  padding: 0 12rpx 0 28rpx;
+  border: 1rpx solid #e4ddd1;
+  border-radius: 999rpx;
+  background: #fffdf8;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  height: 88rpx;
+  font-size: 28rpx;
+}
+
+.search-placeholder {
+  color: #b3aa9d;
+}
+
+.search-clear {
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9a9184;
+  font-size: 34rpx;
+}
+
+.search-action {
+  padding: 0 22rpx;
+  color: #986d08;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.category-scroll {
+  white-space: nowrap;
+  margin: 4rpx 0 18rpx;
+}
+
+.category-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 64rpx;
+  margin-right: 16rpx;
+  padding: 0 28rpx;
+  border: 1rpx solid #e4ddd1;
+  border-radius: 999rpx;
+  background: #fffdf8;
+  color: #625c52;
+  font-size: 25rpx;
+}
+
+.category-chip.active {
+  border-color: #2b2a26;
+  background: #2b2a26;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.result-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6rpx 6rpx 14rpx;
+}
+
+.result-count {
+  color: #8a8175;
+  font-size: 24rpx;
+}
+
+.sort-picker {
+  color: #625c52;
+  font-size: 25rpx;
+  font-weight: 600;
+}
+
+.restaurant-list {
+  border-top: 1rpx solid #e4ddd1;
+}
+
+.restaurant-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 28rpx 0;
+  border-bottom: 1rpx solid #ece6dc;
+}
+
+.restaurant-cover {
+  position: relative;
+  flex: 0 0 196rpx;
+  width: 196rpx;
+  height: 176rpx;
+  margin-right: 24rpx;
+  border-radius: 16rpx;
+  overflow: hidden;
+  background: #eeeae2;
+}
+
+.cover-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.cover-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #a49b8e;
+  font-size: 22rpx;
+}
+
+.closed-badge {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  padding: 6rpx 10rpx;
+  background: #974e40dd;
+  color: #ffffff;
+  font-size: 20rpx;
+  text-align: center;
+}
+
+.restaurant-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.restaurant-name {
+  margin-bottom: 10rpx;
+  font-size: 32rpx;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.rating-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin-bottom: 8rpx;
+}
+
+.score {
+  margin-right: 14rpx;
+  color: #ba5610;
+  font-size: 38rpx;
+  font-weight: 750;
+}
+
+.rating-note {
+  margin-right: 14rpx;
+  color: #7a7266;
+  font-size: 23rpx;
+}
+
+.price {
+  margin-left: auto;
+  color: #2b2a26;
+  font-size: 27rpx;
+  font-weight: 650;
+}
+
+.meta-line {
+  margin-bottom: 6rpx;
+  color: #6d6559;
+  font-size: 23rpx;
+}
+
+.category {
+  color: #405b50;
+  font-weight: 650;
+}
+
+.meta-dot {
+  margin: 0 8rpx;
+  color: #b3aa9d;
+}
+
+.address-line {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #7a7266;
+  font-size: 23rpx;
+}
+
+.recommend-line {
+  margin-top: 4rpx;
+  color: #8a8175;
+  font-size: 22rpx;
+}
+
+.retry-button {
+  width: 240rpx;
+  margin: 28rpx auto 0;
+}
+
+.load-more {
+  padding: 30rpx 0 10rpx;
+  color: #9a9184;
+  font-size: 24rpx;
+  text-align: center;
+}
+
+.home-footer {
+  padding: 48rpx 0 12rpx;
+  color: #b3aa9d;
+  font-size: 22rpx;
+  text-align: center;
+}

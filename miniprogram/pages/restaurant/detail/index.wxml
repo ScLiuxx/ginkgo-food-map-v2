@@ -1,0 +1,174 @@
+<view class="page detail-page">
+  <view wx:if="{{loading}}" class="empty-state">正在加载店铺详情…</view>
+  <view wx:elif="{{errorMessage}}" class="empty-state">
+    <view class="error-text">{{errorMessage}}</view>
+    <view class="ghost-button detail-retry" bindtap="retry">重新加载</view>
+  </view>
+
+  <block wx:elif="{{restaurant}}">
+    <swiper
+      wx:if="{{albumUrls.length}}"
+      class="album-swiper"
+      indicator-dots
+      indicator-color="rgba(255,255,255,0.45)"
+      indicator-active-color="#e9b949"
+      circular
+    >
+      <swiper-item wx:for="{{albumUrls}}" wx:key="*this">
+        <image
+          class="album-image"
+          src="{{item}}"
+          mode="aspectFill"
+          data-url="{{item}}"
+          bindtap="previewAlbum"
+        />
+      </swiper-item>
+    </swiper>
+    <view wx:else class="album-empty">暂无店铺照片</view>
+    <view wx:if="{{albumNextCursor}}" class="album-more" bindtap="loadAlbumMore">
+      {{albumLoadingMore ? '正在加载照片…' : '加载更多照片'}}
+    </view>
+
+    <view class="card summary-card">
+      <view class="summary-top">
+        <view class="flex-1">
+          <view class="detail-name">{{restaurant.name}}</view>
+          <view class="detail-sub">
+            {{restaurant.typeLabel}} · {{restaurant.categoryLabel}}<text wx:if="{{restaurant.businessText}}"> · {{restaurant.businessText}}</text>
+          </view>
+        </view>
+        <view
+          class="favorite-button {{favorited ? 'active' : ''}}"
+          bindtap="toggleFavorite"
+        >{{favoriteBusy ? '处理中' : (favorited ? '已收藏' : '收藏')}}</view>
+      </view>
+
+      <view wx:if="{{favoriteHint}}" class="error-text favorite-hint">{{favoriteHint}}</view>
+
+      <view class="summary-rating">
+        <view class="summary-score">{{restaurant.scoreText}}</view>
+        <view class="flex-1">
+          <view class="summary-count">{{restaurant.reviewCountText}}</view>
+          <view class="muted summary-meta">
+            {{restaurant.participantCountText}}<text wx:if="{{restaurant.recommendText}}"> · 推荐率 {{restaurant.recommendText}}</text>
+          </view>
+        </view>
+        <view class="summary-price">{{restaurant.priceText}}</view>
+      </view>
+
+      <view class="dimension-grid">
+        <view wx:for="{{restaurant.dimensions}}" wx:key="key" class="dimension-item">
+          <view class="dimension-value">{{item.value}}</view>
+          <view class="dimension-label">{{item.label}}</view>
+        </view>
+      </view>
+
+      <view class="divider info-divider"></view>
+
+      <view class="info-row">
+        <text class="info-label">地址</text>
+        <text class="info-value">{{restaurant.addressText}}</text>
+      </view>
+      <view wx:if="{{restaurant.distanceText}}" class="info-row">
+        <text class="info-label">距离</text>
+        <text class="info-value">{{restaurant.distanceText}}</text>
+      </view>
+      <view wx:if="{{restaurant.supportsText}}" class="info-row">
+        <text class="info-label">用餐</text>
+        <text class="info-value">{{restaurant.supportsText}}</text>
+      </view>
+
+      <view wx:if="{{restaurant.tags.length}}" class="tag-row">
+        <text wx:for="{{restaurant.tags}}" wx:key="*this" class="tag">{{item}}</text>
+      </view>
+
+      <view class="map-tip">地图定位与导航将在后续步骤接入，当前可先通过地址前往。</view>
+    </view>
+
+    <view wx:if="{{isCanteen}}" class="section">
+      <view class="section-head">
+        <view class="section-title">食堂窗口</view>
+        <view class="section-meta">{{windows.length}} 个窗口</view>
+      </view>
+      <view wx:if="{{windows.length}}" class="card window-card">
+        <view wx:for="{{windows}}" wx:key="id" class="window-row">
+          <view class="window-cover">
+            <image wx:if="{{item.coverUrl}}" class="window-image" src="{{item.coverUrl}}" mode="aspectFill" lazy-load />
+            <view wx:else class="window-placeholder">窗口</view>
+          </view>
+          <view class="flex-1">
+            <view class="window-name">{{item.name}}</view>
+            <view class="window-meta">{{item.floorText}} · {{item.priceText}}</view>
+            <view class="window-score">{{item.scoreText}} <text class="muted">{{item.reviewCountText}}</text></view>
+          </view>
+          <view wx:if="{{item.closed}}" class="window-closed">停业</view>
+        </view>
+      </view>
+      <view wx:else class="card empty-window">窗口信息暂未补充。</view>
+    </view>
+
+    <view class="section">
+      <view class="section-head">
+        <view class="section-title">点评</view>
+        <picker
+          mode="selector"
+          range="{{reviewSortLabels}}"
+          value="{{reviewSortIndex}}"
+          bindchange="onReviewSortChange"
+        >
+          <view class="sort-picker">{{reviewSortLabels[reviewSortIndex]}} ▾</view>
+        </picker>
+      </view>
+      <view class="section-meta">{{reviewTotalReviews}} 条点评 · {{reviewTotalGroups}} 位作者</view>
+
+      <view wx:if="{{reviewLoading && !reviews.length}}" class="card empty-state">正在加载点评…</view>
+      <view wx:elif="{{reviewError}}" class="card empty-state">
+        <view class="error-text">{{reviewError}}</view>
+        <view class="ghost-button retry-reviews" bindtap="retryReviews">重新加载</view>
+      </view>
+      <view wx:elif="{{!reviews.length}}" class="card empty-state">还没有点评，欢迎后续在小程序发布第一条。</view>
+      <view wx:else class="review-list">
+        <view wx:for="{{reviews}}" wx:key="id" class="card review-card">
+          <view class="review-head">
+            <view class="avatar">{{item.avatarText}}</view>
+            <view class="flex-1">
+              <view class="review-author">
+                {{item.username}}<text wx:if="{{item.authorLevelText}}" class="author-level"> {{item.authorLevelText}}</text>
+              </view>
+              <view class="review-date">
+                {{item.createdAtText}}<text wx:if="{{item.historyText}}"> · {{item.historyText}}</text>
+              </view>
+            </view>
+            <view class="review-score">{{item.overallScoreText}}</view>
+          </view>
+          <view class="review-badge {{item.recommended ? 'recommend' : 'avoid'}}">{{item.recommendationText}}</view>
+          <view class="review-body">{{item.body}}</view>
+          <view wx:if="{{item.photoUrls.length}}" class="review-photos">
+            <image
+              wx:for="{{item.photoUrls}}"
+              wx:for-item="photo"
+              wx:for-index="photoIndex"
+              wx:key="*this"
+              class="review-photo"
+              src="{{photo}}"
+              mode="aspectFill"
+              lazy-load
+              data-review-index="{{index}}"
+              data-url="{{photo}}"
+              bindtap="previewReviewPhoto"
+            />
+          </view>
+        </view>
+      </view>
+
+      <view
+        wx:if="{{reviews.length && hasMoreReviews}}"
+        class="ghost-button load-more-reviews"
+        bindtap="loadMoreReviews"
+      >{{reviewLoading ? '加载中…' : '加载更多点评'}}</view>
+      <view wx:elif="{{reviews.length}}" class="list-end">已展示全部点评</view>
+
+      <view class="compose-note">发布点评、回复与点赞将在下一阶段接入。</view>
+    </view>
+  </block>
+</view>
