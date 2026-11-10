@@ -56,6 +56,9 @@ export interface SubmissionInput {
   photoIds: string[]
 }
 
+/** 待审修改只提交业务字段；clientRequestId 由提交入口独占，不能被修改接口复用。 */
+export type SubmissionPayload = Omit<SubmissionInput, 'clientRequestId'>
+
 /** 与后端一致的码点计数：emoji 等代理对按一个字计算。 */
 export function characterCount(value: string): number {
   return Array.from(value).length
@@ -157,12 +160,8 @@ export function validateSubmissionDraft(draft: SubmissionDraft): string {
 }
 
 /** 始终提交完整字段；未知价格和空地址显式传 null，不能依赖服务端默认值。 */
-export function buildSubmissionInput(
-  draft: SubmissionDraft,
-  clientRequestId: string,
-): SubmissionInput {
+export function buildSubmissionPayload(draft: SubmissionDraft): SubmissionPayload {
   return {
-    clientRequestId,
     name: draft.name.trim(),
     // 食堂不接受分类；即使草稿曾选择分类也显式提交 null。
     categoryCode: draft.restaurantType === 'CANTEEN' ? null : draft.categoryCode,

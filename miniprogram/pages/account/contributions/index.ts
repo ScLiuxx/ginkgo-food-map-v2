@@ -101,7 +101,9 @@ Page<ContributionListData, ContributionListCustom>({
       })
     }
     if (!loggedIn) return
-    if (!this.data.loaded && !this.data.loading) {
+    // 从详情页修改、撤回或重提返回后重新读取，状态计数不能停留在旧快照；
+    // onShow 紧跟 onLoad 时首屏请求仍在进行，不重复发起。
+    if (!this.data.loading && !this.data.loadingMore) {
       void this.load(this.data.filter, 1, true)
     }
   },

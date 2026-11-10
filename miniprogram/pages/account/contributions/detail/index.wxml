@@ -81,8 +81,46 @@
       查看店铺
     </view>
 
-    <view class="readonly-note">
-      小程序当前仅支持查看记录；待审修改、撤回和驳回重提请在网页端完成。
+    <view wx:if="{{detail.canEdit || detail.canResubmit}}" class="card action-card">
+      <view class="section-title">申请操作</view>
+      <view wx:if="{{detail.canEdit}}" class="action-copy">
+        修改会整体替换当前待审内容并重新进入审核队列。原申请附图不会自动保留，需要重新选择上传。
+      </view>
+      <view wx:elif="{{detail.canResubmit}}" class="action-copy">
+        重新提交会基于当前内容创建新的待审申请，原驳回记录与原因保持不变。附图需要重新选择上传。
+      </view>
+      <view
+        wx:if="{{detail.status === 'REJECTED' && detail.requestType === 'UPDATE' && !detail.targetAvailable}}"
+        class="field-hint"
+      >原店铺已不可用，无法重新提交资料纠错。</view>
+      <view class="action-row">
+        <view
+          wx:if="{{detail.canEdit}}"
+          class="primary-button action-button {{busy ? 'is-disabled' : ''}}"
+          bindtap="editApplication"
+        >修改内容</view>
+        <view
+          wx:if="{{detail.canEdit}}"
+          class="ghost-button action-button action-danger {{busy ? 'is-disabled' : ''}}"
+          bindtap="withdraw"
+        >{{busy ? '处理中…' : '撤回申请'}}</view>
+        <view
+          wx:if="{{detail.canResubmit}}"
+          class="primary-button action-button {{busy ? 'is-disabled' : ''}}"
+          bindtap="resubmitApplication"
+        >修改后重新提交</view>
+      </view>
+      <view wx:if="{{actionError}}" class="error-text action-error">{{actionError}}</view>
+    </view>
+
+    <view wx:if="{{detail.canEdit || detail.canResubmit}}" class="readonly-note">
+      修改与重提都只影响申请记录，审核通过前不会改动公开店铺资料。
+    </view>
+    <view wx:elif="{{detail.status === 'APPROVED'}}" class="readonly-note">
+      该申请已审核通过并更新公开资料，不能再次修改。
+    </view>
+    <view wx:elif="{{detail.status === 'WITHDRAWN'}}" class="readonly-note">
+      该申请已由你撤回，不可恢复；如需更新资料请重新提交申请。
     </view>
   </block>
 </view>

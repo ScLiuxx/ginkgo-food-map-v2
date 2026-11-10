@@ -13,6 +13,8 @@
     "pages/account/privacy/index",
     "pages/review/compose/index",
     "pages/submission/index",
+    "pages/user/profile/index",
+    "pages/user/follows/index",
     "pages/login/index",
     "pages/register/index",
     "pages/password-reset/index"

@@ -53,3 +53,23 @@ export async function fetchMyReviewGroups(page: number): Promise<MyReviewPageVie
   })
   return toMyReviewPageView(raw, page)
 }
+
+/**
+ * 读取其他用户的公开点评（仍按店铺分组）。
+ *
+ * 公开主页要求登录；响应中的作者必须回指请求用户，
+ * 避免错误路由或缓存把其他人的点评显示在当前主页。
+ */
+export async function fetchUserReviewGroups(
+  userId: string,
+  page: number,
+): Promise<MyReviewPageView> {
+  const raw = await request<MyReviewPageRaw>({
+    path: `/api/users/${encodeURIComponent(userId)}/reviews?page=${page}&pageSize=8`,
+    auth: 'required',
+  })
+  if (!raw || !raw.author || raw.author.id !== userId) {
+    throw new Error('该用户的点评无法确认，请重新加载。')
+  }
+  return toMyReviewPageView(raw, page)
+}

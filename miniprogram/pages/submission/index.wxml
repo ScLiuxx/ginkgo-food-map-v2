@@ -7,13 +7,13 @@
 
   <view class="submission-hero">
     <view class="hero-eyebrow">社区共建</view>
-    <view class="hero-title">{{isCorrection ? '补充 / 纠错' : '新店投稿'}}</view>
-    <view class="hero-copy">{{isCorrection ? '已带入当前店铺资料，只需修改有误或缺失的内容。提交后由管理员审核，通过前不会改动公开资料。' : '提交后进入审核队列，通过后才会出现在找店列表。请尽量填写真实资料并在地图中确认位置。'}}</view>
+    <view class="hero-title">{{heroTitle}}</view>
+    <view class="hero-copy">{{heroCopy}}</view>
   </view>
 
   <view wx:if="{{!loggedIn}}" class="card login-card">
-    <view class="login-title">{{isCorrection ? '登录后提交纠错' : '登录后提交投稿'}}</view>
-    <view class="login-copy">{{isCorrection ? '纠错会记录当前账号，不读取微信头像、昵称或手机号；资料只保留在当前页面。' : '投稿会记录当前账号，不读取微信头像、昵称或手机号；草稿只保留在当前页面。'}}</view>
+    <view class="login-title">{{loginTitle}}</view>
+    <view class="login-copy">{{loginCopy}}</view>
     <view wx:if="{{errorMessage}}" class="error-text login-error">{{errorMessage}}</view>
     <view class="primary-button" bindtap="login">使用邮箱登录</view>
   </view>
@@ -22,10 +22,10 @@
     <view class="card form-card">
       <view class="section-label">基础资料</view>
 
-      <view wx:if="{{isCorrection && sourceLoading}}" class="field-hint">正在读取店铺资料…</view>
+      <view wx:if="{{isCorrection && sourceLoading}}" class="field-hint">正在读取资料…</view>
       <view wx:if="{{isCorrection && sourceError}}" class="source-error">
         <view class="error-text">{{sourceError}}</view>
-        <view class="ghost-button retry-source" bindtap="loadSource">重新读取资料</view>
+        <view class="ghost-button retry-source" bindtap="retrySource">重新读取资料</view>
       </view>
 
       <view class="field-block">
@@ -123,7 +123,7 @@
             <view class="ghost-button location-button" bindtap="chooseLocation">{{isCorrection && latitude && longitude ? '重新选择' : '选择位置'}}</view>
           </view>
         </view>
-        <view wx:if="{{isCorrection && latitude && longitude && !locationConfirmed}}" class="field-hint">已带入店铺原有坐标，请核对无误后点击“确认位置”；坐标不正确时请重新选择。</view>
+        <view wx:if="{{isCorrection && latitude && longitude && !locationConfirmed}}" class="field-hint">已带入原有坐标，请核对无误后点击“确认位置”；坐标不正确时请重新选择。</view>
       </view>
 
       <view class="field-block">
@@ -177,7 +177,7 @@
 
     <view class="card form-card">
       <view class="photo-head">
-        <text class="section-label">{{isCorrection ? '本次新增图片' : '照片'}}</text>
+        <text class="section-label">{{photoSectionLabel}}</text>
         <text class="muted">{{photos.length}} / {{maxPhotos}}</text>
       </view>
       <view class="photo-grid">
@@ -203,7 +203,7 @@
           <text class="photo-add-text">添加照片</text>
         </view>
       </view>
-      <view class="field-hint">{{isCorrection ? '已有照片无需重复上传；本次新增图片审核通过后追加到相册。最多 5 张，上传前自动压缩；失败照片需重试或移除后才能提交。' : '最多 5 张，上传前自动压缩；失败照片需重试或移除后才能提交。'}}</view>
+      <view class="field-hint">{{photoHint}}</view>
     </view>
 
     <view wx:if="{{errorMessage}}" class="error-text form-error">{{errorMessage}}</view>
@@ -211,7 +211,7 @@
     <view
       class="primary-button submit-button {{submitting || uploading ? 'is-disabled' : ''}}"
       bindtap="submit"
-    >{{submitting ? '正在提交…' : '提交审核'}}</view>
-    <view class="submit-hint">提交只代表申请已受理，审核结果请到“我的投稿”查看。</view>
+    >{{submitting ? '正在提交…' : submitLabel}}</view>
+    <view class="submit-hint">{{submitHint}}</view>
   </block>
 </view>

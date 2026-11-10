@@ -1,0 +1,71 @@
+<view class="page follows-page">
+  <view class="ambient">
+    <view class="ambient-blob ambient-a"></view>
+    <view class="ambient-blob ambient-b"></view>
+    <view class="ambient-blob ambient-c"></view>
+  </view>
+
+  <view wx:if="{{!loggedIn}}" class="card state-card">
+    <view class="state-title">登录后查看名单</view>
+    <view class="state-copy">关注与粉丝名单仅向登录用户开放。</view>
+    <view class="primary-button state-action" bindtap="login">去登录</view>
+  </view>
+
+  <block wx:else>
+    <view class="follows-head">
+      <view class="follows-title">{{kindLabel}}</view>
+      <view wx:if="{{page > 0}}" class="follows-total">共 {{total}} 人</view>
+    </view>
+
+    <view wx:if="{{hint}}" class="error-text list-hint">{{hint}}</view>
+
+    <view wx:if="{{loading}}" class="card state-card">
+      <view class="state-copy">正在加载名单…</view>
+    </view>
+
+    <view wx:elif="{{errorMessage}}" class="card state-card">
+      <view class="state-title">名单不可用</view>
+      <view class="state-copy">{{errorMessage}}</view>
+      <view class="ghost-button state-action" bindtap="reload">重新加载</view>
+    </view>
+
+    <block wx:else>
+      <view wx:if="{{!records.length}}" class="card state-card">
+        <view class="state-title">{{total ? '当前页已变化' : '暂无可展示的用户'}}</view>
+        <view class="state-copy">{{total ? '名单人数已更新，请返回第一页查看。' : (kind === 'FOLLOWING' ? '对方还没有关注任何人。' : '对方还没有粉丝。')}}</view>
+        <view wx:if="{{total}}" class="ghost-button state-action" bindtap="reload">返回第一页</view>
+      </view>
+
+      <view wx:for="{{records}}" wx:key="userId" class="card member-card">
+        <view class="member-main" data-id="{{item.userId}}" bindtap="openMember">
+          <view class="member-avatar">{{item.avatarText}}</view>
+          <view class="member-copy">
+            <view class="member-name">{{item.username}}</view>
+            <view wx:if="{{item.level}}" class="member-level">Lv.{{item.level}}</view>
+          </view>
+        </view>
+        <view
+          wx:if="{{isSelf && kind === 'FOLLOWING'}}"
+          class="member-action {{busyId === item.userId ? 'is-disabled' : ''}}"
+          data-id="{{item.userId}}"
+          catchtap="cancelFollow"
+        >{{busyId === item.userId ? '处理中…' : '取消关注'}}</view>
+        <view wx:elif="{{item.following}}" class="member-state">已关注</view>
+      </view>
+
+      <view wx:if="{{totalPages > 1}}" class="pager">
+        <view
+          class="pager-button {{page <= 1 || loading ? 'is-disabled' : ''}}"
+          data-page="{{page - 1}}"
+          bindtap="goPage"
+        >上一页</view>
+        <view class="pager-text">{{page}} / {{totalPages}}</view>
+        <view
+          class="pager-button {{page >= totalPages || loading ? 'is-disabled' : ''}}"
+          data-page="{{page + 1}}"
+          bindtap="goPage"
+        >下一页</view>
+      </view>
+    </block>
+  </block>
+</view>

@@ -1,6 +1,7 @@
 import {
   downloadContributionPhoto,
   fetchContributionDetail,
+  withdrawContribution,
   type ContributionDetailView,
 } from '../../../../modules/restaurant/contribution'
 import { ApiError } from '../../../../shared/api/request'
@@ -20,27 +21,38 @@ type DetailData = {
   errorMessage: string
   detail: ContributionDetailView | null
   photos: PhotoItem[]
+  /** 撤回等写操作进行中；期间不允许重复提交。 */
+  busy: boolean
+  /** 写操作失败提示；与整页读取失败分开，避免错误卡片覆盖已加载详情。 */
+  actionError: string
 }
 
 type DetailCustom = {
   active: boolean
   requestSequence: number
+  skipNextShowReload: boolean
   load(): Promise<void>
   loadPhotos(): Promise<void>
   patchPhoto(position: number, patch: Partial<PhotoItem>): void
   retryPhoto(event: WxTapEvent): Promise<void>
   previewPhoto(event: WxTapEvent): void
   openRestaurant(): void
+  editApplication(): void
+  resubmitApplication(): void
+  openSubmission(mode: 'edit' | 'resubmit'): void
+  withdraw(): void
+  performWithdraw(): Promise<void>
   login(): void
   currentPath(): string
   handleAuthFailure(reason: unknown): boolean
 }
 
 /**
- * 本人投稿/纠错详情（只读）。
+ * 本人投稿/纠错详情。
  *
  * 附图是私有资源，先带 Bearer 下载到临时文件再展示；
- * 页面不提供修改、撤回或重提操作，避免出现网页端才具备的半成品入口。
+ * 待审申请可整体修改或撤回，被驳回申请可修改后重新提交。
+ * 详情接口只返回附图位置，修改/重提时无法沿用原文件编号，界面会明确要求重新上传。
  */
 Page<DetailData, DetailCustom>({
   data: {
@@ -50,10 +62,13 @@ Page<DetailData, DetailCustom>({
     errorMessage: '',
     detail: null,
     photos: [],
+    busy: false,
+    actionError: '',
   },
 
   active: true,
   requestSequence: 0,
+  skipNextShowReload: false,
 
   onLoad(query) {
     const id = query.id
@@ -64,15 +79,35 @@ Page<DetailData, DetailCustom>({
       return
     }
     this.setData({ applicationId: id })
-    if (loggedIn) void this.load()
+    if (loggedIn) {
+      // onLoad 后紧跟的 onShow 不应重复请求同一份详情。
+      this.skipNextShowReload = true
+      void this.load()
+    }
   },
 
   onShow() {
     const loggedIn = isLoggedIn()
-    if (loggedIn === this.data.loggedIn) return
-    this.requestSequence += 1
-    this.setData({ loggedIn, detail: null, photos: [], errorMessage: '', loading: false })
-    if (loggedIn) void this.load()
+    if (loggedIn !== this.data.loggedIn) {
+      this.requestSequence += 1
+      this.setData({
+        loggedIn,
+        detail: null,
+        photos: [],
+        errorMessage: '',
+        loading: false,
+        busy: false,
+        actionError: '',
+      })
+      if (loggedIn) void this.load()
+      return
+    }
+    if (this.skipNextShowReload) {
+      this.skipNextShowReload = false
+      return
+    }
+    // 从修改/重提页面返回时重新读取，确保状态与内容不是旧快照。
+    if (loggedIn && this.data.applicationId) void this.load()
   },
 
   onUnload() {
@@ -89,7 +124,7 @@ Page<DetailData, DetailCustom>({
       return
     }
     const sequence = ++this.requestSequence
-    this.setData({ loading: true, errorMessage: '', photos: [] })
+    this.setData({ loading: true, errorMessage: '', photos: [], actionError: '' })
     try {
       const detail = await fetchContributionDetail(this.data.applicationId)
       if (!this.active || sequence !== this.requestSequence) return
@@ -176,6 +211,60 @@ Page<DetailData, DetailCustom>({
     wx.navigateTo({
       url: `/pages/restaurant/detail/index?id=${encodeURIComponent(detail.restaurantId)}`,
     })
+  },
+
+  /** 待审申请进入修改模式；表单按申请快照回填，附图需重新上传。 */
+  editApplication(): void {
+    const detail = this.data.detail
+    if (!detail || !detail.canEdit || this.data.busy) return
+    this.openSubmission('edit')
+  },
+
+  /** 被驳回申请进入重提模式；成功后服务端会创建新的待审申请。 */
+  resubmitApplication(): void {
+    const detail = this.data.detail
+    if (!detail || !detail.canResubmit || this.data.busy) return
+    this.openSubmission('resubmit')
+  },
+
+  openSubmission(mode: 'edit' | 'resubmit'): void {
+    wx.navigateTo({
+      url:
+        `/pages/submission/index?mode=${mode}` +
+        `&requestId=${encodeURIComponent(this.data.applicationId)}`,
+    })
+  },
+
+  /** 撤回不可恢复，必须显式确认；重复撤回由服务端保持幂等。 */
+  withdraw(): void {
+    const detail = this.data.detail
+    if (!detail || !detail.canEdit || this.data.busy) return
+    wx.showModal({
+      title: '撤回申请',
+      content: '撤回后该申请不可恢复；如需再次提交，请重新填写。原申请内容不会修改公开店铺资料。',
+      confirmText: '撤回申请',
+      confirmColor: '#b83a34',
+      success: (result) => {
+        if (result.confirm) void this.performWithdraw()
+      },
+    })
+  },
+
+  async performWithdraw(): Promise<void> {
+    const detail = this.data.detail
+    if (!detail || this.data.busy) return
+    this.setData({ busy: true, actionError: '' })
+    try {
+      await withdrawContribution(detail.id)
+      wx.showToast({ title: '已撤回申请', icon: 'success' })
+      await this.load()
+    } catch (reason) {
+      if (!this.handleAuthFailure(reason)) {
+        this.setData({ actionError: toMessage(reason) })
+      }
+    } finally {
+      this.setData({ busy: false })
+    }
   },
 
   login(): void {

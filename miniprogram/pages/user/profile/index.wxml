@@ -1,0 +1,151 @@
+<view class="page profile-page">
+  <view class="ambient">
+    <view class="ambient-blob ambient-a"></view>
+    <view class="ambient-blob ambient-b"></view>
+    <view class="ambient-blob ambient-c"></view>
+  </view>
+
+  <view wx:if="{{!loggedIn}}" class="card state-card">
+    <view class="state-title">登录后查看个人主页</view>
+    <view class="state-copy">个人主页、关注名单与点评内容仅向登录用户开放。</view>
+    <view class="primary-button state-action" bindtap="login">去登录</view>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{loading}}" class="card state-card">
+      <view class="state-copy">正在加载个人主页…</view>
+    </view>
+
+    <view wx:elif="{{errorMessage}}" class="card state-card">
+      <view class="state-title">无法打开主页</view>
+      <view class="state-copy">{{errorMessage}}</view>
+      <view class="ghost-button state-action" bindtap="retry">重新加载</view>
+    </view>
+
+    <block wx:elif="{{profile}}">
+      <view class="card profile-card">
+        <view class="profile-identity">
+          <view class="profile-avatar">{{avatarText}}</view>
+          <view class="profile-info">
+            <view class="profile-heading">
+              <text class="profile-name">{{profile.username}}</text>
+              <text class="level-badge">Lv.{{profile.level}}</text>
+            </view>
+            <view class="profile-bio">{{profile.bio || '还没有填写个人简介'}}</view>
+          </view>
+        </view>
+
+        <view class="profile-stats">
+          <view class="stat" data-kind="FOLLOWING" bindtap="openFollows">
+            <text class="stat-value">{{social ? social.followingCount : '—'}}</text>
+            <text class="stat-label">关注</text>
+          </view>
+          <view class="stat" data-kind="FOLLOWERS" bindtap="openFollows">
+            <text class="stat-value">{{social ? social.followersCount : '—'}}</text>
+            <text class="stat-label">粉丝</text>
+          </view>
+          <view class="stat stat-static">
+            <text class="stat-value">{{profile.receivedLikes}}</text>
+            <text class="stat-label">获赞</text>
+          </view>
+        </view>
+
+        <view wx:if="{{socialError}}" class="error-text social-error">{{socialError}}</view>
+        <view wx:if="{{social && !isSelf}}"
+          class="follow-button {{social.following ? 'is-following' : 'primary-button'}} {{followBusy ? 'is-disabled' : ''}}"
+          bindtap="toggleFollow"
+        >{{followBusy ? '处理中…' : (social.following ? '已关注 · 点击取消' : '关注')}}</view>
+        <view wx:elif="{{isSelf}}" class="self-note">这是你的公开主页，完整资料与设置请回到“我的”。</view>
+        <view wx:elif="{{socialLoading}}" class="self-note">正在读取关注信息…</view>
+      </view>
+
+      <view class="segmented">
+        <view class="segment {{tab === 'reviews' ? 'active' : ''}}" data-tab="reviews" bindtap="switchTab">
+          点评<text wx:if="{{reviewLoaded}}"> {{reviewTotalGroups}}</text>
+        </view>
+        <view class="segment {{tab === 'favorites' ? 'active' : ''}}" data-tab="favorites" bindtap="switchTab">
+          收藏<text wx:if="{{favoriteLoaded && !favoritePrivate}}"> {{favoriteTotal}}</text>
+        </view>
+      </view>
+
+      <view wx:if="{{listHint}}" class="error-text list-hint">{{listHint}}</view>
+
+      <view wx:if="{{listLoading}}" class="card state-card compact">
+        <view class="state-copy">正在加载…</view>
+      </view>
+
+      <view wx:elif="{{listError}}" class="card state-card compact">
+        <view class="state-copy">{{listError}}</view>
+        <view wx:if="{{!favoritePrivate}}" class="ghost-button state-action" bindtap="retry">重新加载</view>
+      </view>
+
+      <block wx:elif="{{tab === 'reviews'}}">
+        <view wx:if="{{!reviews.length}}" class="card state-card compact">
+          <view class="state-title">还没有发布过点评</view>
+          <view class="state-copy">对方发布的有效点评会按店铺显示在这里。</view>
+        </view>
+
+        <view
+          wx:for="{{reviews}}"
+          wx:key="reviewId"
+          class="card content-card"
+          data-id="{{item.restaurantId}}"
+          bindtap="openRestaurant"
+        >
+          <view class="content-card-head">
+            <view class="content-card-title {{item.closed ? 'title-closed' : ''}}">{{item.restaurantName}}</view>
+            <view class="content-score">{{item.overallScoreText}}</view>
+          </view>
+          <view class="content-card-meta">
+            <text>{{item.businessText}}</text>
+            <text wx:if="{{item.createdAtText}}"> · {{item.createdAtText}}</text>
+          </view>
+          <view class="content-card-body">{{item.body}}</view>
+          <view class="content-card-foot">
+            <view class="content-badges">
+              <text class="badge {{item.recommended ? 'badge-good' : 'badge-plain'}}">{{item.recommendationText}}</text>
+              <text wx:if="{{item.historyText}}" class="badge badge-plain">{{item.historyText}}</text>
+              <text wx:if="{{item.photoCountText}}" class="badge badge-plain">{{item.photoCountText}}</text>
+            </view>
+            <view class="content-link">查看店铺 ›</view>
+          </view>
+        </view>
+
+        <view wx:if="{{reviewPage < reviewTotalPages}}" class="load-more" bindtap="loadMore">
+          {{listLoadingMore ? '加载中…' : '加载更多'}}
+        </view>
+        <view wx:elif="{{reviews.length}}" class="list-meta">共 {{reviewTotalGroups}} 家店铺 · {{reviewTotalReviews}} 条点评</view>
+      </block>
+
+      <block wx:else>
+        <view wx:if="{{!favorites.length}}" class="card state-card compact">
+          <view class="state-title">还没有收藏店铺</view>
+          <view class="state-copy">对方公开收藏的餐厅与食堂会显示在这里。</view>
+        </view>
+
+        <view
+          wx:for="{{favorites}}"
+          wx:key="restaurantId"
+          class="card content-card favorite-card"
+          data-id="{{item.restaurantId}}"
+          bindtap="openRestaurant"
+        >
+          <view class="favorite-row">
+            <view class="favorite-copy">
+              <view class="content-card-title {{item.closed ? 'title-closed' : ''}}">{{item.name}}</view>
+              <view class="content-card-meta">{{item.metaText}} · {{item.createdAtText}}</view>
+            </view>
+          </view>
+          <view class="content-card-foot">
+            <view class="content-link">{{item.available ? '查看店铺 ›' : '无法打开详情'}}</view>
+          </view>
+        </view>
+
+        <view wx:if="{{favoritePage < favoriteTotalPages}}" class="load-more" bindtap="loadMore">
+          {{listLoadingMore ? '加载中…' : '加载更多'}}
+        </view>
+        <view wx:elif="{{favorites.length}}" class="list-meta">共 {{favoriteTotal}} 个收藏</view>
+      </block>
+    </block>
+  </block>
+</view>

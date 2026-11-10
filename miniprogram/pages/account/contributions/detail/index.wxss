@@ -139,3 +139,46 @@
   line-height: 1.7;
   text-align: center;
 }
+
+.action-card {
+  margin-top: 22rpx;
+}
+
+.action-copy {
+  margin-top: 10rpx;
+  color: var(--ink-soft);
+  font-size: 24rpx;
+  line-height: 1.7;
+  word-break: break-word;
+}
+
+.field-hint {
+  margin-top: 12rpx;
+  color: var(--ink-muted);
+  font-size: 22rpx;
+  line-height: 1.6;
+}
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 20rpx;
+}
+
+.action-button {
+  margin: 0 16rpx 0 0;
+  padding: 0 34rpx;
+}
+
+.action-danger {
+  border-color: rgba(184, 58, 52, 0.35);
+  color: var(--danger);
+}
+
+.is-disabled {
+  opacity: 0.55;
+}
+
+.action-error {
+  margin-top: 16rpx;
+}

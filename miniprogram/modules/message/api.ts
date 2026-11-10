@@ -228,7 +228,7 @@ export function toNotificationView(item: NotificationItem): NotificationView {
     hint = '查看获赞提醒'
   } else if (item.category === 'FOLLOWERS') {
     headline = `${item.actorUsername ?? '用户'} 关注了你`
-    summary = '个人主页与关注名单暂未在小程序开放'
+    summary = '可查看关注名单或打开对方主页'
     hint = '查看关注提醒'
   } else if (item.notificationType === 'ANNOUNCEMENT') {
     headline = '系统公告'

@@ -1,7 +1,7 @@
 import { fetchCategories, fetchRestaurantDetail } from '../../modules/restaurant/api'
 import {
   MAX_SUBMISSION_PHOTOS,
-  buildSubmissionInput,
+  buildSubmissionPayload,
   submitNewRestaurant,
   submitRestaurantCorrection,
   toCorrectionDraft,
@@ -12,6 +12,11 @@ import {
   type SubmissionPriceKind,
   type TriState,
 } from '../../modules/restaurant/submission'
+import {
+  fetchContributionEditSource,
+  resubmitContribution,
+  updateContribution,
+} from '../../modules/restaurant/contribution'
 import { cancelImage, uploadImage } from '../../shared/api/files'
 import { ApiError, toErrorMessage } from '../../shared/api/request'
 import { isLoggedIn } from '../../shared/auth/session'
@@ -19,6 +24,8 @@ import { createRequestId, isLongId } from '../../shared/lib/id'
 import { prepareImage } from '../../shared/lib/image'
 
 type PhotoStatus = 'uploading' | 'ready' | 'failed'
+type RequestMode = 'edit' | 'resubmit'
+type SubmissionMode = 'new' | 'correction' | RequestMode
 
 type DraftPhoto = {
   key: number
@@ -32,10 +39,19 @@ type DraftPhoto = {
 
 type SubmissionData = {
   loggedIn: boolean
-  /** 纠错模式复用投稿表单，但目标、标题和提交接口不同。 */
+  mode: SubmissionMode
+  /** 纠错、修改和重提都会先读取已有资料，复用同一块来源状态。 */
   isCorrection: boolean
   sourceLoading: boolean
   sourceError: string
+  heroTitle: string
+  heroCopy: string
+  loginTitle: string
+  loginCopy: string
+  photoSectionLabel: string
+  photoHint: string
+  submitLabel: string
+  submitHint: string
   name: string
   typeLabels: string[]
   typeIndex: number
@@ -66,6 +82,9 @@ type SubmissionData = {
 
 type SubmissionCustom = {
   requestId: string
+  /** 修改/重提模式下的申请编号；新投稿与纠错为空。 */
+  applicationId: string
+  requestMode: '' | RequestMode
   submittedContent: string
   /** 纠错目标店铺；新店投稿为空。 */
   restaurantId: string
@@ -73,6 +92,9 @@ type SubmissionCustom = {
   pendingCategoryCode: string
   loadCategories(): Promise<void>
   loadSource(): Promise<void>
+  loadRequestSource(): Promise<void>
+  retrySource(): void
+  applyDraft(draft: SubmissionDraft): void
   selectCategoryCode(code: string): void
   confirmLocation(): void
   changeName(event: WxInputEvent): void
@@ -95,6 +117,7 @@ type SubmissionCustom = {
   refreshUploadingState(): void
   patchPhoto(key: number, patch: Partial<DraftPhoto>): void
   buildDraft(): SubmissionDraft
+  actionName(): string
   login(): void
 }
 
@@ -133,9 +156,18 @@ function truncateText(value: string, limit: number): string {
 Page<SubmissionData, SubmissionCustom>({
   data: {
     loggedIn: false,
+    mode: 'new',
     isCorrection: false,
     sourceLoading: false,
     sourceError: '',
+    heroTitle: '新店投稿',
+    heroCopy: '提交后进入审核队列，通过后才会出现在找店列表。请尽量填写真实资料并在地图中确认位置。',
+    loginTitle: '登录后提交投稿',
+    loginCopy: '投稿会记录当前账号，不读取微信头像、昵称或手机号；草稿只保留在当前页面。',
+    photoSectionLabel: '照片',
+    photoHint: '最多 5 张，上传前自动压缩；失败照片需重试或移除后才能提交。',
+    submitLabel: '提交审核',
+    submitHint: '提交只代表申请已受理，审核结果请到“我的投稿”查看。',
     name: '',
     typeLabels: TYPE_LABELS,
     typeIndex: 0,
@@ -165,6 +197,8 @@ Page<SubmissionData, SubmissionCustom>({
   },
 
   requestId: '',
+  applicationId: '',
+  requestMode: '',
   submittedContent: '',
   restaurantId: '',
   pendingCategoryCode: '',
@@ -172,13 +206,49 @@ Page<SubmissionData, SubmissionCustom>({
   onLoad(query) {
     pageGeneration++
     const restaurantId = query.id ? decodeURIComponent(query.id) : ''
+    const requestMode: '' | RequestMode =
+      query.mode === 'edit' || query.mode === 'resubmit' ? query.mode : ''
+    const applicationId = query.requestId ? decodeURIComponent(query.requestId) : ''
     const loggedIn = isLoggedIn()
-    if (restaurantId) {
+    if (requestMode) {
+      // 修改/重提复用投稿表单，但以申请快照为准，不读取公开店铺资料。
+      this.requestMode = requestMode
+      this.applicationId = isLongId(applicationId) ? applicationId : ''
+      const editing = requestMode === 'edit'
+      this.setData({
+        loggedIn,
+        mode: requestMode,
+        isCorrection: true,
+        heroTitle: editing ? '修改待审核申请' : '重新提交申请',
+        heroCopy: editing
+          ? '修改会整体替换当前待审内容，并重新进入审核队列；通过前不会改动公开资料。'
+          : '将基于被驳回的内容创建新的待审申请，原驳回记录与原因保持不变。',
+        loginTitle: editing ? '登录后修改申请' : '登录后重新提交',
+        loginCopy: '操作会记录当前账号，不读取微信头像、昵称或手机号；草稿只保留在当前页面。',
+        photoSectionLabel: '本次附图',
+        photoHint:
+          '原申请附图无法自动沿用，修改和重提都需要重新选择上传；不选则本次申请不含附图（最多 5 张）。',
+        submitLabel: editing ? '保存修改' : '重新提交审核',
+        submitHint: editing
+          ? '保存后申请回到待审核状态，审核结果请到“我的投稿”查看。'
+          : '重新提交后会生成新的待审申请，可在“我的投稿”查看进度。',
+        sourceError: this.applicationId ? '' : '申请编号无效，请返回投稿记录后重试。',
+      })
+      wx.setNavigationBarTitle({ title: editing ? '修改申请' : '重新提交' })
+      if (this.applicationId) void this.loadRequestSource()
+    } else if (restaurantId) {
       // 纠错复用同一表单：先按公开资料回填，再等待用户核对位置后提交审核。
       this.restaurantId = isLongId(restaurantId) ? restaurantId : ''
       this.setData({
         loggedIn,
+        mode: 'correction',
         isCorrection: true,
+        heroTitle: '补充 / 纠错',
+        heroCopy: '已带入当前店铺资料，只需修改有误或缺失的内容。提交后由管理员审核，通过前不会改动公开资料。',
+        loginTitle: '登录后提交纠错',
+        loginCopy: '纠错会记录当前账号，不读取微信头像、昵称或手机号；资料只保留在当前页面。',
+        photoSectionLabel: '本次新增图片',
+        photoHint: '已有照片无需重复上传；本次新增图片审核通过后追加到相册。最多 5 张，上传前自动压缩；失败照片需重试或移除后才能提交。',
         sourceError: this.restaurantId ? '' : '店铺编号无效，请返回详情后重试。',
       })
       wx.setNavigationBarTitle({ title: '补充 / 纠错' })
@@ -260,38 +330,72 @@ Page<SubmissionData, SubmissionCustom>({
       const row = await fetchRestaurantDetail(id)
       if (generation !== pageGeneration) return
       if (!row || row.id !== id) throw new Error('店铺资料无法确认，请返回详情后重试。')
-      const draft = toCorrectionDraft(row)
-      const typeIndex = TYPE_VALUES.indexOf(draft.restaurantType)
-      const priceIndex = PRICE_VALUES.indexOf(draft.priceKind)
-      const businessIndex = BUSINESS_VALUES.indexOf(draft.businessStatus)
-      const dineIndex = TRI_VALUES.indexOf(draft.supportsDineIn)
-      const deliveryIndex = TRI_VALUES.indexOf(draft.supportsDelivery)
-      this.pendingCategoryCode = draft.categoryCode
-      this.setData({
-        name: draft.name,
-        typeIndex: typeIndex >= 0 ? typeIndex : 0,
-        categoryIndex: 0,
-        priceIndex: priceIndex >= 0 ? priceIndex : 0,
-        priceText: draft.priceText,
-        address: draft.address,
-        latitude: draft.latitude,
-        longitude: draft.longitude,
-        locationText:
-          draft.latitude && draft.longitude
-            ? `${draft.latitude}, ${draft.longitude}`
-            : '',
-        locationConfirmed: false,
-        businessIndex: businessIndex >= 0 ? businessIndex : 0,
-        dineIndex: dineIndex >= 0 ? dineIndex : 0,
-        deliveryIndex: deliveryIndex >= 0 ? deliveryIndex : 0,
-        tagsText: draft.tagsText,
-        sourceLoading: false,
-      })
-      this.selectCategoryCode(draft.categoryCode)
+      this.applyDraft(toCorrectionDraft(row))
     } catch (reason) {
       if (generation !== pageGeneration) return
       this.setData({ sourceLoading: false, sourceError: toErrorMessage(reason) })
     }
+  },
+
+  /**
+   * 读取本人申请快照用于修改或重提。
+   *
+   * 状态在服务端再次校验；若页面停留期间申请已被审核或撤回，
+   * 这里会返回明确提示，而不是让用户在过期表单里继续填写。
+   */
+  async loadRequestSource(): Promise<void> {
+    const id = this.applicationId
+    const mode = this.requestMode
+    if (!id || !mode) return
+    const generation = pageGeneration
+    this.setData({ sourceLoading: true, sourceError: '' })
+    try {
+      const source = await fetchContributionEditSource(id, mode)
+      if (generation !== pageGeneration) return
+      this.applyDraft(source.draft)
+    } catch (reason) {
+      if (generation !== pageGeneration) return
+      this.setData({ sourceLoading: false, sourceError: toErrorMessage(reason) })
+    }
+  },
+
+  /** 重新读取失败后按当前模式选择正确的来源，避免重提页面误读公开店铺。 */
+  retrySource(): void {
+    if (this.requestMode) {
+      void this.loadRequestSource()
+    } else {
+      void this.loadSource()
+    }
+  },
+
+  /** 把已有快照写入表单；编码匹配和坐标确认由后续交互完成。 */
+  applyDraft(draft: SubmissionDraft): void {
+    const typeIndex = TYPE_VALUES.indexOf(draft.restaurantType)
+    const priceIndex = PRICE_VALUES.indexOf(draft.priceKind)
+    const businessIndex = BUSINESS_VALUES.indexOf(draft.businessStatus)
+    const dineIndex = TRI_VALUES.indexOf(draft.supportsDineIn)
+    const deliveryIndex = TRI_VALUES.indexOf(draft.supportsDelivery)
+    this.pendingCategoryCode = draft.categoryCode
+    this.setData({
+      name: draft.name,
+      typeIndex: typeIndex >= 0 ? typeIndex : 0,
+      categoryIndex: 0,
+      priceIndex: priceIndex >= 0 ? priceIndex : 0,
+      priceText: draft.priceText,
+      address: draft.address,
+      latitude: draft.latitude,
+      longitude: draft.longitude,
+      locationText:
+        draft.latitude && draft.longitude ? `${draft.latitude}, ${draft.longitude}` : '',
+      locationConfirmed: draft.locationConfirmed,
+      businessIndex: businessIndex >= 0 ? businessIndex : 0,
+      dineIndex: dineIndex >= 0 ? dineIndex : 0,
+      deliveryIndex: deliveryIndex >= 0 ? deliveryIndex : 0,
+      tagsText: draft.tagsText,
+      sourceLoading: false,
+      sourceError: '',
+    })
+    this.selectCategoryCode(draft.categoryCode)
   },
 
   /** 分类可能先于资料加载；编码未匹配时保留待选项，不把选择错位到其他分类。 */
@@ -302,6 +406,8 @@ Page<SubmissionData, SubmissionCustom>({
     }
     const index = this.data.categoryCodes.indexOf(code)
     this.setData({ categoryIndex: index >= 0 ? index + 1 : 0 })
+    // 已匹配到当前分类时不再需要等待分类加载；未匹配则保留待选项供后续恢复。
+    if (!code || index >= 0) this.pendingCategoryCode = ''
   },
 
   /** 纠错带入的历史坐标必须由用户主动核对，不能默认视为本人已确认。 */
@@ -515,21 +621,17 @@ Page<SubmissionData, SubmissionCustom>({
   async submit(): Promise<void> {
     if (this.data.submitting) return
     if (!this.data.loggedIn) {
-      this.setData({
-        errorMessage: this.data.isCorrection
-          ? '请先登录后再提交纠错。'
-          : '请先登录后再提交投稿。',
-      })
+      this.setData({ errorMessage: `请先登录后再${this.actionName()}。` })
       return
     }
     if (this.data.isCorrection) {
       // 资料未读取成功时提交会漏掉未展示字段，必须等完整快照回填后再允许提交。
       if (this.data.sourceLoading) {
-        this.setData({ errorMessage: '正在读取店铺资料，请稍候。' })
+        this.setData({ errorMessage: '正在读取申请资料，请稍候。' })
         return
       }
       if (this.data.sourceError) {
-        this.setData({ errorMessage: '店铺资料未读取成功，请重新读取后再提交。' })
+        this.setData({ errorMessage: '申请资料未读取成功，请重新读取后再提交。' })
         return
       }
     }
@@ -549,25 +651,47 @@ Page<SubmissionData, SubmissionCustom>({
       return
     }
 
-    const base = buildSubmissionInput(draft, '')
-    // 纠错把目标编号也纳入指纹，避免同一页面切换店铺后复用旧请求号。
-    const content = JSON.stringify([this.data.isCorrection ? this.restaurantId : 'new', base])
+    const payload = buildSubmissionPayload(draft)
+    // 指纹包含模式与目标：同一表单修改不同申请时不能复用旧请求号。
+    const content = JSON.stringify([
+      this.requestMode || (this.data.isCorrection ? `correction:${this.restaurantId}` : 'new'),
+      payload,
+    ])
     // 内容未变的重试沿用原请求号；改动后换新编号，避免服务端判定内容冲突。
     if (this.submittedContent && this.submittedContent !== content) {
       this.requestId = createRequestId()
     }
     this.submittedContent = content
-    if (!this.requestId) this.requestId = createRequestId()
 
     this.setData({ submitting: true, errorMessage: '' })
     try {
-      if (this.data.isCorrection) {
-        await submitRestaurantCorrection(this.restaurantId, {
-          ...base,
+      if (this.requestMode === 'edit') {
+        // PUT 只提交业务字段，clientRequestId 属于新建申请入口，不能混入修改请求。
+        await updateContribution(this.applicationId, payload)
+        this.submittedContent = ''
+        wx.showToast({ title: '修改已保存', icon: 'success' })
+        setTimeout(() => wx.navigateBack(), 600)
+        return
+      }
+      if (this.requestMode === 'resubmit') {
+        if (!this.requestId) this.requestId = createRequestId()
+        await resubmitContribution(this.applicationId, {
+          ...payload,
           clientRequestId: this.requestId,
         })
+        this.submittedContent = ''
+        this.requestId = ''
+        wx.showToast({ title: '已重新提交', icon: 'success' })
+        setTimeout(() => wx.navigateBack(), 600)
+        return
+      }
+
+      if (!this.requestId) this.requestId = createRequestId()
+      const input = { ...payload, clientRequestId: this.requestId }
+      if (this.data.isCorrection) {
+        await submitRestaurantCorrection(this.restaurantId, input)
       } else {
-        await submitNewRestaurant({ ...base, clientRequestId: this.requestId })
+        await submitNewRestaurant(input)
       }
       this.submittedContent = ''
       this.requestId = ''
@@ -586,6 +710,13 @@ Page<SubmissionData, SubmissionCustom>({
     }
   },
 
+  /** 提交按钮与错误文案共用的动作名称，避免重提场景仍显示“投稿”。 */
+  actionName(): string {
+    if (this.requestMode === 'edit') return '保存修改'
+    if (this.requestMode === 'resubmit') return '重新提交'
+    return this.data.isCorrection ? '提交纠错' : '提交投稿'
+  },
+
   refreshUploadingState(): void {
     this.setData({ uploading: this.data.photos.some((item) => item.status === 'uploading') })
   },
@@ -597,10 +728,15 @@ Page<SubmissionData, SubmissionCustom>({
   },
 
   login(): void {
-    // 纠错登录后回到同一家店铺继续填写，不能退回新店投稿或丢失目标编号。
-    const target = this.data.isCorrection
-      ? `/pages/submission/index?id=${encodeURIComponent(this.restaurantId)}`
-      : '/pages/submission/index'
+    // 登录后回到同一目标继续填写，不能退回新店投稿或丢失纠错/申请编号。
+    let target = '/pages/submission/index'
+    if (this.requestMode) {
+      target +=
+        `?mode=${this.requestMode}` +
+        `&requestId=${encodeURIComponent(this.applicationId)}`
+    } else if (this.data.isCorrection) {
+      target += `?id=${encodeURIComponent(this.restaurantId)}`
+    }
     wx.navigateTo({
       url: `/pages/login/index?redirect=${encodeURIComponent(target)}`,
     })

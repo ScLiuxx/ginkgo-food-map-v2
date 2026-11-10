@@ -110,6 +110,26 @@ export async function fetchMyFavorites(page: number): Promise<FavoritePageView> 
   return toFavoritePageView(raw, page)
 }
 
+/**
+ * 读取他人公开收藏。
+ *
+ * 对方关闭公开时服务端返回 403 RESTAURANT_FAVORITES_PRIVATE；
+ * 页面应原样提示私密，而不是把拒绝降级成空列表。响应必须回指请求用户。
+ */
+export async function fetchUserFavorites(
+  userId: string,
+  page: number,
+): Promise<FavoritePageView> {
+  const raw = await request<FavoritePageRaw>({
+    path: `/api/users/${encodeURIComponent(userId)}/favorites?page=${page}&pageSize=8`,
+    auth: 'required',
+  })
+  if (!raw || raw.userId !== userId) {
+    throw new Error('该用户的收藏无法确认，请重新加载。')
+  }
+  return toFavoritePageView(raw, page)
+}
+
 /** 食堂窗口公开集合；窗口详情尚未在小程序第一批接入，仅展示窗口摘要。 */
 export interface CanteenWindowResponse {
   id: string

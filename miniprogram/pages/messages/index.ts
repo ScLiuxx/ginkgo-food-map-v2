@@ -46,6 +46,8 @@ type MessagesData = {
   detailMeta: string
   detailBlocks: DetailBlock[]
   detailTargetId: string
+  /** 关注提醒携带的触发者编号；用于打开对方公开主页。 */
+  detailActorId: string
   /** 回复目标可能是食堂窗口；窗口没有餐厅资料，跳转参数和文案需区分。 */
   detailIsWindow: boolean
 }
@@ -66,6 +68,7 @@ type MessagesCustom = {
   performDelete(id: string): Promise<void>
   openSystemSession(): void
   openRestaurant(): void
+  openActorProfile(): void
   login(): void
   retry(): void
   syncBadge(count: number): void
@@ -138,6 +141,7 @@ Page<MessagesData, MessagesCustom>({
     detailMeta: '',
     detailBlocks: [],
     detailTargetId: '',
+    detailActorId: '',
     detailIsWindow: false,
   },
 
@@ -311,6 +315,7 @@ Page<MessagesData, MessagesCustom>({
       detailError: '',
       detailLoading: false,
       detailTargetId: '',
+      detailActorId: '',
       detailIsWindow: false,
     })
     if (item.notificationType === 'ANNOUNCEMENT') {
@@ -355,7 +360,7 @@ Page<MessagesData, MessagesCustom>({
       if (item.rejectReason) blocks.push({ label: '驳回原因', text: item.rejectReason })
       blocks.push({
         label: '说明',
-        text: '投稿详情与审核记录暂未在小程序开放，可在网页端“我的投稿 / 纠错”查看。',
+        text: '投稿详情与审核记录可在“我的投稿 / 纠错”查看。',
       })
       this.setData({ detailBlocks: blocks })
       return
@@ -401,8 +406,12 @@ Page<MessagesData, MessagesCustom>({
     this.setData({
       detailBlocks: [
         { label: '提醒', text: `${item.actorUsername ?? '用户'} 关注了你。` },
-        { label: '说明', text: '个人主页与关注名单暂未在小程序开放。' },
+        {
+          label: '说明',
+          text: '可在“我的 - 粉丝”查看名单，或打开对方主页了解更多。',
+        },
       ],
+      detailActorId: item.actorUserId ?? '',
     })
   },
 
@@ -415,6 +424,7 @@ Page<MessagesData, MessagesCustom>({
       detailMeta: '',
       detailBlocks: [],
       detailTargetId: '',
+      detailActorId: '',
       detailIsWindow: false,
     })
   },
@@ -475,6 +485,14 @@ Page<MessagesData, MessagesCustom>({
         ? `/pages/restaurant/detail/index?windowId=${encodeURIComponent(id)}`
         : `/pages/restaurant/detail/index?id=${encodeURIComponent(id)}`,
     })
+  },
+
+  /** 关注提醒进入触发者主页；编号缺失时入口不渲染，避免跳到无效页面。 */
+  openActorProfile() {
+    const id = this.data.detailActorId
+    if (!id) return
+    this.closeDetail()
+    wx.navigateTo({ url: `/pages/user/profile/index?id=${encodeURIComponent(id)}` })
   },
 
   login() {

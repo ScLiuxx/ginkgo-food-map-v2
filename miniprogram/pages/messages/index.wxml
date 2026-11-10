@@ -126,6 +126,7 @@
         </view>
       </block>
     </scroll-view>
-    <view wx:if="{{detailTargetId}}" class="primary-button sheet-action" bindtap="openRestaurant">{{detailIsWindow ? '查看窗口' : '查看店铺'}}</view>
+    <view wx:if="{{detailActorId}}" class="primary-button sheet-action" bindtap="openActorProfile">查看对方主页</view>
+    <view wx:elif="{{detailTargetId}}" class="primary-button sheet-action" bindtap="openRestaurant">{{detailIsWindow ? '查看窗口' : '查看店铺'}}</view>
   </view>
 </view>

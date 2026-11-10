@@ -2,6 +2,16 @@ import { absoluteUrl } from '../../config/env'
 import { request } from '../../shared/api/request'
 import { getToken } from '../../shared/auth/session'
 import { formatDate } from '../../shared/lib/format'
+import { isLongId } from '../../shared/lib/id'
+import type {
+  SubmissionBusinessStatus,
+  SubmissionDraft,
+  SubmissionInput,
+  SubmissionPayload,
+  SubmissionPriceKind,
+  RestaurantType,
+  TriState,
+} from './submission'
 
 export type ContributionStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'WITHDRAWN'
 export type ContributionFilter = 'ALL' | ContributionStatus
@@ -84,6 +94,8 @@ export interface ContributionFieldRow {
 
 export interface ContributionDetailView {
   id: string
+  /** 申请类型决定驳回重提的接口语义；CREATE 不依赖现存的公开店铺。 */
+  requestType: ContributionType
   typeLabel: string
   status: ContributionStatus
   statusLabel: string
@@ -97,6 +109,10 @@ export interface ContributionDetailView {
   proposed: ContributionFieldRow[]
   approved: ContributionFieldRow[]
   targetAvailable: boolean
+  /** 仅待审申请可整体修改。 */
+  canEdit: boolean
+  /** 仅被驳回申请可修改后重新提交；UPDATE 还要求原店铺仍可访问。 */
+  canResubmit: boolean
   restaurantId: string
   photoPositions: number[]
   photoText: string
@@ -323,6 +339,7 @@ export async function fetchContributionDetail(id: string): Promise<ContributionD
 
   return {
     id: application.id,
+    requestType: application.requestType,
     typeLabel: typeLabels[application.requestType],
     status: application.status,
     statusLabel: statusLabels[application.status],
@@ -338,10 +355,187 @@ export async function fetchContributionDetail(id: string): Promise<ContributionD
     proposed: toSnapshotRows(raw.proposed),
     approved: raw.approved ? toSnapshotRows(raw.approved) : [],
     targetAvailable: raw.targetAvailable,
+    // 新店投稿没有公开目标；UPDATE 的原店铺被删除后服务端也拒绝重提。
+    canEdit: application.status === 'PENDING',
+    canResubmit:
+      application.status === 'REJECTED' &&
+      (application.requestType === 'CREATE' || raw.targetAvailable),
     restaurantId: application.restaurantId ?? '',
     photoPositions: raw.photoPositions,
     photoText: raw.photoPositions.length > 0 ? `${raw.photoPositions.length} 张附图` : '',
   }
+}
+
+/**
+ * 待审修改与被驳回重提共用的表单数据。
+ *
+ * `draft.photoIds` 始终为空：详情接口只返回附图位置，不暴露文件编号，
+ * 因此修改与重提都必须重新选择并上传图片，不能假装保留原附图。
+ */
+export interface ContributionEditSource {
+  id: string
+  requestType: ContributionType
+  status: ContributionStatus
+  restaurantId: string
+  targetAvailable: boolean
+  draft: SubmissionDraft
+}
+
+/** PUT 修改不接收 clientRequestId；由服务端以申请编号和完整内容确定幂等边界。 */
+export type ContributionPayload = SubmissionPayload
+
+function finiteCoordinate(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+/** 把申请快照还原成可编辑草稿；缺失字段保持空值，不用默认值补造资料。 */
+function toEditDraft(snapshot: ContributionSnapshotRaw): SubmissionDraft {
+  const restaurantType: RestaurantType =
+    snapshot.restaurantType === 'CANTEEN' ? 'CANTEEN' : 'REGULAR'
+  const priceKind: SubmissionPriceKind =
+    snapshot.priceKind === 'EXACT' || snapshot.priceKind === 'ESTIMATE'
+      ? snapshot.priceKind
+      : 'UNKNOWN'
+  const hasPrice = priceKind !== 'UNKNOWN' && finiteCoordinate(snapshot.pricePerPerson)
+  const latitude = finiteCoordinate(snapshot.latitude) ? snapshot.latitude : null
+  const longitude = finiteCoordinate(snapshot.longitude) ? snapshot.longitude : null
+  // 坐标文本只在“原申请已确认且经纬度完整”时回填，否则要求用户重新选择。
+  let latitudeText = ''
+  let longitudeText = ''
+  if (snapshot.locationConfirmed === true && latitude !== null && longitude !== null) {
+    latitudeText = latitude.toFixed(6)
+    longitudeText = longitude.toFixed(6)
+  }
+  const hasLocation = latitudeText !== '' && longitudeText !== ''
+
+  return {
+    name: snapshot.name?.trim() ?? '',
+    restaurantType,
+    // 食堂没有分类；普通餐厅沿用申请中的分类编码，是否启用仍由服务端判定。
+    categoryCode: restaurantType === 'CANTEEN' ? '' : (snapshot.categoryCode?.trim() ?? ''),
+    priceKind,
+    priceText: hasPrice ? String(snapshot.pricePerPerson) : '',
+    address: snapshot.address?.trim() ?? '',
+    latitude: latitudeText,
+    longitude: longitudeText,
+    locationConfirmed: hasLocation,
+    businessStatus: snapshot.businessStatus === 'CLOSED' ? 'CLOSED' : 'OPERATING',
+    supportsDineIn:
+      snapshot.supportsDineIn === true ? true : snapshot.supportsDineIn === false ? false : null,
+    supportsDelivery:
+      snapshot.supportsDelivery === true
+        ? true
+        : snapshot.supportsDelivery === false
+          ? false
+          : null,
+    tagsText: Array.isArray(snapshot.tags)
+      ? snapshot.tags.filter((tag) => typeof tag === 'string' && tag.trim()).join('\n')
+      : '',
+    photoIds: [],
+  }
+}
+
+/**
+ * 读取修改/重提所需的申请快照。
+ *
+ * 只有待审申请可修改、被驳回申请可重提；状态不符时直接拒绝，
+ * 避免用户在过期页面提交后得到服务端 409 才得知状态已变化。
+ */
+export async function fetchContributionEditSource(
+  id: string,
+  mode: 'edit' | 'resubmit',
+): Promise<ContributionEditSource> {
+  if (!isLongId(id)) throw new Error('申请编号无效，请返回列表后重试。')
+  const raw = await request<ContributionDetailRaw>({
+    path: `/api/me/restaurant-requests/${encodeURIComponent(id)}`,
+    auth: 'required',
+  })
+  if (
+    !raw ||
+    !raw.application ||
+    !raw.proposed ||
+    typeof raw.proposed !== 'object' ||
+    (raw.rejectReason !== null && typeof raw.rejectReason !== 'string') ||
+    typeof raw.targetAvailable !== 'boolean'
+  ) {
+    throw invalid()
+  }
+  const application = toApplication(raw.application)
+  if (application.id !== id) throw invalid()
+  if (mode === 'edit' && application.status !== 'PENDING') {
+    throw new Error('只有待审核申请可以修改，请刷新后查看最新状态。')
+  }
+  if (mode === 'resubmit') {
+    if (application.status !== 'REJECTED') {
+      throw new Error('只有被驳回的申请可以重新提交。')
+    }
+    if (application.requestType === 'UPDATE' && !raw.targetAvailable) {
+      throw new Error('原店铺已不可用，无法重新提交资料纠错。')
+    }
+  }
+
+  return {
+    id: application.id,
+    requestType: application.requestType,
+    status: application.status,
+    restaurantId: application.restaurantId ?? '',
+    targetAvailable: raw.targetAvailable,
+    draft: toEditDraft(raw.proposed),
+  }
+}
+
+/** 整体替换本人待审申请；成功只代表修改已保存，仍需等待管理员重新审核。 */
+export async function updateContribution(
+  id: string,
+  payload: ContributionPayload,
+): Promise<{ id: string; status: 'PENDING' }> {
+  if (!isLongId(id)) throw new Error('申请编号无法确认，请返回重试。')
+  const raw = await request<{ id: string; status: string }>({
+    path: `/api/me/restaurant-requests/${encodeURIComponent(id)}`,
+    method: 'PUT',
+    auth: 'required',
+    data: payload,
+  })
+  if (!raw || raw.id !== id || raw.status !== 'PENDING') {
+    throw new Error('修改结果无法确认，请返回投稿记录核对。')
+  }
+  return { id: raw.id, status: 'PENDING' }
+}
+
+/** 撤回本人待审申请；重复撤回同样成功，不改变审核结果或公开资料。 */
+export async function withdrawContribution(id: string): Promise<void> {
+  if (!isLongId(id)) throw new Error('申请编号无法确认，请返回重试。')
+  const raw = await request<{ id: string; status: string }>({
+    path: `/api/me/restaurant-requests/${encodeURIComponent(id)}/withdraw`,
+    method: 'POST',
+    auth: 'required',
+  })
+  if (!raw || raw.id !== id || raw.status !== 'WITHDRAWN') {
+    throw new Error('撤回结果无法确认，请刷新后核对状态。')
+  }
+}
+
+/**
+ * 基于被驳回申请创建新申请。
+ *
+ * 新申请保留原驳回记录与原因，服务端返回新的申请编号；
+ * 图片必须重新上传，不能沿用原申请的文件编号。
+ */
+export async function resubmitContribution(
+  id: string,
+  input: SubmissionInput,
+): Promise<{ id: string; status: 'PENDING' }> {
+  if (!isLongId(id)) throw new Error('原申请编号无法确认，请返回重试。')
+  const raw = await request<{ id: string; status: string }>({
+    path: `/api/me/restaurant-requests/${encodeURIComponent(id)}/resubmit`,
+    method: 'POST',
+    auth: 'required',
+    data: input,
+  })
+  if (!raw || !isLongId(raw.id) || raw.status !== 'PENDING') {
+    throw new Error('重新提交结果无法确认，请到“我的投稿”核对待审记录。')
+  }
+  return { id: raw.id, status: 'PENDING' }
 }
 
 /**

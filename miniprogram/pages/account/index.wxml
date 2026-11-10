@@ -24,8 +24,24 @@
   <view wx:else class="card account-card">
     <view class="account-title">账号已登录</view>
     <view class="account-copy-text">
-      当前小程序已接入店铺浏览、点评发布与互动、收藏、消息、投稿记录以及成长、资料与隐私设置；账号信息与网页端共用。
+      当前小程序已接入店铺浏览、点评发布与互动、收藏、关注、消息、投稿记录以及成长、资料与隐私设置；账号信息与网页端共用。
     </view>
+
+    <view class="social-strip">
+      <view class="social-stat" data-kind="FOLLOWING" bindtap="openFollows">
+        <view class="social-value">{{socialLoading ? '…' : followingText}}</view>
+        <view class="social-label">关注</view>
+      </view>
+      <view class="social-stat" data-kind="FOLLOWERS" bindtap="openFollows">
+        <view class="social-value">{{socialLoading ? '…' : followersText}}</view>
+        <view class="social-label">粉丝</view>
+      </view>
+      <view class="social-stat" bindtap="openMyPublicProfile">
+        <view class="social-value social-value-small">主页</view>
+        <view class="social-label">公开主页</view>
+      </view>
+    </view>
+    <view wx:if="{{socialError}}" class="social-error">{{socialError}}</view>
 
     <view class="account-menu" data-tab="reviews" bindtap="openMyContent">
       <view class="account-menu-copy">

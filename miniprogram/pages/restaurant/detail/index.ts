@@ -217,6 +217,8 @@ type DetailCustom = {
   onReportDetailInput(event: WxInputEvent): void
   submitReport(): Promise<void>
   openWindow(event: WxTapEvent): void
+  /** 点击点评作者进入公开主页，本人作者同样可查看自己的公开资料。 */
+  openAuthor(event: WxTapEvent): void
 }
 
 /**
@@ -1080,6 +1082,16 @@ Page<DetailData, DetailCustom>({
     if (!/^[1-9]\d*$/.test(id)) return
     wx.navigateTo({
       url: `/pages/restaurant/detail/index?windowId=${encodeURIComponent(id)}`,
+    })
+  },
+
+  /** 点评作者编号来自服务端只读视图；缺失时不跳转，避免打开空白主页。 */
+  openAuthor(event: WxTapEvent) {
+    const index = Number(event.currentTarget.dataset.index)
+    const review = this.data.reviews[index]
+    if (!review || !review.authorId) return
+    wx.navigateTo({
+      url: `/pages/user/profile/index?id=${encodeURIComponent(review.authorId)}`,
     })
   },
 
