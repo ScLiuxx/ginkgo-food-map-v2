@@ -2,26 +2,130 @@
   <view class="ambient">
     <view class="ambient-blob ambient-a"></view>
     <view class="ambient-blob ambient-b"></view>
+    <view class="ambient-blob ambient-c"></view>
   </view>
 
-  <view class="placeholder-hero">
-    <view class="placeholder-icon">消息</view>
-    <view class="placeholder-title">消息中心</view>
-    <view class="placeholder-copy">
-      点评回复、点赞和系统通知将在下一阶段接入。当前小程序已支持账号登录，登录后可在“我的”查看账号状态。
+  <view class="messages-hero">
+    <view class="hero-eyebrow">与你有关</view>
+    <view class="hero-title">消息</view>
+    <view class="hero-copy">点评回复、获赞、新增关注和系统通知都收在这里。</view>
+  </view>
+
+  <view wx:if="{{!loggedIn}}" class="card login-card">
+    <view class="login-title">登录后查看消息</view>
+    <view class="login-copy">消息属于账号私有数据，未登录时不会发起消息请求，也不会展示虚构未读数。</view>
+    <view class="primary-button" bindtap="login">使用邮箱登录</view>
+  </view>
+
+  <block wx:else>
+    <view class="card toolbar">
+      <view class="toolbar-meta">
+        <text class="toolbar-count">{{totalUnread}}</text>
+        <text class="toolbar-label">条未读</text>
+      </view>
+      <view
+        class="ghost-button mark-all {{busy || totalUnread === 0 ? 'is-disabled' : ''}}"
+        bindtap="markAll"
+      >全部已读</view>
     </view>
-  </view>
 
-  <view wx:if="{{!loggedIn}}" class="card">
-    <view class="login-title">先登录，才能接收互动消息</view>
-    <view class="login-copy">消息属于账号私有数据，未登录时不会发起消息请求。</view>
-    <view class="primary-button" bindtap="login">登录账号</view>
-  </view>
+    <scroll-view class="category-strip" scroll-x show-scrollbar="{{false}}" enhanced>
+      <view
+        wx:for="{{categories}}"
+        wx:key="id"
+        class="category-chip {{item.id === category ? 'active' : ''}}"
+        data-id="{{item.id}}"
+        bindtap="switchCategory"
+      >
+        <text>{{item.label}}</text>
+        <text wx:if="{{item.unread > 0}}" class="chip-badge">{{item.unread > 99 ? '99+' : item.unread}}</text>
+      </view>
+    </scroll-view>
 
-  <view wx:else class="card">
-    <view class="planning-title">消息功能规划</view>
-    <view class="planning-item">1. 分类查看回复、点赞与系统通知。</view>
-    <view class="planning-item">2. 单条已读、全部已读和删除。</view>
-    <view class="planning-item">3. 跳转到对应点评或店铺详情。</view>
+    <view
+      wx:if="{{category === 'ALL' && latestSystem}}"
+      class="card session-card"
+      bindtap="openSystemSession"
+    >
+      <view class="session-icon">系统</view>
+      <view class="flex-1">
+        <view class="session-title">系统通知</view>
+        <view class="session-summary">{{latestSystem.summary || latestSystem.headline}}</view>
+      </view>
+      <view wx:if="{{latestSystem.unread}}" class="session-dot"></view>
+      <view class="session-arrow">›</view>
+    </view>
+
+    <view wx:if="{{notice}}" class="notice-text">{{notice}}</view>
+
+    <view wx:if="{{errorMessage && items.length > 0}}" class="card error-card">
+      <text class="error-text">{{errorMessage}}</text>
+      <view class="ghost-button retry-button" bindtap="retry">重新加载</view>
+    </view>
+
+    <view wx:if="{{errorMessage && items.length === 0}}" class="card error-card">
+      <text class="error-text">{{errorMessage}}</text>
+      <view class="ghost-button retry-button" bindtap="retry">重新加载</view>
+    </view>
+
+    <view wx:if="{{loading && items.length === 0}}" class="card empty-state">正在加载消息…</view>
+
+    <view wx:elif="{{!errorMessage && items.length === 0}}" class="card empty-state">
+      <view class="empty-title">暂时没有新消息</view>
+      <view class="empty-copy">{{emptyText}}</view>
+    </view>
+
+    <block wx:else>
+      <view
+        wx:for="{{items}}"
+        wx:key="id"
+        class="card message-card {{item.unread ? 'unread' : ''}}"
+      >
+        <view class="message-body" data-id="{{item.id}}" bindtap="openItem">
+          <view class="message-head">
+            <text class="message-headline">{{item.headline}}</text>
+            <view wx:if="{{item.unread}}" class="unread-dot"></view>
+          </view>
+          <view wx:if="{{item.summary}}" class="message-summary">{{item.summary}}</view>
+          <view class="message-foot">
+            <text class="message-time">{{item.timeLabel}}</text>
+            <text class="message-hint">{{item.hint}} ›</text>
+          </view>
+        </view>
+        <view class="message-delete" data-id="{{item.id}}" catchtap="deleteItem">删除消息</view>
+      </view>
+
+      <view wx:if="{{totalPages > 1}}" class="card pager">
+        <view
+          class="pager-button {{page <= 1 || busy || loading ? 'is-disabled' : ''}}"
+          bindtap="prevPage"
+        >上一页</view>
+        <text class="pager-status">{{page}} / {{totalPages}}</text>
+        <view
+          class="pager-button {{page >= totalPages || busy || loading ? 'is-disabled' : ''}}"
+          bindtap="nextPage"
+        >下一页</view>
+      </view>
+    </block>
+  </block>
+
+  <view wx:if="{{detailVisible}}" class="sheet-mask" bindtap="closeDetail"></view>
+  <view wx:if="{{detailVisible}}" class="sheet card">
+    <view class="sheet-head">
+      <view class="sheet-title">{{detailTitle}}</view>
+      <view class="sheet-close" bindtap="closeDetail">关闭</view>
+    </view>
+    <view wx:if="{{detailMeta}}" class="sheet-meta">{{detailMeta}}</view>
+    <scroll-view class="sheet-body" scroll-y>
+      <view wx:if="{{detailLoading}}" class="sheet-loading">正在读取内容…</view>
+      <view wx:elif="{{detailError}}" class="error-text">{{detailError}}</view>
+      <block wx:else>
+        <view wx:for="{{detailBlocks}}" wx:key="label" class="detail-block">
+          <view wx:if="{{item.label}}" class="detail-label">{{item.label}}</view>
+          <text class="detail-text" selectable>{{item.text}}</text>
+        </view>
+      </block>
+    </scroll-view>
+    <view wx:if="{{detailTargetId}}" class="primary-button sheet-action" bindtap="openRestaurant">查看店铺</view>
   </view>
 </view>

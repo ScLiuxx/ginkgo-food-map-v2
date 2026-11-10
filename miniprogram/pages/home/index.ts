@@ -76,6 +76,7 @@ Page<HomeData, HomeCustom>({
   onShow() {
     const tabBar = this.getTabBar?.()
     if (tabBar) tabBar.setData({ selected: 0 })
+    tabBar?.refreshUnread?.()
     // 从登录页或详情页返回时重新读取本地会话，避免按钮状态停留在旧值。
     this.setData({ loggedIn: isLoggedIn() })
   },

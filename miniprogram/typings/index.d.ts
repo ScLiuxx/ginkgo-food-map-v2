@@ -146,7 +146,12 @@ interface PageInstance<D extends object> {
   data: D
   route: string
   setData(data: Partial<D> | Record<string, unknown>, callback?: () => void): void
-  getTabBar?(): { setData(data: Record<string, unknown>): void } | undefined
+  /** 悬浮 TabBar 暴露选中项、红点回写和轻量未读刷新。 */
+  getTabBar?(): {
+    setData(data: Record<string, unknown>): void
+    setUnread?(count: number): void
+    refreshUnread?(): void
+  } | undefined
 }
 
 interface PageOptions<D extends object, C extends object> {
@@ -187,12 +192,13 @@ interface ComponentInstance<D extends object> {
 interface ComponentOptions<D extends object, M extends object> {
   data?: D
   methods?: M & ThisType<ComponentInstance<D> & M>
+  /** 生命周期内同样需要访问 data / methods，例如挂载时刷新未读数。 */
   lifetimes?: {
     created?(): void
     attached?(): void
     ready?(): void
     detached?(): void
-  }
+  } & ThisType<ComponentInstance<D> & M>
 }
 
 declare function Component<D extends object, M extends object>(
