@@ -56,6 +56,9 @@
 | GET | `/api/admin/restaurant-requests/{id}/photos/{position}` | 管理员 | 200 JPEG | 申请私有图片 |
 | POST | `/api/admin/restaurant-requests/{id}/approve` | 管理员 | 200 | 审核并发布资料及附图 |
 | POST | `/api/admin/restaurant-requests/{id}/reject` | 管理员 | 200 | 驳回申请 |
+| GET | `/api/admin/content-reports` | 管理员 | 200 | 举报分页 |
+| GET | `/api/admin/content-reports/{id}` | 管理员 | 200 | 举报详情与正文快照 |
+| POST | `/api/admin/content-reports/{id}/dismiss` | 管理员 | 200 | 驳回同内容待处理举报 |
 | GET | `/api/restaurant-categories` | 公开 | 200 | 分类字典 |
 | GET | `/api/restaurants/{id}/windows` | 公开 | 200 | 食堂完整窗口集合 |
 | GET | `/api/canteen-windows/{id}` | 公开 | 200 | 独立窗口详情 |
@@ -1115,7 +1118,7 @@ DELETE只解除本窗口的图片关联，并提交媒体待回收状态；云�
 
 ## 23. 内容举报
 
-第一版只受理点评和回复。被举报内容在核查前继续公开（RISK-003）；当前仅完成举报提交与正文快照保存，管理员后台处置尚未实现。
+第一版只受理点评和回复。被举报内容在核查前继续公开（RISK-003）；当前已完成举报提交、管理员查询和驳回，删除违规内容尚未实现。
 
 ### 23.1 提交举报
 
@@ -1137,6 +1140,22 @@ reason必填，大小写精确，取值为SPAM、ABUSE、PORNOGRAPHY、ILLEGAL�
 
 目标不存在或父店/窗口不可见统一404 `REPORT_TARGET_NOT_FOUND`；举报自己发布的内容403 `REPORT_SELF_NOT_ALLOWED`；原因非法、编号非法或说明超长400 `REPORT_INVALID_INPUT`；未登录401。举报不改变内容可见性、商户评分、点赞或成长经验。
 
-### 23.2 尚未实现的处置能力
+### 23.2 管理员列表与详情
 
-管理员举报列表、详情、驳回和删除内容仍待实现。已确认规则为确认违规后永久删除且不恢复（RISK-004），并向举报者发送结果系统消息（RISK-012）；账号处罚、禁言、停用和申诉不在本轮范围。
+`GET /api/admin/content-reports`需管理员。status默认PENDING，只接受PENDING、RESOLVED、DISMISSED；page默认1，pageSize默认20、范围1–50；按提交时间及ID升序。成功200、禁止缓存，data为：
+
+```json
+{"records":[{"id":"1","targetType":"REVIEW","targetId":"101","reviewId":"101","reporterUserId":"11","targetAuthorUserId":"22","contentSnapshot":"被举报正文","reason":"ABUSE","detail":"含攻击性内容","status":"PENDING","handledBy":null,"handledAt":null,"decisionNote":null,"createdAt":"2026-11-10T08:00:00Z"}],"total":1,"totalPages":1,"page":1,"pageSize":20}
+```
+
+`GET /api/admin/content-reports/{id}`返回同一单条结构。所有编号为字符串；contentSnapshot为提交时保存的正文，仅管理员可读。匿名401、普通用户403、状态或分页非法400、编号不存在404 `REPORT_NOT_FOUND`。
+
+### 23.3 驳回举报
+
+`POST /api/admin/content-reports/{id}/dismiss`需管理员，请求体可省略，或为`{"note":"未认定违规"}`；note选填，去首尾空白后最多200码点，空白视为未填写。同一内容（target_type与target_id相同）下所有PENDING举报一并改为DISMISSED，记录相同处理人、时间和备注，避免逐条重复处理（RISK-026）。
+
+首次与重复驳回均200，data为`{"reportId":"1","status":"DISMISSED","affectedReports":2,"handledAt":"2026-11-10T08:05:00Z"}`；重复驳回时affectedReports为0。不存在404 `REPORT_NOT_FOUND`；举报已因内容删除变为RESOLVED时409 `REPORT_STATE_CONFLICT`，不能反向改写处置结果。驳回不改变内容可见性、评分或作者状态，也不发送通知。
+
+### 23.4 尚未实现的处置能力
+
+删除违规内容仍待实现。已确认规则为确认违规后永久删除且不恢复（RISK-004），并向举报者发送结果系统消息（RISK-012）；账号处罚、禁言、停用和申诉不在本轮范围。

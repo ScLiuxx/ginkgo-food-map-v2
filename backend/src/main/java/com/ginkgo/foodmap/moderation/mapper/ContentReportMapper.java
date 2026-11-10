@@ -6,6 +6,10 @@ import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
+
+import java.time.Instant;
+import java.util.List;
 
 /** 只访问moderation自有表；点评、回复和账号事实通过公开服务核验，不跨模块JOIN。 */
 @Mapper
@@ -34,4 +38,35 @@ public interface ContentReportMapper {
             @Param("reporter") long reporter,
             @Param("type") String type,
             @Param("target") long target);
+
+    /** 管理端按状态分页，先到先处理，同时间按自增ID稳定排序。 */
+    @Select(
+            "SELECT "
+                    + COLUMNS
+                    + " FROM content_reports WHERE status=#{status}"
+                    + " ORDER BY created_at,id LIMIT #{size} OFFSET #{offset}")
+    List<ContentReportEntity> pageByStatus(
+            @Param("status") String status, @Param("offset") long offset, @Param("size") int size);
+
+    @Select("SELECT COUNT(*) FROM content_reports WHERE status=#{status}")
+    long countByStatus(@Param("status") String status);
+
+    @Select("SELECT " + COLUMNS + " FROM content_reports WHERE id=#{id}")
+    ContentReportEntity findById(@Param("id") long id);
+
+    /**
+     * 同一内容的所有待处理举报一并驳回（RISK-026）。
+     *
+     * <p>只更新PENDING行，重复驳回或并发处理返回0，不会覆盖已删除内容的终态。
+     */
+    @Update(
+            "UPDATE content_reports SET status='DISMISSED',handled_by=#{handler},"
+                    + "handled_at=#{handledAt},decision_note=#{note,jdbcType=VARCHAR}"
+                    + " WHERE target_type=#{type} AND target_id=#{target} AND status='PENDING'")
+    int dismissPendingTarget(
+            @Param("type") String type,
+            @Param("target") long target,
+            @Param("handler") long handler,
+            @Param("handledAt") Instant handledAt,
+            @Param("note") String note);
 }

@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -71,6 +72,8 @@ class ContentReportApiIntegrationTest {
     @MockitoBean LoginSessionService sessions;
     private String reporter;
     private String author;
+    private String other;
+    private String admin;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) throws SQLException {
@@ -108,7 +111,7 @@ class ContentReportApiIntegrationTest {
                         "users")) {
             jdbc.update("DELETE FROM " + table);
         }
-        for (long id : List.of(11L, 22L)) {
+        for (long id : List.of(11L, 22L, 33L, 44L)) {
             jdbc.update(
                     "INSERT INTO users(id,username,email,password_hash,email_verified) VALUES(?,?,?,?,TRUE)",
                     id,
@@ -116,8 +119,9 @@ class ContentReportApiIntegrationTest {
                     "report" + id + "@example.test",
                     "private-password");
             jdbc.update(
-                    "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code='ROLE_USER'",
-                    id);
+                    "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code=?",
+                    id,
+                    id == 33L ? "ROLE_ADMIN" : "ROLE_USER");
         }
         jdbc.update(
                 "INSERT INTO restaurants(id,name,category_code,created_by) VALUES(1,'举报测试店','OTHER',11)");
@@ -126,6 +130,8 @@ class ContentReportApiIntegrationTest {
         when(sessions.isActive(anyString(), anyLong(), anyLong())).thenReturn(true);
         reporter = token(11);
         author = token(22);
+        other = token(44);
+        admin = token(33);
     }
 
     @AfterAll
@@ -262,6 +268,125 @@ class ContentReportApiIntegrationTest {
                 .andExpect(status().isUnauthorized());
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM content_reports", Long.class))
                 .isZero();
+    }
+
+    @Test
+    void adminListsPendingReportsWithSnapshot() throws Exception {
+        String id = createReport(reporter, "/api/reviews/100/reports", "ABUSE", "含攻击性内容");
+
+        mvc.perform(
+                        get("/api/admin/content-reports")
+                                .header("Authorization", "Bearer " + admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.totalPages").value(1))
+                .andExpect(jsonPath("$.data.records[0].id").value(id))
+                .andExpect(jsonPath("$.data.records[0].targetType").value("REVIEW"))
+                .andExpect(jsonPath("$.data.records[0].reporterUserId").value("11"))
+                .andExpect(jsonPath("$.data.records[0].targetAuthorUserId").value("22"))
+                .andExpect(jsonPath("$.data.records[0].contentSnapshot").value("被举报点评正文内容"))
+                .andExpect(jsonPath("$.data.records[0].detail").value("含攻击性内容"))
+                .andExpect(jsonPath("$.data.records[0].status").value("PENDING"));
+
+        mvc.perform(
+                        get("/api/admin/content-reports/" + id)
+                                .header("Authorization", "Bearer " + admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.contentSnapshot").value("被举报点评正文内容"));
+    }
+
+    @Test
+    void ordinaryUserCannotReadOrDismissAdminReports() throws Exception {
+        String id = createReport(reporter, "/api/reviews/100/reports", "ABUSE", null);
+
+        mvc.perform(
+                        get("/api/admin/content-reports")
+                                .header("Authorization", "Bearer " + other))
+                .andExpect(status().isForbidden());
+        mvc.perform(
+                        post("/api/admin/content-reports/" + id + "/dismiss")
+                                .header("Authorization", "Bearer " + other))
+                .andExpect(status().isForbidden());
+
+        assertThat(jdbc.queryForObject("SELECT status FROM content_reports", String.class))
+                .isEqualTo("PENDING");
+    }
+
+    @Test
+    void dismissMergesAllPendingReportsForSameContent() throws Exception {
+        String first = createReport(reporter, "/api/reviews/100/reports", "ABUSE", null);
+        createReport(other, "/api/reviews/100/reports", "SPAM", "另一位同学举报");
+
+        dismiss(first, "{\"note\":\" 未认定违规 \"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.reportId").value(first))
+                .andExpect(jsonPath("$.data.status").value("DISMISSED"))
+                .andExpect(jsonPath("$.data.affectedReports").value(2))
+                .andExpect(jsonPath("$.data.handledAt").isNotEmpty());
+
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT COUNT(*) FROM content_reports"
+                                        + " WHERE status='DISMISSED' AND handled_by=33"
+                                        + " AND decision_note='未认定违规'",
+                                Long.class))
+                .isEqualTo(2L);
+    }
+
+    @Test
+    void dismissIsIdempotentAndRejectsResolvedReport() throws Exception {
+        String id = createReport(reporter, "/api/reviews/100/reports", "ABUSE", null);
+        dismiss(id, "{}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.affectedReports").value(1));
+        dismiss(id, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("DISMISSED"))
+                .andExpect(jsonPath("$.data.affectedReports").value(0));
+
+        // 删除内容后举报变为RESOLVED；当前尚无删除接口，直接用数据库构造终态验证不可驳回。
+        String resolved = createReport(other, "/api/reviews/100/reports", "SPAM", null);
+        jdbc.update(
+                "UPDATE content_reports SET status='RESOLVED',handled_by=33,handled_at=NOW(6)"
+                        + " WHERE id=?",
+                Long.parseLong(resolved));
+        dismiss(resolved, null)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("REPORT_STATE_CONFLICT"));
+    }
+
+    @Test
+    void dismissUnknownReportAndInvalidFilterAreRejected() throws Exception {
+        dismiss("999", null)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("REPORT_NOT_FOUND"));
+
+        mvc.perform(
+                        get("/api/admin/content-reports?status=BOGUS")
+                                .header("Authorization", "Bearer " + admin))
+                .andExpect(status().isBadRequest());
+    }
+
+    private String createReport(String token, String path, String reason, String detail)
+            throws Exception {
+        var result =
+                report(token, path, reason, detail)
+                        .andExpect(status().isCreated())
+                        .andReturn();
+        return json.readTree(result.getResponse().getContentAsString())
+                .get("data")
+                .get("reportId")
+                .asText();
+    }
+
+    private ResultActions dismiss(String id, String body) throws Exception {
+        var request =
+                post("/api/admin/content-reports/" + id + "/dismiss")
+                        .header("Authorization", "Bearer " + admin);
+        if (body != null) {
+            request.contentType(MediaType.APPLICATION_JSON).content(body);
+        }
+        return mvc.perform(request);
     }
 
     private ResultActions report(String token, String path, String reason, String detail)

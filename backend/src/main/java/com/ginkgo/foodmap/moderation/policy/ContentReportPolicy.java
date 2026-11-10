@@ -37,6 +37,20 @@ public final class ContentReportPolicy {
 
     /** 说明去首尾空白后为空视为未填写；最多200个码点，与数据库列宽一致。 */
     public static String detail(String value) {
+        return optionalText(value);
+    }
+
+    /** 管理端举报编号沿用内容编号规则；非法编号统一返回400而不是500。 */
+    public static long reportId(String value) {
+        return targetId(value);
+    }
+
+    /** 驳回备注与举报说明使用相同的长度和空白规则，空白备注不写入数据库。 */
+    public static String decisionNote(String value) {
+        return optionalText(value);
+    }
+
+    private static String optionalText(String value) {
         if (value == null) {
             return null;
         }
