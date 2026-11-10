@@ -7,7 +7,7 @@
 - 按MY-014/MY-015实现本人申请写流程：PENDING可整体修改业务内容与0–5张附图，修改后仍为PENDING；PENDING可撤回为WITHDRAWN并记录撤回时间；REJECTED可携带新clientRequestId重提，生成PENDING新申请并通过previous_request_id关联原驳回记录，原记录状态、驳回原因和审核字段不变。APPROVED、REJECTED、WITHDRAWN不可修改，仅REJECTED可重提。
 - 新增Flyway V40：补充previous_request_id与withdrawn_at，重建状态、目标与审核字段约束，增加自关联外键；撤回不写审核人/通过快照，CREATE撤回仍无商户ID，UPDATE撤回保留原商户ID。所有写入按本人范围校验，他人申请与不存在统一404。
 - 并发控制：修改和撤回锁定申请行，与管理员审核使用同一行锁，状态在锁内复核；重提锁定本人被驳回申请后创建新申请。附图替换只释放新列表移除的旧图，交集图片复用原绑定，旧图释放、关联重建、新图绑定和内容更新同事务回滚。管理员已打开旧页面后的并发提示仍按MY-016暂缓。
-- 验证（本地MySQL 8.0.46 + Redis 7.0.15）：`MyRestaurantRequestApiIntegrationTest` 15项全部通过，真实执行Flyway V1–V40、MySQL约束、真实JWT/MockMvc及附图绑定替换，确认V40可在非空库上迁移；`RestaurantReadApiIntegrationTest`等店铺相关套件212项通过。全量开启MySQL/Redis集成开关时最初有5项既有测试与现行代码漂移：通知`FOLLOWERS`分类已合法、本人点评改为使用`mixedPage`、用户名自V11区分大小写、改密接口返回`data.username`。已按现行契约修正这5项断言（空`FOLLOWERS`可读且批量已读幂等、断言`mixedPage`、登录使用原始拼写、大小写变体按未知账号独立限流、改密断言用户名），修正后全量执行797项、0失败、20项跳过（未启用OSS/ES等外部依赖）；无MySQL时`mvn verify`为673项、0失败、427项跳过。本次验证不包含提交、推送或部署。
+- 验证（本地MySQL 8.0.46 + Redis 7.0.15）：`MyRestaurantRequestApiIntegrationTest` 15项全部通过，真实执行Flyway V1–V40、MySQL约束、真实JWT/MockMvc及附图绑定替换，确认V40可在非空库上迁移；`RestaurantReadApiIntegrationTest`等店铺相关套件212项通过。全量开启MySQL/Redis集成开关时最初有5项既有测试与现行代码漂移：通知`FOLLOWERS`分类已合法、本人点评改为使用`mixedPage`、用户名自V11区分大小写、改密接口返回`data.username`。已按现行契约修正这5项断言（空`FOLLOWERS`可读且批量已读幂等、断言`mixedPage`、登录使用原始拼写、大小写变体按未知账号独立限流、改密断言用户名），修正后全量执行797项、0失败、20项跳过（未启用OSS/ES等外部依赖）；随后在项目基线MySQL 8.4.13上重跑同一全量套件，Flyway V1–V40及全部集成测试通过，结果为797项、0失败、20项跳过；无MySQL时`mvn verify`为673项、0失败、427项跳过。本次验证不包含提交、推送或部署。
 
 ## 2026-11-08：全站评分统一五分制展示
 
