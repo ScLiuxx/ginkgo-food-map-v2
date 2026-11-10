@@ -42,6 +42,7 @@ interface WxModalOptions {
   showCancel?: boolean
   confirmText?: string
   cancelText?: string
+  confirmColor?: string
   success?: (result: { confirm: boolean; cancel: boolean }) => void
 }
 

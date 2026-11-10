@@ -167,6 +167,99 @@
               bindtap="previewReviewPhoto"
             />
           </view>
+
+          <view class="review-actions">
+            <view
+              class="review-action {{item.liked ? 'active' : ''}} {{item.likeBusy ? 'disabled' : ''}}"
+              data-index="{{index}}"
+              bindtap="toggleReviewLike"
+            >
+              <text class="action-heart">♥</text>
+              <text wx:if="{{item.likeKnown && item.likeAvailable}}">{{item.likeCount}}</text>
+              <text wx:else>赞</text>
+            </view>
+            <view class="review-action" data-index="{{index}}" bindtap="toggleReplies">
+              {{item.repliesOpen ? '收起回复' : '回复'}}
+            </view>
+            <view
+              wx:if="{{item.canReport}}"
+              class="review-action"
+              data-review-index="{{index}}"
+              bindtap="openReport"
+            >举报</view>
+          </view>
+
+          <view wx:if="{{item.repliesOpen}}" class="reply-block">
+            <view wx:if="{{item.repliesLoading && !item.replies.length}}" class="muted reply-tip">正在加载回复…</view>
+            <view wx:elif="{{item.repliesError}}" class="reply-tip">
+              <text class="error-text">{{item.repliesError}}</text>
+              <text class="reply-link" data-index="{{index}}" bindtap="retryReplies">重试</text>
+            </view>
+            <view wx:elif="{{!item.replies.length}}" class="muted reply-tip">还没有回复。</view>
+            <view
+              wx:for="{{item.replies}}"
+              wx:for-item="reply"
+              wx:for-index="replyIndex"
+              wx:key="id"
+              class="reply-row"
+            >
+              <view class="reply-head">
+                <text class="reply-author">{{reply.username}}</text>
+                <text class="reply-date">{{reply.createdAtText}}</text>
+              </view>
+              <view class="reply-body">{{reply.body}}</view>
+              <view class="reply-actions">
+                <view
+                  class="reply-action {{reply.liked ? 'active' : ''}} {{reply.likeBusy ? 'disabled' : ''}}"
+                  data-review-index="{{index}}"
+                  data-reply-index="{{replyIndex}}"
+                  bindtap="toggleReplyLike"
+                >
+                  ♥<text wx:if="{{reply.likeKnown && reply.likeAvailable}}"> {{reply.likeCount}}</text>
+                </view>
+                <view
+                  wx:if="{{reply.canDelete}}"
+                  class="reply-action danger"
+                  data-review-index="{{index}}"
+                  data-reply-index="{{replyIndex}}"
+                  bindtap="deleteReply"
+                >删除</view>
+                <view
+                  wx:if="{{reply.canReport}}"
+                  class="reply-action"
+                  data-review-index="{{index}}"
+                  data-reply-index="{{replyIndex}}"
+                  bindtap="openReport"
+                >举报</view>
+              </view>
+            </view>
+
+            <view
+              wx:if="{{item.repliesHasMore}}"
+              class="reply-more"
+              data-index="{{index}}"
+              bindtap="loadMoreReplies"
+            >{{item.repliesLoading ? '加载中…' : '查看更多回复'}}</view>
+
+            <view wx:if="{{item.replyComposerOpen}}" class="reply-composer">
+              <textarea
+                class="reply-textarea"
+                value="{{item.replyDraft}}"
+                data-index="{{index}}"
+                maxlength="200"
+                placeholder="友善回复，最多200字"
+                bindinput="onReplyInput"
+              />
+              <view class="reply-composer-foot">
+                <text class="muted">{{item.replyDraftLength}}/200</text>
+                <view class="mini-button" data-index="{{index}}" bindtap="submitReply">
+                  {{item.replySubmitting ? '发送中…' : '发送'}}
+                </view>
+              </view>
+              <view wx:if="{{item.replyError}}" class="error-text">{{item.replyError}}</view>
+            </view>
+            <view wx:elif="{{!item.repliesLoading}}" class="reply-open" data-index="{{index}}" bindtap="openReplyComposer">写回复</view>
+          </view>
         </view>
       </view>
 
@@ -177,7 +270,38 @@
       >{{reviewLoading ? '加载中…' : '加载更多点评'}}</view>
       <view wx:elif="{{reviews.length}}" class="list-end">已展示全部点评</view>
 
-      <view class="compose-note">发布点评、回复与点赞将在下一阶段接入。</view>
+      <view wx:if="{{interactionHint}}" class="error-text interaction-hint">{{interactionHint}}</view>
+      <view class="compose-note">请友善互动；举报内容由管理员核查后处理，不会立即隐藏原文。</view>
     </view>
   </block>
+
+  <view wx:if="{{reportOpen}}" class="report-mask" catchtap="closeReport">
+    <view class="card report-sheet" catchtap="stopPropagation">
+      <view class="report-title">举报{{reportTargetLabel}}</view>
+      <view class="muted report-sub">举报不会立即隐藏内容，管理员核查后处理。</view>
+      <picker
+        mode="selector"
+        range="{{reportReasonLabels}}"
+        value="{{reportReasonIndex}}"
+        bindchange="onReportReasonChange"
+      >
+        <view class="field-shell report-picker">原因：{{reportReasonLabels[reportReasonIndex]}} ▾</view>
+      </picker>
+      <textarea
+        class="report-textarea"
+        value="{{reportDetail}}"
+        maxlength="200"
+        placeholder="补充说明（选填，最多200字）"
+        bindinput="onReportDetailInput"
+      />
+      <view class="muted report-count">{{reportDetailLength}}/200</view>
+      <view wx:if="{{reportError}}" class="error-text">{{reportError}}</view>
+      <view class="report-actions">
+        <view class="ghost-button flex-1" bindtap="closeReport">取消</view>
+        <view class="primary-button flex-1" bindtap="submitReport">
+          {{reportSubmitting ? '提交中…' : '提交举报'}}
+        </view>
+      </view>
+    </view>
+  </view>
 </view>

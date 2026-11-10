@@ -4,7 +4,6 @@ import {
   MAX_REVIEW_BODY,
   MAX_REVIEW_PHOTOS,
   cancelReviewPhoto,
-  createRequestId,
   isValidScores,
   normalizeReviewBody,
   prepareReviewPhoto,
@@ -14,6 +13,7 @@ import {
   type ReviewScores,
   type ScoreKey,
 } from '../../../modules/review/compose'
+import { createRequestId } from '../../../shared/lib/id'
 
 type PhotoStatus = 'uploading' | 'ready' | 'failed'
 

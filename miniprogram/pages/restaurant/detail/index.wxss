@@ -429,6 +429,221 @@
   text-align: center;
 }
 
+.interaction-hint {
+  margin-top: 16rpx;
+  text-align: center;
+}
+
+.review-actions {
+  display: flex;
+  align-items: center;
+  margin-top: 18rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid rgba(255, 255, 255, 0.62);
+}
+
+.review-action {
+  margin-right: 18rpx;
+  padding: 8rpx 20rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.42);
+  color: var(--ink-soft);
+  font-size: 23rpx;
+}
+
+.review-action.active {
+  background: rgba(255, 231, 236, 0.9);
+  color: #c2455f;
+}
+
+.review-action.disabled {
+  opacity: 0.5;
+}
+
+.action-heart {
+  margin-right: 4rpx;
+  font-size: 24rpx;
+}
+
+.reply-block {
+  margin-top: 18rpx;
+  padding: 18rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.6);
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.reply-tip {
+  padding: 8rpx 0;
+  font-size: 23rpx;
+}
+
+.reply-row {
+  padding: 14rpx 0;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.56);
+}
+
+.reply-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.reply-author {
+  color: var(--ink);
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.reply-date {
+  color: var(--ink-muted);
+  font-size: 21rpx;
+}
+
+.reply-body {
+  margin-top: 8rpx;
+  color: var(--ink-soft);
+  font-size: 25rpx;
+  line-height: 1.65;
+  word-break: break-word;
+}
+
+.reply-actions {
+  display: flex;
+  align-items: center;
+  margin-top: 10rpx;
+}
+
+.reply-action {
+  margin-right: 24rpx;
+  color: var(--ink-muted);
+  font-size: 22rpx;
+}
+
+.reply-action.active {
+  color: #c2455f;
+}
+
+.reply-action.danger {
+  color: var(--danger);
+}
+
+.reply-action.disabled {
+  opacity: 0.5;
+}
+
+.reply-link {
+  margin-left: 12rpx;
+  color: var(--accent-deep);
+  font-size: 23rpx;
+}
+
+.reply-more {
+  padding: 14rpx 0 4rpx;
+  color: var(--accent-deep);
+  font-size: 23rpx;
+  text-align: center;
+}
+
+.reply-open {
+  margin-top: 14rpx;
+  color: var(--accent-deep);
+  font-size: 24rpx;
+}
+
+.reply-composer {
+  margin-top: 14rpx;
+}
+
+.reply-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 130rpx;
+  padding: 18rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.85);
+  border-radius: 20rpx;
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 25rpx;
+}
+
+.reply-composer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12rpx;
+}
+
+.mini-button {
+  padding: 10rpx 32rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, #37a9ff, #0a84ff 58%, #0066cc);
+  box-shadow: 0 8rpx 20rpx rgba(10, 132, 255, 0.24);
+  color: #ffffff;
+  font-size: 23rpx;
+  font-weight: 600;
+}
+
+.report-mask {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 28rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
+  background: rgba(8, 25, 43, 0.34);
+}
+
+.report-sheet {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.report-title {
+  color: var(--ink);
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.report-sub {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+}
+
+.report-picker {
+  margin-top: 18rpx;
+}
+
+.report-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 140rpx;
+  margin-top: 16rpx;
+  padding: 18rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.9);
+  border-radius: 20rpx;
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 25rpx;
+}
+
+.report-count {
+  margin-top: 8rpx;
+  font-size: 21rpx;
+  text-align: right;
+}
+
+.report-actions {
+  display: flex;
+  margin-top: 18rpx;
+}
+
+.report-actions .ghost-button {
+  margin-right: 18rpx;
+}
+
 .detail-retry {
   width: 240rpx;
   margin: 28rpx auto 0;
