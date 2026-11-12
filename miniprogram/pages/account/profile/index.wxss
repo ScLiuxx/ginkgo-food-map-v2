@@ -1,4 +1,4 @@
-@import "../../content/index.wxss";
+@import "../content/index.wxss";
 
 .profile-page {
   padding-bottom: calc(56rpx + env(safe-area-inset-bottom));
