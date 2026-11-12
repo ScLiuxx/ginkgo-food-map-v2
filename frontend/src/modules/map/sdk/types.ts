@@ -11,6 +11,9 @@ export interface SDKMarker {
   getContent(): globalThis.HTMLElement | string
 }
 export interface SDKMap {
+  getCenter(): SDKLatLng
+  getZoom(): number
+  lngLatToContainer(position: [number, number]): { getX(): number; getY(): number }
   getBounds(): SDKBounds
   on(event: string, callback: () => void): void
   off(event: string, callback: () => void): void
@@ -41,7 +44,13 @@ export interface AMapSDK {
   ): void
   Map: new (
     container: globalThis.HTMLElement,
-    options: { center: [number, number]; zoom: number; viewMode: string; mapStyle?: string },
+    options: {
+      center: [number, number]
+      zoom: number
+      zooms?: [number, number]
+      viewMode: string
+      mapStyle?: string
+    },
   ) => SDKMap
   Marker: new (options: {
     position: [number, number]

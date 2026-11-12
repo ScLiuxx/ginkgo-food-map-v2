@@ -1,23 +1,29 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, useId, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  onUnmounted,
+  reactive,
+  ref,
+  useId,
+  watch,
+} from 'vue'
 import {
   campusDistance,
   filterRestaurants,
   useRestaurantCatalog,
   MapRestaurantCard,
   RestaurantAdvancedFilters,
-  fetchRestaurant,
   fetchRestaurantCategories,
 } from '@/modules/restaurant'
-import type { RestaurantReadModel } from '@/modules/restaurant'
 import { useViewport } from '../model/viewport'
 import { useMapSelection } from '../model/selection'
+import { useMapBrowsing } from '../model/browsing.store'
 import AMapCanvas from './AMapCanvas.vue'
-import { mapExamples, navigationUrl, placeNavigationUrl } from '../model/map'
-import { usePlaceSearch } from '../model/placeSearch'
-import type { MapFocus, MapPoint } from '../api/mapApi'
-import PlaceSearchResults from './PlaceSearchResults.vue'
-import { SubmitRestaurantButton } from '@/modules/restaurant'
+import { mapExamples, navigationUrl } from '../model/map'
+import type { MapCamera, MapFocus } from '../api/mapApi'
 import type { CatalogFilters } from '@/modules/restaurant'
 import MapIllustration from './MapIllustration.vue'
 import NearbyLocation from '@/modules/restaurant/ui/NearbyLocation.vue'
@@ -29,6 +35,19 @@ const props = withDefaults(defineProps<{ preview?: boolean }>(), {
 })
 const catalog = useRestaurantCatalog()
 if (!props.preview) catalog.pause()
+const browsing = useMapBrowsing()
+const restored = props.preview ? null : browsing.snapshot
+if (restored) {
+  // 首页也会改共享条件；回到地图时恢复自己的快照，并清掉快照未选择的可选条件。
+  Object.assign(catalog.filters, {
+    distanceOrigin: undefined,
+    latitude: undefined,
+    longitude: undefined,
+    restaurantType: undefined,
+    diningMode: undefined,
+    ...restored.filters,
+  })
+}
 const filters = props.preview
   ? reactive<CatalogFilters>({
       keyword: '',
@@ -39,10 +58,10 @@ const filters = props.preview
       maxDistanceMeters: null,
     })
   : catalog.filters
-const selection = useMapSelection(props.preview ? 'demo-1' : null)
+const selection = useMapSelection(props.preview ? 'demo-1' : (restored?.selectedId ?? null))
 const selectedId = selection.activeId
 const mobile = ref(globalThis.matchMedia?.('(max-width: 700px)').matches ?? false)
-const sheetSnap = ref<'collapsed' | 'half' | 'full'>('collapsed')
+const sheetSnap = ref<'collapsed' | 'half' | 'full'>(restored?.sheetSnap ?? 'collapsed')
 const sheetHeight = ref(148)
 const filterArea = ref<globalThis.HTMLElement>()
 const filterBottom = ref(140)
@@ -53,7 +72,22 @@ function updateMobile() {
   mobile.value = media?.matches ?? false
 }
 const resultPanel = ref<globalThis.HTMLElement>()
-const placesAnchor = ref<globalThis.HTMLDivElement>()
+const canvas = ref<InstanceType<typeof AMapCanvas>>()
+const camera = ref<MapCamera | null>(restored?.camera ?? null)
+const listScroll = ref(restored?.scrollTop ?? 0)
+let pendingScroll = Boolean(restored)
+let restoreResults = Boolean(restored)
+let leaving = false
+const listVisible = () => !mobile.value || !hasSelection.value || sheetSnap.value !== 'collapsed'
+/** 手机选店卡片遮住列表时延后恢复滚动；显示列表后再应用，避免隐藏DOM把位置归零。 */
+function restoreListScroll() {
+  if (leaving || !pendingScroll || !listVisible() || !resultPanel.value) return
+  resultPanel.value.scrollTop = listScroll.value
+  pendingScroll = false
+}
+function rememberListScroll() {
+  if (listVisible() && resultPanel.value) listScroll.value = resultPanel.value.scrollTop
+}
 const selectionPanel = ref<globalThis.HTMLDivElement>()
 const selectionHeight = ref(225)
 /** 浮层随长店名自然增长，仅调整底部面板，不能通过压缩地图改变候选范围。 */
@@ -67,13 +101,10 @@ watch(selectionPanel, (panel, _previous, onCleanup) => {
   observer.observe(panel)
   onCleanup(() => observer.disconnect())
 })
-const viewport = useViewport(filters, !props.preview)
+const viewport = useViewport(filters, !props.preview, restored?.viewport)
 const searching = computed(() => !props.preview && Boolean(filters.keyword.trim()))
-const places = usePlaceSearch(() => filters.keyword, !props.preview)
 const focusTarget = ref<MapFocus | null>(null)
 let focusSequence = 0
-const remoteSelection = ref<RestaurantReadModel | null>(null)
-let selectionSequence = 0
 const categories = computed(() =>
   props.preview
     ? ['火锅', '川菜', '小吃', '快餐', '烧烤'].map((name) => ({
@@ -94,42 +125,23 @@ const restaurants = computed(() => {
         (campusDistance(r) !== null && campusDistance(r)! * 1000 <= filters.maxDistanceMeters)),
   )
 })
-const selected = computed(
-  () =>
-    restaurants.value.find((r) => r.id === selectedId.value) ??
-    (remoteSelection.value?.id === selectedId.value ? remoteSelection.value : null),
+/** 地图和列表均来自同一批候选，点选无需再跨请求补查其他店铺。 */
+const selected = computed(() => restaurants.value.find((r) => r.id === selectedId.value) ?? null)
+const hasSelection = computed(() => Boolean(selected.value))
+watch([mobile, sheetSnap, hasSelection], async () => {
+  await nextTick()
+  restoreListScroll()
+})
+// 返回时相同条件的重新验证保留阅读位置；主动换范围或筛选仍从列表顶部开始。
+watch(
+  [filters, viewport.bounds],
+  () => {
+    restoreResults = false
+  },
+  { deep: true, flush: 'sync' },
 )
-const selectedPlace = computed(
-  () => places.records.value.find((place) => `amap:${place.id}` === selectedId.value) ?? null,
-)
-const hasSelection = computed(() => Boolean(selected.value || selectedPlace.value))
-// 已经显示在本站当前页的同一店铺不再重复列出；不确定匹配关系的地点保持独立。
-const externalRows = computed(() =>
-  places.records.value.filter(
-    (place) => !place.match || !restaurants.value.some((row) => row.id === place.match!.id),
-  ),
-)
-const canvasPoints = computed<MapPoint[]>(() => [
-  ...viewport.points.value,
-  ...(searching.value
-    ? externalRows.value.map((place): MapPoint => ({
-        id: `amap:${place.id}`,
-        kind: 'amap',
-        name: place.name,
-        longitude: place.longitude,
-        latitude: place.latitude,
-        score: null,
-        pricePerPerson: null,
-        businessStatus: 'UNKNOWN',
-      }))
-    : []),
-])
-const highlightedId = computed(() =>
-  selectedPlace.value?.match &&
-  restaurants.value.some((row) => row.id === selectedPlace.value!.match!.id)
-    ? selectedPlace.value.match.id
-    : selectedId.value,
-)
+const canvasPoints = computed(() => viewport.points.value)
+const highlightedId = selectedId
 watch(
   () => filters.keyword.trim(),
   () => {
@@ -148,18 +160,27 @@ const advancedCount = computed(
 )
 const loading = computed(() => !props.preview && viewport.loading.value)
 const error = computed(() => (props.preview ? null : viewport.error.value))
-watch([restaurants, places.records], ([rows, external]) => {
-  const visible = (id: string) =>
-    rows.some((r) => r.id === id) ||
-    viewport.points.value.some((p) => p.id === id) ||
-    external.some((place) => `amap:${place.id}` === id)
-  if (selection.pinnedId.value && !visible(selection.pinnedId.value))
+/** 范围或条件成功切换后重置卡片滚动，仍在集合内的选店保持有效。 */
+watch(restaurants, async (rows) => {
+  const visible = (id: string) => rows.some((r) => r.id === id)
+  if (selection.pinnedId.value && !visible(selection.pinnedId.value)) {
     selection.pinnedId.value = null
+    focusTarget.value = null
+  }
   if (selection.hoveredId.value && !visible(selection.hoveredId.value))
     selection.hoveredId.value = null
   if (props.preview && !selectedId.value && rows[0]) selection.pin(rows[0].id)
+  await nextTick()
+  if (restoreResults) {
+    pendingScroll = true
+    restoreListScroll()
+  } else {
+    listScroll.value = 0
+    pendingScroll = false
+    if (resultPanel.value) resultPanel.value.scrollTop = 0
+  }
 })
-onMounted(() => {
+onMounted(async () => {
   media?.addEventListener('change', updateMobile)
   if (globalThis.ResizeObserver && filterArea.value) {
     filterObserver = new globalThis.ResizeObserver(() => {
@@ -167,6 +188,9 @@ onMounted(() => {
     })
     filterObserver.observe(filterArea.value)
   }
+  await nextTick()
+  if (leaving) return
+  restoreListScroll()
   if (!props.preview) {
     void viewport.load()
     if (!catalog.categories.length)
@@ -177,31 +201,20 @@ onMounted(() => {
         .catch(() => {})
   }
 })
-/** 原生dialog约束焦点；关闭和卸载都恢复背景滚动，草稿只有确认才写回查询。 */
+/** 点选只定位并高亮，电脑和手机都保留原候选范围，避免自动放大触发重查。 */
 function selectRestaurant(id: string) {
   selection.pin(id)
   sheetSnap.value = 'collapsed'
-  if (searching.value || mobile.value) {
+  if (!props.preview) {
     const point = canvasPoints.value.find((row) => row.id === id)
     if (point)
       focusTarget.value = {
         longitude: point.longitude,
         latitude: point.latitude,
         sequence: ++focusSequence,
-        preserveResults: mobile.value,
+        preserveResults: true,
       }
   }
-}
-/** 两类结果共用侧栏滚动区；直接到高德分组，不滚动整页或改变查询条件。 */
-async function showPlaceResults() {
-  if (mobile.value) sheetSnap.value = 'full'
-  await nextTick()
-  if (!placesAnchor.value || !resultPanel.value) return
-  const top =
-    resultPanel.value.scrollTop +
-    placesAnchor.value.getBoundingClientRect().top -
-    resultPanel.value.getBoundingClientRect().top
-  resultPanel.value.scrollTo({ top, behavior: 'auto' })
 }
 /** Tab在卡片内部移动时保持预览；焦点移出整个卡片后才安排关闭。 */
 function onCardFocusOut(event: globalThis.FocusEvent) {
@@ -212,29 +225,23 @@ function onCardFocusOut(event: globalThis.FocusEvent) {
     return
   selection.leave()
 }
-/** 悬停与固定使用同一详情读取，关闭后使迟到响应失效，不能重新弹出卡片。 */
-watch(selectedId, (id) => {
-  const ticket = ++selectionSequence
-  remoteSelection.value = null
-  if (
-    id &&
-    !id.startsWith('amap:') &&
-    !props.preview &&
-    !restaurants.value.some((r) => r.id === id)
-  ) {
-    void fetchRestaurant(id)
-      .then((row) => {
-        if (ticket === selectionSequence && selectedId.value === id) remoteSelection.value = row
-      })
-      .catch(() => {
-        if (ticket === selectionSequence) selection.close()
-      })
-  }
+onBeforeUnmount(() => {
+  // 父组件先取快照，再由子组件正常销毁地图；预览不读写真实浏览记录。
+  rememberListScroll()
+  if (!props.preview)
+    browsing.remember({
+      filters: { ...filters },
+      camera: canvas.value?.captureCamera() ?? camera.value,
+      viewport: viewport.snapshot(),
+      selectedId: selection.pinnedId.value,
+      sheetSnap: sheetSnap.value,
+      scrollTop: listScroll.value,
+    })
+  leaving = true
 })
 onUnmounted(() => {
   media?.removeEventListener('change', updateMobile)
   filterObserver?.disconnect()
-  selectionSequence++
   if (!props.preview) catalog.cancelPending()
 })
 </script>
@@ -320,36 +327,20 @@ onUnmounted(() => {
           ref="resultPanel"
           class="map-result-panel"
           aria-label="餐厅结果"
+          @scroll="rememberListScroll"
         >
-          <p v-if="searching" class="map-search-summary">
-            <span>全站搜索 · 本站 + 高德</span
-            ><button aria-controls="map-place-results" @click="showPlaceResults">
-              {{
-                places.error.value
-                  ? '高德地点暂不可用'
-                  : places.loading.value
-                    ? '高德搜索中…'
-                    : `高德地点 ${places.total.value}`
-              }}
-              ↓
-            </button>
-          </p>
           <div class="map-result-heading">
             <h2>
-              {{
-                searching
-                  ? '本站已收录'
-                  : preview || viewport.bounds.value
-                    ? '此区域的餐厅'
-                    : '餐厅目录'
-              }}
+              {{ searching ? '此区域的搜索结果' : '此区域的餐厅' }}
             </h2>
             <span role="status">{{
               loading
                 ? '正在加载…'
                 : preview
                   ? `${restaurants.length} 家示例餐厅`
-                  : `共 ${viewport.total.value} 家 · 当前页 ${restaurants.length} 家`
+                  : !viewport.bounds.value
+                    ? '等待地图范围…'
+                    : `区域内 ${viewport.total.value} 家 · 当前展示 ${restaurants.length} 家`
             }}</span>
           </div>
           <p v-if="viewport.searchNotice.value && !loading" role="status">
@@ -358,7 +349,7 @@ onUnmounted(() => {
           <p v-if="error" class="map-empty" role="alert">
             {{ error }} <button @click="viewport.load">重试</button>
           </p>
-          <div v-else class="map-card-list">
+          <div class="map-card-list">
             <MapRestaurantCard
               v-for="restaurant in restaurants"
               :key="restaurant.id"
@@ -366,39 +357,24 @@ onUnmounted(() => {
               :selected="restaurant.id === highlightedId"
               @select="selectRestaurant(restaurant.id)"
             />
-            <p v-if="!restaurants.length && !loading" class="map-empty">
+            <p v-if="!restaurants.length && !loading && !error" class="map-empty">
               {{
                 searching
-                  ? '本站没有匹配的餐厅，可继续查看下方高德地点。'
-                  : '没有符合条件的餐厅，试试其他分类或筛选。'
+                  ? '当前地图范围内没有匹配的餐厅，可移动地图或调整关键词。'
+                  : !preview && !viewport.bounds.value
+                    ? '等待地图确定范围；也可返回首页浏览餐厅。'
+                    : '当前范围内没有符合条件的餐厅，可移动地图或调整筛选。'
               }}
             </p>
           </div>
-          <nav
-            v-if="!preview && viewport.pages.value > 1"
-            class="map-pagination"
-            aria-label="餐厅分页"
-          >
-            <button
-              :disabled="viewport.page.value === 1 || loading"
-              @click="viewport.goToPage(viewport.page.value - 1)"
-            >
-              上一页</button
-            ><span>{{ viewport.page.value }} / {{ viewport.pages.value }}</span
-            ><button
-              :disabled="viewport.page.value === viewport.pages.value || loading"
-              @click="viewport.goToPage(viewport.page.value + 1)"
-            >
-              下一页
-            </button>
-          </nav>
+          <p v-if="!preview && viewport.truncated.value" class="map-data-note" role="status">
+            当前展示本区域符合条件的前 {{ restaurants.length }} 家，放大或移动地图可查找更多店铺。
+          </p>
           <p class="map-data-note">
             {{
               preview
                 ? '示意数据 · 餐厅与位置均为虚构，不用于导航'
-                : searching
-                  ? '全站搜索，不受当前地图范围限制。地图展示当前页本站结果和本页高德地点；点击结果移到餐厅位置。'
-                  : '移动或缩放结束后自动更新；未加载地图时显示全部餐厅目录。'
+                : '搜索、筛选只作用于当前地图范围；移动或缩放后一起更新地图和列表。'
             }}
           </p>
           <p
@@ -413,31 +389,6 @@ onUnmounted(() => {
               >ODbL-1.0</a
             >
           </p>
-          <div v-if="searching" id="map-place-results" ref="placesAnchor">
-            <PlaceSearchResults
-              :keyword="filters.keyword"
-              :can-submit="
-                !preview &&
-                !loading &&
-                !error &&
-                viewport.resultsCurrent.value &&
-                viewport.total.value === 0 &&
-                !places.loading.value &&
-                !places.error.value
-              "
-              :records="externalRows"
-              :hidden-count="places.records.value.length - externalRows.length"
-              :loading="places.loading.value"
-              :error="places.error.value"
-              :total="places.total.value"
-              :page="places.page.value"
-              :pages="places.pages.value"
-              :selected="selectedId"
-              @select="selectRestaurant"
-              @retry="places.load"
-              @page-change="places.goToPage"
-            />
-          </div>
         </aside>
       </Teleport>
       <div
@@ -456,10 +407,13 @@ onUnmounted(() => {
         />
         <AMapCanvas
           v-else
+          ref="canvas"
+          :initial-camera="restored?.viewport.bounds ? restored.camera : null"
           :points="canvasPoints"
           :selected="highlightedId"
           :focus="focusTarget"
           @move="viewport.move"
+          @view="camera = $event"
           @select="selectRestaurant"
           @hover="selection.hover"
           @leave="selection.leave"
@@ -468,11 +422,7 @@ onUnmounted(() => {
           {{ searching ? '正在搜索本站餐厅…' : '正在更新此区域…' }}
         </p>
         <p v-if="!preview && error" class="map-auto-status" role="alert">
-          {{ searching ? '本站搜索失败，请重试。' : '区域更新失败，当前显示上次结果。'
-          }}<button @click="viewport.load">重试</button>
-        </p>
-        <p v-if="!preview && viewport.truncated.value" class="map-truncation" role="status">
-          此区域餐厅较多，最多显示100个点位，请放大地图查看更小范围。
+          区域更新失败，当前显示上次结果。<button @click="viewport.load">重试</button>
         </p>
         <Teleport :to="`#${sheetId}-selection`" :disabled="!mobile" defer>
           <div
@@ -495,7 +445,10 @@ onUnmounted(() => {
                 @select="mobile && (sheetSnap = 'half')"
               />
               <div class="map-selection-actions">
-                <RouterLink v-if="!preview" :to="`/restaurants/${selected.id}`">查看详情</RouterLink
+                <RouterLink
+                  v-if="!preview"
+                  :to="{ path: `/restaurants/${selected.id}`, query: { from: 'map' } }"
+                  >查看详情</RouterLink
                 ><button v-else disabled>查看详情</button
                 ><a
                   v-if="navigationUrl(selected)"
@@ -512,49 +465,6 @@ onUnmounted(() => {
               <small v-if="!preview && navigationUrl(selected)" class="navigation-origin"
                 >定位与路线由高德地图处理</small
               >
-            </template>
-            <template v-else-if="selectedPlace">
-              <div class="map-place-detail">
-                <small
-                  >高德地点 ·
-                  {{
-                    selectedPlace.matchState === 'matched'
-                      ? '本站已收录'
-                      : selectedPlace.matchState === 'checking'
-                        ? '正在核对收录状态'
-                        : selectedPlace.matchState === 'unavailable'
-                          ? '收录状态待核实'
-                          : '暂未匹配本站'
-                  }}</small
-                >
-                <h3>{{ selectedPlace.name }}</h3>
-                <p>{{ selectedPlace.address || '地址待补充' }}</p>
-                <p>
-                  {{ [selectedPlace.district, selectedPlace.category].filter(Boolean).join(' · ') }}
-                </p>
-              </div>
-              <div class="map-selection-actions">
-                <RouterLink
-                  v-if="selectedPlace.match"
-                  :to="`/restaurants/${selectedPlace.match.id}`"
-                  >查看本站详情</RouterLink
-                >
-                <SubmitRestaurantButton
-                  v-else-if="selectedPlace.matchState === 'unmatched'"
-                  :place="selectedPlace"
-                />
-                <span v-else>正在核实收录状态，暂不能提交</span>
-                <a
-                  v-if="placeNavigationUrl(selectedPlace)"
-                  :href="placeNavigationUrl(selectedPlace)!"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="map-navigate"
-                  >在高德中打开 ↗</a
-                >
-                <button v-else class="map-navigate" disabled>位置待确认</button>
-              </div>
-              <small class="navigation-origin">来源：高德地图 · 定位与路线由高德处理</small>
             </template>
           </div>
         </Teleport>

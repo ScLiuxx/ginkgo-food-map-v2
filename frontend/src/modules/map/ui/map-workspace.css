@@ -214,6 +214,8 @@
   min-height: 0;
   min-width: 0;
   overflow-y: auto;
+  /* 返回和范围更新由页面统一恢复滚动，避免加载提示切换时浏览器再次锚定而偏移。 */
+  overflow-anchor: none;
   padding: 0 18px 16px 0;
   scrollbar-width: thin;
   scrollbar-color: #dedfdf transparent;

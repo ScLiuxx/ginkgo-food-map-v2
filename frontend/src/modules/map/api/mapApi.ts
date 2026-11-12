@@ -1,12 +1,19 @@
 import { httpClient } from '@/shared/api/httpClient'
 import type { ApiResponse } from '@/shared/api/api.types'
 import type { CatalogFilters } from '@/modules/restaurant'
+import { toRestaurantModel, type RestaurantResponse } from '@/modules/restaurant/api/restaurantApi'
+import type { RestaurantReadModel } from '@/modules/restaurant/model/restaurant.types'
 
 export interface MapBounds {
   west: number
   east: number
   south: number
   north: number
+}
+/** 浏览会话中的实际图面视角，与点选定位前的候选查询范围分开保存。 */
+export interface MapCamera {
+  center: [number, number]
+  zoom: number
 }
 export interface MapPoint {
   kind?: 'restaurant' | 'amap'
@@ -33,10 +40,13 @@ export interface MapFocus {
 }
 export interface MapPoints {
   points: MapPoint[]
+  /** 与点位同序的完整卡片集合，不能另查目录分页来拼接本轮结果。 */
+  records: RestaurantReadModel[]
   matchedCount: number
   returnedCount: number
   limit: number
   truncated: boolean
+  search?: { engine: 'ES' | 'MYSQL'; effectiveSort: string }
 }
 
 /** 请求显式快照及取消信号；地图点位不携带列表分页，保留服务端上限及计数。 */
@@ -45,7 +55,9 @@ export async function fetchMapPoints(
   bounds: MapBounds,
   signal?: AbortSignal,
 ): Promise<MapPoints> {
-  const response = await httpClient.get<ApiResponse<MapPoints>>('/api/restaurants/map-points', {
+  const response = await httpClient.get<
+    ApiResponse<Omit<MapPoints, 'records'> & { records: RestaurantResponse[] }>
+  >('/api/restaurants/map-points', {
     params: {
       ...filters,
       ...bounds,
@@ -56,6 +68,7 @@ export async function fetchMapPoints(
   })
   return {
     ...response.data.data,
+    records: response.data.data.records.map(toRestaurantModel),
     points: response.data.data.points.map((point) => ({
       ...point,
       score:

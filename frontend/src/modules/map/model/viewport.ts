@@ -1,30 +1,34 @@
 import { computed, onScopeDispose, ref, watch } from 'vue'
-import {
-  fetchRestaurants,
-  type CatalogFilters,
-  type RestaurantReadModel,
-} from '@/modules/restaurant'
+import type { CatalogFilters, RestaurantReadModel } from '@/modules/restaurant'
 import { fetchMapPoints, type MapBounds, type MapPoint } from '../api/mapApi'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 
-/** 地图会话状态：分页只更新列表，移动/筛选同时更新点位；成功后原子替换，失败保留并标记旧结果。 */
-export function useViewport(filters: CatalogFilters, enabled = true) {
-  const bounds = ref<MapBounds>()
-  const page = ref(1),
-    total = ref(0),
-    pages = ref(1)
-  const rows = ref<RestaurantReadModel[]>([]),
-    points = ref<MapPoint[]>([])
-  // 只有当前筛选成功完成后，空结果才可用于展示新店投稿入口。
-  const successfulFilters = ref('')
-  const searchNotice = ref('')
+/** 恢复公开候选资料供页面立即呈现，返回后仍按保存的范围重新验证。 */
+export interface ViewportSnapshot {
+  bounds?: MapBounds
+  total: number
+  rows: RestaurantReadModel[]
+  points: MapPoint[]
+  truncated: boolean
+  searchNotice: string
+  error: string | null
+}
+
+/** 地图范围决定候选集：单次响应原子更新点位和卡片，搜索、筛选均不脱离该范围。 */
+export function useViewport(filters: CatalogFilters, enabled = true, initial?: ViewportSnapshot) {
+  const bounds = ref<MapBounds | undefined>(initial?.bounds)
+  const total = ref(initial?.total ?? 0)
+  const rows = ref<RestaurantReadModel[]>(initial?.rows ?? []),
+    points = ref<MapPoint[]>(initial?.points ?? [])
+  const successfulKey = ref('')
+  const searchNotice = ref(initial?.searchNotice ?? '')
   const loading = ref(false),
-    error = ref<string | null>(null),
-    truncated = ref(false)
+    error = ref<string | null>(initial?.error ?? null),
+    truncated = ref(initial?.truncated ?? false)
   let sequence = 0,
     controller: AbortController | undefined,
     timer: ReturnType<typeof setTimeout> | undefined
-  let loadedKey = ''
+  const currentKey = () => JSON.stringify([filters, bounds.value])
   function cancel() {
     sequence++
     controller?.abort()
@@ -34,81 +38,50 @@ export function useViewport(filters: CatalogFilters, enabled = true) {
   async function load() {
     if (!enabled) return
     cancel()
+    // SDK尚未提供范围时保持空状态；失败也不偷偷改成全站目录。
+    if (!bounds.value) return
     const ticket = sequence,
-      filterKey = JSON.stringify(filters),
+      key = currentKey(),
       snapshot = { ...filters },
-      searching = Boolean(snapshot.keyword.trim()),
-      area = !searching && bounds.value ? { ...bounds.value } : undefined
-    // 类型及用餐方式由后端统一过滤，列表与点位使用同一份条件快照。
-    // 无用户位置时等待授权，清掉旧点位，避免继续呈现其他排序的结果。
+      area = { ...bounds.value }
     if (snapshot.sort === 'distance' && (snapshot.latitude == null || snapshot.longitude == null)) {
       rows.value = []
       points.value = []
       total.value = 0
-      pages.value = 1
-      loadedKey = ''
+      truncated.value = false
+      successfulKey.value = ''
+      searchNotice.value = ''
+      error.value = null
       return
     }
-    const key = JSON.stringify([snapshot, area])
-    const reloadPoints = key !== loadedKey
     controller = new AbortController()
     const signal = controller.signal
     loading.value = true
     error.value = null
-    searchNotice.value = ''
     try {
-      const [result, markers] = await Promise.all([
-        fetchRestaurants(snapshot, page.value, 8, signal, area),
-        area && reloadPoints ? fetchMapPoints(snapshot, area, signal) : Promise.resolve(null),
-      ])
+      const result = await fetchMapPoints(snapshot, area, signal)
       if (ticket !== sequence || signal.aborted) return
-      if (page.value > Math.max(1, result.accessiblePages ?? result.totalPages)) {
-        page.value = Math.max(1, result.accessiblePages ?? result.totalPages)
-        void load()
-        return
-      }
       rows.value = result.records
-      total.value = result.total
-      pages.value = Math.max(1, result.accessiblePages ?? result.totalPages)
-      searchNotice.value = result.search && result.search.engine === 'MYSQL' && searching
-        ? '当前使用基础关键词匹配。' + (result.search.effectiveSort === 'score' ? '按综合评分排序。' : '')
-        : ''
-      if (result.accessiblePages !== undefined && result.accessiblePages < result.totalPages)
-        searchNotice.value += '结果较多，仅开放前10000条的分页，请缩小筛选范围。'
-      if (searching) {
-        // 全站搜索只画当前页的真实结果，不把当前地图框作为搜索条件。
-        points.value = result.records.flatMap((row) =>
-          !row.needsLocation && row.longitude !== null && row.latitude !== null
-            ? [
-                {
-                  id: row.id,
-                  name: row.name,
-                  longitude: row.longitude,
-                  latitude: row.latitude,
-                  score: row.score,
-                  pricePerPerson: row.price,
-                  businessStatus: row.closed ? ('CLOSED' as const) : ('OPERATING' as const),
-                },
-              ]
-            : [],
-        )
-        truncated.value = false
-      } else if (markers) {
-        points.value = markers.points
-        truncated.value = markers.truncated
-      }
-      loadedKey = key
-      successfulFilters.value = filterKey
+      points.value = result.points
+      total.value = result.matchedCount
+      truncated.value = result.truncated
+      searchNotice.value =
+        result.search?.engine === 'MYSQL' && snapshot.keyword.trim()
+          ? '当前在地图范围内使用基础关键词匹配。' +
+            (result.search.effectiveSort === 'score' ? '按综合口碑分排序。' : '')
+          : ''
+      successfulKey.value = key
     } catch (reason) {
       if (ticket === sequence && !signal.aborted) error.value = toErrorMessage(reason)
     } finally {
       if (ticket === sequence) loading.value = false
     }
   }
-  /** moveend和zoomend通常连续到达，合并相同范围，立即使旧响应失效，300ms后只查询最后范围。 */
+  /** 连续地图事件合并为300ms后的最后范围；防抖等待期间也立即废弃旧响应。 */
   function schedule() {
     if (!enabled) return
     cancel()
+    if (!bounds.value) return
     loading.value = true
     timer = setTimeout(() => {
       void load()
@@ -116,32 +89,24 @@ export function useViewport(filters: CatalogFilters, enabled = true) {
   }
   function move(area: MapBounds) {
     if (JSON.stringify(area) === JSON.stringify(bounds.value)) return
-    bounds.value = area
-    // 搜索时仍记住最新视野供清空搜索后浏览，但移动不重搜、不重置搜索分页。
-    if (filters.keyword.trim()) return
-    page.value = 1
+    bounds.value = { ...area }
     schedule()
   }
-  watch(
-    filters,
-    () => {
-      page.value = 1
-      schedule()
-    },
-    { deep: true, flush: 'sync' },
-  )
-  function goToPage(value: number) {
-    if (!loading.value && value >= 1 && value <= pages.value) {
-      page.value = value
-      void load()
-    }
-  }
+  watch(filters, schedule, { deep: true, flush: 'sync' })
   onScopeDispose(cancel)
   return {
+    /** 不缓存loading、定时器或请求控制器；未完成的查询在返回时使用新序号重发。 */
+    snapshot: (): ViewportSnapshot => ({
+      bounds: bounds.value && { ...bounds.value },
+      total: total.value,
+      rows: rows.value,
+      points: points.value,
+      truncated: truncated.value,
+      searchNotice: searchNotice.value,
+      error: error.value,
+    }),
     bounds,
-    page,
     total,
-    pages,
     rows,
     points,
     loading,
@@ -150,8 +115,7 @@ export function useViewport(filters: CatalogFilters, enabled = true) {
     truncated,
     move,
     load,
-    goToPage,
     stale: computed(() => Boolean(error.value) || loading.value),
-    resultsCurrent: computed(() => successfulFilters.value === JSON.stringify(filters)),
+    resultsCurrent: computed(() => successfulKey.value === currentKey()),
   }
 }

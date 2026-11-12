@@ -382,31 +382,43 @@ class RestaurantSearchQueryIntegrationTest {
     /** 真实ES按八位口碑分排序，热度按条数；核对分页、地图和SQL降级的同一契约。 */
     @Test
     void reputationAndHeatSortsStayOnEsAndAgreeWithSql() throws Exception {
-        jdbc.update("UPDATE restaurants SET latitude=30.75,longitude=103.93004,needs_location=FALSE WHERE id=103");
+        jdbc.update(
+                "UPDATE restaurants SET latitude=30.75,longitude=103.93004,needs_location=FALSE"
+                    + " WHERE id=103");
         rating(101, 10000, 9234, "82400");
         rating(102, 100000, 92349, "824900");
         rating(103, 10000, 9235, "82500");
         rating(104, 1, 0, "0");
         publish(List.of(101L, 102L, 103L, 104L));
         for (String sort : List.of("score", "reviews", "recommend")) {
-            var expected = sort.equals("score") ? List.of("103", "102", "101", "104", "106")
-                    : List.of("102", "101", "103", "104", "106");
+            var expected =
+                    sort.equals("score")
+                            ? List.of("103", "102", "101", "104", "106")
+                            : List.of("102", "101", "103", "104", "106");
             var q = query("咖啡");
             q.setSort(sort);
             var es = queries.list(q);
             assertThat(es.getSearch().getEngine()).isEqualTo("ES");
-            assertThat(es.getRecords()).extracting(r -> r.getId()).containsExactlyElementsOf(expected);
+            assertThat(es.getRecords())
+                    .extracting(r -> r.getId())
+                    .containsExactlyElementsOf(expected);
             var sql = mysql.list(q);
-            assertThat(es.getRecords()).extracting(r -> r.getReputationScore())
-                    .containsExactlyElementsOf(sql.getRecords().stream().map(r -> r.getReputationScore()).toList());
+            assertThat(es.getRecords())
+                    .extracting(r -> r.getReputationScore())
+                    .containsExactlyElementsOf(
+                            sql.getRecords().stream().map(r -> r.getReputationScore()).toList());
             assertThat(es.getRecords().getLast().getReputationScore()).isNull();
             q.setPageSize(1);
             q.setPage(3);
-            assertThat(queries.list(q).getRecords()).extracting(r -> r.getId()).containsExactly(expected.get(2));
+            assertThat(queries.list(q).getRecords())
+                    .extracting(r -> r.getId())
+                    .containsExactly(expected.get(2));
             bounds(q, "103", "105", "30", "32");
             var map = queries.mapPoints(q);
             assertThat(map.getSearch().getEngine()).isEqualTo("ES");
-            assertThat(map.getPoints()).extracting(r -> r.getId()).containsExactlyElementsOf(expected);
+            assertThat(map.getPoints())
+                    .extracting(r -> r.getId())
+                    .containsExactlyElementsOf(expected);
             q.setKeyword("清水河咖啡");
             q.setPage(1);
             assertThat(queries.list(q).getSearch().getEngine()).isEqualTo("ES");
@@ -419,9 +431,12 @@ class RestaurantSearchQueryIntegrationTest {
             var fallback = queries.list(q);
             assertThat(fallback.getSearch().isDegraded()).isTrue();
             assertThat(fallback.getSearch().getEffectiveSort()).isEqualTo(sort);
-            assertThat(fallback.getRecords()).extracting(r -> r.getId())
-                    .containsExactlyElementsOf(sort.equals("score") ? List.of("103", "102", "101", "104", "106")
-                            : List.of("102", "101", "103", "104", "106"));
+            assertThat(fallback.getRecords())
+                    .extracting(r -> r.getId())
+                    .containsExactlyElementsOf(
+                            sort.equals("score")
+                                    ? List.of("103", "102", "101", "104", "106")
+                                    : List.of("102", "101", "103", "104", "106"));
         }
     }
 
@@ -435,7 +450,14 @@ class RestaurantSearchQueryIntegrationTest {
                 participants,
                 recommended,
                 sum);
-        jdbc.update("UPDATE restaurant_review_statistics SET taste_sum=?,value_sum=?,service_sum=?,ambience_sum=? WHERE restaurant_id=?", sum, sum, sum, sum, id);
+        jdbc.update(
+                "UPDATE restaurant_review_statistics SET"
+                    + " taste_sum=?,value_sum=?,service_sum=?,ambience_sum=? WHERE restaurant_id=?",
+                sum,
+                sum,
+                sum,
+                sum,
+                id);
         jdbc.update("UPDATE restaurants SET search_projection_version=2 WHERE id=?", id);
     }
 
@@ -535,6 +557,10 @@ class RestaurantSearchQueryIntegrationTest {
         assertThat(list.getRecords()).hasSize(8);
         assertThat(map.getMatchedCount()).isEqualTo(105);
         assertThat(map.getPoints()).hasSize(100);
+        assertThat(map.getRecords()).hasSize(100);
+        assertThat(map.getRecords())
+                .extracting(r -> r.getId())
+                .containsExactlyElementsOf(map.getPoints().stream().map(p -> p.getId()).toList());
         assertThat(map.isTruncated()).isTrue();
     }
 

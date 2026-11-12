@@ -15,6 +15,8 @@ vi.mock('../api/restaurantAlbumApi', () => ({
   fetchRestaurantAlbum: vi.fn(),
   fetchRestaurantAlbumImage: vi.fn(),
 }))
+// 返回入口只依赖路由来源；管理操作的离开确认由其独立路由测试覆盖。
+vi.mock('./RestaurantManagementActions.vue', () => ({ default: { render: () => null } }))
 // 只模拟发布确认事件，验证详情统计生命周期；真实发布/回复由各自的集成测试覆盖。
 vi.mock('@/modules/review', async () => {
   const { defineComponent, h } = await import('vue')
@@ -47,7 +49,10 @@ describe('restaurant detail API integration', () => {
   const currentId = ref(restaurantFixture.id)
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: ['/'].map((path) => ({ path, component: { template: '<div />' } })),
+    routes: ['/', '/map', '/restaurants/:id', '/:pathMatch(.*)*'].map((path) => ({
+      path,
+      component: { template: '<div />' },
+    })),
   })
   const settle = async () => {
     for (let i = 0; i < 6; i++) await nextTick()
@@ -134,6 +139,33 @@ describe('restaurant detail API integration', () => {
     expect(host.querySelector('.share-button')).toBeNull()
     expect(host.querySelector('.manual-copy')).toBeNull()
     expect(host.querySelector('.location-links a')?.textContent).toContain('在高德中打开')
+  })
+  it('地图入口显示返回并回到地图，普通入口仍返回首页', async () => {
+    await router.push({ path: `/restaurants/${restaurantFixture.id}`, query: { from: 'map' } })
+    await mount()
+    const link = host.querySelector<HTMLAnchorElement>('.detail-breadcrumb a')!
+    expect(link.textContent).toBe('← 返回')
+    expect(link.getAttribute('href')).toBe('/map')
+    await new Promise<void>((resolve) => {
+      const stop = router.afterEach(() => {
+        stop()
+        resolve()
+      })
+      link.click()
+    })
+    await settle()
+    expect(router.currentRoute.value.path).toBe('/map')
+    await router.push(`/restaurants/${restaurantFixture.id}`)
+    await settle()
+    expect(host.querySelector('.detail-breadcrumb a')?.textContent).toBe('← 返回首页')
+  })
+  it('地图来源的临时故障仍提供返回地图入口', async () => {
+    await router.push({ path: `/restaurants/${restaurantFixture.id}`, query: { from: 'map' } })
+    vi.mocked(fetchRestaurant).mockRejectedValueOnce(new Error('offline'))
+    await mount()
+    const link = host.querySelector<HTMLAnchorElement>('.missing-restaurant a')!
+    expect(link.textContent).toBe('返回')
+    expect(link.getAttribute('href')).toBe('/map')
   })
 
   it('ignores the previous restaurant response after switching routes', async () => {

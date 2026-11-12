@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.ginkgo.foodmap.restaurant.dto.RestaurantListQuery;
 import com.ginkgo.foodmap.restaurant.mapper.RestaurantCatalogMapper;
+import com.ginkgo.foodmap.restaurant.vo.RestaurantMapPointsVo;
 import com.ginkgo.foodmap.security.TestJwtKeys;
 import com.ginkgo.foodmap.security.service.LoginSessionService;
 
@@ -31,6 +32,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +42,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -103,11 +106,12 @@ class RestaurantReadApiIntegrationTest {
         insert(107, "百分%_!\\测试", "OTHER", null, "UNKNOWN", null, null, null, "OPERATING");
         insert(9007199254740993L, "Z大ID", "OTHER", null, "UNKNOWN", null, null, null, "OPERATING");
         jdbc.update(
-                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6), delete_reason_code='SYSTEM' WHERE id=106");
+                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),"
+                        + " delete_reason_code='SYSTEM' WHERE id=106");
         jdbc.update("UPDATE restaurants SET created_by=42, updated_by=43 WHERE id=101");
         jdbc.update(
                 "INSERT INTO restaurant_tags(restaurant_id,tag,position) VALUES "
-                        + "(101,'招牌',0),(101,'测试搜索',1),(101,'测试组合',2),(102,'测试搜索',0),(106,'仅删除命中',0)");
+                    + "(101,'招牌',0),(101,'测试搜索',1),(101,'测试组合',2),(102,'测试搜索',0),(106,'仅删除命中',0)");
     }
 
     /** 并发快照测试不用外层事务，其余测试回滚；此处只清理专属随机库中的夹具。 */
@@ -364,8 +368,9 @@ class RestaurantReadApiIntegrationTest {
                                 try (Connection writer = connect(database);
                                         Statement statement = writer.createStatement()) {
                                     statement.executeUpdate(
-                                            "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6), "
-                                                    + "delete_reason_code='SYSTEM' WHERE id=101");
+                                            "UPDATE restaurants SET"
+                                                    + " deleted_at=CURRENT_TIMESTAMP(6),"
+                                                    + " delete_reason_code='SYSTEM' WHERE id=101");
                                     statement.executeUpdate(
                                             "DELETE FROM restaurant_tags WHERE restaurant_id=101");
                                 }
@@ -516,8 +521,11 @@ class RestaurantReadApiIntegrationTest {
                                 try (Connection writer = connect(database);
                                         Statement statement = writer.createStatement()) {
                                     statement.executeUpdate(
-                                            "UPDATE restaurant_review_statistics SET review_count=2, participant_count=2, "
-                                                    + "overall_score_sum=9, taste_sum=9, value_sum=9, service_sum=9, ambience_sum=9 WHERE restaurant_id=101");
+                                            "UPDATE restaurant_review_statistics SET"
+                                                + " review_count=2, participant_count=2,"
+                                                + " overall_score_sum=9, taste_sum=9, value_sum=9,"
+                                                + " service_sum=9, ambience_sum=9 WHERE"
+                                                + " restaurant_id=101");
                                 }
                             }
                             return total;
@@ -664,6 +672,10 @@ class RestaurantReadApiIntegrationTest {
                 .andExpect(jsonPath("$.data.matchedCount").value(2))
                 .andExpect(jsonPath("$.data.returnedCount").value(2))
                 .andExpect(jsonPath("$.data.points[0].id").value("101"))
+                .andExpect(result -> assertMapIds(result, List.of("101", "102")))
+                .andExpect(jsonPath("$.data.records[0].address").value("清水河Alpha路"))
+                .andExpect(jsonPath("$.data.records[0].tags[0]").value("招牌"))
+                .andExpect(jsonPath("$.data.records[0].createdBy").doesNotExist())
                 .andExpect(jsonPath("$.data.truncated").value(false))
                 .andExpect(jsonPath("$.data.points[0].createdBy").doesNotExist());
         mvc.perform(
@@ -784,8 +796,9 @@ class RestaurantReadApiIntegrationTest {
             String service,
             String ambience) {
         jdbc.update(
-                "INSERT INTO restaurant_review_statistics(restaurant_id,review_count,participant_count,recommend_count,"
-                        + "overall_score_sum,taste_sum,value_sum,service_sum,ambience_sum) VALUES(?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO"
+                    + " restaurant_review_statistics(restaurant_id,review_count,participant_count,recommend_count,overall_score_sum,taste_sum,value_sum,service_sum,ambience_sum)"
+                    + " VALUES(?,?,?,?,?,?,?,?,?)",
                 id,
                 reviews,
                 participants,
@@ -874,8 +887,9 @@ class RestaurantReadApiIntegrationTest {
             Double longitude,
             String businessStatus) {
         jdbc.update(
-                "INSERT INTO restaurants(id,name,category_code,price_per_person,price_kind,address,latitude,longitude,"
-                        + "needs_location,business_status) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO"
+                    + " restaurants(id,name,category_code,price_per_person,price_kind,address,latitude,longitude,needs_location,business_status)"
+                    + " VALUES (?,?,?,?,?,?,?,?,?,?)",
                 id,
                 name,
                 category,
@@ -993,22 +1007,47 @@ class RestaurantReadApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.matchedCount").value(105))
                 .andExpect(jsonPath("$.data.returnedCount").value(100))
+                .andExpect(jsonPath("$.data.records.length()").value(100))
+                .andExpect(
+                        result ->
+                                assertMapIds(
+                                        result,
+                                        java.util.stream.IntStream.range(1000, 1100)
+                                                .mapToObj(Integer::toString)
+                                                .toList()))
                 .andExpect(jsonPath("$.data.truncated").value(true));
+    }
+
+    /** 将真实HTTP响应反序列化后逐项比较，不依赖JSONPath通配符的集合转换行为。 */
+    private void assertMapIds(MvcResult result, List<String> ids) throws Exception {
+        var data = json.readTree(result.getResponse().getContentAsString()).get("data");
+        var batch = json.treeToValue(data, RestaurantMapPointsVo.class);
+        assertThat(batch.getRecords())
+                .extracting(row -> row.getId())
+                .containsExactlyElementsOf(ids);
+        assertThat(batch.getPoints())
+                .extracting(point -> point.getId())
+                .containsExactlyElementsOf(ids);
     }
 
     private void diningFixtures() {
         jdbc.update(
-                "UPDATE restaurants SET restaurant_type='CANTEEN',category_code=NULL WHERE id IN (102,103,106)");
+                "UPDATE restaurants SET restaurant_type='CANTEEN',category_code=NULL WHERE id IN"
+                        + " (102,103,106)");
         jdbc.update(
-                "UPDATE restaurants SET supports_dine_in=TRUE,supports_delivery=FALSE WHERE id=101");
+                "UPDATE restaurants SET supports_dine_in=TRUE,supports_delivery=FALSE WHERE"
+                        + " id=101");
         jdbc.update(
-                "UPDATE restaurants SET supports_dine_in=TRUE,supports_delivery=TRUE WHERE id IN (102,106)");
+                "UPDATE restaurants SET supports_dine_in=TRUE,supports_delivery=TRUE WHERE id IN"
+                        + " (102,106)");
         jdbc.update(
-                "UPDATE restaurants SET supports_dine_in=FALSE,supports_delivery=NULL WHERE id=103");
+                "UPDATE restaurants SET supports_dine_in=FALSE,supports_delivery=NULL WHERE"
+                        + " id=103");
         jdbc.update(
                 "UPDATE restaurants SET supports_dine_in=NULL,supports_delivery=TRUE WHERE id=104");
         jdbc.update(
-                "UPDATE restaurants SET supports_dine_in=FALSE,supports_delivery=FALSE WHERE id=105");
+                "UPDATE restaurants SET supports_dine_in=FALSE,supports_delivery=FALSE WHERE"
+                        + " id=105");
     }
 
     /** 必须显式指定回环端口，不能误用业务URL或从开发配置读取数据库凭据。 */

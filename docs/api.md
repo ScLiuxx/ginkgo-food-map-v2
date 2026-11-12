@@ -375,7 +375,9 @@ reason必填，DTO最多200个UTF-16单元，去Unicode首尾空白后不能为�
 
 `GET /api/restaurants/{id}`成功200，data为上述单条餐厅；不存在/已删除404 `RESTAURANT_NOT_FOUND`，停业可读。详情没有用户查询原点，distanceKm为null。
 
-`GET /api/restaurants/map-points`必须提供四个视口边界，其他筛选及排序与目录相同。page/pageSize不扩大点位数量，固定最多100条。data为`{points,matchedCount,returnedCount,limit:100,truncated,search}`，points包含id/name/latitude/longitude/score/pricePerPerson/businessStatus；matchedCount为完整符合条件数量，truncated表示未全部返回。恰好100条且无更多结果时为false。
+`GET /api/restaurants/map-points`允许匿名读取，必须提供四个视口边界，其他筛选及排序与目录相同；关键词也在视口内匹配。page/pageSize不改变候选集合，固定最多100家。data为`{points,records,matchedCount,returnedCount,limit:100,truncated,search}`：points包含id/name/latitude/longitude/score/reputationScore/pricePerPerson/businessStatus；records使用上述公开餐厅结构，包含标签、距离及正式封面，和points逐项同ID、同顺序，两者长度均为returnedCount。无结果时两数组为空。matchedCount为完整符合条件数量，truncated表示未全部返回；恰好100家且无更多结果时为false。前端明确显示完整数量和当前展示数量，不把截断集合称为全部。
+
+同一响应由同一批已确认坐标的店铺生成点位及卡片；SQL路径在一个RR只读快照中读取计数、店铺、标签与封面，ES关键词路径沿用版本回查与整次SQL降级规则。地图页仅使用本接口，不再并行查询目录分页或混入高德全城地点搜索；普通首页目录及投稿选址的地点搜索仍按原入口使用。用户移动/缩放地图后300毫秒防抖更新，关键词和筛选保留；程序点选定位、面板展开及卡片滚动不发起新范围查询。SDK尚未提供有效范围时不查询全站，失败保留并标明上次地图和卡片结果。HTTP成功200，只读，无新数据表或迁移。
 
 无视口400 `RESTAURANT_INVALID_INPUT`；缺边、非法范围/参数400 `COMMON_VALIDATION_FAILED`。查询不会访问高德或写入资料。
 

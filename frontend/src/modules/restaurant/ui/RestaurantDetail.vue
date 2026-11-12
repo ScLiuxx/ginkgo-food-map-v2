@@ -12,7 +12,7 @@ import { fetchWindow } from '../api/canteenWindowApi'
 import type { RestaurantReadModel } from '../model/restaurant.types'
 import { priceLabel, ratingDimensions } from '../model/catalog.logic'
 import StarScore from '@/shared/ui/StarScore.vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { diningDetails } from '../model/campusDining'
 import CanteenWindows from './CanteenWindows.vue'
 import RestaurantManagementActions from './RestaurantManagementActions.vue'
@@ -27,6 +27,26 @@ const isWindow = computed(() => dining.value?.kind === 'window')
 const navigation = computed(() => (restaurant.value ? navigationUrl(restaurant.value) : null))
 const failedDishes = ref<string[]>([])
 const route = useRoute()
+const router = useRouter()
+const fromMap = computed(() => route.query.from === 'map')
+const backTarget = computed(() => (fromMap.value ? '/map' : '/'))
+/** 地图入口显式标记来源；普通点击回到原历史条目，直达/新标签页则安全返回站内地图。
+ * 保留修饰键和新标签页打开链接的行为，不把用户提供的任意地址作为返回目标。
+ */
+function returnToMap(event: globalThis.MouseEvent) {
+  if (
+    !fromMap.value ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  )
+    return
+  event.preventDefault()
+  if (router.options.history.state.back === '/map') router.back()
+  else void router.replace('/map')
+}
 const displayScore = computed(() => restaurant.value?.score ?? null)
 /** 返回链接只使用真实父食堂ID；筛选来自窗口入口快照，直达窗口时回到其所属楼层。 */
 const parentLink = computed(() => ({
@@ -134,7 +154,9 @@ onUnmounted(() => {
       <h1>餐厅资料暂时无法加载。</h1>
       <p>{{ error }}</p>
       <button type="button" class="primary-action" @click="loadDetail">重新加载</button>
-      <RouterLink to="/">返回首页</RouterLink>
+      <RouterLink :to="backTarget" @click.capture="returnToMap">{{
+        fromMap ? '返回' : '返回首页'
+      }}</RouterLink>
     </section>
     <article
       v-else-if="restaurant && dining"
@@ -147,7 +169,9 @@ onUnmounted(() => {
           >← 返回 {{ dining.parent.name
           }}<template v-if="dining.floor">（{{ dining.floor }}）</template></RouterLink
         >
-        <RouterLink v-else to="/">← 返回首页</RouterLink>
+        <RouterLink v-else :to="backTarget" @click.capture="returnToMap">{{
+          fromMap ? '← 返回' : '← 返回首页'
+        }}</RouterLink>
       </nav>
 
       <header class="detail-hero" :class="{ 'canteen-hero': isCanteen }">
@@ -305,7 +329,9 @@ onUnmounted(() => {
     <section v-else class="missing-restaurant" aria-labelledby="missing-title">
       <h1 id="missing-title">没有找到这家店。</h1>
       <p>餐厅可能已删除或链接有误，回去看看其他好味道吧。</p>
-      <RouterLink class="primary-action" to="/">返回餐厅目录</RouterLink>
+      <RouterLink class="primary-action" :to="backTarget" @click.capture="returnToMap">{{
+        fromMap ? '返回' : '返回餐厅目录'
+      }}</RouterLink>
     </section>
   </div>
 </template>

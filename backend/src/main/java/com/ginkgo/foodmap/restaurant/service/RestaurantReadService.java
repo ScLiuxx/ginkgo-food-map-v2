@@ -115,33 +115,11 @@ public class RestaurantReadService {
         return page;
     }
 
-    /** 地图也回查同一版本及硬条件，保留100点限制；不复用分页列表的前8条冒充地图集合。 */
+    /** ES候选经同一RR快照核对后，同时生成地图与列表，避免两次查询产生不同集合。 */
     public RestaurantMapPointsVo searchMap(
             RestaurantListQuery query, RestaurantSearchResult result) {
         var rows = currentSearchRows(query, result);
-        var points =
-                rows.stream()
-                        .map(
-                                row -> {
-                                    var point = new RestaurantMapPointVo();
-                                    point.setId(row.getId().toString());
-                                    point.setName(row.getName());
-                                    point.setLatitude(row.getLatitude());
-                                    point.setLongitude(row.getLongitude());
-                                    point.setScore(row.getScore());
-                                    point.setReputationScore(row.getReputationScore());
-                                    point.setPricePerPerson(row.getPricePerPerson());
-                                    point.setBusinessStatus(row.getBusinessStatus());
-                                    return point;
-                                })
-                        .toList();
-        var response = new RestaurantMapPointsVo();
-        response.setPoints(points);
-        response.setMatchedCount(result.getTotal());
-        response.setReturnedCount(points.size());
-        response.setLimit(100);
-        response.setTruncated(result.getTotal() > points.size());
-        return response;
+        return mapResponse(rows, result.getTotal());
     }
 
     private List<RestaurantEntity> currentSearchRows(
@@ -178,7 +156,7 @@ public class RestaurantReadService {
                 .toList();
     }
 
-    /** 地图必须显式指定完整视口，COUNT与点位保持同一事务快照，不加载无用标签。 */
+    /** 地图必须指定完整视口；计数、店铺、标签和封面均在同一只读事务快照内读取。 */
     public RestaurantMapPointsVo mapPoints(RestaurantListQuery query) {
         if (query.getWest() == null
                 || query.getEast() == null
@@ -188,26 +166,42 @@ public class RestaurantReadService {
             throw new BusinessException(RestaurantErrorCode.INVALID_INPUT);
         }
         long count = mapper.countVisible(query);
+        var rows = count == 0 ? List.<RestaurantEntity>of() : mapper.selectMapPoints(query);
+        return mapResponse(rows, count);
+    }
+
+    /** 只对同一批至多100家店批量补充资料；points由records派生，身份、顺序和评分不会漂移。 */
+    private RestaurantMapPointsVo mapResponse(List<RestaurantEntity> rows, long count) {
+        var tags = tagsFor(rows);
+        var covers = albums.covers(rows.stream().map(RestaurantEntity::getId).toList());
+        var records =
+                rows.stream()
+                        .map(
+                                row -> {
+                                    var vo = toVo(row, tags.getOrDefault(row.getId(), List.of()));
+                                    vo.setCoverPhoto(covers.get(row.getId()));
+                                    return vo;
+                                })
+                        .toList();
         var points =
-                count == 0
-                        ? List.<RestaurantMapPointVo>of()
-                        : mapper.selectMapPoints(query).stream()
-                                .map(
-                                        row -> {
-                                            var point = new RestaurantMapPointVo();
-                                            point.setId(row.getId().toString());
-                                            point.setName(row.getName());
-                                            point.setLatitude(row.getLatitude());
-                                            point.setLongitude(row.getLongitude());
-                                            point.setScore(row.getScore());
+                records.stream()
+                        .map(
+                                row -> {
+                                    var point = new RestaurantMapPointVo();
+                                    point.setId(row.getId());
+                                    point.setName(row.getName());
+                                    point.setLatitude(row.getLatitude());
+                                    point.setLongitude(row.getLongitude());
+                                    point.setScore(row.getScore());
                                     point.setReputationScore(row.getReputationScore());
-                                            point.setPricePerPerson(row.getPricePerPerson());
-                                            point.setBusinessStatus(row.getBusinessStatus());
-                                            return point;
-                                        })
-                                .toList();
+                                    point.setPricePerPerson(row.getPricePerPerson());
+                                    point.setBusinessStatus(row.getBusinessStatus());
+                                    return point;
+                                })
+                        .toList();
         var response = new RestaurantMapPointsVo();
         response.setPoints(points);
+        response.setRecords(records);
         response.setMatchedCount(count);
         response.setReturnedCount(points.size());
         response.setLimit(100);
