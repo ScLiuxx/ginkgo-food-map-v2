@@ -112,7 +112,7 @@ class RestaurantSearchQueryIntegrationTest {
         properties.setIndexAlias(index + "-alias");
         String definition;
         try (var stream =
-                getClass().getResourceAsStream("/elasticsearch/restaurant-search-v003.json")) {
+                getClass().getResourceAsStream("/elasticsearch/restaurant-search-v004.json")) {
             var mapping = json.readValue(stream, Map.class);
             mapping.remove("aliases");
             definition = json.writeValueAsString(mapping);
@@ -379,64 +379,49 @@ class RestaurantSearchQueryIntegrationTest {
                 .containsExactly("103", "104");
     }
 
-    /** 一位小数后的同分以ID排序；含舍入临界值、未知/零、全局分页及SQL降级一致性。 */
+    /** 真实ES按八位口碑分排序，热度按条数；核对分页、地图和SQL降级的同一契约。 */
     @Test
-    void roundedRatingSortsStayOnEsAndAgreeWithSql() throws Exception {
-        jdbc.update(
-                "UPDATE restaurants SET latitude=30.75,longitude=103.93004,needs_location=FALSE"
-                        + " WHERE id=103");
-        rating(101, 10000, 9234, "82400"); // 8.24 -> 8.2，92.34% -> 92.3%
-        rating(102, 100000, 92349, "824900"); // 更高尾数仍同档，不能排到较小ID前面。
-        rating(103, 10000, 9235, "82500"); // 8.25 -> 8.3，92.35% -> 92.4%
-        rating(104, 1, 0, "0"); // 真实零应排在未知106之前。
+    void reputationAndHeatSortsStayOnEsAndAgreeWithSql() throws Exception {
+        jdbc.update("UPDATE restaurants SET latitude=30.75,longitude=103.93004,needs_location=FALSE WHERE id=103");
+        rating(101, 10000, 9234, "82400");
+        rating(102, 100000, 92349, "824900");
+        rating(103, 10000, 9235, "82500");
+        rating(104, 1, 0, "0");
         publish(List.of(101L, 102L, 103L, 104L));
-        for (String sort : List.of("score", "recommend")) {
+        for (String sort : List.of("score", "reviews", "recommend")) {
+            var expected = sort.equals("score") ? List.of("103", "102", "101", "104", "106")
+                    : List.of("102", "101", "103", "104", "106");
             var q = query("咖啡");
             q.setSort(sort);
             var es = queries.list(q);
             assertThat(es.getSearch().getEngine()).isEqualTo("ES");
-            assertThat(es.getRecords())
-                    .extracting(r -> r.getId())
-                    .containsExactly("103", "101", "102", "104", "106");
-            assertThat(es.getRecords().getFirst().getScore()).isEqualByComparingTo("8.3");
-            assertThat(es.getRecords().getFirst().getRecommendRate()).isEqualByComparingTo("0.924");
-            assertThat(es.getRecords().get(1).getScore()).isEqualByComparingTo("8.2");
-            assertThat(es.getRecords().get(1).getRecommendRate()).isEqualByComparingTo("0.923");
-            assertThat(es.getRecords().getLast().getScore()).isNull();
-            assertThat(es.getRecords())
-                    .extracting(r -> r.getId())
-                    .containsExactlyElementsOf(
-                            mysql.list(q).getRecords().stream().map(r -> r.getId()).toList());
+            assertThat(es.getRecords()).extracting(r -> r.getId()).containsExactlyElementsOf(expected);
+            var sql = mysql.list(q);
+            assertThat(es.getRecords()).extracting(r -> r.getReputationScore())
+                    .containsExactlyElementsOf(sql.getRecords().stream().map(r -> r.getReputationScore()).toList());
+            assertThat(es.getRecords().getLast().getReputationScore()).isNull();
             q.setPageSize(1);
             q.setPage(3);
-            assertThat(queries.list(q).getRecords())
-                    .extracting(r -> r.getId())
-                    .containsExactly("102");
+            assertThat(queries.list(q).getRecords()).extracting(r -> r.getId()).containsExactly(expected.get(2));
             bounds(q, "103", "105", "30", "32");
             var map = queries.mapPoints(q);
             assertThat(map.getSearch().getEngine()).isEqualTo("ES");
-            assertThat(map.getPoints())
-                    .extracting(r -> r.getId())
-                    .containsExactly("103", "101", "102", "104", "106");
-            // 组合词匹配集合不因评分/好评率排序而退回LIKE（SQL此组合只命中101、102）。
+            assertThat(map.getPoints()).extracting(r -> r.getId()).containsExactlyElementsOf(expected);
             q.setKeyword("清水河咖啡");
             q.setPage(1);
-            var combined = queries.list(q);
-            assertThat(combined.getSearch().getEngine()).isEqualTo("ES");
-            assertThat(combined.getTotal()).isEqualTo(4);
-            assertThat(queries.mapPoints(q).getMatchedCount()).isEqualTo(4);
+            assertThat(queries.list(q).getSearch().getEngine()).isEqualTo("ES");
+            assertThat(queries.list(q).getTotal()).isEqualTo(4);
         }
-        // 缺失索引触发真实SQL降级，保留显式排序及相同舍入/ID次序。
         properties.setIndexAlias(index + "-missing");
-        for (String sort : List.of("score", "recommend")) {
+        for (String sort : List.of("score", "reviews", "recommend")) {
             var q = query("咖啡");
             q.setSort(sort);
             var fallback = queries.list(q);
             assertThat(fallback.getSearch().isDegraded()).isTrue();
             assertThat(fallback.getSearch().getEffectiveSort()).isEqualTo(sort);
-            assertThat(fallback.getRecords())
-                    .extracting(r -> r.getId())
-                    .containsExactly("103", "101", "102", "104", "106");
+            assertThat(fallback.getRecords()).extracting(r -> r.getId())
+                    .containsExactlyElementsOf(sort.equals("score") ? List.of("103", "102", "101", "104", "106")
+                            : List.of("102", "101", "103", "104", "106"));
         }
     }
 
@@ -450,6 +435,7 @@ class RestaurantSearchQueryIntegrationTest {
                 participants,
                 recommended,
                 sum);
+        jdbc.update("UPDATE restaurant_review_statistics SET taste_sum=?,value_sum=?,service_sum=?,ambience_sum=? WHERE restaurant_id=?", sum, sum, sum, sum, id);
         jdbc.update("UPDATE restaurants SET search_projection_version=2 WHERE id=?", id);
     }
 

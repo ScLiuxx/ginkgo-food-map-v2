@@ -35,6 +35,19 @@ const { locating, location, message: locationMessage } = storeToRefs(userLocatio
 const locate = userLocation.locate
 let myMarker: SDKMarker | undefined
 let lastLocated: number | undefined
+// 点选餐厅引起的程序定位只改变图面；直到用户主动操作地图，继续保留本轮查询范围。
+let preserveResults = false
+function resumeViewport() {
+  preserveResults = false
+}
+function userKeydown(event: globalThis.KeyboardEvent) {
+  if (
+    ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', '+', '-', '=', 'Enter', ' '].includes(
+      event.key,
+    )
+  )
+    resumeViewport()
+}
 
 /** 本人位置单独管理，餐厅点位刷新不会清掉蓝点，也不会把蓝点当作餐厅。 */
 watch([location, () => props.points], ([position]) => {
@@ -63,7 +76,7 @@ watch([location, () => props.points], ([position]) => {
 
 /** 读取SDK实际视口，经度在前；固定精度避免浮点微动引起相同区域反复查询。 */
 function moved() {
-  if (!map || destroyed) return
+  if (!map || destroyed || preserveResults) return
   const box = map.getBounds() as SDKBounds
   if (!box?.getSouthWest) return
   const sw = box.getSouthWest(),
@@ -129,7 +142,7 @@ async function start() {
       center: [104.02, 30.67],
       zoom: 11,
       viewMode: '2D',
-      // 使用官方底图配色减少道路和标注的饱和度，不改写第三方DOM或版权样式。
+      // 使用官方底图配色；原生版权内容保留，手机端只随面板调整其位置。
       mapStyle: 'amap://styles/whitesmoke',
     })
     map.on('complete', () => {
@@ -156,8 +169,10 @@ watch(() => props.points, draw)
 watch(() => props.selected, highlight)
 /** 搜索结果可在当前视口外，主动点击才移动；悬停和后台搜索不抢走用户视角。 */
 function focusResult() {
-  if (!destroyed && props.focus && map)
+  if (!destroyed && props.focus && map) {
+    preserveResults = props.focus.preserveResults ?? false
     map.setZoomAndCenter(props.focus.zoom ?? 16, [props.focus.longitude, props.focus.latitude])
+  }
 }
 watch(() => props.focus, focusResult)
 onMounted(() => {
@@ -176,7 +191,12 @@ onUnmounted(() => {
 })
 </script>
 <template>
-  <div class="amap-canvas">
+  <div
+    class="amap-canvas"
+    @pointerdown.capture="resumeViewport"
+    @wheel.capture="resumeViewport"
+    @keydown.capture="userKeydown"
+  >
     <div ref="host" class="amap-host" aria-label="高德餐厅地图" />
     <div v-if="error || loading" class="sdk-state" :role="error ? 'alert' : 'status'">
       <h2>{{ error ? '地图暂不可用' : '正在加载高德地图…' }}</h2>

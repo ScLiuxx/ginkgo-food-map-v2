@@ -68,6 +68,34 @@ management:
       show-details: never
 
 app:
+  ranking:
+    # 服务就绪后异步生成四榜，每轮结束后等待1小时；关闭后仍可读取已有快照。
+    generation-enabled: true
+    refresh-interval: 1h
+    # 校区中心均为GCJ-02；清水河沿用原参考点，沙河由历史OSM参考点转换，均为直线5公里。
+    qingshuihe:
+      latitude: 30.754400
+      longitude: 103.931200
+      radius-meters: 5000
+    shahe:
+      latitude: 30.675789
+      longitude: 104.099671
+      radius-meters: 5000
+    # 本机缓存只保存四份不可变榜单；写后30分钟过期，命中不加加载锁。
+    caffeine-enabled: true
+    caffeine-ttl: 30m
+    # 单实例榜单Cache Aside；关闭仅用于MySQL对照或暂时回源，认证Redis不受影响。
+    redis-enabled: true
+    max-snapshot-age: 24h
+    redis-key-prefix: "ginkgo:restaurant-rankings:v1:"
+    redis-ttl: 2h
+    preparing-ttl: 5s
+    lock-wait: 1s
+    redis-command-timeout: 200ms
+    redis-connect-timeout: 200ms
+    repair-delay: 5s
+    repair-attempts: 3
+    repair-cooldown: 1m
   growth:
     # 暂定成长参数随部署生效；旧奖励保留实际amount，不因修改配置回算或重新发放。
     first-review-experience: ${GROWTH_FIRST_REVIEW_EXPERIENCE:5}

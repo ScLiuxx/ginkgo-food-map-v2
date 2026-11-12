@@ -1,10 +1,30 @@
 import type { CatalogFilters, RatingDimension, RestaurantReadModel } from './restaurant.types'
 
-export const ratingDimensions: { key: RatingDimension; label: string; description: string }[] = [
-  { key: 'taste', label: '味道', description: '调味、火候与食材，吃完还想不想再来。' },
-  { key: 'value', label: '性价比', description: '从学生的预算出发，这一餐值不值得。' },
-  { key: 'service', label: '服务', description: '态度、出餐速度，以及用餐中的照顾。' },
-  { key: 'ambience', label: '环境', description: '卫生、座位与噪音，能否舒服吃顿饭。' },
+export const ratingDimensions: {
+  key: RatingDimension
+  label: string
+  description: string
+}[] = [
+  {
+    key: 'taste',
+    label: '味道',
+    description: '调味、火候与食材，吃完还想不想再来。',
+  },
+  {
+    key: 'value',
+    label: '性价比',
+    description: '从学生的预算出发，这一餐值不值得。',
+  },
+  {
+    key: 'service',
+    label: '服务',
+    description: '态度、出餐速度，以及用餐中的照顾。',
+  },
+  {
+    key: 'ambience',
+    label: '环境',
+    description: '卫生、座位与噪音，能否舒服吃顿饭。',
+  },
 ]
 
 /** 以已授权的GCJ-02用户位置计算直线公里数；无原点时仅使用服务器明确返回的距离。 */
@@ -60,7 +80,7 @@ export function filterRestaurants(
   })
   const value = (restaurant: RestaurantReadModel): number | null => {
     if (filters.sort === 'distance') return campusDistance(restaurant)
-    if (filters.sort === 'recommend') return restaurant.recommendRate
+    if (filters.sort === 'recommend') return restaurant.reviewCount
     if (filters.sort === 'reviews') return restaurant.reviewCount
     if (filters.sort === 'price')
       return restaurant.price !== null && restaurant.price > 0 ? restaurant.price : null

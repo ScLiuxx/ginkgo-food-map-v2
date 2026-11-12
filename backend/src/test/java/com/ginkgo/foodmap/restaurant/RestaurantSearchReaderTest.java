@@ -36,8 +36,8 @@ class RestaurantSearchReaderTest {
         assertThat(match.should()).hasSize(4);
         assertThat(match.should())
                 .allSatisfy(term -> assertThat(term.term().value().stringValue()).isEqualTo("𠀀"));
-        assertThat(request.runtimeMappings()).containsKey("queryRating");
-        assertThat(request.sort().getFirst().field().field()).isEqualTo("queryRating");
+        assertThat(request.runtimeMappings()).doesNotContainKey("queryRating");
+        assertThat(request.sort().getFirst().field().field()).isEqualTo("reputationScore");
         q.setSort("relevance");
         assertThat(q.getEffectiveSort()).isEqualTo("relevance");
     }

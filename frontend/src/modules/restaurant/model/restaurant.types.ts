@@ -21,6 +21,8 @@ export interface RestaurantReadModel {
   priceKind: 'estimate' | 'exact' | 'unknown'
   /** 保留接口0–10分，展示时换算为五分制，排序与统计使用原值。 */
   score: number | null
+  /** 服务端五分制口碑分；score为现有星级组件兼容转换后的十分制展示值。 */
+  reputationScore?: number | null
   reviewCount: number
   /** 每账号每店只取最新有效点评，人数不随历史条数增长。 */
   participantCount: number
@@ -37,6 +39,8 @@ export type RestaurantSort =
 
 /** 分类使用服务端稳定编码，所有条件随分页请求提交，不在当前页二次筛选。 */
 export interface CatalogFilters {
+  /** 距离参照点独立于排序；校区选择不会读取用户位置，也不写入账号。 */
+  distanceOrigin?: 'QINGSHUIHE' | 'SHAHE' | 'USER'
   /** GCJ-02用户位置：仅在授权成功后随查询发送，不持久化。 */
   latitude?: number
   longitude?: number

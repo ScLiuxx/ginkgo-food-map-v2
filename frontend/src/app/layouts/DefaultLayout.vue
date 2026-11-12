@@ -25,6 +25,7 @@ watchEffect(() => {
 const detailPage = computed(
   () => /^\/restaurants\/[^/]+$/.test(route.path) && route.path !== '/restaurants/new',
 )
+const mapPage = computed(() => route.path === '/map' || route.path === '/previews/map')
 </script>
 
 <template>
@@ -42,9 +43,13 @@ const detailPage = computed(
       ><button :disabled="auth.loggingOut" @click="auth.signOut">退出当前会话</button></template
     >
   </section>
-  <div v-else class="app-shell">
+  <div
+    v-else
+    class="app-shell"
+    :class="{ 'ranking-shell': route.meta.ranking, 'map-shell': mapPage }"
+  >
     <AppHeader
-      :discovery="route.path === '/' || detailPage"
+      :discovery="route.path === '/' || detailPage || !!route.meta.ranking"
       :authenticated="auth.authenticated"
       :username="auth.user?.username"
       :restoring="auth.restoring"
@@ -60,13 +65,87 @@ const detailPage = computed(
     <BottomNavigation
       v-if="!detailPage"
       :has-unread-notifications="hasUnreadNotifications"
-      :discovery="route.path === '/'"
+      :discovery="route.path === '/' || !!route.meta.ranking"
       :authenticated="auth.authenticated"
     />
   </div>
 </template>
 
 <style scoped>
+/* 手机地图采用单视口布局，底栏参与布局，避免地图和拖动面板落到固定底栏后面。 */
+@media (max-width: 700px) {
+  /* 移动浏览器的100vh可能大于可视高度，解除全站body最小高度以免地址栏出现时整页仍可滚动。 */
+  :global(body:has(.map-shell)) {
+    min-height: 0;
+  }
+  .map-shell {
+    height: 100dvh;
+    min-height: 0;
+    padding-bottom: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .map-shell :deep(.topbar) {
+    display: none;
+  }
+  .map-shell > main {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+  .map-shell :deep(.bottom-navigation) {
+    position: static;
+    flex-shrink: 0;
+  }
+}
+/* 榜单品牌及底栏按已确认图稿局部调整，不改变其他页面的共享布局。 */
+.ranking-shell {
+  padding-bottom: 0;
+}
+.ranking-shell :deep(.topbar.is-discovery) {
+  max-width: 1056px;
+}
+.ranking-shell :deep(.is-discovery .brand strong) {
+  font-size: 23px;
+  gap: 12px;
+}
+.ranking-shell :deep(.is-discovery .brand em) {
+  font-size: 32px;
+  color: #ee970f;
+  font-weight: 850;
+}
+.ranking-shell :deep(.navigation-items) {
+  max-width: 900px;
+}
+.ranking-shell :deep(.navigation-items svg) {
+  width: 22px;
+  height: 22px;
+}
+.ranking-shell :deep(.compose-icon) {
+  background: #f7f0e4;
+  color: #a96c1e;
+}
+@media (max-width: 600px) {
+  .ranking-shell :deep(.topbar.is-discovery) {
+    width: calc(100% - 36px);
+    height: 65px;
+  }
+  .ranking-shell :deep(.is-discovery .brand strong) {
+    font-size: 17px;
+    gap: 8px;
+  }
+  .ranking-shell :deep(.is-discovery .brand em) {
+    font-size: 25px;
+  }
+  .ranking-shell :deep(.navigation-items) {
+    height: 60px;
+  }
+  .ranking-shell :deep(.navigation-items svg) {
+    width: 21px;
+    height: 21px;
+  }
+}
 .identity-check {
   max-width: 560px;
   margin: 100px auto;

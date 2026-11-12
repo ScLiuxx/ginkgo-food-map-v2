@@ -27,6 +27,8 @@ export interface RestaurantResponse {
   distanceKm: number | null
   tags: string[]
   score: number | null
+  /** 新版接口独立返回五分制口碑分，旧score保持原十分制均分语义。 */
+  reputationScore?: number | null
   recommendRate: number | null
   reviewCount: number
   participantCount: number
@@ -109,7 +111,14 @@ export function toRestaurantModel(value: RestaurantResponse): RestaurantReadMode
     priceKind: { UNKNOWN: 'unknown', EXACT: 'exact', ESTIMATE: 'estimate' }[
       value.priceKind
     ] as RestaurantReadModel['priceKind'],
-    score: value.score,
+    // 展示模型沿用十分制星级组件的输入；新口碑分只在此转换一次，原始四维不变。
+    score:
+      value.reputationScore === undefined
+        ? value.score
+        : value.reputationScore === null
+          ? null
+          : value.reputationScore * 2,
+    reputationScore: value.reputationScore,
     recommendRate: value.recommendRate,
     reviewCount: value.reviewCount,
     participantCount: value.participantCount,

@@ -36,6 +36,10 @@
         COALESCE(s.participant_count, 0) AS participant_count,
         <!-- 综合分按0–10的一位小数；好评率比例保留三位，即百分数的一位小数。原始累计值不变。 -->
         ROUND(CAST(s.overall_score_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0), 1) AS score,
+        <!-- 食堂继续使用窗口等权均分；普通餐厅使用生成列，零评价不填先验分。 -->
+        CASE WHEN r.restaurant_type='CANTEEN' THEN
+            ROUND(s.overall_score_sum / NULLIF(s.participant_count,0) / 2,8)
+            ELSE s.reputation_score END AS reputation_score,
         ROUND(CAST(s.recommend_count AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0), 3) AS recommend_rate,
         CAST(s.taste_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0) AS taste,
         CAST(s.value_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0) AS value,
@@ -95,12 +99,13 @@
         <choose>
             <when test="query.effectiveSort == 'price'">r.price_per_person IS NULL, r.price_per_person,</when>
             <when test="query.effectiveSort == 'distance'">distance_km IS NULL, distance_km,</when>
-            <when test="query.effectiveSort == 'recommend'">recommend_rate IS NULL, recommend_rate DESC,</when>
+            <!-- 兼容旧recommend参数为热度别名；现行前端显式使用reviews。 -->
+            <when test="query.effectiveSort == 'recommend'">review_count DESC,</when>
             <when test="query.effectiveSort == 'reviews'">review_count DESC,</when>
-            <otherwise>score IS NULL, score DESC,</otherwise>
+            <otherwise>reputation_score IS NULL, reputation_score DESC, participant_count DESC,</otherwise>
         </choose>
-        <!-- 评分/好评率含默认综合分均以ID破同分，人数及未舍入尾数不再影响顺序。 -->
-        <if test="!query.searchOrderById and (query.effectiveSort == 'price' or query.effectiveSort == 'distance' or query.effectiveSort == 'reviews')">r.name,</if> r.id
+        <!-- 口碑分使用八位小数，同分时人数降序再按ID；热度同条数按ID。 -->
+        <if test="!query.searchOrderById and (query.effectiveSort == 'price' or query.effectiveSort == 'distance')">r.name,</if> r.id
     </sql>
 
     <!-- 身份有界且保留全部非关键词条件；排序由ES身份顺序决定，不能在SQL里重排当前页。 -->

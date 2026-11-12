@@ -145,7 +145,10 @@ public class SecurityConfiguration {
                                                 HttpMethod.GET,
                                                 "/api/restaurants/{restaurantId}/reviews/authors/{authorId}/history")
                                         .permitAll()
-                                        // 只允许餐厅阅读的三个GET入口；不放开后续写入、管理或嵌套资源。
+                                        // 榜单只公开明确GET路径，不开放写入、触发生成或其他方法。
+                                        .requestMatchers(HttpMethod.GET, "/api/restaurant-rankings")
+                                        .permitAll()
+                                        // 只允许餐厅阅读的GET入口；不放开后续写入、管理或嵌套资源。
                                         .requestMatchers(
                                                 HttpMethod.GET,
                                                 "/api/restaurant-categories",

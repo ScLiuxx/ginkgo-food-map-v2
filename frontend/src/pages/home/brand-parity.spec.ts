@@ -47,6 +47,9 @@ describe('approved homepage composition', () => {
     expect(host.querySelector('input[type="search"]')?.getAttribute('placeholder')).toBe(
       '搜索餐厅、食堂或窗口…',
     )
+    expect(host.querySelector('.catalog-ranking-entry')?.getAttribute('href')).toBe(
+      '/restaurant-rankings',
+    )
     expect(host.textContent).not.toContain('看点评')
   })
 })

@@ -1,6 +1,6 @@
 # MySQL 表结构
 
-本文集中维护 MySQL 业务表的当前字段、类型、默认值、枚举、主键、索引、外键与字段约束。覆盖当前迁移定义的 31 张应用表，按下列分组查阅；Flyway 自建的迁移历史表不属于应用表。
+本文集中维护 MySQL 业务表的当前字段、类型、默认值、枚举、主键、索引、外键与字段约束。覆盖当前迁移定义的 32 张应用表，按下列分组查阅；Flyway 自建的迁移历史表不属于应用表。
 
 ## 目录
 
@@ -8,6 +8,7 @@
 - [用户账号、角色与安全审计表结构](#user-profile)
 - [餐厅、食堂与窗口表结构](#restaurant-schema)
 - [店铺收藏表结构](#restaurant-favorites)
+- [餐厅榜单快照表结构](#restaurant-ranking-snapshots)
 - [商户搜索同步任务表结构](#restaurant-search-outbox)
 - [点评、回复与媒体表结构](#review-schema)
 - [用户关注表结构](#user-follows)
@@ -194,9 +195,12 @@ position范围0～7；同一餐厅内标签及位置分别唯一。
 | `service_sum` | `decimal(16,2)` | 否 | 服务累计分；默认0.00 |
 | `ambience_sum` | `decimal(16,2)` | 否 | 环境累计分；默认0.00 |
 | `overall_score_sum` | `decimal(16,2)` | 否 | 单条综合分累计值；默认0.00 |
+| `reputation_score` | `decimal(12,8)` | 是 | STORED生成列；普通餐厅五分制长期平滑口碑分，无计分用户为NULL；表达式为四维累计加权和÷2加17.5，再除以人数加5 |
 | `updated_at` | `timestamp(6)` | 否 | 最后修改时间；默认CURRENT_TIMESTAMP(6) |
 
 主键 `(restaurant_id)`。
+
+排序索引：`idx_restaurant_statistics_reputation(reputation_score DESC, participant_count DESC, restaurant_id)`。
 
 外键：`restaurant_id` → `restaurants.id`。
 
@@ -354,6 +358,41 @@ restaurant模块拥有`restaurant_favorites`表。存储引擎InnoDB，字符集
 | idx_restaurant_favorites_user_time | `(user_id,created_at DESC,id DESC)` | 普通索引 |
 
 CHECK约束`chk_restaurant_favorites_ids`限定user_id及restaurant_id均在正Long范围内。外键`fk_restaurant_favorites_restaurant`：restaurant_id → restaurants.id，ON DELETE RESTRICT、ON UPDATE RESTRICT。user_id为跨模块逻辑引用，无物理外键。收藏列表可见性保存在users.favorites_public，不在每条关系中重复存储。
+
+<a id="restaurant-ranking-snapshots"></a>
+
+## 餐厅榜单快照表结构
+
+restaurant模块拥有`restaurant_ranking_snapshots`表。存储引擎InnoDB，表字符集utf8mb4、排序规则utf8mb4_0900_ai_ci；两个机器编码列使用ASCII字符集及ascii_bin排序规则。
+
+### `restaurant_ranking_snapshots`：校区周月榜单最近成功快照
+
+| 字段 | 类型 | 可空 | 默认值及含义 |
+| --- | --- | --- | --- |
+| `campus_code` | `varchar(32)` | 否 | 无默认值；`QINGSHUIHE`清水河、`SHAHE`沙河。 |
+| `period_type` | `varchar(8)` | 否 | 无默认值；`WEEK`近168小时、`MONTH`近720小时。 |
+| `window_start_at` | `timestamp(6)` | 否 | 无默认值；统计区间起点，包含该时刻。 |
+| `window_end_at` | `timestamp(6)` | 否 | 无默认值；统计截止时刻T，不包含该时刻，也是数据年龄计算依据。 |
+| `generated_at` | `timestamp(6)` | 否 | 无默认值；完整结果生成完成时刻，不等同于事务提交时刻。 |
+| `rules_snapshot` | `json` | 否 | 无默认值；本次生成使用的规则、分制及地理范围配置对象。 |
+| `items` | `json` | 否 | 无默认值；已排序的完整榜单数组，0～20项，空榜为`[]`。 |
+
+| 名称 | 列 | 类型 |
+| --- | --- | --- |
+| PRIMARY | `(campus_code,period_type)` | 联合主键 |
+
+无其他索引或物理外键；没有自增ID。当前校区、周期枚举组合限定至多4行。
+
+| CHECK约束 | 限定条件 |
+| --- | --- |
+| `chk_ranking_snapshot_campus` | 校区按二进制精确匹配`QINGSHUIHE`、`SHAHE`，拒绝错误大小写及尾部空格。 |
+| `chk_ranking_snapshot_period` | 周期按二进制精确匹配`WEEK`、`MONTH`，拒绝错误大小写及尾部空格。 |
+| `chk_ranking_snapshot_window` | `window_start_at < window_end_at`。 |
+| `chk_ranking_snapshot_generated` | `generated_at >= window_end_at`。 |
+| `chk_ranking_snapshot_rules` | `JSON_TYPE(rules_snapshot) = 'OBJECT'`。 |
+| `chk_ranking_snapshot_items` | `JSON_TYPE(items) = 'ARRAY' AND JSON_LENGTH(items) <= 20`。 |
+
+原生JSON列拒绝格式非法的JSON；SQL NULL由非空约束拒绝，JSON字面量`null`由顶层类型约束拒绝。DDL仅限定JSON顶层形状及条数，不限定内部对象字段，也不在数据库CHECK中限定168/720小时的精确窗口长度。
 
 <a id="restaurant-search-outbox"></a>
 

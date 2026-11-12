@@ -1,6 +1,6 @@
 # Elasticsearch商户搜索索引结构
 
-物理索引`restaurant-search-v003`，别名`restaurant-search`。每家普通餐厅或食堂对应一份文档，`_id`为商户ID的十进制字符串，正文id为long。字段定义来源于[索引定义JSON](../../backend/src/main/resources/elasticsearch/restaurant-search-v003.json)。
+物理索引`restaurant-search-v004`，别名`restaurant-search`。每家普通餐厅或食堂对应一份文档，`_id`为商户ID的十进制字符串，正文id为long。字段定义来源于[索引定义JSON](../../backend/src/main/resources/elasticsearch/restaurant-search-v004.json)。
 
 ## 当前读取边界
 
@@ -10,9 +10,9 @@
 
 | 项目 | 当前定义 | 含义 |
 | --- | --- | --- |
-| 物理索引 | `restaurant-search-v003` | 固定当前字段与分词配置版本 |
+| 物理索引 | `restaurant-search-v004` | 固定当前字段与分词配置版本 |
 | 业务别名 | `restaurant-search` | 业务访问名称 |
-| 写索引标记 | `is_write_index=true` | 别名当前唯一指向v003 |
+| 写索引标记 | `is_write_index=true` | 别名当前唯一指向v004 |
 | 主分片 | 1 | 主分片数 |
 | 副本 | 0 | 副本数 |
 | 刷新间隔 | `1s` | 刷新周期 |
@@ -57,8 +57,9 @@
 
 | 字段 | ES类型 | 来源/计算 | 用途 |
 | --- | --- | --- | --- |
-| `ratingScore` | `double` | overall_score_sum / participant_count | 商户综合评分排序，使用后端0–10口径 |
-| `recommendRate` | `double` | recommend_count / participant_count | 好评优先，0–1比例 |
+| `reputationScore` | `double` | MySQL五分制派生分 | 综合分展示与排序；无计分用户缺省，食堂保留窗口等权均分 |
+| `ratingScore` | `double` | overall_score_sum / participant_count | 原始综合均分，保留0–10口径 |
+| `recommendRate` | `double` | recommend_count / participant_count | 推荐率展示，0–1比例 |
 | `participantCount` | `long` | participant_count | 计分人数 |
 | `reviewCount` | `long` | review_count | 有效点评总条数 |
 

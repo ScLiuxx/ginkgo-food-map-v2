@@ -3,6 +3,16 @@ import { createRouter, createWebHistory } from 'vue-router'
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    // 示例数据仅在开发环境单独预览，生产构建不提供该路由或导入示例资源。
+    ...(import.meta.env.DEV
+      ? [
+          {
+            path: '/previews/restaurant-rankings',
+            component: () => import('@/pages/restaurant/RestaurantRankingPreviewPage.vue'),
+            meta: { title: '榜单界面预览', ranking: true },
+          },
+        ]
+      : []),
     // 管理端共用独立布局，身份验证通过后才挂载页面；审核使用真实申请及服务端处理结果。
     {
       path: '/admin/login',
@@ -95,6 +105,12 @@ const router = createRouter({
       component: () => import('@/pages/account/PublicProfilePage.vue'),
       props: true,
       meta: { title: '个人主页' },
+    },
+    {
+      path: '/restaurant-rankings',
+      name: 'restaurant-rankings',
+      component: () => import('@/pages/restaurant/RestaurantRankingPage.vue'),
+      meta: { title: '近期推荐榜', ranking: true },
     },
     {
       path: '/restaurants/submit',

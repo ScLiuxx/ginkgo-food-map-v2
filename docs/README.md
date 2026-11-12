@@ -30,6 +30,7 @@ ES 监控的实际故障验证见[故障演练报告](history/elasticsearch-metr
 
 ## 设计与计划
 
+- 餐厅榜单：[近期榜单计划](plans/hot-restaurants.md)记录规则及分阶段实施；[快照表](architecture/mysql-schema.md#restaurant-ranking-snapshots)、[读取接口与两级缓存](api.md#24-近期餐厅榜单读取)、内部计算已完成；实测见[MySQL基线](history/restaurant-ranking-read-2026-11-11.md)、[Redis对照](history/restaurant-ranking-redis-2026-11-11.md)、[Caffeine三模式对照及故障验证](history/restaurant-ranking-caffeine-2026-11-11.md)。自动发布、小时调度及防重叠已完成；首页入口及独立榜单页已按确认示意图接入，本地真实接口的空榜及模拟点评生成的20项榜单联调通过，上线验收待进行。
 - 食堂窗口：[资料、独立点评与评分汇总](api.md#22-食堂窗口资料点评与汇总)，管理员维护及用户浏览已接通，窗口资料由管理员统一录入，用户窗口投稿审核暂不规划。
 
 - 业务访谈：[社区业务规则讨论记录](plans/community-rules.md)，逐项确认“我的”、消息、互动、风控及相关未完成业务，区分待讨论、暂定、已确认与暂缓，不代表已经实现。
@@ -45,7 +46,7 @@ ES 监控的实际故障验证见[故障演练报告](history/elasticsearch-metr
 - 本人投稿：[API 16](api.md#16-本人投稿与纠错记录)、[申请表结构](architecture/mysql-schema.md#restaurant_change_requests商户资料待审核申请)。
 - 成长等级：[V24经验账户与奖励表结构](architecture/mysql-schema.md#growth-schema)、[事务与后续接入设计](plans/community-growth-v1.md)；首次点评计奖、内部撤销、本人等级查询及本人页面展示已实现，其他奖励与排序待接入，接口见[API](api.md#14-本人成长摘要)，验证与运行状态见开发记录。
 - 架构：[模块化单体](architecture/modular-monolith.md)、[前端分层](architecture/frontend.md)。
-- 数据结构：[MySQL 表结构](architecture/mysql-schema.md)，集中查看全部 30 张应用表，涵盖应用元数据、用户/角色/安全审计、商户、点评、媒体、点赞、成长与通知；[Elasticsearch 索引](architecture/elasticsearch-schema.md)。
+- 数据结构：[MySQL 表结构](architecture/mysql-schema.md)，集中查看当前应用表，涵盖应用元数据、用户/角色/安全审计、商户及榜单快照、点评、媒体、点赞、成长与通知；[Elasticsearch 索引](architecture/elasticsearch-schema.md)。
 - 分类：[分类表及编码](architecture/mysql-schema.md#restaurant_categories餐厅分类)；数据整理记录见[开发记录](development.md)。
 - 审核存储：[商户申请表V17](architecture/mysql-schema.md#restaurant_change_requests商户资料待审核申请)，采用request_type和单个restaurant_id，记录审核结果与资料快照；通过/驳回及正式相册发布已实现，新增[正式相册V18](architecture/mysql-schema.md#restaurant_photos正式商户相册)，餐厅/食堂详情相册及管理端发布记录已接入，首页/地图卡片封面也已接入。
 - 页面：[找店界面与前端架构](architecture/frontend.md)。

@@ -6,7 +6,13 @@ defineProps<{ authenticated: boolean; discovery?: boolean; hasUnreadNotification
 <template>
   <nav class="bottom-navigation" aria-label="应用导航">
     <div class="navigation-items">
-      <RouterLink to="/" exact-active-class="selected" aria-label="首页" title="首页">
+      <RouterLink
+        to="/"
+        exact-active-class="selected"
+        :class="{ selected: discovery }"
+        aria-label="首页"
+        title="首页"
+      >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="m3 11 9-8 9 8M5 10v11h5v-7h4v7h5V10" />
         </svg>

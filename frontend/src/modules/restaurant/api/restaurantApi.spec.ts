@@ -24,6 +24,16 @@ afterEach(() => {
 
 /** 使用真实Axios配置验证查询白名单、路径和模型转换，防止前后端协议漂移。 */
 describe('restaurant HTTP API', () => {
+  it('uses the five-point reputation for display exactly once and preserves unrated null', () => {
+    const model = toRestaurantModel({ ...responseFixture, score: 10, reputationScore: 3.75 })
+    expect(model.reputationScore).toBe(3.75)
+    // 星级组件仍接收十分制输入，五分制口碑分只在API边界转换一次。
+    expect(model.score).toBe(7.5)
+    expect(
+      toRestaurantModel({ ...responseFixture, score: 10, reputationScore: null }).score,
+    ).toBeNull()
+    expect(model.dimensions).toEqual(responseFixture.dimensions)
+  })
   it('食堂允许空分类，页面模型不会补造美食品类', () => {
     const model = toRestaurantModel({
       ...responseFixture,

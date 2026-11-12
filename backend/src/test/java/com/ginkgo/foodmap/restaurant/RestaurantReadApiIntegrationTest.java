@@ -432,6 +432,26 @@ class RestaurantReadApiIntegrationTest {
         verifyNoInteractions(sessions);
     }
 
+    /** 一人满分不能压过二十人的稳定好评，接口公开同一五分制口碑分。 */
+    @Test
+    void shouldSortByStoredReputationAndUseReviewCountForHeat() throws Exception {
+        statistics(101, 100, 1, 1, "10", "10", "10", "10", "10");
+        statistics(102, 20, 20, 20, "180", "180", "180", "180", "180");
+        mvc.perform(get("/api/restaurants").param("sort", "score").param("pageSize", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.records[0].id").value("102"))
+                .andExpect(jsonPath("$.data.records[0].reputationScore").value(4.3));
+        mvc.perform(get("/api/restaurants/101"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.reputationScore").value(3.75))
+                .andExpect(jsonPath("$.data.score").value(10));
+        for (String sort : java.util.List.of("reviews", "recommend")) {
+            mvc.perform(get("/api/restaurants").param("sort", sort).param("pageSize", "1"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.records[0].id").value("101"));
+        }
+    }
+
     /** 综合分与总条数先在完整集合排序，再分页；同分仍按名称和ID稳定返回。 */
     @ParameterizedTest
     @ValueSource(strings = {"score", "reviews"})
@@ -777,15 +797,15 @@ class RestaurantReadApiIntegrationTest {
                 ambience);
     }
 
-    /** 好评排序使用推荐比例，区别于综合分；无评分记录排在已计分记录后。 */
+    /** 旧recommend参数兼容热度条数，不再按推荐比例排序。 */
     @Test
-    void shouldSortByRecommendationRate() throws Exception {
+    void shouldTreatLegacyRecommendationSortAsHeat() throws Exception {
         statistics(101, 10, 10, 5, "90", "90", "90", "90", "90");
         statistics(102, 2, 2, 2, "14", "14", "14", "14", "14");
         mvc.perform(get("/api/restaurants").param("sort", "recommend"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.records[0].id").value("102"))
-                .andExpect(jsonPath("$.data.records[1].id").value("101"));
+                .andExpect(jsonPath("$.data.records[0].id").value("101"))
+                .andExpect(jsonPath("$.data.records[1].id").value("102"));
         mvc.perform(get("/api/restaurants").param("sort", "score"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.records[0].id").value("101"));

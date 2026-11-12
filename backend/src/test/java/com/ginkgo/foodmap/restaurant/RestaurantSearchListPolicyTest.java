@@ -50,6 +50,7 @@ class RestaurantSearchListPolicyTest {
         d.setParticipantCount(1L);
         d.setReviewCount(3L);
         d.setRatingScore(0.0);
+        d.setReputationScore(2.91666667);
         d.setRecommendRate(0.0);
         assertThat(RestaurantSearchListPolicy.toView(d, new RestaurantListQuery()).getScore())
                 .isEqualByComparingTo("0");

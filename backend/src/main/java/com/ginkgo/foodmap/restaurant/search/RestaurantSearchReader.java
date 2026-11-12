@@ -193,14 +193,7 @@ public class RestaurantSearchReader {
             filters.add(range("pricePerPerson", Map.of("lte", query.getMaxPrice())));
         }
         var runtime = new LinkedHashMap<String, Object>();
-        // 对现有评分字段生成有界整数排序键，不改变原始统计或商户投影数值。
-        // 评分8.3分 -> 83；好评率92.3%（原比例0.923）-> 923，正数四舍五入，同键只按ID。
-        if (query.getEffectiveSort().equals("score")) {
-            runtime.put("queryRating", roundedRating("ratingScore", 10));
-        }
-        if (query.getEffectiveSort().equals("recommend")) {
-            runtime.put("queryRecommend", roundedRating("recommendRate", 1000));
-        }
+        // v004口碑分已预计算，直接按索引数值排序，不执行评分脚本。
         if (query.getWest() != null) {
             runtime.put("queryLat", coordinate("lat"));
             runtime.put("queryLon", coordinate("lon"));
@@ -303,8 +296,11 @@ public class RestaurantSearchReader {
             case "price" -> sorts.add(fieldSort("pricePerPerson", "asc"));
             case "reviews" -> sorts.add(fieldSort("reviewCount", "desc"));
             case "distance" -> sorts.add(fieldSort("queryDistance", "asc"));
-            case "score" -> sorts.add(fieldSort("queryRating", "desc"));
-            case "recommend" -> sorts.add(fieldSort("queryRecommend", "desc"));
+            case "score" -> {
+                sorts.add(fieldSort("reputationScore", "desc"));
+                sorts.add(fieldSort("participantCount", "desc"));
+            }
+            case "recommend" -> sorts.add(fieldSort("reviewCount", "desc"));
             default -> throw new IllegalArgumentException("未知搜索排序");
         }
         sorts.add(Map.of("id", "asc"));
@@ -335,6 +331,7 @@ public class RestaurantSearchReader {
                                 "location",
                                 "needsLocation",
                                 "ratingScore",
+                                "reputationScore",
                                 "recommendRate",
                                 "participantCount",
                                 "reviewCount",

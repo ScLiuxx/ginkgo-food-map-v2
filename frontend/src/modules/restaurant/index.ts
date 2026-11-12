@@ -14,3 +14,5 @@ export type { CatalogFilters, RestaurantReadModel } from './model/restaurant.typ
 export { default as RestaurantAdvancedFilters } from './ui/RestaurantAdvancedFilters.vue'
 export { default as SubmitRestaurantButton } from './ui/SubmitRestaurantButton.vue'
 export { default as MyContributions } from './ui/MyContributions.vue'
+export { default as RestaurantRankings } from './ui/RestaurantRankings.vue'
+export type { RankingLoader, RestaurantRanking } from './api/restaurantRankingApi'

@@ -45,7 +45,7 @@ class IndexInitializationSafetyTest(unittest.TestCase):
         self.assertTrue(all(call.args[0] == "GET" for call in client.request.call_args_list))
 
     def test_current_schema_adds_only_four_character_subfields_and_preserves_source_contract(self):
-        current, previous = load_spec(), load_spec("002")
+        current, previous = load_spec("003"), load_spec("002")
         self.assertEqual(current['mappings']['_meta']['schema_version'], '003')
         self.assertEqual(set(current['mappings']['properties']), set(previous['mappings']['properties']))
         for name in ('name', 'address', 'categoryName', 'tags'):

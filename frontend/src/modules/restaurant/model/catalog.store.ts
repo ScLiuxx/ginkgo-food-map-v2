@@ -21,6 +21,10 @@ export const useRestaurantCatalog = defineStore('restaurant-catalog', () => {
   watch(
     () => userLocation.location,
     (position) => {
+      // 校区原点不受共享定位更新影响，尤其不能被迟到的GPS回调覆盖。
+      if (filters.distanceOrigin && filters.distanceOrigin !== 'USER') return
+      // 重新定位暂时清空位置时保留上次参照点，失败不能清空原列表。
+      if (!position) return
       filters.longitude = position?.center[0]
       filters.latitude = position?.center[1]
     },
@@ -93,9 +97,11 @@ export const useRestaurantCatalog = defineStore('restaurant-catalog', () => {
       categories.value = dictionary
       total.value = result.total
       pages.value = Math.max(1, result.accessiblePages ?? result.totalPages)
-      searchNotice.value = result.search && result.search.engine === 'MYSQL' && snapshot.keyword.trim()
-        ? '当前使用基础关键词匹配。' + (result.search.effectiveSort === 'score' ? '按综合评分排序。' : '')
-        : ''
+      searchNotice.value =
+        result.search && result.search.engine === 'MYSQL' && snapshot.keyword.trim()
+          ? '当前使用基础关键词匹配。' +
+            (result.search.effectiveSort === 'score' ? '按综合评分排序。' : '')
+          : ''
       if (result.accessiblePages !== undefined && result.accessiblePages < result.totalPages)
         searchNotice.value += '结果较多，仅开放前10000条的分页，请缩小筛选范围。'
       // 删除等操作使最后一页消失时回到新末页，再请求，避免显示假空结果。

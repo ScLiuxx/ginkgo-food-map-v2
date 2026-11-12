@@ -107,7 +107,7 @@ class RestaurantSearchSyncIntegrationTest {
         // 完整复用v002的显式mapping/IK设置，但删除正式别名定义，仅添加本次随机别名。
         String definition;
         try (var stream =
-                getClass().getResourceAsStream("/elasticsearch/restaurant-search-v003.json")) {
+                getClass().getResourceAsStream("/elasticsearch/restaurant-search-v004.json")) {
             var mapping = json.readValue(stream, Map.class);
             mapping.remove("aliases");
             definition = json.writeValueAsString(mapping);

@@ -111,45 +111,95 @@ describe('restaurant catalog API integration', () => {
     expect(document.querySelector('.catalog-filter-dialog')).toBeNull()
   })
 
-  it('requests location only from the nearest button and supports recommendation sorting', async () => {
+  /** 校区排序只使用固定原点，展开菜单和选择热度均不申请位置。 */
+  it('uses campus origins without geolocation and applies my position only after success', async () => {
     const location = useUserLocation(pinia)
     const locate = vi.spyOn(location, 'locate').mockResolvedValue(undefined)
-    expect(locate).not.toHaveBeenCalled()
-    const buttons = [...host.querySelectorAll<HTMLButtonElement>('.sort-pills button')]
-    expect(buttons.map((b) => b.textContent?.trim())).toEqual(['综合排序', '距离最近', '好评优先'])
-    buttons[2]!.click()
+    const store = useRestaurantCatalog(pinia)
+    const distance = () => host.querySelector<HTMLButtonElement>('[aria-label="选择距离排序"]')!
+    const option = (name: string) =>
+      [...host.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((button) =>
+        button.textContent?.includes(name),
+      )!
+    const heat = [...host.querySelectorAll<HTMLButtonElement>('.sort-pills > button')].find(
+      (button) => button.textContent?.trim() === '热度优先',
+    )!
+    heat.click()
     await settle()
-    expect(useRestaurantCatalog(pinia).filters.sort).toBe('recommend')
+    expect(store.filters.sort).toBe('reviews')
+    distance().click()
+    await settle()
     expect(locate).not.toHaveBeenCalled()
-    buttons[1]!.click()
-    expect(useRestaurantCatalog(pinia).filters.sort).toBe('distance')
+    option('距清水河最近').click()
+    await settle()
+    expect(store.filters).toMatchObject({
+      sort: 'distance',
+      distanceOrigin: 'QINGSHUIHE',
+      latitude: 30.7544,
+      longitude: 103.9312,
+    })
+    expect(locate).not.toHaveBeenCalled()
+    distance().click()
+    await settle()
+    option('距我最近').click()
+    await settle()
     expect(locate).toHaveBeenCalledOnce()
+    expect(store.filters.distanceOrigin).toBe('QINGSHUIHE')
     location.location = { center: [104.1, 30.67], accuracy: 20, timestamp: 1 }
     await settle()
-    expect(useRestaurantCatalog(pinia).filters).toMatchObject({
-      longitude: 104.1,
-      latitude: 30.67,
+    expect(store.filters).toMatchObject({
       sort: 'distance',
+      distanceOrigin: 'USER',
+      latitude: 30.67,
+      longitude: 104.1,
     })
-    buttons[2]!.click()
-    await settle()
-    buttons[1]!.click()
-    await settle()
-    expect(buttons[1]!.getAttribute('aria-pressed')).toBe('true')
-    expect(buttons[2]!.getAttribute('aria-pressed')).toBe('false')
-    expect(locate).toHaveBeenCalledOnce()
     expect(fetchRestaurants).toHaveBeenLastCalledWith(
       expect.objectContaining({ sort: 'distance', latitude: 30.67, longitude: 104.1 }),
       1,
       8,
       expect.any(AbortSignal),
     )
-    // 迟到的位置更新只更新原点，不能覆盖用户后来选中的好评排序。
-    buttons[2]!.click()
-    location.location = { center: [104.11, 30.68], accuracy: 20, timestamp: 2 }
+  })
+
+  it('retains the previous results and sort when my location is denied', async () => {
+    const location = useUserLocation(pinia)
+    vi.spyOn(location, 'locate').mockImplementation(async () => {
+      location.message = '未获定位权限'
+    })
+    const store = useRestaurantCatalog(pinia)
+    host.querySelector<HTMLButtonElement>('[aria-label="选择距离排序"]')!.click()
     await settle()
-    expect(useRestaurantCatalog(pinia).filters.sort).toBe('recommend')
-    locate.mockRestore()
+    ;[...host.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+      .find((button) => button.textContent?.includes('距我最近'))!
+      .click()
+    await settle()
+    expect(store.filters.sort).toBe('auto')
+    expect(store.visibleRestaurants).toHaveLength(8)
+    expect(host.textContent).toContain('无法获取位置，可选择校区距离')
+  })
+
+  it('ignores a late GPS result after switching to Shahe', async () => {
+    const location = useUserLocation(pinia)
+    vi.spyOn(location, 'locate').mockResolvedValue(undefined)
+    const choose = async (text: string) => {
+      host.querySelector<HTMLButtonElement>('[aria-label="选择距离排序"]')!.click()
+      await settle()
+      ;[...host.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+        .find((button) => button.textContent?.includes(text))!
+        .click()
+      await settle()
+    }
+    await choose('距我最近')
+    await choose('距沙河最近')
+    location.location = { center: [104.2, 30.8], accuracy: 20, timestamp: 2 }
+    await settle()
+    expect(useRestaurantCatalog(pinia).filters).toMatchObject({
+      sort: 'distance',
+      distanceOrigin: 'SHAHE',
+      longitude: 104.099671,
+      latitude: 30.675789,
+    })
+    expect(host.querySelector('[aria-label="选择距离排序"]')?.textContent).toContain('距沙河最近')
   })
 
   it('hides campus and sorting controls and the distance section', async () => {
@@ -410,14 +460,29 @@ describe('restaurant catalog API integration', () => {
     await settle()
     await store.load()
     expect(store.filters.sort).toBe('score')
-    expect(fetchRestaurants).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'score', keyword: '蜜雪冰城' }), 1, 8, expect.any(AbortSignal))
+    expect(fetchRestaurants).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: 'score', keyword: '蜜雪冰城' }),
+      1,
+      8,
+      expect.any(AbortSignal),
+    )
   })
 
   it('keeps exact totals but limits navigation and announces basic matching after fallback', async () => {
-    vi.mocked(fetchRestaurants).mockResolvedValue(pageFixture({
-      total: 12000, totalPages: 1500, accessiblePages: 1250,
-      search: { engine: 'MYSQL', degraded: true, reason: 'ES_UNAVAILABLE', effectiveSort: 'score', resultWindow: 10000 },
-    }))
+    vi.mocked(fetchRestaurants).mockResolvedValue(
+      pageFixture({
+        total: 12000,
+        totalPages: 1500,
+        accessiblePages: 1250,
+        search: {
+          engine: 'MYSQL',
+          degraded: true,
+          reason: 'ES_UNAVAILABLE',
+          effectiveSort: 'score',
+          resultWindow: 10000,
+        },
+      }),
+    )
     const store = useRestaurantCatalog(pinia)
     store.filters.keyword = '咖啡'
     await settle()

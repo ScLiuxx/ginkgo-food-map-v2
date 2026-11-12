@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { formatRating } from '@/shared/lib/formatRating'
-import { useUserLocation } from '@/modules/map/model/userLocation.store'
-const userLocation = useUserLocation()
+import { useRestaurantCatalog } from '../model/catalog.store'
+import { distanceOriginLabel } from '../model/distanceOrigin'
+const catalog = useRestaurantCatalog()
 import { computed, ref, watch } from 'vue'
 import { campusDistance, priceLabel } from '../model/catalog.logic'
 import type { RestaurantReadModel } from '../model/restaurant.types'
@@ -14,7 +15,8 @@ const imageFailed = ref(false)
 watch([() => props.restaurant.id, () => photo.value?.url], () => {
   imageFailed.value = false
 })
-const distance = computed(() => campusDistance(props.restaurant, userLocation.location?.center))
+// 优先使用本次服务端查询的距离，不能用共享GPS将校区距离重新计算成距我。
+const distance = computed(() => campusDistance(props.restaurant))
 // 类型优先采用服务端明确字段；缺省时才兼容旧食堂分类。
 const cafeteria = computed(
   () =>
@@ -27,7 +29,7 @@ const businessTags = computed(() =>
 const distanceLabel = computed(() =>
   distance.value === null
     ? '位置待补充'
-    : `距你 ${distance.value < 1 ? Math.round(distance.value * 1000) + '米' : distance.value.toFixed(1) + '公里'}`,
+    : `距${distanceOriginLabel(catalog.filters.distanceOrigin)} ${distance.value < 1 ? Math.round(distance.value * 1000) + '米' : distance.value.toFixed(1) + '公里'}`,
 )
 </script>
 
@@ -61,7 +63,11 @@ const distanceLabel = computed(() =>
     <div class="card-copy">
       <h3>{{ restaurant.name }}</h3>
       <template v-if="!cafeteria">
-        <p class="card-rating" :class="{ unrated: restaurant.score === null }">
+        <p
+          class="card-rating"
+          :class="{ unrated: restaurant.score === null }"
+          title="综合口碑分：口味70%、性价比15%、服务10%、环境5%，结合评价人数平滑计算"
+        >
           <span v-if="restaurant.score !== null" class="score-value"
             ><span aria-hidden="true">★</span> {{ formatRating(restaurant.score) }}</span
           >
@@ -71,7 +77,9 @@ const distanceLabel = computed(() =>
           >
           <span
             class="card-price"
-            :class="{ unknown: restaurant.price === null || restaurant.price <= 0 }"
+            :class="{
+              unknown: restaurant.price === null || restaurant.price <= 0,
+            }"
           >
             <template v-if="restaurant.price !== null && restaurant.price > 0"
               ><small>人均</small><b>{{ priceLabel(restaurant) }}</b
@@ -101,7 +109,8 @@ const distanceLabel = computed(() =>
       <template v-else>
         <p class="card-address">{{ restaurant.address || '位置资料待补充' }}</p>
         <p class="card-service">
-          食堂 · 窗口资料待补充 <span v-if="restaurant.closed" class="closed-label">· 已停业</span>
+          食堂 · 窗口资料待补充
+          <span v-if="restaurant.closed" class="closed-label">· 已停业</span>
         </p>
         <span class="cafeteria-entry">查看食堂 <span aria-hidden="true">→</span></span>
       </template>

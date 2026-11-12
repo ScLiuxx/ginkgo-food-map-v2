@@ -35,6 +35,8 @@ public class RestaurantVo {
     private List<String> tags;
     /** 商户聚合综合分，0–10，四舍五入一位小数；原始累计统计不变。 */
     private BigDecimal score;
+    /** 五分制综合口碑分，展示和综合排序共用；无人计分为null，原score保留十分制均分语义。 */
+    private BigDecimal reputationScore;
     /** 仍为0–1比例，三位小数对应百分数一位小数，如0.923表示92.3%。 */
     private BigDecimal recommendRate;
     private long reviewCount;

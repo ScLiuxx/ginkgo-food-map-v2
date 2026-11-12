@@ -15,12 +15,16 @@ export interface MapPoint {
   latitude: number
   longitude: number
   score: number | null
+  /** 五分制口碑分，地图展示转换为现有星级输入。 */
+  reputationScore?: number | null
   pricePerPerson: number | null
   /** UNKNOWN仅用于临时第三方点位，不把基础地点搜索当作营业状态证明。 */
   businessStatus: 'OPERATING' | 'CLOSED' | 'UNKNOWN'
 }
 /** 仅用户点击结果时发起地图定位；序号允许重复点击同一家再次居中。 */
 export interface MapFocus {
+  /** 点选列表只定位展示，不把门店局部视野重新当成本轮候选范围。 */
+  preserveResults?: boolean
   /** 切换校区用区域视野，点选商家仍默认放大到门店。 */
   zoom?: number
   longitude: number
@@ -50,5 +54,16 @@ export async function fetchMapPoints(
     },
     signal,
   })
-  return response.data.data
+  return {
+    ...response.data.data,
+    points: response.data.data.points.map((point) => ({
+      ...point,
+      score:
+        point.reputationScore === undefined
+          ? point.score
+          : point.reputationScore === null
+            ? null
+            : point.reputationScore * 2,
+    })),
+  }
 }

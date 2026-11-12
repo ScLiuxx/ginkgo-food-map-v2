@@ -6,7 +6,7 @@ V2 是对旧版 Ginkgo 美食地图的渐进式重构。第一阶段采用模块
 
 ## 当前阶段
 
-当前功能与未完成范围统一见[功能说明](docs/features.md)，接口与调用规则见[API文档](docs/api.md)。ES搜索的实现进度见[搜索计划](docs/plans/elasticsearch-search.md)，当前版本准确度与接口耗时见[最终评测](docs/history/elasticsearch-final-benchmark-2026-11-05.md)。线上可用能力以实际部署版本为准。
+当前功能与未完成范围统一见[功能说明](docs/features.md)，接口与调用规则见[API文档](docs/api.md)。ES搜索的实现进度见[搜索计划](docs/plans/elasticsearch-search.md)，v003历史版本准确度与接口耗时见[最终评测](docs/history/elasticsearch-final-benchmark-2026-11-05.md)。线上可用能力以实际部署版本为准。
 
 ## 项目文档
 

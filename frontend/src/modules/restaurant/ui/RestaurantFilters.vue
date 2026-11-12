@@ -18,20 +18,30 @@ const cuisineCategories = computed(() =>
 
 <template>
   <div class="catalog-filters">
-    <form class="search-field" role="search" @submit.prevent="catalog.load">
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.6" />
-        <path d="m16 16 4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-      </svg>
-      <input
-        v-model="catalog.filters.keyword"
-        aria-label="搜索餐厅"
-        placeholder="搜索餐厅、食堂或窗口…"
-        maxlength="100"
-        type="search"
-      />
-      <button type="submit" class="search-submit" aria-label="提交搜索">搜索</button>
-    </form>
+    <div class="catalog-search-line">
+      <form class="search-field" role="search" @submit.prevent="catalog.load">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.6" />
+          <path d="m16 16 4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+        </svg>
+        <input
+          v-model="catalog.filters.keyword"
+          aria-label="搜索餐厅"
+          placeholder="搜索餐厅、食堂或窗口…"
+          maxlength="100"
+          type="search"
+        />
+        <button type="submit" class="search-submit" aria-label="提交搜索">搜索</button>
+      </form>
+      <RouterLink class="catalog-ranking-entry" to="/restaurant-rankings">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M8 3h8v5a4 4 0 0 1-8 0ZM8 5H4v2a4 4 0 0 0 4 4m8-6h4v2a4 4 0 0 1-4 4M12 12v6m-4 3h8M9 18h6"
+          />
+        </svg>
+        推荐榜 <span aria-hidden="true">→</span>
+      </RouterLink>
+    </div>
     <nav class="quick-categories" aria-label="美食快捷分类">
       <button
         type="button"

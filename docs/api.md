@@ -13,7 +13,7 @@
 | 业务ID | 餐厅、申请、点评、回复和文件ID采用无前导零的正整数字符串，范围1–9223372036854775807 |
 | 账号ID | `/auth/login`、`/auth/me`及`/api/admin/me`中的账号ID为JSON整数；其他署名/业务资源引用为字符串 |
 | 时间 | ISO 8601 UTC字符串 |
-| 评分 | 接口总分与四维评分保留0–10，前端展示统一除以2换算为五分制；发布仍提交接口原分制 |
+| 评分 | 现有点评、餐厅总分与四维评分保留0–10，前端展示除以2；榜单接口独立使用五分制（scoreScale=5），不得再次除以2 |
 | 坐标 | GCJ-02；用户查询位置不写入数据库 |
 
 除图片字节、204无内容及Actuator接口外，响应使用统一封装：
@@ -62,6 +62,7 @@
 | POST | `/api/admin/content-reports/{id}/dismiss` | 管理员 | 200 | 驳回同内容待处理举报 |
 | POST | `/api/admin/content-reports/{id}/remove` | 管理员 | 200 | 永久删除违规内容并结案 |
 | GET | `/api/restaurant-categories` | 公开 | 200 | 分类字典 |
+| GET | `/api/restaurant-rankings` | 公开 | 200 | 按校区及周/月读取已生成榜单；[契约](#24-近期餐厅榜单读取) |
 | GET | `/api/restaurants/{id}/windows` | 公开 | 200 | 食堂完整窗口集合 |
 | GET | `/api/canteen-windows/{id}` | 公开 | 200 | 独立窗口详情 |
 | GET | `/api/admin/restaurants/{id}/windows` | 管理员 | 200 | 窗口管理集合，含删除项 |
@@ -320,15 +321,15 @@ reason必填，DTO最多200个UTF-16单元，去Unicode首尾空白后不能为�
 | `sort` | auto | auto/relevance/score/reviews/price/distance/recommend；auto在多字关键词时请求相关度，空关键词或单个汉字使用综合分；显式排序保持有效；四维排序仍返回400 |
 | `hideClosed` | false | true时隐藏停业商户 |
 | `maxPrice` | 无 | 大于0，最多8位整数和2位小数；未知价格不符合上限筛选 |
-| `latitude` / `longitude` | 无 | 用户GCJ-02原点，范围[-90,90]/[-180,180]，必须成对提供 |
-| `maxDistanceMeters` | 无 | 整数1–20040000，以用户原点计算；缺位置商户不符合距离筛选 |
+| `latitude` / `longitude` | 无 | 距离参照点的GCJ-02原点，可为固定校区点或主动授权的用户位置，范围[-90,90]/[-180,180]，必须成对提供 |
+| `maxDistanceMeters` | 无 | 整数1–20040000，以请求参照原点计算；缺位置商户不符合距离筛选 |
 | `west/east/south/north` | 无 | 可选视口，四边同时提供，经度[-180,180]、纬度[-90,90]，west<east且south<north |
 | `page` | 1 | 正整数，最多2147483647 |
 | `pageSize` | 8 | 1–100 |
 
-条件取交集，在完整可见集合上排序、计数后分页。关键词价格/点评数/距离排序同值按数字ID升序，ES与SQL采用相同规则；综合分和好评率在目录及搜索中均先四舍五入，同值按数字ID升序。评分类与推荐率排序未知值排后，人均升序；好评率按百分数的一位小数比较，不再按计分人数或原始尾数破同分。距离按请求用户原点升序，缺原点时距离为null且按名称/ID稳定排序。视口不支持跨日期变更线，边界包含，提供视口时排除待定位记录。用户坐标不保存。
+条件取交集，在完整可见集合上排序、计数后分页。score按五分制reputationScore八位小数降序，真正同分按participantCount降序、数字ID升序，未知末尾；页面显示一位小数，不用于截断排序精度。reviews按reviewCount降序、数字ID升序表示热度；旧recommend参数兼容同一热度规则，不再按推荐率排序。距离按请求参照原点升序，未定位商户排后；无原点时不应在前端冒充距离排序。前端校区选项只发送固定GCJ-02坐标，不请求定位；仅距我选项触发定位，坐标不保存到账号。视口不支持跨日期变更线，边界包含，提供视口时排除待定位记录。
 
-餐厅类型读取正式restaurant_type，独立于美食品类；食堂本身无美食分类，因此CANTEEN与具体美食品类组合时返回空集合，不自动忽略任一条件。类型及用餐方式过滤同时作用于COUNT、排序分页和地图点位。非法restaurantType/diningMode返回400 `COMMON_VALIDATION_FAILED`，不静默忽略。公开列表和地图共用RestaurantQueryService引擎策略；字典及详情始终读取MySQL。ES查询需同时显式开启ES_ENABLED及ES_QUERY_ENABLED，默认不启用。列表无关键词浏览及单汉字搜索均优先走ES；地理条件缺原点时走SQL。地图点位无关键词仍走SQL。综合分/好评率/价格/点评数/有原点距离排序及默认相关度均可走ES；未知价格和距离排后。
+餐厅类型读取正式restaurant_type，独立于美食品类；食堂本身无美食分类，因此CANTEEN与具体美食品类组合时返回空集合，不自动忽略任一条件。类型及用餐方式过滤同时作用于COUNT、排序分页和地图点位。非法restaurantType/diningMode返回400 `COMMON_VALIDATION_FAILED`，不静默忽略。公开列表和地图共用RestaurantQueryService引擎策略；字典及详情始终读取MySQL。ES查询需同时显式开启ES_ENABLED及ES_QUERY_ENABLED，默认不启用。列表无关键词浏览及单汉字搜索均优先走ES；地理条件缺原点时走SQL。地图点位无关键词仍走SQL。口碑分/热度/价格/点评数/有原点距离排序及默认相关度均可走ES；未知价格和距离排后。
 
 杯型计算与响应字段tier已移除；目录和地图请求若携带view、tiers或tiers数组参数，返回400 `RESTAURANT_INVALID_INPUT`，不静默忽略旧筛选。详情与点评保留四维评分展示。
 
@@ -341,10 +342,12 @@ reason必填，DTO最多200个UTF-16单元，去Unicode首尾空白后不能为�
   "supportsDineIn":true,"supportsDelivery":null,"pricePerPerson":25,"priceKind":"EXACT",
   "address":"商户地址","latitude":30.670582,"longitude":104.107260,"needsLocation":false,
   "businessStatus":"OPERATING","createdAt":"2026-11-03T06:00:00Z","updatedAt":"2026-11-03T06:00:00Z",
-  "distanceKm":null,"tags":["家常菜"],"score":null,"recommendRate":null,"reviewCount":0,"participantCount":0,
+  "distanceKm":null,"tags":["家常菜"],"score":null,"reputationScore":null,"recommendRate":null,"reviewCount":0,"participantCount":0,
   "dimensions":{"taste":null,"value":null,"service":null,"ambience":null}
 }
 ```
+
+`reputationScore`为五分制综合口碑分，普通餐厅使用`((0.70*taste_sum+0.15*value_sum+0.10*service_sum+0.05*ambience_sum)/2+17.5)/(participant_count+5)`，由MySQL存储生成列维护，固定C=3.5、m=5，保留八位小数。原score保持十分制等权均分语义，不覆盖单条点评；前端主要综合分使用reputationScore，五分制只换算一次。食堂的reputationScore为原窗口等权均分换算五分制，不将跨窗口人数当作去重人数；窗口点评与四维展示不变。
 
 无人计分的分数/推荐率/四维为null，真实0分保持0。reviewCount计全部有效点评，participantCount计每人最新有效代表。score为代表点评综合分累计值/人数，四舍五入保留一位小数；recommendRate为推荐人数/人数（0–1），四舍五入保留三位小数，对应百分比一位小数（0.923表示92.3%）。历史点评不重复贡献评分，原始累计值不变。地址、价格和位置未知保持null，不用模拟值补齐。列表/详情不返回创建者、删除元数据或数据库版本。ES列表没有四维和审计时间投影，因此dimensions四项及createdAt/updatedAt为null；详情仍读取MySQL并返回实际值。
 
@@ -357,7 +360,7 @@ reason必填，DTO最多200个UTF-16单元，去Unicode首尾空白后不能为�
 - 查询与建索引分别使用ik_smart和ik_max_word。所有查询词必须在名称、分类名称、标签及地址的并集中满足；短语命中加权。完整规范化店名以独立排序层保证优先，其余按相关度及数字ID排序。显式业务排序不夹带相关度或页内重排。
 - 单个汉字按Unicode码点和Han脚本判断，包含补充平面汉字；直接term查询name.chars/address.chars/categoryName.chars/tags.chars，任一字段包含即满足。auto保持原有score默认排序，显式relevance及业务排序照常执行。列表与地图共用此路径，不再因单字预定走SQL。查询前核对四字段可检索并固定本次物理索引，旧结构未就绪时整次SQL降级，避免未映射字段返回假空集合。
 - 单字ES匹配采用原字语义，不继承MySQL排序规则的字符等价扩展，例如〇不会命中ASCII数字0。真实库中〇的ES字面命中为1家，旧SQL为3748家；SQL降级仍可能受数据库排序规则影响，因此基础匹配提示保留。
-- score/recommend不再强制走SQL；ES在现有double字段上计算整数排序键：Math.round(ratingScore*10)、Math.round(recommendRate*1000)，同键按数字ID升序，未知末尾、真实零保留。SQL公开读取分别ROUND到一位/三位并使用相同排序；实际排序按此精度比较，不只是页面格式化，无需改mapping或重新导入。
+- score直接按v004预计算的reputationScore排序，再按participantCount及数字ID；reviews/recommend按reviewCount、数字ID排序。SQL使用同一生成列和同分规则，不再在ES查询中生成评分或推荐率runtime排序键。旧索引缺少新字段时需受控升级，不能以旧ratingScore冒充口碑分。
 - SQL路径保持原LIKE包含匹配；请求相关度但实际走SQL时，实际排序为score。首版不做无结果放宽、拼音、简称、错字或全局同义扩展。
 - 所有硬筛选在ES计数及分页之前执行。列表直接读取ES公开投影，不回查MySQL资料、标签、封面或Outbox，接受评分、资料、删除与恢复的短暂同步延迟；详情及写操作仍以MySQL为准。地图点位保留MySQL当前页资料和版本回查，不以LIKE再次过滤ES分词命中。不拿ES前100条交给SQL筛选后当作全量。
 - ES不可达、客户端不存在、索引不存在、超时、部分分片失败、非精确总数或不完整结果，均整次执行原SQL；ES本身返回空集合不触发降级。仅地图点位在查询前或回查快照存在当前版本PENDING/FAILED任务时保守走SQL；地图回查有删除、缺失、版本或硬条件变化时丢弃整页ES结果和total，完整重查SQL。列表不因同步积压降级，但非法或不完整的投影正文仍作为ES错误整次降级。
@@ -1185,3 +1188,53 @@ reason必填，大小写精确，取值为SPAM、ABUSE、PORNOGRAPHY、ILLEGAL�
 ### 23.5 范围边界
 
 普通用户在他人点评/回复操作区提交举报，管理员在`/admin/reports`查看与处置；账号处罚、禁言、停用和申诉不在本轮范围。
+
+## 24. 近期餐厅榜单读取
+
+`GET /api/restaurant-rankings?campusCode=QINGSHUIHE&periodType=WEEK`，公开、200，无需登录；主动携带无效Bearer仍按通用认证规则拒绝。仅此GET公开，写入、生成及嵌套管理入口未提供。读取顺序为Caffeine→Redis→MySQL快照：本机热命中不访问Redis/MySQL且不等待加载锁；下层未命中或Redis故障时回源一次联合主键SELECT，不触发点评聚合、不逐店补查。响应沿用安全链的`Cache-Control: no-store`，它不禁止服务端缓存。
+
+| 参数 | 必填 | 值 |
+| --- | --- | --- |
+| campusCode | 是 | `QINGSHUIHE`清水河、`SHAHE`沙河，精确大写 |
+| periodType | 是 | `WEEK`近168小时、`MONTH`近720小时，精确大写 |
+
+不分页，最多20项；不接受客户端控制来源、状态、条数或有效期。缺少参数或枚举错误400 `COMMON_VALIDATION_FAILED`，不访问快照表。
+
+成功data示例（为说明格式的合成数据）：
+
+```json
+{
+  "campusCode": "QINGSHUIHE",
+  "periodType": "WEEK",
+  "status": "READY",
+  "scoreScale": 5,
+  "windowStartAt": "2026-11-04T07:00:00Z",
+  "windowEndAt": "2026-11-11T07:00:00Z",
+  "generatedAt": "2026-11-11T07:00:30Z",
+  "items": [
+    {
+      "rank": 1,
+      "restaurantId": "9007199254740993",
+      "name": "示例餐厅",
+      "coverUrl": null,
+      "tasteScore": 4.5,
+      "recommendationScore": 4.1,
+      "participantCount": 8
+    }
+  ]
+}
+```
+
+- `READY`：存在有效快照；`items=[]`表示成功生成但无合格餐厅。
+- `PREPARING`：尚无快照；`items=[]`，三个时间字段均为null。新版服务就绪后异步生成首轮结果，首轮完成前或关闭自动生成且没有快照时返回此状态。
+- `UNAVAILABLE`：已有快照的数据年龄超过`app.ranking.max-snapshot-age`（默认24小时）；保留三个时间字段，`items=[]`，不展示过期条目。数据年龄以`windowEndAt`计算，刚好24小时仍可用，超过才失效；不因生成较晚或读取而续期。
+
+三个业务状态均返回200且保持区分；需要回源且数据库不可用、MySQL快照时间元数据非法、可展示快照的JSON格式损坏或版本不支持，以及加载等锁超时返回503 `RESTAURANT_RANKING_UNAVAILABLE`，不伪装为正常空榜，也不输出内部JSON或SQL。Redis坏值会清理并回源，Redis异常本身不导致请求失败，有效本机结果仍可读取。超过年龄上限后不再解析旧条目。返回顺序沿用快照名次，不在读取时重新排序。
+
+`tasteScore`是五分制口味均分，读取时HALF_UP保留一位，**不得再次除以2**；recommendationScore为对应周期平滑推荐分，HALF_UP一位，用于推荐榜主分展示，与快照排序依据一致；它不是首页长期reputationScore。原始分子分母、规则及用户明细不输出。封面为本站稳定照片路径`/api/restaurants/{restaurantId}/photos/{photoId}`或null，访问图片时仍走既有公开可见性校验。ID为正Long字符串，人数为整数。
+
+内部JSON读取格式v1：`rules_snapshot`需包含整数`formatVersion=1`和`scoreScale=5`；`items`为0～20项数组，每项含上述公开字段（coverUrl可缺省），并允许保存不会透传的内部扩展字段。读取器校验连续名次、餐厅ID不重复、名称、口味分4～5及参与人数至少3；时间区间必须精确168/720小时，生成时间不得早于截止或晚于当前时间。读取校验与生成算法的正确性验证分别负责存储格式和计算规则。
+
+GET可回填或修复本模块的两级缓存，不写MySQL、不刷新快照时间、不调用ES或OSS、不查询点评表。正常结果（含成功空榜）本机写后30分钟过期、最多4份，Redis默认2小时；无快照的`PREPARING`两级最多缓存5秒，跨层回填沿用其原过期时刻，`UNAVAILABLE`及故障不缓存。命中不续期，每次命中仍检查24小时数据年龄；本机保存不可变解析结果，返回独立响应对象，Redis保存完整JSON。Redis TTL不超过快照剩余可用时间；本机即使物理缓存未到期也拒绝超龄结果。单实例四榜的加载、回填与发布共用一把锁，等待上限默认1秒，本机热命中无需加锁；榜单Redis连接及命令超时默认200毫秒，不改变登录会话配置。
+
+内部发布服务已支持同轮四份已计算快照的事务发布：实际提交后先失效本机再删Redis，回滚保留两级旧结果；删除失败绕过Redis并有限重试，可把最新MySQL结果缓存在本机；启动时清理四个固定Redis榜单键，本机不跨重启保留。与发布重叠的在途热读可能返回旧榜，不承诺不同请求跨榜原子切换。内部计算服务已按同一截止时刻返回四榜，采用周期内最新点评去重、校区范围筛选及精确平滑分排序；计算自身不发布、不清缓存；生成入口已在其独立只读事务结束后调用四榜短事务发布。新版默认在服务就绪后异步生成，随后每轮结束等待1小时刷新，失败保留旧榜及原时间、下一轮再试，并发生成直接跳过。通过`app.ranking.generation-enabled`关闭自动生成，`app.ranking.refresh-interval`配置间隔，重启生效；关闭后仍可读取已有快照。没有HTTP计算或写接口，本轮GET契约不变。规则及运行参数见[计划](plans/hot-restaurants.md)，分阶段测量见[MySQL基线](history/restaurant-ranking-read-2026-11-11.md)、[Redis报告](history/restaurant-ranking-redis-2026-11-11.md)、[两级缓存报告](history/restaurant-ranking-caffeine-2026-11-11.md)。资料快速下榜仍未接入。前端`/restaurant-rankings`已接入此GET：首页入口进入，URL参数保存`campusCode/periodType`，按返回名次展示、不二次换算分数，也不逐店补查；游客读取不自动携带旧Bearer，服务端对主动携带无效Bearer的约定不变。切换时取消旧请求并隔离迟到结果，缺图及加载失败单独处理，状态与响应契约不变。仅DEV提供明确标注的独立示例页，正式页面不使用示例兜底。

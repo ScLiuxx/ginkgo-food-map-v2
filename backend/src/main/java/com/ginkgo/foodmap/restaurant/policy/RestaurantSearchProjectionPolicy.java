@@ -104,6 +104,11 @@ public final class RestaurantSearchProjectionPolicy {
                                 <= 0);
         document.setParticipantCount(participants);
         document.setReviewCount(row.getReviewCount());
+        // 五分制派生分直接来自同一RR快照；不从已舍入的展示均分反推。
+        if (row.getReputationScore() != null) {
+            require(participants > 0 && inRange(row.getReputationScore(), "0", "5"));
+            document.setReputationScore(row.getReputationScore().doubleValue());
+        }
         if (participants > 0) {
             // 先使用累计值/人数，最后转ES double；不先舍入为页面两位分数，也不对无人计分填0。
             var divisor = BigDecimal.valueOf(participants);

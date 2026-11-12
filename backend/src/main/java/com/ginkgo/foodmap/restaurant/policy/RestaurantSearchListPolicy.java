@@ -58,9 +58,12 @@ public final class RestaurantSearchListPolicy {
         result.setReviewCount(doc.getReviewCount());
         result.setParticipantCount(doc.getParticipantCount());
         if (doc.getParticipantCount() == 0) {
-            require(doc.getRatingScore() == null && doc.getRecommendRate() == null);
+            require(doc.getRatingScore() == null && doc.getRecommendRate() == null
+                    && doc.getReputationScore() == null);
         } else {
             result.setScore(decimal(doc.getRatingScore(), 10, 1));
+            // 新投影缺失口碑分时整次降级，避免旧均分冒充新分数。
+            result.setReputationScore(decimal(doc.getReputationScore(), 5, 8));
             result.setRecommendRate(decimal(doc.getRecommendRate(), 1, 3));
         }
         if (!doc.getNeedsLocation()) {

@@ -49,6 +49,9 @@ public class RestaurantEntity {
     /** 均分由累计值除以人数取得；null表示无人计分，真实0分必须保留。 */
     @TableField(exist = false)
     private BigDecimal score;
+    /** 五分制长期口碑分；食堂保留窗口等权均分，不把跨窗口人数当作去重人数。 */
+    @TableField(exist = false)
+    private BigDecimal reputationScore;
     @TableField(exist = false)
     private BigDecimal recommendRate;
     @TableField(exist = false)

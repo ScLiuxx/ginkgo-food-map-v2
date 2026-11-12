@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, useId, watch } from 'vue'
 import {
   campusDistance,
   filterRestaurants,
@@ -21,6 +21,7 @@ import { SubmitRestaurantButton } from '@/modules/restaurant'
 import type { CatalogFilters } from '@/modules/restaurant'
 import MapIllustration from './MapIllustration.vue'
 import NearbyLocation from '@/modules/restaurant/ui/NearbyLocation.vue'
+import MapBottomSheet from './MapBottomSheet.vue'
 
 /** 预览只操作本地样例；正式页复用目录筛选状态并读取真实视口接口。 */
 const props = withDefaults(defineProps<{ preview?: boolean }>(), {
@@ -40,27 +41,28 @@ const filters = props.preview
   : catalog.filters
 const selection = useMapSelection(props.preview ? 'demo-1' : null)
 const selectedId = selection.activeId
-const expanded = ref(false)
+const mobile = ref(globalThis.matchMedia?.('(max-width: 700px)').matches ?? false)
+const sheetSnap = ref<'collapsed' | 'half' | 'full'>('collapsed')
+const sheetHeight = ref(148)
+const filterArea = ref<globalThis.HTMLElement>()
+const filterBottom = ref(140)
+let filterObserver: globalThis.ResizeObserver | undefined
+const sheetId = 'map-sheet-' + useId()
+const media = globalThis.matchMedia?.('(max-width: 700px)')
+function updateMobile() {
+  mobile.value = media?.matches ?? false
+}
 const resultPanel = ref<globalThis.HTMLElement>()
 const placesAnchor = ref<globalThis.HTMLDivElement>()
-const browseListButton = ref<globalThis.HTMLButtonElement>()
-const closeListButton = ref<globalThis.HTMLButtonElement>()
-/** 手机切换成完整列表后地图控件不可见，主动移动焦点；关闭时返回列表入口，避免焦点留在隐藏区域。 */
-watch(expanded, async (open) => {
-  if (!globalThis.matchMedia?.('(max-width: 700px)').matches) return
-  const restore = !open && !!resultPanel.value?.contains(globalThis.document.activeElement)
-  await nextTick()
-  if (expanded.value !== open) return
-  if (open) closeListButton.value?.focus({ preventScroll: true })
-  else if (restore) browseListButton.value?.focus()
-})
 const selectionPanel = ref<globalThis.HTMLDivElement>()
 const selectionHeight = ref(225)
-/** 浮层随长店名及来源文字自然增长，手机地图为实际高度让位，不用固定高度遮挡版权。 */
+/** 浮层随长店名自然增长，仅调整底部面板，不能通过压缩地图改变候选范围。 */
 watch(selectionPanel, (panel, _previous, onCleanup) => {
   if (!panel || !globalThis.ResizeObserver) return
   const observer = new globalThis.ResizeObserver(() => {
-    selectionHeight.value = Math.ceil(panel.getBoundingClientRect().height)
+    const height = Math.ceil(panel.getBoundingClientRect().height)
+    // 展开列表时选店卡片暂时隐藏，不能把隐藏高度0当成下一次收起所需的高度。
+    if (height) selectionHeight.value = height
   })
   observer.observe(panel)
   onCleanup(() => observer.disconnect())
@@ -158,6 +160,13 @@ watch([restaurants, places.records], ([rows, external]) => {
   if (props.preview && !selectedId.value && rows[0]) selection.pin(rows[0].id)
 })
 onMounted(() => {
+  media?.addEventListener('change', updateMobile)
+  if (globalThis.ResizeObserver && filterArea.value) {
+    filterObserver = new globalThis.ResizeObserver(() => {
+      filterBottom.value = filterArea.value?.getBoundingClientRect().bottom ?? 140
+    })
+    filterObserver.observe(filterArea.value)
+  }
   if (!props.preview) {
     void viewport.load()
     if (!catalog.categories.length)
@@ -171,20 +180,21 @@ onMounted(() => {
 /** 原生dialog约束焦点；关闭和卸载都恢复背景滚动，草稿只有确认才写回查询。 */
 function selectRestaurant(id: string) {
   selection.pin(id)
-  expanded.value = false
-  if (searching.value) {
+  sheetSnap.value = 'collapsed'
+  if (searching.value || mobile.value) {
     const point = canvasPoints.value.find((row) => row.id === id)
     if (point)
       focusTarget.value = {
         longitude: point.longitude,
         latitude: point.latitude,
         sequence: ++focusSequence,
+        preserveResults: mobile.value,
       }
   }
 }
 /** 两类结果共用侧栏滚动区；直接到高德分组，不滚动整页或改变查询条件。 */
 async function showPlaceResults() {
-  if (globalThis.matchMedia?.('(max-width: 700px)').matches) expanded.value = true
+  if (mobile.value) sheetSnap.value = 'full'
   await nextTick()
   if (!placesAnchor.value || !resultPanel.value) return
   const top =
@@ -222,6 +232,8 @@ watch(selectedId, (id) => {
   }
 })
 onUnmounted(() => {
+  media?.removeEventListener('change', updateMobile)
+  filterObserver?.disconnect()
   selectionSequence++
   if (!props.preview) catalog.cancelPending()
 })
@@ -229,13 +241,16 @@ onUnmounted(() => {
 <template>
   <section
     class="map-workspace"
-    :class="{ 'is-preview': preview }"
+    :class="{ 'is-preview': preview, 'sheet-full': mobile && sheetSnap === 'full' }"
     :style="{
       '--map-selection-height': `${hasSelection ? selectionHeight : 0}px`,
+      '--map-sheet-height': `${mobile ? sheetHeight : 0}px`,
+      '--map-filter-bottom': `${filterBottom}px`,
     }"
     aria-label="地图找店"
   >
     <div class="map-topline">
+      <RouterLink class="map-mobile-brand" to="/" aria-label="泥电美食地图首页">泥电</RouterLink>
       <h1>地图找店</h1>
       <RouterLink v-if="preview" to="/map">返回真实餐厅 →</RouterLink>
     </div>
@@ -253,7 +268,7 @@ onUnmounted(() => {
           placeholder="搜索餐厅、地址"
         />
       </div>
-      <div class="map-filter-area">
+      <div ref="filterArea" class="map-filter-area">
         <nav class="map-categories" aria-label="美食分类">
           <button :aria-pressed="!filters.category" @click="filters.category = ''">全部美食</button
           ><button
@@ -274,7 +289,12 @@ onUnmounted(() => {
           >
             <span aria-hidden="true"></span>
             隐藏停业餐厅</button
-          ><RestaurantAdvancedFilters :filters="filters" campus-filters />
+          ><RestaurantAdvancedFilters
+            :filters="filters"
+            :categories="categories"
+            campus-filters
+            map-filters
+          />
         </div>
         <div v-if="advancedCount" class="map-applied">
           <button v-if="filters.maxPrice !== null" @click="filters.maxPrice = null">
@@ -292,153 +312,140 @@ onUnmounted(() => {
             {{ filters.diningMode === 'dineIn' ? '支持堂食' : '支持外卖' }} ×
           </button>
         </div>
-        <p v-if="searching" class="map-search-summary">
-          <span>全站搜索 · 本站 + 高德</span
-          ><button aria-controls="map-place-results" @click="showPlaceResults">
-            {{
-              places.error.value
-                ? '高德地点暂不可用'
-                : places.loading.value
-                  ? '高德搜索中…'
-                  : `高德地点 ${places.total.value}`
-            }}
-            ↓
-          </button>
-        </p>
       </div>
-      <aside
-        id="map-restaurant-results"
-        ref="resultPanel"
-        class="map-result-panel"
-        :class="{ expanded }"
-        aria-label="餐厅结果"
-      >
-        <button
-          v-if="expanded"
-          ref="closeListButton"
-          class="map-close-list"
-          @click="expanded = false"
+      <!-- 移动端将同一份真实结果移入面板，避免复制列表、重复请求或丢失滚动状态。 -->
+      <Teleport :to="`#${sheetId}-results`" :disabled="!mobile" defer>
+        <aside
+          id="map-restaurant-results"
+          ref="resultPanel"
+          class="map-result-panel"
+          aria-label="餐厅结果"
         >
-          收起列表 ×
-        </button>
-        <div class="map-result-heading">
-          <h2>
+          <p v-if="searching" class="map-search-summary">
+            <span>全站搜索 · 本站 + 高德</span
+            ><button aria-controls="map-place-results" @click="showPlaceResults">
+              {{
+                places.error.value
+                  ? '高德地点暂不可用'
+                  : places.loading.value
+                    ? '高德搜索中…'
+                    : `高德地点 ${places.total.value}`
+              }}
+              ↓
+            </button>
+          </p>
+          <div class="map-result-heading">
+            <h2>
+              {{
+                searching
+                  ? '本站已收录'
+                  : preview || viewport.bounds.value
+                    ? '此区域的餐厅'
+                    : '餐厅目录'
+              }}
+            </h2>
+            <span role="status">{{
+              loading
+                ? '正在加载…'
+                : preview
+                  ? `${restaurants.length} 家示例餐厅`
+                  : `共 ${viewport.total.value} 家 · 当前页 ${restaurants.length} 家`
+            }}</span>
+          </div>
+          <p v-if="viewport.searchNotice.value && !loading" role="status">
+            {{ viewport.searchNotice.value }}
+          </p>
+          <p v-if="error" class="map-empty" role="alert">
+            {{ error }} <button @click="viewport.load">重试</button>
+          </p>
+          <div v-else class="map-card-list">
+            <MapRestaurantCard
+              v-for="restaurant in restaurants"
+              :key="restaurant.id"
+              :restaurant="restaurant"
+              :selected="restaurant.id === highlightedId"
+              @select="selectRestaurant(restaurant.id)"
+            />
+            <p v-if="!restaurants.length && !loading" class="map-empty">
+              {{
+                searching
+                  ? '本站没有匹配的餐厅，可继续查看下方高德地点。'
+                  : '没有符合条件的餐厅，试试其他分类或筛选。'
+              }}
+            </p>
+          </div>
+          <nav
+            v-if="!preview && viewport.pages.value > 1"
+            class="map-pagination"
+            aria-label="餐厅分页"
+          >
+            <button
+              :disabled="viewport.page.value === 1 || loading"
+              @click="viewport.goToPage(viewport.page.value - 1)"
+            >
+              上一页</button
+            ><span>{{ viewport.page.value }} / {{ viewport.pages.value }}</span
+            ><button
+              :disabled="viewport.page.value === viewport.pages.value || loading"
+              @click="viewport.goToPage(viewport.page.value + 1)"
+            >
+              下一页
+            </button>
+          </nav>
+          <p class="map-data-note">
             {{
-              searching
-                ? '本站已收录'
-                : preview || viewport.bounds.value
-                  ? '此区域的餐厅'
-                  : '餐厅目录'
-            }}
-          </h2>
-          <span role="status">{{
-            loading
-              ? '正在加载…'
-              : preview
-                ? `${restaurants.length} 家示例餐厅`
-                : `共 ${viewport.total.value} 家 · 当前页 ${restaurants.length} 家`
-          }}</span>
-        </div>
-        <p v-if="viewport.searchNotice.value && !loading" role="status">{{ viewport.searchNotice.value }}</p>
-        <p v-if="error" class="map-empty" role="alert">
-          {{ error }} <button @click="viewport.load">重试</button>
-        </p>
-        <div v-else class="map-card-list">
-          <MapRestaurantCard
-            v-for="restaurant in restaurants"
-            :key="restaurant.id"
-            :restaurant="restaurant"
-            :selected="restaurant.id === highlightedId"
-            @select="selectRestaurant(restaurant.id)"
-          />
-          <p v-if="!restaurants.length && !loading" class="map-empty">
-            {{
-              searching
-                ? '本站没有匹配的餐厅，可继续查看下方高德地点。'
-                : '没有符合条件的餐厅，试试其他分类或筛选。'
+              preview
+                ? '示意数据 · 餐厅与位置均为虚构，不用于导航'
+                : searching
+                  ? '全站搜索，不受当前地图范围限制。地图展示当前页本站结果和本页高德地点；点击结果移到餐厅位置。'
+                  : '移动或缩放结束后自动更新；未加载地图时显示全部餐厅目录。'
             }}
           </p>
-        </div>
-        <nav
-          v-if="!preview && viewport.pages.value > 1"
-          class="map-pagination"
-          aria-label="餐厅分页"
-        >
-          <button
-            :disabled="viewport.page.value === 1 || loading"
-            @click="viewport.goToPage(viewport.page.value - 1)"
+          <p
+            v-if="!preview && restaurants.some((r) => r.tags.includes('OSM测试数据'))"
+            class="map-data-note"
           >
-            上一页</button
-          ><span>{{ viewport.page.value }} / {{ viewport.pages.value }}</span
-          ><button
-            :disabled="viewport.page.value === viewport.pages.value || loading"
-            @click="viewport.goToPage(viewport.page.value + 1)"
-          >
-            下一页
-          </button>
-        </nav>
-        <p class="map-data-note">
-          {{
-            preview
-              ? '示意数据 · 餐厅与位置均为虚构，不用于导航'
-              : searching
-                ? '全站搜索，不受当前地图范围限制。地图展示当前页本站结果和本页高德地点；点击结果移到餐厅位置。'
-                : '移动或缩放结束后自动更新；未加载地图时显示全部餐厅目录。'
-          }}
-        </p>
-        <p
-          v-if="!preview && restaurants.some((r) => r.tags.includes('OSM测试数据'))"
-          class="map-data-note"
-        >
-          © OpenStreetMap contributors ·
-          <a
-            href="https://www.openstreetmap.org/copyright"
-            target="_blank"
-            rel="noopener noreferrer"
-            >ODbL-1.0</a
-          >
-        </p>
-        <div v-if="searching" id="map-place-results" ref="placesAnchor">
-          <PlaceSearchResults
-            :keyword="filters.keyword"
-            :can-submit="
-              !preview &&
-              !loading &&
-              !error &&
-              viewport.resultsCurrent.value &&
-              viewport.total.value === 0 &&
-              !places.loading.value &&
-              !places.error.value
-            "
-            :records="externalRows"
-            :hidden-count="places.records.value.length - externalRows.length"
-            :loading="places.loading.value"
-            :error="places.error.value"
-            :total="places.total.value"
-            :page="places.page.value"
-            :pages="places.pages.value"
-            :selected="selectedId"
-            @select="selectRestaurant"
-            @retry="places.load"
-            @page-change="places.goToPage"
-          />
-        </div>
-      </aside>
+            © OpenStreetMap contributors ·
+            <a
+              href="https://www.openstreetmap.org/copyright"
+              target="_blank"
+              rel="noopener noreferrer"
+              >ODbL-1.0</a
+            >
+          </p>
+          <div v-if="searching" id="map-place-results" ref="placesAnchor">
+            <PlaceSearchResults
+              :keyword="filters.keyword"
+              :can-submit="
+                !preview &&
+                !loading &&
+                !error &&
+                viewport.resultsCurrent.value &&
+                viewport.total.value === 0 &&
+                !places.loading.value &&
+                !places.error.value
+              "
+              :records="externalRows"
+              :hidden-count="places.records.value.length - externalRows.length"
+              :loading="places.loading.value"
+              :error="places.error.value"
+              :total="places.total.value"
+              :page="places.page.value"
+              :pages="places.pages.value"
+              :selected="selectedId"
+              @select="selectRestaurant"
+              @retry="places.load"
+              @page-change="places.goToPage"
+            />
+          </div>
+        </aside>
+      </Teleport>
       <div
         class="map-stage"
-        :class="{ 'has-selection': hasSelection, 'list-expanded': expanded }"
+        :class="{ 'has-selection': hasSelection }"
+        :inert="mobile && sheetSnap === 'full'"
         @keydown.esc="selection.close"
       >
-        <button
-          ref="browseListButton"
-          class="map-browse-list"
-          :aria-expanded="expanded"
-          aria-controls="map-restaurant-results"
-          @click="expanded = !expanded"
-        >
-          {{ expanded ? '收起列表' : '查看餐厅列表' }} ·
-          {{ restaurants.length + (searching ? externalRows.length : 0) }}
-        </button>
         <MapIllustration
           v-if="preview"
           :ids="restaurants.map((r) => r.id)"
@@ -467,90 +474,102 @@ onUnmounted(() => {
         <p v-if="!preview && viewport.truncated.value" class="map-truncation" role="status">
           此区域餐厅较多，最多显示100个点位，请放大地图查看更小范围。
         </p>
-        <div
-          v-if="hasSelection"
-          ref="selectionPanel"
-          class="map-selection"
-          aria-label="选中餐厅"
-          @mouseenter="selection.keepOpen"
-          @mouseleave="selection.leave"
-          @focusin="selection.keepOpen"
-          @focusout="onCardFocusOut"
-        >
-          <button class="map-sheet-handle" :aria-expanded="expanded" @click="expanded = !expanded">
-            {{ expanded ? '收起餐厅列表' : '展开餐厅列表' }}
-          </button>
-          <button class="map-popup-close" aria-label="关闭选中餐厅" @click="selection.close">
-            ×
-          </button>
-          <template v-if="selected">
-            <MapRestaurantCard
-              :restaurant="selected"
-              :selected="false"
-              @select="expanded = !expanded"
-            />
-            <div class="map-selection-actions">
-              <RouterLink v-if="!preview" :to="`/restaurants/${selected.id}`">查看详情</RouterLink
-              ><button v-else disabled>查看详情</button
-              ><a
-                v-if="navigationUrl(selected)"
-                :href="navigationUrl(selected)!"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="map-navigate"
-                title="在高德打开此餐厅，由高德处理定位与路线"
-                >在高德中打开 ↗</a
-              ><button v-else class="map-navigate" disabled>
-                {{ preview ? '在高德中打开 ↗' : '位置待确认' }}
-              </button>
-            </div>
-            <small v-if="!preview && navigationUrl(selected)" class="navigation-origin"
-              >定位与路线由高德地图处理</small
-            >
-          </template>
-          <template v-else-if="selectedPlace">
-            <div class="map-place-detail">
-              <small
-                >高德地点 ·
-                {{
-                  selectedPlace.matchState === 'matched'
-                    ? '本站已收录'
-                    : selectedPlace.matchState === 'checking'
-                      ? '正在核对收录状态'
-                      : selectedPlace.matchState === 'unavailable'
-                        ? '收录状态待核实'
-                        : '暂未匹配本站'
-                }}</small
-              >
-              <h3>{{ selectedPlace.name }}</h3>
-              <p>{{ selectedPlace.address || '地址待补充' }}</p>
-              <p>
-                {{ [selectedPlace.district, selectedPlace.category].filter(Boolean).join(' · ') }}
-              </p>
-            </div>
-            <div class="map-selection-actions">
-              <RouterLink v-if="selectedPlace.match" :to="`/restaurants/${selectedPlace.match.id}`"
-                >查看本站详情</RouterLink
-              >
-              <SubmitRestaurantButton
-                v-else-if="selectedPlace.matchState === 'unmatched'"
-                :place="selectedPlace"
+        <Teleport :to="`#${sheetId}-selection`" :disabled="!mobile" defer>
+          <div
+            v-if="hasSelection"
+            ref="selectionPanel"
+            class="map-selection"
+            aria-label="选中餐厅"
+            @mouseenter="selection.keepOpen"
+            @mouseleave="selection.leave"
+            @focusin="selection.keepOpen"
+            @focusout="onCardFocusOut"
+          >
+            <button class="map-popup-close" aria-label="关闭选中餐厅" @click="selection.close">
+              ×
+            </button>
+            <template v-if="selected">
+              <MapRestaurantCard
+                :restaurant="selected"
+                :selected="false"
+                @select="mobile && (sheetSnap = 'half')"
               />
-              <span v-else>正在核实收录状态，暂不能提交</span>
-              <a
-                v-if="placeNavigationUrl(selectedPlace)"
-                :href="placeNavigationUrl(selectedPlace)!"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="map-navigate"
-                >在高德中打开 ↗</a
+              <div class="map-selection-actions">
+                <RouterLink v-if="!preview" :to="`/restaurants/${selected.id}`">查看详情</RouterLink
+                ><button v-else disabled>查看详情</button
+                ><a
+                  v-if="navigationUrl(selected)"
+                  :href="navigationUrl(selected)!"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="map-navigate"
+                  title="在高德打开此餐厅，由高德处理定位与路线"
+                  >在高德中打开 ↗</a
+                ><button v-else class="map-navigate" disabled>
+                  {{ preview ? '在高德中打开 ↗' : '位置待确认' }}
+                </button>
+              </div>
+              <small v-if="!preview && navigationUrl(selected)" class="navigation-origin"
+                >定位与路线由高德地图处理</small
               >
-              <button v-else class="map-navigate" disabled>位置待确认</button>
-            </div>
-            <small class="navigation-origin">来源：高德地图 · 定位与路线由高德处理</small>
-          </template>
-        </div>
+            </template>
+            <template v-else-if="selectedPlace">
+              <div class="map-place-detail">
+                <small
+                  >高德地点 ·
+                  {{
+                    selectedPlace.matchState === 'matched'
+                      ? '本站已收录'
+                      : selectedPlace.matchState === 'checking'
+                        ? '正在核对收录状态'
+                        : selectedPlace.matchState === 'unavailable'
+                          ? '收录状态待核实'
+                          : '暂未匹配本站'
+                  }}</small
+                >
+                <h3>{{ selectedPlace.name }}</h3>
+                <p>{{ selectedPlace.address || '地址待补充' }}</p>
+                <p>
+                  {{ [selectedPlace.district, selectedPlace.category].filter(Boolean).join(' · ') }}
+                </p>
+              </div>
+              <div class="map-selection-actions">
+                <RouterLink
+                  v-if="selectedPlace.match"
+                  :to="`/restaurants/${selectedPlace.match.id}`"
+                  >查看本站详情</RouterLink
+                >
+                <SubmitRestaurantButton
+                  v-else-if="selectedPlace.matchState === 'unmatched'"
+                  :place="selectedPlace"
+                />
+                <span v-else>正在核实收录状态，暂不能提交</span>
+                <a
+                  v-if="placeNavigationUrl(selectedPlace)"
+                  :href="placeNavigationUrl(selectedPlace)!"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="map-navigate"
+                  >在高德中打开 ↗</a
+                >
+                <button v-else class="map-navigate" disabled>位置待确认</button>
+              </div>
+              <small class="navigation-origin">来源：高德地图 · 定位与路线由高德处理</small>
+            </template>
+          </div>
+        </Teleport>
       </div>
+      <!-- 常驻目标容器保证横竖屏切换时Teleport始终能找到接收点；桌面仅隐藏面板。 -->
+      <MapBottomSheet
+        v-show="mobile"
+        v-model="sheetSnap"
+        :list-id="`${sheetId}-results`"
+        :selection-id="`${sheetId}-selection`"
+        :selected="hasSelection"
+        :selection-height="selectionHeight"
+        title="餐厅结果"
+        @resize="sheetHeight = $event"
+      />
     </div>
   </section>
 </template>

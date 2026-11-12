@@ -27,4 +27,6 @@ public class RestaurantSearchSource {
     private long participantCount;
     private long recommendCount;
     private BigDecimal overallScoreSum;
+    /** MySQL生成列提供权威派生结果，食堂由SQL投影保留原有窗口等权均分。 */
+    private BigDecimal reputationScore;
 }

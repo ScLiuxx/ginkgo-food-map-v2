@@ -11,6 +11,8 @@ public class RestaurantMapPointVo {
     private BigDecimal latitude;
     private BigDecimal longitude;
     private BigDecimal score;
+    /** 五分制口碑分，与列表、详情来自同一统计投影。 */
+    private BigDecimal reputationScore;
     private Integer pricePerPerson;
     private String businessStatus;
 }

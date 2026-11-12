@@ -129,6 +129,7 @@ public class RestaurantReadService {
                                     point.setLatitude(row.getLatitude());
                                     point.setLongitude(row.getLongitude());
                                     point.setScore(row.getScore());
+                                    point.setReputationScore(row.getReputationScore());
                                     point.setPricePerPerson(row.getPricePerPerson());
                                     point.setBusinessStatus(row.getBusinessStatus());
                                     return point;
@@ -199,6 +200,7 @@ public class RestaurantReadService {
                                             point.setLatitude(row.getLatitude());
                                             point.setLongitude(row.getLongitude());
                                             point.setScore(row.getScore());
+                                    point.setReputationScore(row.getReputationScore());
                                             point.setPricePerPerson(row.getPricePerPerson());
                                             point.setBusinessStatus(row.getBusinessStatus());
                                             return point;
@@ -261,6 +263,7 @@ public class RestaurantReadService {
         vo.setDistanceKm(row.getDistanceKm());
         vo.setTags(tags);
         vo.setScore(row.getScore());
+        vo.setReputationScore(row.getReputationScore());
         vo.setRecommendRate(row.getRecommendRate());
         vo.setReviewCount(row.getReviewCount());
         vo.setParticipantCount(row.getParticipantCount());

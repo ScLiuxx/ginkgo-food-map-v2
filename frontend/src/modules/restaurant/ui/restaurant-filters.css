@@ -3,6 +3,43 @@
   margin: 0 0 9px;
   min-width: 0;
 }
+/* 首页榜单只新增搜索框右侧入口，不改动分类、排序和现有工具栏。 */
+.catalog-search-line {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  max-width: 1056px;
+}
+.catalog-search-line .search-field {
+  flex: 1;
+  min-width: 0;
+}
+.catalog-ranking-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  height: 48px;
+  padding: 0 16px;
+  border: 1px solid #e9e2d8;
+  border-radius: 8px;
+  color: #8e5a1e;
+  font-size: 14px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.catalog-ranking-entry svg {
+  width: 18px;
+  height: 18px;
+  stroke: #b87b2d;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.catalog-ranking-entry:focus-visible {
+  outline: 2px solid #ad6f26;
+  outline-offset: 3px;
+}
 button,
 input,
 select {
@@ -194,6 +231,19 @@ select:focus-visible {
   }
 }
 @media (max-width: 700px) {
+  .catalog-search-line {
+    gap: 10px;
+  }
+  .catalog-ranking-entry {
+    height: 44px;
+    padding: 0 10px;
+    gap: 6px;
+    font-size: 12px;
+  }
+  .catalog-ranking-entry svg {
+    width: 16px;
+    height: 16px;
+  }
   .search-field {
     height: 48px;
     padding: 0 14px;

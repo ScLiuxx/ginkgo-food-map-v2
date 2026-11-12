@@ -169,7 +169,8 @@ onUnmounted(() => {
           </div>
           <p v-if="isWindow" class="detail-affiliation">
             <RouterLink v-if="dining.parent" :to="parentLink">{{ dining.parent.name }}</RouterLink
-            ><span v-else>所属食堂待补充</span> · {{ dining.floor || '楼层待补充' }}
+            ><span v-else>所属食堂待补充</span> ·
+            {{ dining.floor || '楼层待补充' }}
           </p>
           <p v-if="isWindow && dining.description" class="detail-affiliation">
             {{ dining.description }}
@@ -186,6 +187,9 @@ onUnmounted(() => {
             }}</span>
           </div>
           <div v-if="!isCanteen" class="score-summary">
+            <p v-if="!isWindow" class="reputation-explanation">
+              综合口碑分参考四维评分与评价人数；评价较少时向3.5分参考值平滑。四维数值为真实均分。
+            </p>
             <div class="score-dimensions">
               <span v-for="d in ratingDimensions" :key="d.key"
                 >{{ d.label }}
@@ -249,7 +253,9 @@ onUnmounted(() => {
         class="detail-dishes"
         aria-labelledby="dishes-title"
       >
-        <h2 id="dishes-title">{{ isWindow ? '窗口菜品与价格' : '菜品信息' }}</h2>
+        <h2 id="dishes-title">
+          {{ isWindow ? '窗口菜品与价格' : '菜品信息' }}
+        </h2>
         <div v-if="dining.dishes.length" class="dish-list">
           <article v-for="dish in dining.dishes" :key="dish.id" class="dish-row">
             <img
@@ -305,3 +311,13 @@ onUnmounted(() => {
 </template>
 
 <style scoped src="./restaurant-detail.css"></style>
+
+<style scoped>
+.reputation-explanation {
+  margin: 0 0 10px;
+  max-width: 52em;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.7;
+}
+</style>
