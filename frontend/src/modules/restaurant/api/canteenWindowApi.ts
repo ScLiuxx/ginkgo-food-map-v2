@@ -23,7 +23,6 @@ export interface CanteenWindow {
   value: number | null
   service: number | null
   ambience: number | null
-  recommendRate: number | null
   reviewCount: number
   participantCount: number
   address: string | null
@@ -82,7 +81,6 @@ export async function fetchWindow(id: string, signal?: AbortSignal): Promise<Res
       row.priceKind
     ],
     score: row.score,
-    recommendRate: row.recommendRate,
     reviewCount: row.reviewCount,
     participantCount: row.participantCount,
     dimensions: {

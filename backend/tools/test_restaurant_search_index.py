@@ -74,18 +74,18 @@ class ElasticsearchSchemaIntegrationTest(unittest.TestCase):
             "tags": ["学生聚餐"], "address": "清水河校区南门", "restaurantType": "REGULAR",
             "supportsDineIn": True, "supportsDelivery": False, "pricePerPerson": 25, "priceKind": "EXACT",
             "businessStatus": "OPERATING", "location": {"lat": 30.75, "lon": 103.93}, "needsLocation": False,
-            "ratingScore": 8.0, "recommendRate": 0.5, "participantCount": 2, "reviewCount": 3,
+            "ratingScore": 8.0, "participantCount": 2, "reviewCount": 3,
 
             "deleted": False, "projectionVersion": 1, "coverPhotoId": "9007199254740993",
         }
         canteen = {**base, "id": 2, "name": "测试食堂", "restaurantType": "CANTEEN",
             "categoryCode": None, "categoryName": None, "tags": [], "pricePerPerson": None, "priceKind": "UNKNOWN",
             "supportsDineIn": None, "supportsDelivery": None, "location": {"lat": 30.7502, "lon": 103.9302},
-            "ratingScore": None, "recommendRate": None, "participantCount": 0, "reviewCount": 0,
+            "ratingScore": None, "participantCount": 0, "reviewCount": 0,
             "coverPhotoId": None}
         zero = {**base, "id": 10, "name": "测试面馆", "categoryCode": "FAST_FOOD", "categoryName": "小吃快餐",
             "supportsDineIn": False, "pricePerPerson": 40, "location": None, "needsLocation": True,
-            "ratingScore": 0, "recommendRate": 0, "participantCount": 1, "reviewCount": 1,
+            "ratingScore": 0, "participantCount": 1, "reviewCount": 1,
             "coverPhotoId": None}
         deleted = {**base, "id": 20, "name": "已删除测试商户", "deleted": True}
         for document in (base, canteen, zero, deleted):

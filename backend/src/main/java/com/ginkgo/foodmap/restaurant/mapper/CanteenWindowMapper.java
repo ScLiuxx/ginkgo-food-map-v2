@@ -25,8 +25,7 @@ public interface CanteenWindowMapper {
                 + " taste,ROUND(s.value_sum/NULLIF(s.participant_count,0),2)"
                 + " value,ROUND(s.service_sum/NULLIF(s.participant_count,0),2)"
                 + " service,ROUND(s.ambience_sum/NULLIF(s.participant_count,0),2)"
-                + " ambience,ROUND(100*s.recommend_count/NULLIF(s.participant_count,0),2)"
-                + " recommend_rate,COALESCE(s.review_count,0)"
+                + " ambience,COALESCE(s.review_count,0)"
                 + " review_count,COALESCE(s.participant_count,0) participant_count";
 
     @Select(

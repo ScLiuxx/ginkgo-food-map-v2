@@ -13,6 +13,8 @@ import com.ginkgo.foodmap.security.service.LoginSessionService;
 
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -100,20 +102,24 @@ class ReviewWriteApiIntegrationTest {
         jdbc.update("DELETE FROM users");
         for (long id : List.of(11L, 22L, 33L)) {
             jdbc.update(
-                    "INSERT INTO users(id,username,email,password_hash,email_verified) VALUES(?,?,?,?,TRUE)",
+                    "INSERT INTO users(id,username,email,password_hash,email_verified)"
+                            + " VALUES(?,?,?,?,TRUE)",
                     id,
                     "reviewer_" + id,
                     "reviewer" + id + "@example.test",
                     "test-only");
             jdbc.update(
-                    "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code='ROLE_USER'",
+                    "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE"
+                            + " code='ROLE_USER'",
                     id);
         }
         // 正式商户管理已收紧为管理员；普通点评作者仍只具有自己的点评权限。
         jdbc.update(
-                "INSERT INTO user_roles(user_id,role_id) SELECT 33,id FROM roles WHERE code='ROLE_ADMIN'");
+                "INSERT INTO user_roles(user_id,role_id) SELECT 33,id FROM roles WHERE"
+                        + " code='ROLE_ADMIN'");
         jdbc.update(
-                "INSERT INTO restaurants(id,name,category_code,created_by) VALUES(1,'发布店','OTHER',11),(2,'另一店','OTHER',11)");
+                "INSERT INTO restaurants(id,name,category_code,created_by)"
+                        + " VALUES(1,'发布店','OTHER',11),(2,'另一店','OTHER',11)");
         when(sessions.isActive(anyString(), anyLong(), anyLong())).thenReturn(true);
         owner = token(11, false);
         other = token(22, false);
@@ -141,8 +147,8 @@ class ReviewWriteApiIntegrationTest {
                         uuid,
                         "scores",
                         Map.of("taste", score, "value", score, "service", score, "ambience", score),
-                        "recommended",
-                        recommended,
+                        "recommendation",
+                        recommended ? "RECOMMENDED" : "NOT_RECOMMENDED",
                         "body",
                         "这是一条真实测试正文"));
     }
@@ -247,7 +253,8 @@ class ReviewWriteApiIntegrationTest {
 
     private List<Long> outboxVersions() {
         return jdbc.queryForList(
-                "SELECT projection_version FROM restaurant_search_outbox WHERE restaurant_id=1 ORDER BY projection_version",
+                "SELECT projection_version FROM restaurant_search_outbox WHERE restaurant_id=1"
+                        + " ORDER BY projection_version",
                 Long.class);
     }
 
@@ -268,18 +275,86 @@ class ReviewWriteApiIntegrationTest {
                 .andExpect(status().isCreated());
         assertThat(count("reviews")).isEqualTo(3);
         assertStats(3, 2, 1, "15");
+        // 删除商户推荐率不影响点评本身的态度；同一作者的两次真实体验仍各自保存。
+        assertThat(
+                        jdbc.queryForList(
+                                "SELECT recommendation FROM reviews WHERE author_user_id=11 ORDER"
+                                        + " BY id",
+                                String.class))
+                .containsExactly("RECOMMENDED", "NOT_RECOMMENDED");
         assertThat(projectionVersion()).isEqualTo(4);
         mvc.perform(get("/api/restaurants/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.reviewCount").value(3))
                 .andExpect(jsonPath("$.data.participantCount").value(2))
                 .andExpect(jsonPath("$.data.score").value(7.5))
-                .andExpect(jsonPath("$.data.recommendRate").value(0.5))
+                .andExpect(jsonPath("$.data.recommendRate").doesNotExist())
                 .andExpect(jsonPath("$.data.tier").doesNotExist());
         mvc.perform(get("/api/restaurants/1/management").header("Authorization", "Bearer " + admin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.restaurant.score").value(7.5))
                 .andExpect(jsonPath("$.data.restaurant.participantCount").value(2));
+    }
+
+    /** 一般完整参与评分；原请求可重试，改态度复用UUID冲突，删掉最新后恢复旧代表。 */
+    @Test
+    void neutralPublishesReplaysConflictsAndFallsBackToPreviousAttitude() throws Exception {
+        long first = publishId(owner, 8, true);
+        var data = input(6, false, UUID.randomUUID().toString());
+        data.put("recommendation", "NEUTRAL");
+        var result = publish(owner, 1, data).andExpect(status().isCreated()).andReturn();
+        String second =
+                json.readTree(result.getResponse().getContentAsString())
+                        .path("data")
+                        .path("reviewId")
+                        .asString();
+        publish(owner, 1, data)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.replayed").value(true));
+        assertStats(2, 1, 0, "6");
+        mvc.perform(get("/api/restaurants/1/reviews"))
+                .andExpect(status().isOk())
+                .andExpect(
+                        jsonPath("$.data.records[0].currentReview.recommendation").value("NEUTRAL"))
+                .andExpect(jsonPath("$.data.records[0].currentReview.recommended").doesNotExist());
+        data.put("recommendation", "NOT_RECOMMENDED");
+        publish(owner, 1, data).andExpect(status().isConflict());
+        removeReview(owner, Long.parseLong(second)).andExpect(status().isNoContent());
+        assertStats(1, 1, 1, "8");
+        mvc.perform(get("/api/restaurants/1/reviews"))
+                .andExpect(
+                        jsonPath("$.data.records[0].currentReview.id").value(Long.toString(first)))
+                .andExpect(
+                        jsonPath("$.data.records[0].currentReview.recommendation")
+                                .value("RECOMMENDED"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "true",
+                "false",
+                "0",
+                "1",
+                "\"neutral\"",
+                "\"NEUTRAL \"",
+                "\"UNKNOWN\"",
+                "[]",
+                "{}",
+                "null"
+            })
+    void rejectsInvalidRecommendationTypesAndCodes(String value) throws Exception {
+        var data = input(8, true, UUID.randomUUID().toString());
+        data.remove("recommendation");
+        String body = json.writeValueAsString(data);
+        body = body.substring(0, body.length() - 1) + ",\"recommendation\":" + value + "}";
+        mvc.perform(
+                        post("/api/restaurants/1/reviews")
+                                .header("Authorization", "Bearer " + owner)
+                                .contentType("application/json")
+                                .content(body))
+                .andExpect(status().isBadRequest());
+        assertThat(count("reviews")).isZero();
     }
 
     @Test
@@ -335,7 +410,8 @@ class ReviewWriteApiIntegrationTest {
             publish(owner, 1, input(value, true, UUID.randomUUID().toString()))
                     .andExpect(status().isBadRequest());
         }
-        for (String field : List.of("authorUserId", "photos", "createdAt", "overallScore")) {
+        for (String field :
+                List.of("authorUserId", "photos", "createdAt", "overallScore", "recommended")) {
             var data = input(7, true, UUID.randomUUID().toString());
             data.put(field, List.of());
             publish(owner, 1, data).andExpect(status().isBadRequest());
@@ -345,7 +421,7 @@ class ReviewWriteApiIntegrationTest {
             data.put("body", body);
             publish(owner, 1, data).andExpect(status().isBadRequest());
         }
-        for (String field : List.of("body", "recommended", "scores", "clientRequestId")) {
+        for (String field : List.of("body", "recommendation", "scores", "clientRequestId")) {
             var data = input(7, true, UUID.randomUUID().toString());
             data.remove(field);
             publish(owner, 1, data).andExpect(status().isBadRequest());
@@ -354,7 +430,7 @@ class ReviewWriteApiIntegrationTest {
         data.put("body", "🥟".repeat(500));
         publish(owner, 1, data).andExpect(status().isCreated());
         data = input(10, true, UUID.randomUUID().toString());
-        data.put("recommended", "true");
+        data.put("recommendation", "true");
         publish(owner, 1, data).andExpect(status().isBadRequest());
         assertStats(1, 1, 0, "0");
     }
@@ -372,7 +448,8 @@ class ReviewWriteApiIntegrationTest {
                                 .content(json.writeValueAsString(data)))
                 .andExpect(status().isBadRequest());
         jdbc.update(
-                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM' WHERE id=1");
+                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM'"
+                        + " WHERE id=1");
         publish(owner, 1, input(7, true, UUID.randomUUID().toString()))
                 .andExpect(status().isNotFound());
     }
@@ -443,8 +520,9 @@ class ReviewWriteApiIntegrationTest {
             }
             var latest =
                     jdbc.queryForMap(
-                            "SELECT overall_score,is_recommended FROM reviews WHERE restaurant_id=1 ORDER BY created_at DESC,id DESC LIMIT 1");
-            long recommended = Boolean.TRUE.equals(latest.get("is_recommended")) ? 1 : 0;
+                            "SELECT overall_score,recommendation FROM reviews WHERE restaurant_id=1"
+                                    + " ORDER BY created_at DESC,id DESC LIMIT 1");
+            long recommended = "RECOMMENDED".equals(latest.get("recommendation")) ? 1 : 0;
             assertStats(7, 1, recommended, latest.get("overall_score").toString());
             assertThat(projectionVersion()).isEqualTo(8);
             assertThat(outboxVersions()).containsExactly(2L, 3L, 4L, 5L, 6L, 7L, 8L);
@@ -551,7 +629,8 @@ class ReviewWriteApiIntegrationTest {
         assertStats(2, 1, 0, "6");
         assertThat(
                         jdbc.queryForObject(
-                                "SELECT overall_score FROM reviews ORDER BY created_at DESC,id DESC LIMIT 1",
+                                "SELECT overall_score FROM reviews ORDER BY created_at DESC,id DESC"
+                                        + " LIMIT 1",
                                 BigDecimal.class))
                 .isEqualByComparingTo("6");
     }
@@ -626,11 +705,15 @@ class ReviewWriteApiIntegrationTest {
     void deletionRollsBackChildrenMediaAndReceiptThenSchedulesCleanup() throws Exception {
         long id = publishId(owner, 8, true);
         jdbc.update(
-                "INSERT INTO media_files(id,uploader_user_id,bucket_name,storage_key,content_type,byte_size,width,height,sha256,status,bound_at) VALUES(991,11,'test-bucket','review/delete.jpg','image/jpeg',100,10,10,UNHEX(REPEAT('00',32)),'BOUND',CURRENT_TIMESTAMP(6))");
+                "INSERT INTO"
+                    + " media_files(id,uploader_user_id,bucket_name,storage_key,content_type,byte_size,width,height,sha256,status,bound_at)"
+                    + " VALUES(991,11,'test-bucket','review/delete.jpg','image/jpeg',100,10,10,UNHEX(REPEAT('00',32)),'BOUND',CURRENT_TIMESTAMP(6))");
         jdbc.update(
                 "INSERT INTO review_photos(review_id,position,media_file_id) VALUES(?,0,991)", id);
         jdbc.update(
-                "INSERT INTO review_replies(review_id,author_user_id,body,client_request_id,request_hash) VALUES(?,22,'回复正文',UUID_TO_BIN(?),UNHEX(REPEAT('00',32)))",
+                "INSERT INTO"
+                    + " review_replies(review_id,author_user_id,body,client_request_id,request_hash)"
+                    + " VALUES(?,22,'回复正文',UUID_TO_BIN(?),UNHEX(REPEAT('00',32)))",
                 id,
                 UUID.randomUUID().toString());
         // 删除已完成统计和版本更新后失败，回滚时不得消耗版本或删除媒体关联。
@@ -651,7 +734,8 @@ class ReviewWriteApiIntegrationTest {
                 .isEqualTo("BOUND");
         assertThat(
                         jdbc.queryForObject(
-                                "SELECT COUNT(*) FROM review_request_receipts WHERE deleted_at IS NOT NULL",
+                                "SELECT COUNT(*) FROM review_request_receipts WHERE deleted_at IS"
+                                        + " NOT NULL",
                                 Long.class))
                 .isZero();
         assertStats(1, 1, 1, "8");
@@ -665,7 +749,8 @@ class ReviewWriteApiIntegrationTest {
                 .isEqualTo("PENDING_DELETE");
         assertThat(
                         jdbc.queryForObject(
-                                "SELECT COUNT(*) FROM media_files WHERE expires_at<=CURRENT_TIMESTAMP(6)",
+                                "SELECT COUNT(*) FROM media_files WHERE"
+                                        + " expires_at<=CURRENT_TIMESTAMP(6)",
                                 Long.class))
                 .isEqualTo(1);
         mvc.perform(get("/api/reviews/" + id + "/photos/0")).andExpect(status().isNotFound());

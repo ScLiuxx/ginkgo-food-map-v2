@@ -1,3 +1,4 @@
+import { isReviewRecommendation, type ReviewRecommendation } from '../model/review'
 import type { ApiResponse } from '@/shared/api/api.types'
 import { httpClient } from '@/shared/api/httpClient'
 import type { ReviewItem, Scores } from '../model/review'
@@ -29,7 +30,7 @@ interface MyReviewPageDto extends Omit<MyReviewPage, 'records'> {
       id: string
       scores: Scores
       overallScore: number
-      recommended: boolean
+      recommendation: ReviewRecommendation
       body: string
       createdAt: string
       scoringStatus: 'current'
@@ -96,7 +97,7 @@ export async function fetchMyReviews(
       reviewIds.has(review.id) ||
       review.scoringStatus !== 'current' ||
       typeof review.body !== 'string' ||
-      typeof review.recommended !== 'boolean' ||
+      !isReviewRecommendation(review.recommendation) ||
       !Number.isFinite(Date.parse(review.createdAt)) ||
       !Number.isFinite(review.overallScore) ||
       review.overallScore < 0 ||

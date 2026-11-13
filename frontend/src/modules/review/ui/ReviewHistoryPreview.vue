@@ -65,13 +65,7 @@ function reset() {
             <span>评价人数</span
             ><strong data-testid="people">{{ snapshot.people }}<small> 人</small></strong>
           </div>
-          <div>
-            <span>推荐率</span
-            ><strong>{{
-              snapshot.recommendRate === null ? '—' : snapshot.recommendRate + '%'
-            }}</strong>
-          </div>
-          <p>每人只取最新一条有效点评计算四维均分与推荐率，历史记录不重复计分。</p>
+          <p>每人只取最新一条有效点评计算四维均分，历史记录不重复计分。</p>
         </section>
         <ReviewPanel :key="revision" restaurant-id="preview-restaurant" preview />
       </div>
@@ -171,7 +165,7 @@ h1 small {
 }
 .summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   border: 1px solid #ecdfc1;
   border-radius: 16px;

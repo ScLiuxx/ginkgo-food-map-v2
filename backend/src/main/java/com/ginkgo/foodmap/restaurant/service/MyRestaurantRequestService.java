@@ -11,6 +11,7 @@ import com.ginkgo.foodmap.restaurant.mapper.MyRestaurantRequestMapper;
 import com.ginkgo.foodmap.restaurant.mapper.RestaurantCatalogMapper;
 import com.ginkgo.foodmap.restaurant.support.RestaurantIdentifiers;
 import com.ginkgo.foodmap.restaurant.vo.MyRestaurantRequestViews;
+import com.ginkgo.foodmap.review.service.ReviewSubmissionService;
 import com.ginkgo.foodmap.security.service.CurrentActorService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -37,6 +38,7 @@ public class MyRestaurantRequestService {
     private final RestaurantWriteService validation;
     private final Validator validator;
     private final ObjectMapper json;
+    private final ReviewSubmissionService reviewSubmissions;
     private static final List<String> FIELDS = List.of("name", "categoryCode", "restaurantType", "priceKind",
             "pricePerPerson", "address", "latitude", "longitude", "locationConfirmed", "businessStatus",
             "supportsDineIn", "supportsDelivery", "tags");
@@ -125,6 +127,7 @@ public class MyRestaurantRequestService {
         if (locked == null) {
             throw new BusinessException(RestaurantErrorCode.REQUEST_NOT_FOUND);
         }
+        reviewSubmissions.requireNoAttachedReview(requestId);
         if (!"PENDING".equals(locked.getStatus())) {
             throw new BusinessException(RestaurantErrorCode.STATE_CONFLICT, "仅待审核申请可以修改");
         }
@@ -149,6 +152,7 @@ public class MyRestaurantRequestService {
         if (locked == null) {
             throw new BusinessException(RestaurantErrorCode.REQUEST_NOT_FOUND);
         }
+        reviewSubmissions.requireNoAttachedReview(requestId);
         // 重复撤回和相同回执重试都返回成功，不再次修改撤回时间。
         if ("WITHDRAWN".equals(locked.getStatus())) {
             return;

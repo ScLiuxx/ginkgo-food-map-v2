@@ -74,16 +74,14 @@ describe('restaurant reading rules', () => {
     ])
   })
 
-  it('sorts by recommendation or total review count independently from the overall score', () => {
+  it('sorts by review count for heat and its legacy alias independently from the overall score', () => {
     const items = [
       candidate('a', 9, {
         reviewCount: 1,
-        recommendRate: 0.2,
         dimensions: { taste: 5, value: null, service: null, ambience: null },
       }),
       candidate('b', 6, {
         reviewCount: 5,
-        recommendRate: 0.9,
         dimensions: { taste: 9, value: null, service: null, ambience: null },
       }),
     ]

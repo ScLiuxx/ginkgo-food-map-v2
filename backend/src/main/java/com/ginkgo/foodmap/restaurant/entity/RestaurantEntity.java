@@ -53,8 +53,6 @@ public class RestaurantEntity {
     @TableField(exist = false)
     private BigDecimal reputationScore;
     @TableField(exist = false)
-    private BigDecimal recommendRate;
-    @TableField(exist = false)
     private BigDecimal taste;
     @TableField(exist = false)
     private BigDecimal value;

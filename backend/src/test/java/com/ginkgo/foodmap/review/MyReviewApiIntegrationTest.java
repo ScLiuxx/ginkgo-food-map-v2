@@ -109,17 +109,20 @@ class MyReviewApiIntegrationTest {
         }
         for (long id : List.of(11L, 22L)) {
             jdbc.update(
-                    "INSERT INTO users(id,username,email,password_hash,email_verified) VALUES(?,?,?,?,TRUE)",
+                    "INSERT INTO users(id,username,email,password_hash,email_verified)"
+                        + " VALUES(?,?,?,?,TRUE)",
                     id,
                     "my_reviewer_" + id,
                     "my" + id + "@example.test",
                     "private-password");
             jdbc.update(
-                    "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code='ROLE_USER'",
+                    "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE"
+                        + " code='ROLE_USER'",
                     id);
         }
         jdbc.update(
-                "INSERT INTO restaurants(id,name,category_code,created_by) VALUES(1,'第一家店','OTHER',11),(2,'第二家店','OTHER',11)");
+                "INSERT INTO restaurants(id,name,category_code,created_by)"
+                    + " VALUES(1,'第一家店','OTHER',11),(2,'第二家店','OTHER',11)");
         when(sessions.isActive(anyString(), anyLong(), anyLong())).thenReturn(true);
         owner = token(11);
     }
@@ -207,7 +210,8 @@ class MyReviewApiIntegrationTest {
             throws Exception {
         for (int id = 3; id <= 11; id++) {
             jdbc.update(
-                    "INSERT INTO restaurants(id,name,category_code,created_by) VALUES(?,?,'OTHER',11)",
+                    "INSERT INTO restaurants(id,name,category_code,created_by)"
+                        + " VALUES(?,?,'OTHER',11)",
                     id,
                     "店铺" + id);
         }
@@ -216,7 +220,8 @@ class MyReviewApiIntegrationTest {
         }
         review(999, 999, 11, 8, "2026-11-03 01:00:00");
         jdbc.update(
-                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM' WHERE id=11");
+                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM'"
+                    + " WHERE id=11");
         jdbc.update("UPDATE restaurants SET business_status='CLOSED' WHERE id=10");
         mine(owner)
                 .andExpect(jsonPath("$.data.records.length()").value(8))
@@ -278,7 +283,8 @@ class MyReviewApiIntegrationTest {
         review(101, 1, 11, 8, "2026-11-01 01:00:00");
         review(102, 1, 11, 9, "2026-11-02 01:00:00");
         jdbc.update(
-                "INSERT INTO review_photos(review_id,position,media_file_id) VALUES(102,1,502),(102,0,501)");
+                "INSERT INTO review_photos(review_id,position,media_file_id)"
+                    + " VALUES(102,1,502),(102,0,501)");
         var response =
                 mine(owner)
                         .andExpect(
@@ -355,7 +361,9 @@ class MyReviewApiIntegrationTest {
                             CompletableFuture.runAsync(
                                             () ->
                                                     jdbc.update(
-                                                            "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM' WHERE id=1"))
+                                                            "UPDATE restaurants SET"
+                                                                + " deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM'"
+                                                                + " WHERE id=1"))
                                     .get(5, TimeUnit.SECONDS);
                             return invocation.callRealMethod();
                         })
@@ -382,7 +390,9 @@ class MyReviewApiIntegrationTest {
                 "INSERT INTO restaurants(id,name,category_code,created_by) VALUES(?,?,'OTHER',11)",
                 stores);
         jdbc.batchUpdate(
-                "INSERT INTO reviews(id,restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,is_recommended,body,client_request_id,request_hash) VALUES(?,?,11,8,8,8,8,TRUE,'批量点评正文',UUID_TO_BIN(?),UNHEX(SHA2('test',256)))",
+                "INSERT INTO"
+                    + " reviews(id,restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,recommendation,body,client_request_id,request_hash)"
+                    + " VALUES(?,?,11,8,8,8,8,'RECOMMENDED','批量点评正文',UUID_TO_BIN(?),UNHEX(SHA2('test',256)))",
                 reviews);
         mine(owner)
                 .andExpect(jsonPath("$.data.totalGroups").value(501))
@@ -392,7 +402,10 @@ class MyReviewApiIntegrationTest {
         verify(photos, times(1)).references(anyList());
         String columns =
                 jdbc.queryForObject(
-                        "SELECT GROUP_CONCAT(column_name ORDER BY seq_in_index) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='reviews' AND index_name='idx_reviews_author_restaurant_created_id'",
+                        "SELECT GROUP_CONCAT(column_name ORDER BY seq_in_index) FROM"
+                            + " information_schema.statistics WHERE table_schema=DATABASE() AND"
+                            + " table_name='reviews' AND"
+                            + " index_name='idx_reviews_author_restaurant_created_id'",
                         String.class);
         assertThat(columns).isEqualTo("author_user_id,restaurant_id,created_at,id");
     }
@@ -414,7 +427,9 @@ class MyReviewApiIntegrationTest {
 
     private void review(long id, long restaurant, long author, double score, String time) {
         jdbc.update(
-                "INSERT INTO reviews(id,restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,is_recommended,body,client_request_id,request_hash,created_at) VALUES(?,?,?,?,?,?,?,TRUE,'本人点评测试正文',UUID_TO_BIN(?),UNHEX(SHA2('private-hash',256)),?)",
+                "INSERT INTO"
+                    + " reviews(id,restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,recommendation,body,client_request_id,request_hash,created_at)"
+                    + " VALUES(?,?,?,?,?,?,?,'RECOMMENDED','本人点评测试正文',UUID_TO_BIN(?),UNHEX(SHA2('private-hash',256)),?)",
                 id,
                 restaurant,
                 author,
@@ -433,8 +448,8 @@ class MyReviewApiIntegrationTest {
                         UUID.randomUUID().toString(),
                         "scores",
                         Map.of("taste", 8, "value", 8, "service", 8, "ambience", 8),
-                        "recommended",
-                        true,
+                        "recommendation",
+                        "RECOMMENDED",
                         "body",
                         "我的点评完整闭环测试正文");
         var result =

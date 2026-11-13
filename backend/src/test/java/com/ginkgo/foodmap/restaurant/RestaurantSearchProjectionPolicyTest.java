@@ -13,6 +13,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -49,17 +50,15 @@ class RestaurantSearchProjectionPolicyTest {
         assertThat(result.getSupportsDineIn()).isNull();
         assertThat(result.getSupportsDelivery()).isNull();
         assertThat(result.getRatingScore()).isNull();
-        assertThat(result.getRecommendRate()).isNull();
         assertThat(result.getParticipantCount()).isZero();
         assertThat(result.getReviewCount()).isZero();
     }
 
     @Test
-    void keepsRawRatioWithoutPageRoundingAndCopiesOrderedTags() {
+    void keepsRawScoreWithoutPageRoundingAndCopiesOrderedTags() {
         var row = regular();
         row.setParticipantCount(3);
         row.setReviewCount(7);
-        row.setRecommendCount(1);
         row.setOverallScoreSum(new BigDecimal("23.12"));
         row.setNeedsLocation(false);
         row.setLatitude(new BigDecimal("30.750001"));
@@ -73,7 +72,6 @@ class RestaurantSearchProjectionPolicyTest {
         tags.clear();
         assertThat(result.getTags()).containsExactly("学生聚餐", "夜宵");
         assertThat(result.getRatingScore()).isCloseTo(23.12 / 3, within(1e-14)).isNotEqualTo(7.71);
-        assertThat(result.getRecommendRate()).isEqualTo(1.0 / 3);
         assertThat(result.getReviewCount()).isEqualTo(7);
         assertThat(result.getCoverPhotoId()).isEqualTo("9223372036854775807");
         assertThat(result.getLocation().getLat()).isEqualByComparingTo("30.750001");
@@ -94,7 +92,6 @@ class RestaurantSearchProjectionPolicyTest {
         assertThat(result.getCategoryCode()).isNull();
         assertThat(result.getCategoryName()).isNull();
         assertThat(result.getRatingScore()).isZero();
-        assertThat(result.getRecommendRate()).isZero();
     }
 
     @Test
@@ -131,8 +128,12 @@ class RestaurantSearchProjectionPolicyTest {
                 getClass().getResourceAsStream("/elasticsearch/restaurant-search-v002.json")) {
             Map<?, ?> spec = json.readValue(stream, Map.class);
             Map<?, ?> properties = (Map<?, ?>) ((Map<?, ?>) spec.get("mappings")).get("properties");
-            assertThat(body.keySet().equals(properties.keySet())).isTrue();
+            // 兼容既有物理索引的历史字段；新文档不再生成推荐率，无需改建索引。
+            var activeFields = new HashSet<>(properties.keySet());
+            activeFields.remove("recommendRate");
+            assertThat(body.keySet().equals(activeFields)).isTrue();
         }
+        assertThat(body.containsKey("recommendRate")).isFalse();
         assertThat(body.get("id")).isInstanceOf(Long.class);
         assertThat(body.get("projectionVersion")).isInstanceOf(Number.class);
         assertThat(body.get("coverPhotoId")).isInstanceOf(String.class);
@@ -173,7 +174,6 @@ class RestaurantSearchProjectionPolicyTest {
                 },
                 row -> row.setReviewCount(-1),
                 row -> row.setParticipantCount(1),
-                row -> row.setRecommendCount(1),
                 row -> row.setOverallScoreSum(BigDecimal.ONE),
                 row -> row.setOverallScoreSum(null));
     }

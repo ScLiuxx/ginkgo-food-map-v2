@@ -97,17 +97,20 @@ class ImageUploadIntegrationTest {
         jdbc.update("DELETE FROM users");
         for (long id : List.of(11L, 22L)) {
             jdbc.update(
-                    "INSERT INTO users(id,username,email,password_hash,email_verified) VALUES(?,?,?,?,TRUE)",
+                    "INSERT INTO users(id,username,email,password_hash,email_verified)"
+                        + " VALUES(?,?,?,?,TRUE)",
                     id,
                     "reviewer_" + id,
                     "reviewer" + id + "@example.test",
                     "test-only");
             jdbc.update(
-                    "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code='ROLE_USER'",
+                    "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE"
+                        + " code='ROLE_USER'",
                     id);
         }
         jdbc.update(
-                "INSERT INTO restaurants(id,name,category_code,created_by) VALUES(1,'发布店','OTHER',11),(2,'另一店','OTHER',11)");
+                "INSERT INTO restaurants(id,name,category_code,created_by)"
+                    + " VALUES(1,'发布店','OTHER',11),(2,'另一店','OTHER',11)");
         when(sessions.isActive(anyString(), anyLong(), anyLong())).thenReturn(true);
         owner = token(11, false);
         other = token(22, false);
@@ -253,7 +256,8 @@ class ImageUploadIntegrationTest {
     void boundFilesCannotBeCancelledOrExpired() throws Exception {
         String id = uploadId();
         jdbc.update(
-                "UPDATE media_files SET status='BOUND',expires_at=NULL,bound_at=CURRENT_TIMESTAMP WHERE id=?",
+                "UPDATE media_files SET status='BOUND',expires_at=NULL,bound_at=CURRENT_TIMESTAMP"
+                    + " WHERE id=?",
                 id);
         mvc.perform(delete("/api/files/images/" + id).header("Authorization", "Bearer " + owner))
                 .andExpect(status().isConflict());
@@ -337,13 +341,15 @@ class ImageUploadIntegrationTest {
                 .andExpect(jsonPath("$.data.id").value(id));
         assertThat(
                         jdbc.queryForList(
-                                "SELECT media_file_id FROM restaurant_change_photos WHERE request_id=? ORDER BY position",
+                                "SELECT media_file_id FROM restaurant_change_photos WHERE"
+                                    + " request_id=? ORDER BY position",
                                 String.class,
                                 id))
                 .containsExactly(second, first);
         assertThat(
                         jdbc.queryForObject(
-                                "SELECT COUNT(*) FROM media_files WHERE status='BOUND' AND purpose='RESTAURANT'",
+                                "SELECT COUNT(*) FROM media_files WHERE status='BOUND' AND"
+                                    + " purpose='RESTAURANT'",
                                 Long.class))
                 .isEqualTo(2);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurants", Long.class))
@@ -448,8 +454,8 @@ class ImageUploadIntegrationTest {
                 uuid,
                 "scores",
                 Map.of("taste", 7, "value", 7, "service", 7, "ambience", 7),
-                "recommended",
-                true,
+                "recommendation",
+                "RECOMMENDED",
                 "body",
                 "带图点评的真实数据库测试正文",
                 "photoIds",
@@ -491,7 +497,8 @@ class ImageUploadIntegrationTest {
                 .isEqualTo(2);
         assertThat(
                         jdbc.queryForObject(
-                                "SELECT review_count FROM restaurant_review_statistics WHERE restaurant_id=1",
+                                "SELECT review_count FROM restaurant_review_statistics WHERE"
+                                    + " restaurant_id=1",
                                 Long.class))
                 .isEqualTo(1);
         when(storage.read(anyString(), anyString())).thenReturn(JpegImageProcessorTest.jpeg(5, 5));
@@ -501,7 +508,8 @@ class ImageUploadIntegrationTest {
         input = reviewInput(List.of(first, second), (String) input.get("clientRequestId"));
         publish(input).andExpect(status().isConflict());
         jdbc.update(
-                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP,delete_reason_code='SYSTEM' WHERE id=1");
+                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP,delete_reason_code='SYSTEM'"
+                    + " WHERE id=1");
         mvc.perform(get("/api/reviews/" + review + "/photos/0")).andExpect(status().isNotFound());
     }
 
@@ -588,7 +596,8 @@ class ImageUploadIntegrationTest {
     void uploadingRecoveryCannotReactivatePendingDeletion() throws Exception {
         String id = uploadId();
         jdbc.update(
-                "UPDATE media_files SET status='UPLOADING',expires_at=CURRENT_TIMESTAMP-INTERVAL 1 SECOND WHERE id=?",
+                "UPDATE media_files SET status='UPLOADING',expires_at=CURRENT_TIMESTAMP-INTERVAL 1"
+                    + " SECOND WHERE id=?",
                 id);
         cleanupJob().cleanup();
         assertThat(files.find(Long.parseLong(id)).getStatus()).isEqualTo("PENDING_DELETE");

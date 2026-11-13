@@ -41,7 +41,12 @@ class SingleCharacterBenchmarkTest(unittest.TestCase):
         count,page=sql_statements({'params':{'keyword':"%' OR 1=1",'sort':'recommend'}})
         self.assertNotIn("OR 1=1",count[0])
         self.assertIn("!%",count[1][0])
-        self.assertIn('ROUND(',page[0]);self.assertIn(',3)',page[0])
+        self.assertIn('ROUND(',page[0]);self.assertIn(',1)',page[0])
+        self.assertNotIn('recommend_rate',page[0])
+        self.assertIn('ORDER BY COALESCE(s.review_count,0) DESC,r.id',page[0])
+        body=search_body({'params':{'keyword':'面','sort':'recommend'}})
+        self.assertEqual(body['sort'][0],{'reviewCount':{'order':'desc','missing':'_last'}})
+        self.assertNotIn('runtime_mappings',body)
         self.assertEqual(page[1][-2:],[8,0])
 
     def test_fixed_query_cases_include_nonempty_and_empty_filter_controls(self):

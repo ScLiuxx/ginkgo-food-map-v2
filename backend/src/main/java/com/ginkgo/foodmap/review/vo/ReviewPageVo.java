@@ -1,7 +1,10 @@
 package com.ginkgo.foodmap.review.vo;
 
+import com.ginkgo.foodmap.review.dto.ReviewRecommendation;
 import com.ginkgo.foodmap.user.dto.PublicAuthor;
+
 import lombok.Data;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -31,7 +34,7 @@ public class ReviewPageVo {
         private String id;
         private Scores scores;
         private BigDecimal overallScore;
-        private boolean recommended;
+        private ReviewRecommendation recommendation;
         private String body;
         private Instant createdAt;
         private String scoringStatus = "current";

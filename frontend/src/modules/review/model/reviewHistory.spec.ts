@@ -13,7 +13,7 @@ const item: ReviewItem = {
   nextHistoryCursor: 'start',
   createdAt: '2026-10-30T00:00:00Z',
   scores: { taste: 8, value: 8, service: 8, ambience: 8 },
-  recommended: true,
+  recommendation: 'RECOMMENDED',
   body: '当前记录',
   photos: [],
   canDelete: false,

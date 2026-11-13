@@ -26,10 +26,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
-import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -78,7 +78,8 @@ class ContentReportApiIntegrationTest {
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) throws SQLException {
         database = "ginkgo_content_reports_it_" + UUID.randomUUID().toString().replace("-", "");
-        try (var connection = connect(""); var statement = connection.createStatement()) {
+        try (var connection = connect("");
+                var statement = connection.createStatement()) {
             statement.executeUpdate(
                     "CREATE DATABASE `"
                             + database
@@ -115,7 +116,8 @@ class ContentReportApiIntegrationTest {
         }
         for (long id : List.of(11L, 22L, 33L, 44L)) {
             jdbc.update(
-                    "INSERT INTO users(id,username,email,password_hash,email_verified) VALUES(?,?,?,?,TRUE)",
+                    "INSERT INTO users(id,username,email,password_hash,email_verified)"
+                        + " VALUES(?,?,?,?,TRUE)",
                     id,
                     "report_user_" + id,
                     "report" + id + "@example.test",
@@ -126,7 +128,8 @@ class ContentReportApiIntegrationTest {
                     id == 33L ? "ROLE_ADMIN" : "ROLE_USER");
         }
         jdbc.update(
-                "INSERT INTO restaurants(id,name,category_code,created_by) VALUES(1,'举报测试店','OTHER',11)");
+                "INSERT INTO restaurants(id,name,category_code,created_by)"
+                    + " VALUES(1,'举报测试店','OTHER',11)");
         review(100, 1, 22, "被举报点评正文内容");
         reply(200, 100, 22, "被举报回复正文");
         // 点评直接插入时未经过发布服务，这里补齐与之一致的累计值，保证删除差额不会变成负数。
@@ -146,7 +149,8 @@ class ContentReportApiIntegrationTest {
         if (!created) {
             return;
         }
-        try (var connection = connect(""); var statement = connection.createStatement()) {
+        try (var connection = connect("");
+                var statement = connection.createStatement()) {
             statement.executeUpdate("DROP DATABASE `" + database + "`");
         }
     }
@@ -170,8 +174,9 @@ class ContentReportApiIntegrationTest {
 
         var row =
                 jdbc.queryForMap(
-                        "SELECT reporter_user_id,target_type,target_id,target_author_user_id,"
-                                + "review_id,content_snapshot,reason,detail,status FROM content_reports");
+                        "SELECT"
+                            + " reporter_user_id,target_type,target_id,target_author_user_id,review_id,content_snapshot,reason,detail,status"
+                            + " FROM content_reports");
         assertThat(number(row.get("reporter_user_id"))).isEqualTo(11L);
         assertThat(row.get("target_type")).isEqualTo("REVIEW");
         assertThat(number(row.get("target_id"))).isEqualTo(100L);
@@ -281,9 +286,7 @@ class ContentReportApiIntegrationTest {
     void adminListsPendingReportsWithSnapshot() throws Exception {
         String id = createReport(reporter, "/api/reviews/100/reports", "ABUSE", "含攻击性内容");
 
-        mvc.perform(
-                        get("/api/admin/content-reports")
-                                .header("Authorization", "Bearer " + admin))
+        mvc.perform(get("/api/admin/content-reports").header("Authorization", "Bearer " + admin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(1))
                 .andExpect(jsonPath("$.data.totalPages").value(1))
@@ -306,9 +309,7 @@ class ContentReportApiIntegrationTest {
     void ordinaryUserCannotReadOrDismissAdminReports() throws Exception {
         String id = createReport(reporter, "/api/reviews/100/reports", "ABUSE", null);
 
-        mvc.perform(
-                        get("/api/admin/content-reports")
-                                .header("Authorization", "Bearer " + other))
+        mvc.perform(get("/api/admin/content-reports").header("Authorization", "Bearer " + other))
                 .andExpect(status().isForbidden());
         mvc.perform(
                         post("/api/admin/content-reports/" + id + "/dismiss")
@@ -341,7 +342,8 @@ class ContentReportApiIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM review_replies", Long.class)).isZero();
         assertThat(
                         jdbc.queryForObject(
-                                "SELECT deleted_at FROM review_request_receipts WHERE review_id=100",
+                                "SELECT deleted_at FROM review_request_receipts WHERE"
+                                    + " review_id=100",
                                 java.sql.Timestamp.class))
                 .isNotNull();
         assertThat(
@@ -359,14 +361,15 @@ class ContentReportApiIntegrationTest {
                 .isEqualTo(2L);
         assertThat(
                         jdbc.queryForObject(
-                                "SELECT COUNT(DISTINCT recipient_user_id) FROM notification_messages"
-                                        + " WHERE notification_type='REPORT_RESULT'",
+                                "SELECT COUNT(DISTINCT recipient_user_id) FROM"
+                                    + " notification_messages WHERE"
+                                    + " notification_type='REPORT_RESULT'",
                                 Long.class))
                 .isEqualTo(2L);
         assertThat(
                         jdbc.queryForObject(
-                                "SELECT review_id FROM notification_messages"
-                                        + " WHERE notification_type='REPORT_RESULT' AND source_id=?",
+                                "SELECT review_id FROM notification_messages WHERE"
+                                    + " notification_type='REPORT_RESULT' AND source_id=?",
                                 Long.class,
                                 Long.valueOf(first)))
                 .isEqualTo(100L);
@@ -504,9 +507,7 @@ class ContentReportApiIntegrationTest {
     private String createReport(String token, String path, String reason, String detail)
             throws Exception {
         var result =
-                report(token, path, reason, detail)
-                        .andExpect(status().isCreated())
-                        .andReturn();
+                report(token, path, reason, detail).andExpect(status().isCreated()).andReturn();
         return json.readTree(result.getResponse().getContentAsString())
                 .get("data")
                 .get("reportId")
@@ -551,8 +552,8 @@ class ContentReportApiIntegrationTest {
         String requestId = UUID.randomUUID().toString();
         jdbc.update(
                 "INSERT INTO reviews(id,restaurant_id,author_user_id,taste_score,value_score,"
-                        + "service_score,ambience_score,is_recommended,body,client_request_id,"
-                        + "request_hash) VALUES(?,?,?,?,?,?,?,TRUE,?,UUID_TO_BIN(?),"
+                        + "service_score,ambience_score,recommendation,body,client_request_id,"
+                        + "request_hash) VALUES(?,?,?,?,?,?,?,'RECOMMENDED',?,UUID_TO_BIN(?),"
                         + "UNHEX(SHA2('report-test-hash',256)))",
                 id,
                 restaurant,
@@ -625,8 +626,7 @@ class ContentReportApiIntegrationTest {
     private static String url(String name) {
         String server =
                 System.getenv()
-                        .getOrDefault(
-                                "MODERATION_TEST_DB_SERVER", "jdbc:mysql://127.0.0.1:3306/");
+                        .getOrDefault("MODERATION_TEST_DB_SERVER", "jdbc:mysql://127.0.0.1:3306/");
         if (!server.matches("jdbc:mysql://(127\\.0\\.0\\.1|localhost):[0-9]{1,5}/")) {
             throw new IllegalArgumentException("Loopback only");
         }

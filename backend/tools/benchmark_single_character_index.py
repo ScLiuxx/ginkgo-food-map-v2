@@ -173,13 +173,13 @@ def sql_statements(case, full=False):
     from_where = ''' FROM restaurants r LEFT JOIN restaurant_categories c ON c.code=r.category_code
         LEFT JOIN restaurant_review_statistics s ON s.restaurant_id=r.id WHERE ''' + ' AND '.join(where)
     rating = 'ROUND(CAST(s.overall_score_sum AS DECIMAL(40,20))/NULLIF(s.participant_count,0),1)'
-    recommend = 'ROUND(CAST(s.recommend_count AS DECIMAL(40,20))/NULLIF(s.participant_count,0),3)'
-    select = 'SELECT r.id,' + rating + ' AS score,' + recommend + ' AS recommend_rate'
+    select = 'SELECT r.id,' + rating + ' AS score'
     sort = q.get('sort', 'score')
     selected_values = []
     if sort == 'distance':
         select += ',(' + DISTANCE_SQL + ') AS distance_meters';selected_values = geo
-    order = {'score': 'score IS NULL,score DESC,r.id', 'recommend': 'recommend_rate IS NULL,recommend_rate DESC,r.id',
+    # 旧recommend参数沿用现行热度别名，不再派生或排序推荐率。
+    order = {'score': 'score IS NULL,score DESC,r.id', 'recommend': 'COALESCE(s.review_count,0) DESC,r.id',
              'reviews': 'COALESCE(s.review_count,0) DESC,r.id', 'price': 'r.price_per_person IS NULL,r.price_per_person,r.id',
              'distance': 'distance_meters IS NULL,distance_meters,r.id'}[sort]
     if full:
@@ -236,10 +236,10 @@ def search_body(case, chars=True, full=False):
     if q.get('maxDistanceMeters') is not None:
         filters.append({'range': {'query_distance': {'lte': q['maxDistanceMeters']}}})
     sort = q.get('sort', 'score')
-    if sort in ('score', 'recommend'):
+    if sort == 'score':
         runtime['query_rating'] = {'type': 'long', 'script': {'source': "if(doc[params.field].size()!=0) emit(Math.round(doc[params.field].value*params.factor));", 'params': {
-            'field': 'ratingScore' if sort == 'score' else 'recommendRate', 'factor': 10 if sort == 'score' else 1000}}}
-    field, direction = {'score': ('query_rating', 'desc'), 'recommend': ('query_rating', 'desc'),
+            'field': 'ratingScore', 'factor': 10}}}
+    field, direction = {'score': ('query_rating', 'desc'), 'recommend': ('reviewCount', 'desc'),
                         'reviews': ('reviewCount', 'desc'), 'price': ('pricePerPerson', 'asc'), 'distance': ('query_distance', 'asc')}[sort]
     limit = 10000 if full else q.get('pageSize', 8)
     offset = 0 if full else (q.get('page', 1) - 1) * limit

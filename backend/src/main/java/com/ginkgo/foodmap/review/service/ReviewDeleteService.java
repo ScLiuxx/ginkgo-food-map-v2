@@ -5,6 +5,7 @@ import com.ginkgo.foodmap.file.service.MediaFileService;
 import com.ginkgo.foodmap.restaurant.dto.RestaurantReviewDelta;
 import com.ginkgo.foodmap.restaurant.service.CanteenWindowService;
 import com.ginkgo.foodmap.restaurant.service.RestaurantReviewApplicationService;
+import com.ginkgo.foodmap.review.dto.ReviewRecommendation;
 import com.ginkgo.foodmap.review.entity.ReviewEntity;
 import com.ginkgo.foodmap.review.exception.ReviewErrorCode;
 import com.ginkgo.foodmap.review.mapper.ReplyDeleteMapper;
@@ -51,8 +52,7 @@ public class ReviewDeleteService {
     /**
      * 管理员处置违规点评：跳过作者归属校验，但沿用同一父锁、回执、子资源和评分重算。
      *
-     * <p>返回true表示本次删除，false表示此前已删除；删除回执继续阻止原发布请求重放，不能借此
-     * 恢复内容。权限由管理安全链和方法注解双重校验。
+     * <p>返回true表示本次删除，false表示此前已删除；删除回执继续阻止原发布请求重放，不能借此 恢复内容。权限由管理安全链和方法注解双重校验。
      */
     @PreAuthorize("hasRole('ADMIN')")
     public boolean removeForModeration(long id) {
@@ -145,7 +145,10 @@ public class ReviewDeleteService {
         d.setReviews(-1);
         d.setParticipants(next == null ? -1 : 0);
         d.setRecommendations(
-                (next != null && next.isRecommended() ? 1 : 0) - (old.isRecommended() ? 1 : 0));
+                (next != null && next.getRecommendation() == ReviewRecommendation.RECOMMENDED
+                                ? 1
+                                : 0)
+                        - (old.getRecommendation() == ReviewRecommendation.RECOMMENDED ? 1 : 0));
         d.setTaste(
                 (next == null ? BigDecimal.ZERO : next.getTasteScore())
                         .subtract(old.getTasteScore()));

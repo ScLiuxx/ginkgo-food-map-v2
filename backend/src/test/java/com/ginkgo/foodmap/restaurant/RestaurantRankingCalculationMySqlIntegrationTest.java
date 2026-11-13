@@ -1,5 +1,8 @@
 package com.ginkgo.foodmap.restaurant;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.ginkgo.foodmap.restaurant.config.RestaurantRankingProperties;
 import com.ginkgo.foodmap.restaurant.entity.RestaurantRankingSnapshotEntity;
 import com.ginkgo.foodmap.restaurant.mapper.RestaurantRankingCandidateMapper;
@@ -11,6 +14,7 @@ import com.ginkgo.foodmap.restaurant.support.RestaurantRankingSnapshotCodec;
 import com.ginkgo.foodmap.review.dto.RestaurantPeriodReviewStats;
 import com.ginkgo.foodmap.review.service.ReviewRankingService;
 import com.ginkgo.foodmap.security.TestJwtKeys;
+
 import org.apache.ibatis.executor.statement.StatementHandler;
 import org.apache.ibatis.plugin.Interceptor;
 import org.apache.ibatis.plugin.Intercepts;
@@ -31,6 +35,7 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -49,23 +54,25 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-/**
- * 显式开启的真实MySQL计算验证：Flyway随机隔离库，绝不向开发库写模拟餐厅或点评。
- * 验证窗口函数、微秒边界、硬删除回退、可见性及RR快照，不能用H2模拟MySQL语义替代。
- */
+/** 显式开启的真实MySQL计算验证：Flyway随机隔离库，绝不向开发库写模拟餐厅或点评。 验证窗口函数、微秒边界、硬删除回退、可见性及RR快照，不能用H2模拟MySQL语义替代。 */
 @EnabledIfSystemProperty(named = "ranking.calculation.integration", matches = "true")
 @ActiveProfiles("test")
-@SpringBootTest(properties = {
-        "spring.flyway.enabled=true", "spring.sql.init.mode=never",
-        "spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver",
-        "app.ranking.redis-enabled=false", "app.ranking.caffeine-enabled=false",
-        "app.search.elasticsearch.enabled=false", "app.search.sync.enabled=false",
-        "app.search.query.enabled=false", "app.file.oss.enabled=false"
+@SpringBootTest(
+        properties = {
+            "spring.flyway.enabled=true",
+            "spring.sql.init.mode=never",
+            "spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver",
+            "app.ranking.redis-enabled=false",
+            "app.ranking.caffeine-enabled=false",
+            "app.search.elasticsearch.enabled=false",
+            "app.search.sync.enabled=false",
+            "app.search.query.enabled=false",
+            "app.file.oss.enabled=false"
+        })
+@Import({
+    TestJwtKeys.class,
+    RestaurantRankingCalculationMySqlIntegrationTest.ProbeConfiguration.class
 })
-@Import({TestJwtKeys.class, RestaurantRankingCalculationMySqlIntegrationTest.ProbeConfiguration.class})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class RestaurantRankingCalculationMySqlIntegrationTest {
     private static final Instant NOW = Instant.parse("2026-11-11T08:00:00Z");
@@ -89,13 +96,21 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) throws SQLException {
         database = "ginkgo_ranking_calc_it_" + UUID.randomUUID().toString().replace("-", "");
-        try (var connection = connect(""); var statement = connection.createStatement()) {
-            statement.executeUpdate("CREATE DATABASE `" + database + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci");
+        try (var connection = connect("");
+                var statement = connection.createStatement()) {
+            statement.executeUpdate(
+                    "CREATE DATABASE `"
+                            + database
+                            + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci");
             created = true;
         }
         registry.add("spring.datasource.url", () -> url(database));
-        registry.add("spring.datasource.username", RestaurantRankingCalculationMySqlIntegrationTest::username);
-        registry.add("spring.datasource.password", RestaurantRankingCalculationMySqlIntegrationTest::password);
+        registry.add(
+                "spring.datasource.username",
+                RestaurantRankingCalculationMySqlIntegrationTest::username);
+        registry.add(
+                "spring.datasource.password",
+                RestaurantRankingCalculationMySqlIntegrationTest::password);
     }
 
     @BeforeEach
@@ -120,7 +135,8 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
             if (!database.matches("ginkgo_ranking_calc_it_[a-f0-9]{32}")) {
                 throw new IllegalStateException("Unexpected ranking calculation database name");
             }
-            try (var connection = connect(""); var statement = connection.createStatement()) {
+            try (var connection = connect("");
+                    var statement = connection.createStatement()) {
                 statement.executeUpdate("DROP DATABASE `" + database + "`");
             }
         }
@@ -151,8 +167,14 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
         for (long id = 1; id <= 6; id++) {
             restaurant(id, false);
         }
-        Instant[] times = {T.minus(Duration.ofDays(7)), T.minus(Duration.ofDays(7)).minusNanos(1000),
-                T, T.minus(Duration.ofDays(30)), T.minus(Duration.ofDays(30)).minusNanos(1000), T.plusSeconds(1)};
+        Instant[] times = {
+            T.minus(Duration.ofDays(7)),
+            T.minus(Duration.ofDays(7)).minusNanos(1000),
+            T,
+            T.minus(Duration.ofDays(30)),
+            T.minus(Duration.ofDays(30)).minusNanos(1000),
+            T.plusSeconds(1)
+        };
         for (int i = 0; i < times.length; i++) {
             threeReviews(i + 1, times[i], "8");
         }
@@ -183,19 +205,27 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
             restaurant(id, false);
             threeReviews(id, T.minusSeconds(100), "10");
         }
-        jdbc.update("UPDATE restaurants SET restaurant_type='CANTEEN',category_code=NULL WHERE id=2");
+        jdbc.update(
+                "UPDATE restaurants SET restaurant_type='CANTEEN',category_code=NULL WHERE id=2");
         jdbc.update("UPDATE restaurants SET business_status='CLOSED' WHERE id=3");
-        jdbc.update("UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM' WHERE id=4");
-        jdbc.update("UPDATE restaurants SET needs_location=1,latitude=NULL,longitude=NULL WHERE id=5");
+        jdbc.update(
+                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM'"
+                    + " WHERE id=4");
+        jdbc.update(
+                "UPDATE restaurants SET needs_location=1,latitude=NULL,longitude=NULL WHERE id=5");
         jdbc.update("UPDATE restaurants SET latitude=31.7544 WHERE id=6");
         request(1, 1, true);
         request(2, 7, false);
-        jdbc.update("INSERT INTO restaurant_photos(id,restaurant_id,media_file_id,position,source_request_id) VALUES(101,1,1,0,1),(102,7,2,0,2)");
+        jdbc.update(
+                "INSERT INTO"
+                    + " restaurant_photos(id,restaurant_id,media_file_id,position,source_request_id)"
+                    + " VALUES(101,1,1,0,1),(102,7,2,0,2)");
         var rows = candidates.selectCandidates();
         assertThat(rows).extracting(row -> row.getId()).containsExactly(1L, 6L, 7L);
         var items = items(calculation.calculate(T), "QINGSHUIHE", "WEEK");
         assertThat(ids(items)).containsExactly("1", "7");
-        assertThat(items.get(0).get("coverUrl").stringValue()).isEqualTo("/api/restaurants/1/photos/101");
+        assertThat(items.get(0).get("coverUrl").stringValue())
+                .isEqualTo("/api/restaurants/1/photos/101");
         assertThat(items.get(1).get("coverUrl").isNull()).isTrue();
     }
 
@@ -212,48 +242,71 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
         properties.getShahe().setLongitude(properties.getQingshuihe().getLongitude());
         var overlap = calculation.calculate(T);
         assertThat(ids(items(overlap, "SHAHE", "WEEK"))).containsExactly("1");
-        assertThat(items(overlap, "SHAHE", "WEEK").get(0).get("participantCount").longValue()).isEqualTo(3);
+        assertThat(items(overlap, "SHAHE", "WEEK").get(0).get("participantCount").longValue())
+                .isEqualTo(3);
     }
 
     @Test
     void calculatedResultsFitReaderAndKeepEvidenceWithoutPublishingOrChangingStatistics() {
         restaurant(1, false);
         threeReviews(1, T.minusSeconds(100), "9");
-        long before = jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_search_outbox", Long.class);
+        long before =
+                jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_search_outbox", Long.class);
         var result = calculation.calculate(T);
         for (int i = 0; i < result.size(); i++) {
             var row = result.get(i);
             assertThat(row.getWindowEndAt()).isEqualTo(T);
             assertThat(row.getGeneratedAt()).isEqualTo(NOW);
-            var view = codec.view(row, RestaurantRankingKey.ALL.get(i), NOW, properties.getMaxSnapshotAge());
+            var view =
+                    codec.view(
+                            row,
+                            RestaurantRankingKey.ALL.get(i),
+                            NOW,
+                            properties.getMaxSnapshotAge());
             assertThat(view.getStatus()).isEqualTo("READY");
             var rules = json.readTree(row.getRulesSnapshot());
-            assertThat(rules.get("weights").get("taste").decimalValue()).isEqualByComparingTo("0.70");
+            assertThat(rules.get("weights").get("taste").decimalValue())
+                    .isEqualByComparingTo("0.70");
             assertThat(rules.get("campus").get("radiusMeters").doubleValue()).isEqualTo(5000);
         }
         var item = items(result, "QINGSHUIHE", "WEEK").get(0);
         assertThat(item.get("tasteScore").decimalValue()).isEqualByComparingTo("4.5");
         assertThat(item.get("scoreSums").get("taste").decimalValue()).isEqualByComparingTo("13.5");
         assertThat(item.get("sortingScore").decimalValue()).isEqualByComparingTo("3.875");
-        assertThat(json.writeValueAsString(codec.view(result.getFirst(), RestaurantRankingKey.ALL.getFirst(), NOW,
-                properties.getMaxSnapshotAge()))).doesNotContain("scoreSums", "sortingScore", "rulesSnapshot");
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_ranking_snapshots", Long.class)).isZero();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_review_statistics", Long.class)).isZero();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_search_outbox", Long.class)).isEqualTo(before);
+        assertThat(
+                        json.writeValueAsString(
+                                codec.view(
+                                        result.getFirst(),
+                                        RestaurantRankingKey.ALL.getFirst(),
+                                        NOW,
+                                        properties.getMaxSnapshotAge())))
+                .doesNotContain("scoreSums", "sortingScore", "rulesSnapshot");
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT COUNT(*) FROM restaurant_ranking_snapshots", Long.class))
+                .isZero();
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT COUNT(*) FROM restaurant_review_statistics", Long.class))
+                .isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_search_outbox", Long.class))
+                .isEqualTo(before);
     }
 
     @Test
     void repeatableReadKeepsBothPeriodsInSameViewWhenReviewsChangeBetweenQueries() {
         restaurant(1, false);
         threeReviews(1, T.minusSeconds(100), "9");
-        probe.beforeAggregate = () -> {
-            // 新连接真实提交，发生在候选SELECT之后、首次点评聚合之前；不依赖线程sleep推测顺序。
-            try (var connection = connect(database); var statement = connection.createStatement()) {
-                statement.executeUpdate("DELETE FROM reviews WHERE restaurant_id=1");
-            } catch (SQLException exception) {
-                throw new IllegalStateException(exception);
-            }
-        };
+        probe.beforeAggregate =
+                () -> {
+                    // 新连接真实提交，发生在候选SELECT之后、首次点评聚合之前；不依赖线程sleep推测顺序。
+                    try (var connection = connect(database);
+                            var statement = connection.createStatement()) {
+                        statement.executeUpdate("DELETE FROM reviews WHERE restaurant_id=1");
+                    } catch (SQLException exception) {
+                        throw new IllegalStateException(exception);
+                    }
+                };
         var result = calculation.calculate(T);
         assertThat(items(result, "QINGSHUIHE", "WEEK")).hasSize(1);
         assertThat(items(result, "QINGSHUIHE", "MONTH")).hasSize(1);
@@ -270,7 +323,10 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
         restaurant(1, false);
         threeReviews(1, T.minusSeconds(100), "9");
         assertThat(generation.generate()).isTrue();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_ranking_snapshots", Long.class)).isEqualTo(4);
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT COUNT(*) FROM restaurant_ranking_snapshots", Long.class))
+                .isEqualTo(4);
         var first = rankingRead.read("QINGSHUIHE", "WEEK");
         assertThat(first.getStatus()).isEqualTo("READY");
         assertThat(first.getItems()).hasSize(1);
@@ -290,13 +346,20 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
         restaurant(1, false);
         threeReviews(1, T.minusSeconds(100), "9");
         assertThat(generation.generate()).isTrue();
-        var old = jdbc.queryForList("SELECT * FROM restaurant_ranking_snapshots ORDER BY campus_code,period_type");
+        var old =
+                jdbc.queryForList(
+                        "SELECT * FROM restaurant_ranking_snapshots ORDER BY"
+                            + " campus_code,period_type");
         jdbc.update("DELETE FROM reviews");
-        probe.beforeAggregate = () -> {
-            throw new IllegalStateException("isolated calculation failure");
-        };
+        probe.beforeAggregate =
+                () -> {
+                    throw new IllegalStateException("isolated calculation failure");
+                };
         assertThatThrownBy(generation::generate).isInstanceOf(RuntimeException.class);
-        assertThat(jdbc.queryForList("SELECT * FROM restaurant_ranking_snapshots ORDER BY campus_code,period_type"))
+        assertThat(
+                        jdbc.queryForList(
+                                "SELECT * FROM restaurant_ranking_snapshots ORDER BY"
+                                    + " campus_code,period_type"))
                 .isEqualTo(old);
         assertThat(rankingRead.read("QINGSHUIHE", "WEEK").getItems()).hasSize(1);
         assertThat(generation.generate()).isTrue();
@@ -305,18 +368,28 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
 
     @Test
     void invalidAggregationIntervalsFailBeforeExecutingSql() {
-        assertThatThrownBy(() -> reviews.aggregate(null, T)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> reviews.aggregate(T, T)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> reviews.aggregate(T.plusNanos(1000), T)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> reviews.aggregate(T.minus(Duration.ofDays(30)).minusNanos(1000), T))
+        assertThatThrownBy(() -> reviews.aggregate(null, T))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> reviews.aggregate(T, T))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> reviews.aggregate(T.plusNanos(1000), T))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(
+                        () -> reviews.aggregate(T.minus(Duration.ofDays(30)).minusNanos(1000), T))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(probe.aggregateReads.get()).isZero();
     }
 
     private void restaurant(long id, boolean shahe) {
         var area = shahe ? properties.getShahe() : properties.getQingshuihe();
-        jdbc.update("INSERT INTO restaurants(id,name,category_code,restaurant_type,latitude,longitude,needs_location)"
-                + " VALUES(?,?,'OTHER','REGULAR',?,?,0)", id, "计算测试餐厅" + id, area.getLatitude(), area.getLongitude());
+        jdbc.update(
+                "INSERT INTO"
+                    + " restaurants(id,name,category_code,restaurant_type,latitude,longitude,needs_location)"
+                    + " VALUES(?,?,'OTHER','REGULAR',?,?,0)",
+                id,
+                "计算测试餐厅" + id,
+                area.getLatitude(),
+                area.getLongitude());
     }
 
     private void threeReviews(long restaurant, Instant time, String score) {
@@ -328,22 +401,49 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
     private long review(Long restaurant, Long window, long author, Instant time, String score) {
         long id = REVIEW_IDS.incrementAndGet();
         var value = new BigDecimal(score);
-        jdbc.update("INSERT INTO reviews(id,restaurant_id,window_id,author_user_id,taste_score,value_score,service_score,ambience_score,"
-                        + "is_recommended,body,client_request_id,request_hash,created_at) VALUES(?,?,?,?,?,?,?,?,1,'仅用于计算的点评',UUID_TO_BIN(?),UNHEX(REPEAT('ab',32)),?)",
-                id, restaurant, window, author, value, value, value, value, UUID.randomUUID().toString(), Timestamp.from(time));
+        jdbc.update(
+                "INSERT INTO"
+                    + " reviews(id,restaurant_id,window_id,author_user_id,taste_score,value_score,service_score,ambience_score,recommendation,body,client_request_id,request_hash,created_at)"
+                    + " VALUES(?,?,?,?,?,?,?,?,'RECOMMENDED','仅用于计算的点评',UUID_TO_BIN(?),UNHEX(REPEAT('ab',32)),?)",
+                id,
+                restaurant,
+                window,
+                author,
+                value,
+                value,
+                value,
+                value,
+                UUID.randomUUID().toString(),
+                Timestamp.from(time));
         return id;
     }
 
     private void request(long id, long restaurant, boolean approved) {
-        jdbc.update("INSERT INTO restaurant_change_requests(id,restaurant_id,request_type,submitted_by,client_request_id,request_hash,"
-                        + "proposed_data,status,reviewed_by,reviewed_at,approved_data,before_data) VALUES(?,?,'UPDATE',1,?,UNHEX(REPEAT('ab',32)),"
-                        + "'{}',?,?,?, ?,?)", id, restaurant, UUID.randomUUID().toString(), approved ? "APPROVED" : "PENDING",
-                approved ? 1L : null, approved ? Timestamp.from(T) : null, approved ? "{}" : null, approved ? "{}" : null);
+        jdbc.update(
+                "INSERT INTO"
+                    + " restaurant_change_requests(id,restaurant_id,request_type,submitted_by,client_request_id,request_hash,proposed_data,status,reviewed_by,reviewed_at,approved_data,before_data)"
+                    + " VALUES(?,?,'UPDATE',1,?,UNHEX(REPEAT('ab',32)),'{}',?,?,?, ?,?)",
+                id,
+                restaurant,
+                UUID.randomUUID().toString(),
+                approved ? "APPROVED" : "PENDING",
+                approved ? 1L : null,
+                approved ? Timestamp.from(T) : null,
+                approved ? "{}" : null,
+                approved ? "{}" : null);
     }
 
-    private JsonNode items(List<RestaurantRankingSnapshotEntity> rows, String campus, String period) {
-        return json.readTree(rows.stream().filter(row -> row.getCampusCode().equals(campus) && row.getPeriodType().equals(period))
-                .findFirst().orElseThrow().getItems());
+    private JsonNode items(
+            List<RestaurantRankingSnapshotEntity> rows, String campus, String period) {
+        return json.readTree(
+                rows.stream()
+                        .filter(
+                                row ->
+                                        row.getCampusCode().equals(campus)
+                                                && row.getPeriodType().equals(period))
+                        .findFirst()
+                        .orElseThrow()
+                        .getItems());
     }
 
     private static List<String> ids(JsonNode items) {
@@ -357,7 +457,9 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
     }
 
     private static String url(String name) {
-        String server = System.getenv().getOrDefault("RANKING_TEST_DB_SERVER", "jdbc:mysql://127.0.0.1:3306/");
+        String server =
+                System.getenv()
+                        .getOrDefault("RANKING_TEST_DB_SERVER", "jdbc:mysql://127.0.0.1:3306/");
         if (!server.matches("jdbc:mysql://(127\\.0\\.0\\.1|localhost):[0-9]{1,5}/")) {
             throw new IllegalArgumentException("Ranking calculation tests require loopback MySQL");
         }
@@ -369,7 +471,8 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
     }
 
     private static String password() {
-        return Objects.requireNonNull(System.getenv("RANKING_TEST_DB_PASSWORD"), "Set RANKING_TEST_DB_PASSWORD");
+        return Objects.requireNonNull(
+                System.getenv("RANKING_TEST_DB_PASSWORD"), "Set RANKING_TEST_DB_PASSWORD");
     }
 
     @TestConfiguration(proxyBeanMethods = false)
@@ -388,7 +491,11 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
     }
 
     /** 仅测试中注册的真实SQL拦截器，用确定性提交交错验证RR；不进入正式运行链路。 */
-    @Intercepts(@Signature(type = StatementHandler.class, method = "prepare", args = {Connection.class, Integer.class}))
+    @Intercepts(
+            @Signature(
+                    type = StatementHandler.class,
+                    method = "prepare",
+                    args = {Connection.class, Integer.class}))
     static class CalculationProbe implements Interceptor {
         private final AtomicLong candidateReads = new AtomicLong();
         private final AtomicLong aggregateReads = new AtomicLong();

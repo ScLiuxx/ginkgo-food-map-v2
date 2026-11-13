@@ -43,8 +43,8 @@ def permitted(row, query):
 def sort_key(row, query, sort, keyword):
     if sort == 'score':
         value = None if row['ratingScore'] is None else Decimal(str(row['ratingScore'])).quantize(Decimal('.1'), rounding=ROUND_HALF_UP)
-    elif sort == 'recommend':
-        value = None if row['recommendRate'] is None else Decimal(str(row['recommendRate'])).quantize(Decimal('.001'), rounding=ROUND_HALF_UP)
+    # 兼容旧排序参数，按点评条数验证热度；态度不再形成推荐率。
+    elif sort == 'recommend':value = row['reviewCount']
     elif sort == 'price':value = row['pricePerPerson']
     elif sort == 'reviews':value = row['reviewCount']
     else:value = distance(row, query)

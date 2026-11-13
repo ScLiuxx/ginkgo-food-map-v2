@@ -13,7 +13,7 @@ const target = (): ReplyTarget => ({
     body: '原文',
     createdAt: '2026-11-01T00:00:00Z',
     overallScore: 7,
-    recommended: true,
+    recommendation: 'RECOMMENDED',
   },
   replyBody: '回复',
   replyCreatedAt: '2026-11-07T00:00:00Z',

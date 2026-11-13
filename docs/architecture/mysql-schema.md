@@ -1,6 +1,6 @@
 # MySQL 表结构
 
-本文集中维护 MySQL 业务表的当前字段、类型、默认值、枚举、主键、索引、外键与字段约束。覆盖当前迁移定义的 32 张应用表，按下列分组查阅；Flyway 自建的迁移历史表不属于应用表。
+本文集中维护 MySQL 业务表的当前字段、类型、默认值、枚举、主键、索引、外键与字段约束。覆盖当前迁移定义的 34 张应用表，按下列分组查阅；Flyway 自建的迁移历史表不属于应用表。
 
 ## 目录
 
@@ -455,7 +455,7 @@ restaurant_id为逻辑引用，无物理外键。
 | `service_score` | `decimal(3,1)` | 否 | 服务0至10，步进0.5 |
 | `ambience_score` | `decimal(3,1)` | 否 | 环境0至10，步进0.5 |
 | `overall_score` | `decimal(4,2)` | 是 | 四维平均后HALF_UP两位；数据库生成 |
-| `is_recommended` | `tinyint(1)` | 否 | 独立推荐判断 |
+| `recommendation` | `varchar(16)`，ascii_bin | 否 | 无默认值；RECOMMENDED推荐、NEUTRAL一般、NOT_RECOMMENDED不推荐 |
 | `body` | `varchar(500)` | 否 | 去首尾空白的5至500码点纯文本 |
 | `client_request_id` | `binary(16)` | 否 | 本次发布UUID |
 | `request_hash` | `binary(32)` | 否 | 服务端计算的规范化内容SHA-256 |
@@ -464,7 +464,7 @@ restaurant_id为逻辑引用，无物理外键。
 
 索引 `(restaurant_id,author_user_id,created_at,id)`；索引 `(restaurant_id,created_at,id)`；索引 `(window_id,author_user_id,created_at,id)`；索引 `(window_id,created_at,id)`；索引 `(author_user_id,restaurant_id,created_at,id)`；主键 `(id)`；唯一键 `(author_user_id,client_request_id)`。
 
-restaurant_id与window_id二选一。四维评分0–10，步长0.5；overall_score为四维均值，保留两位。正文5–500字符。相同账号与请求UUID唯一，允许多次真实点评。删除为物理删除。
+restaurant_id与window_id二选一。四维评分0–10，步长0.5；overall_score为四维均值，保留两位。recommendation仅允许上述三个大小写精确且无空白的编码。正文5–500字符。相同账号与请求UUID唯一，允许多次真实点评。删除为物理删除。
 
 ### `review_photos`：点评照片关联
 
@@ -480,6 +480,55 @@ restaurant_id与window_id二选一。四维评分0–10，步长0.5；overall_sc
 position范围0–4；media_file_id唯一。
 
 外键：`review_id` → `reviews.id`。
+
+### `review_submissions`：待发布点评与发布回执
+
+| 字段 | 类型 | 可空 | 默认值及含义 |
+| --- | --- | --- | --- |
+| `id` | `bigint unsigned` | 否 | 自增主键 |
+| `restaurant_request_id` | `bigint unsigned` | 否 | 无默认值；当前新店申请逻辑ID |
+| `origin_request_id` | `bigint unsigned` | 否 | 无默认值；最初新店申请逻辑ID |
+| `author_user_id` | `bigint unsigned` | 否 | 无默认值；原点评作者逻辑ID |
+| `status` | `varchar(16)`，ascii_bin | 否 | 默认WAITING；WAITING待发布、PUBLISHED已发布、WITHDRAWN已撤回 |
+| `taste_score` | `decimal(3,1)` | 是 | 默认NULL；味道0至10，步进0.5 |
+| `value_score` | `decimal(3,1)` | 是 | 默认NULL；性价比0至10，步进0.5 |
+| `service_score` | `decimal(3,1)` | 是 | 默认NULL；服务0至10，步进0.5 |
+| `ambience_score` | `decimal(3,1)` | 是 | 默认NULL；环境0至10，步进0.5 |
+| `recommendation` | `varchar(16)`，ascii_bin | 是 | 默认NULL；RECOMMENDED推荐、NEUTRAL一般、NOT_RECOMMENDED不推荐 |
+| `body` | `varchar(500)` | 是 | 默认NULL；无首尾空白的5至500码点正文 |
+| `client_request_id` | `binary(16)` | 否 | 无默认值；作者提交请求UUID |
+| `request_hash` | `binary(32)` | 否 | 无默认值；首次规范化请求SHA-256 |
+| `content_hash` | `binary(32)` | 否 | 无默认值；当前规范化内容与有序附图SHA-256 |
+| `publish_request_id` | `binary(16)` | 否 | 无默认值；独立的正式发布请求UUID |
+| `published_review_id` | `bigint unsigned` | 是 | 默认NULL；已发布正式点评逻辑ID，无物理外键 |
+| `created_at` | `timestamp(6)` | 否 | 默认CURRENT_TIMESTAMP(6) |
+| `updated_at` | `timestamp(6)` | 否 | 默认CURRENT_TIMESTAMP(6)，ON UPDATE CURRENT_TIMESTAMP(6) |
+| `published_at` | `timestamp(6)` | 是 | 默认NULL；正式发布时间 |
+| `withdrawn_at` | `timestamp(6)` | 是 | 默认NULL；撤回时间 |
+
+主键`(id)`。唯一键：`uk_review_submission_request(restaurant_request_id)`、`uk_review_submission_author_client(author_user_id,client_request_id)`、`uk_review_submission_publish(publish_request_id)`、`uk_review_submission_published_review(published_review_id)`，后者允许多行NULL。
+
+普通索引：`idx_review_submission_author_status_time(author_user_id,status,created_at,id)`、`idx_review_submission_author_time(author_user_id,created_at,id)`、`idx_review_submission_origin(origin_request_id)`。申请、作者与正式点评均为逻辑引用，无物理外键。
+
+CHECK约束：
+
+- `chk_review_submission_ids`：当前申请、原始申请和作者ID限定1至9223372036854775807。
+- `chk_review_submission_status`：状态仅允许上述三个大写值，且不得含空白。
+- `chk_review_submission_content`：WAITING及WITHDRAWN必须完整保存四维评分、三态态度及正文；评分范围0至10、步进0.5，态度不得含空白，正文5至500码点且无首尾空白。PUBLISHED的四维评分、态度、正文必须全部为NULL。
+- `chk_review_submission_result`：WAITING不含发布或撤回结果；WITHDRAWN只有不早于创建时间的撤回时间；PUBLISHED必须具有正Long范围的正式点评ID及不早于创建时间的发布时间，且没有撤回时间。
+
+### `review_submission_photos`：待发布点评图片关联
+
+| 字段 | 类型 | 可空 | 默认值及含义 |
+| --- | --- | --- | --- |
+| `submission_id` | `bigint unsigned` | 否 | 无默认值；所属待发布点评ID |
+| `position` | `tinyint unsigned` | 否 | 无默认值；0至4的展示顺序 |
+| `media_file_id` | `bigint unsigned` | 否 | 无默认值；file模块REVIEW用途媒体逻辑ID |
+| `created_at` | `timestamp(6)` | 否 | 默认CURRENT_TIMESTAMP(6) |
+
+主键`(submission_id,position)`限定每条最多五图；唯一键`uk_review_submission_photo_file(media_file_id)`限定同一文件在本表只能关联一次。
+
+外键`fk_review_submission_photo_submission`：`submission_id` → `review_submissions.id`，ON DELETE/ON UPDATE均为RESTRICT。媒体文件无跨模块物理外键。`chk_review_submission_photo_position`限定顺序0至4；`chk_review_submission_photo_ids`限定点评与文件ID为正Long范围。
 
 ### `review_replies`：点评回复
 

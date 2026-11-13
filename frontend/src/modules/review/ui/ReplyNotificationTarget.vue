@@ -5,6 +5,7 @@ import { useLoginStore } from '@/modules/auth'
 import { authToken } from '@/shared/api/authSession'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 import { fetchReplyTarget, type ReplyTarget } from '../api/replyTargetApi'
+import { recommendationLabels } from '../model/review'
 
 /** 精确定位弹窗独立读取原点评及目标回复，关闭、换号后销毁正文并拒绝迟到响应。 */
 const props = defineProps<{ replyId: string; reviewId: string }>()
@@ -108,7 +109,7 @@ const time = (value: string) =>
             <strong>{{ target.reviewAuthor.username }}</strong>
             <span class="review-score"
               >★ {{ (target.review.overallScore / 2).toFixed(1) }} ·
-              {{ target.review.recommended ? '推荐' : '不推荐' }}</span
+              {{ recommendationLabels[target.review.recommendation] }}</span
             >
           </div>
           <p>{{ target.review.body }}</p>

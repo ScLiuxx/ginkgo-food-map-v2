@@ -1,5 +1,7 @@
 package com.ginkgo.foodmap.review.entity;
 
+import com.ginkgo.foodmap.review.dto.ReviewRecommendation;
+
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -21,7 +23,7 @@ public class ReviewReadEntity {
     private BigDecimal serviceScore;
     private BigDecimal ambienceScore;
     private BigDecimal overallScore;
-    private boolean recommended;
+    private ReviewRecommendation recommendation;
     @lombok.ToString.Exclude private String body;
     private Instant createdAt;
     private long historyCount;

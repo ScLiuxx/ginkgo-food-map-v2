@@ -2,6 +2,18 @@ import type { InjectionKey } from 'vue'
 import type { RatingDimension } from '@/modules/restaurant/model/restaurant.types'
 export type ReviewSort = 'DEFAULT' | 'TIME'
 export type Scores = Record<RatingDimension, number>
+/** 与正式及待发布点评共用的态度编码；不从分数推断，也没有默认选项。 */
+export const reviewRecommendations = ['RECOMMENDED', 'NEUTRAL', 'NOT_RECOMMENDED'] as const
+export type ReviewRecommendation = (typeof reviewRecommendations)[number]
+export const recommendationLabels: Record<ReviewRecommendation, string> = {
+  RECOMMENDED: '推荐',
+  NEUTRAL: '一般',
+  NOT_RECOMMENDED: '不推荐',
+}
+/** 读取响应也严格校验，拒绝把旧布尔值、缺失值或未知编码当作不推荐。 */
+export function isReviewRecommendation(value: unknown): value is ReviewRecommendation {
+  return typeof value === 'string' && reviewRecommendations.some((item) => item === value)
+}
 /** 与后端发布校验及数据库位置范围同步。 */
 export const MAX_REVIEW_PHOTOS = 5
 export interface ReviewPhoto {
@@ -23,7 +35,7 @@ export interface ReviewItem {
   username: string
   createdAt: string
   scores: Scores
-  recommended: boolean
+  recommendation: ReviewRecommendation
   body: string
   photos: ReviewPhoto[]
   /** 独立预览的演示开关；正式入口比较已认证账号ID与作者ID，授权仍由后端完成。 */
@@ -35,7 +47,7 @@ export interface ReviewDraft {
   windowId?: string
   restaurantId: string
   scores: Scores
-  recommended: boolean
+  recommendation: ReviewRecommendation
   body: string
   photos: File[]
   /** 正式传输使用已上传文件ID；预览传输仍可以使用本地File。 */

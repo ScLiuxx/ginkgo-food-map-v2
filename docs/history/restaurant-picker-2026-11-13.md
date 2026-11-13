@@ -1,6 +1,6 @@
 # 帮我选一家交付验证
 
-日期：2026-11-13。范围：`feature/restaurant-picker`本地实现，未提交、推送或部署。业务规则与设计取舍见[选店计划](../plans/restaurant-picker.md)，接口见[API 2.5](../api.md#25-帮我选一家候选查询)。
+日期：2026-11-13。范围：`feature/restaurant-picker`本地实现，未提交、推送或部署。业务规则与设计取舍见[选店计划](../plans/restaurant-picker.md)，接口见[帮我选一家候选查询](../api/discovery.md#picker)。
 
 ## 环境与验证方法
 

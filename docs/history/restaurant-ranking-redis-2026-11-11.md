@@ -72,7 +72,7 @@ MySQL基线已经只是四份小JSON的主键查询，页与连接池均预热�
 | [RestaurantRankingCacheTest.java](../../backend/src/test/java/com/ginkgo/foodmap/restaurant/RestaurantRankingCacheTest.java) | 缓存、并发和恢复单元验证 |
 | [读取单元测试](../../backend/src/test/java/com/ginkgo/foodmap/restaurant/RestaurantRankingReadServiceTest.java) / [真实集成测试](../../backend/src/test/java/com/ginkgo/foodmap/restaurant/RestaurantRankingReadMySqlIntegrationTest.java) | 适配共用投影、真实读写/故障与同JVM对照基准 |
 | [benchmark_restaurant_rankings.py](../../backend/tools/benchmark_restaurant_rankings.py) | 显式隔离实例入口、运行元数据与完整样本留存 |
-| [计划](../plans/hot-restaurants.md)、[API](../api.md#24-近期餐厅榜单读取)、[功能说明](../features.md)、[开发记录](../development.md)、[导航](../README.md)与本报告 | 更新实现状态、契约、验证及证据索引 |
+| [计划](../plans/hot-restaurants.md)、[近期餐厅榜单读取](../api/discovery.md#rankings)、[功能说明](../features.md)、[开发记录](../development.md)、[导航](../README.md)与本报告 | 更新实现状态、契约、验证及证据索引 |
 
 示例入口（须自行启动私有、可销毁的Redis，数据库账号须能创建隔离库；密码仅取环境或忽略的本地配置，不写入日志）：
 

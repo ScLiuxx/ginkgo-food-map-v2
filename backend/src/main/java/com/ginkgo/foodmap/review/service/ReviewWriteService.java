@@ -8,6 +8,7 @@ import com.ginkgo.foodmap.restaurant.dto.RestaurantReviewDelta;
 import com.ginkgo.foodmap.restaurant.service.CanteenWindowService;
 import com.ginkgo.foodmap.restaurant.service.RestaurantReviewApplicationService;
 import com.ginkgo.foodmap.review.dto.ReviewPublishRequest;
+import com.ginkgo.foodmap.review.dto.ReviewRecommendation;
 import com.ginkgo.foodmap.review.entity.ReviewEntity;
 import com.ginkgo.foodmap.review.exception.ReviewErrorCode;
 import com.ginkgo.foodmap.review.mapper.ReviewDeleteMapper;
@@ -161,7 +162,7 @@ public class ReviewWriteService {
                 && a.getValueScore().compareTo(b.getValueScore()) == 0
                 && a.getServiceScore().compareTo(b.getServiceScore()) == 0
                 && a.getAmbienceScore().compareTo(b.getAmbienceScore()) == 0
-                && a.isRecommended() == b.isRecommended()
+                && a.getRecommendation() == b.getRecommendation()
                 && a.getBody().equals(b.getBody());
     }
 
@@ -170,7 +171,12 @@ public class ReviewWriteService {
         var d = new RestaurantReviewDelta();
         d.setParticipants(old == null ? 1 : 0);
         d.setRecommendations(
-                (row.isRecommended() ? 1 : 0) - (old != null && old.isRecommended() ? 1 : 0));
+                (row.getRecommendation() == ReviewRecommendation.RECOMMENDED ? 1 : 0)
+                        - (old != null
+                                        && old.getRecommendation()
+                                                == ReviewRecommendation.RECOMMENDED
+                                ? 1
+                                : 0));
         d.setTaste(
                 row.getTasteScore().subtract(old == null ? BigDecimal.ZERO : old.getTasteScore()));
         d.setValue(

@@ -1,6 +1,6 @@
 # Elasticsearch 餐厅搜索方案
 
-更新：2026-11-12。当前搜索使用v004口碑投影；现行查询规则以[API契约](../api.md#621-正式搜索与简单降级契约2026-11-05)为准，结构见[索引结构](../architecture/elasticsearch-schema.md)，验证见[开发记录](../development.md)。
+更新：2026-11-12。当前搜索使用v004口碑投影；现行查询规则以[API契约](../api/restaurants.md#search)为准，结构见[索引结构](../architecture/elasticsearch-schema.md)，验证见[开发记录](../development.md)。
 
 ## 当前状态
 
@@ -65,7 +65,7 @@
 
 ## 设计与证据入口
 
-- [接口契约](../api.md#621-正式搜索与简单降级契约2026-11-05)：默认/显式排序、单字原字语义、访问窗口、降级原因及查询熔断。
+- [接口契约](../api/restaurants.md#search)：默认/显式排序、单字原字语义、访问窗口、降级原因及查询熔断。
 - [索引结构](../architecture/elasticsearch-schema.md)：v003字段、分析器、版本化定义与受控本地升级。
 - [同步任务表](../architecture/mysql-schema.md#restaurant-search-outbox)：任务字段、状态、索引及关联。
 - [当前最终评测](../history/elasticsearch-final-benchmark-2026-11-05.md)：SQL/ES准确度与接口耗时、独立一致性核验及测量限制。

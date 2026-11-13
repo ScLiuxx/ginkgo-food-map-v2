@@ -16,7 +16,7 @@ public interface RestaurantSearchProjectionMapper {
           r.supports_dine_in,r.supports_delivery,r.price_per_person,r.price_kind,r.address,
           r.latitude,r.longitude,r.needs_location,r.business_status,(r.deleted_at IS NOT NULL) AS deleted,
           COALESCE(s.review_count,0) AS review_count,COALESCE(s.participant_count,0) AS participant_count,
-          COALESCE(s.recommend_count,0) AS recommend_count,COALESCE(s.overall_score_sum,0) AS overall_score_sum,
+          COALESCE(s.overall_score_sum,0) AS overall_score_sum,
           CASE WHEN r.restaurant_type='CANTEEN' THEN
             ROUND(s.overall_score_sum/NULLIF(s.participant_count,0)/2,8)
             ELSE s.reputation_score END AS reputation_score

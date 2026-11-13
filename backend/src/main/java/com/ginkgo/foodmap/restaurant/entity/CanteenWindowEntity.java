@@ -33,7 +33,6 @@ public class CanteenWindowEntity {
     private BigDecimal value;
     private BigDecimal service;
     private BigDecimal ambience;
-    private BigDecimal recommendRate;
     private long reviewCount;
     private long participantCount;
     private String address;

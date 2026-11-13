@@ -155,7 +155,8 @@ class RestaurantSearchReaderTest {
         assertThat(request.query().bool().must().getFirst().isMatchAll()).isTrue();
         assertThat(request.query().bool().should()).isEmpty();
         assertThat(request.source().filter().includes())
-                .contains("name", "coverPhotoId", "ratingScore");
+                .contains("name", "coverPhotoId", "ratingScore")
+                .doesNotContain("recommendRate");
         SearchResponse<JsonData> response =
                 SearchResponse.of(
                         b ->

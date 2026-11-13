@@ -9,7 +9,7 @@ describe('detail photo provenance', () => {
       username: '甲',
       createdAt: '2026-10-31',
       scores: { taste: 8, value: 8, service: 8, ambience: 8 },
-      recommended: true,
+      recommendation: 'RECOMMENDED',
       body: '真实输入的原始正文',
       photos: [{ id: 'p1', url: '/photo/1' }],
       canDelete: false,

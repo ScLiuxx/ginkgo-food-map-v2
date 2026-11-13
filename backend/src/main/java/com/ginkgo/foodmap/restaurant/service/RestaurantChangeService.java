@@ -2,10 +2,13 @@ package com.ginkgo.foodmap.restaurant.service;
 
 import com.ginkgo.foodmap.common.exception.BusinessException;
 import com.ginkgo.foodmap.restaurant.dto.RestaurantChangeRequest;
+import com.ginkgo.foodmap.restaurant.dto.RestaurantSubmissionRequest;
 import com.ginkgo.foodmap.restaurant.entity.RestaurantChangeEntity;
 import com.ginkgo.foodmap.restaurant.exception.RestaurantErrorCode;
 import com.ginkgo.foodmap.restaurant.mapper.RestaurantChangeMapper;
 import com.ginkgo.foodmap.restaurant.support.RestaurantIdentifiers;
+import com.ginkgo.foodmap.restaurant.vo.RestaurantSubmissionVo;
+import com.ginkgo.foodmap.review.service.ReviewSubmissionService;
 import com.ginkgo.foodmap.security.service.CurrentActorService;
 
 import jakarta.validation.Validator;
@@ -14,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import tools.jackson.databind.ObjectMapper;
@@ -33,6 +37,7 @@ public class RestaurantChangeService {
     private final Validator validator;
     private final ObjectMapper json;
     private final com.ginkgo.foodmap.file.service.MediaFileService media;
+    private final ReviewSubmissionService reviewSubmissions;
 
     /** 返回申请ID；相同账号/请求ID/规范化内容重试返回同一申请，不重复创建。 */
     @Transactional
@@ -60,11 +65,41 @@ public class RestaurantChangeService {
     }
 
     /**
+     * 新店和可选点评在同一事务保存。店铺快照不含点评，联合摘要另纳入规范化点评及附图， 因此同UUID增加、删除或修改点评均会冲突；无点评继续使用原摘要以兼容旧成功请求。
+     * RC配合申请唯一键及行锁串行化重试，避免不同新申请在空点评索引上相互持有间隙锁。
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public RestaurantSubmissionVo submitNewWithReview(RestaurantSubmissionRequest request) {
+        if (request == null || !validator.validate(request).isEmpty()) {
+            throw new BusinessException(RestaurantErrorCode.INVALID_INPUT);
+        }
+        validateSubmission(request, null);
+        String uuid = request.getClientRequestId().toString();
+        // 食堂只能评价具体窗口，联合提交不能绕过这条现行规则；普通餐厅停业仍沿用可评规则。
+        if (request.getReview() != null && !"REGULAR".equals(request.getRestaurantType())) {
+            throw new BusinessException(
+                    RestaurantErrorCode.INVALID_INPUT, "仅普通餐厅可以附带点评，食堂请评价具体窗口");
+        }
+        String reviewHash =
+                request.getReview() == null
+                        ? null
+                        : reviewSubmissions.fingerprint(uuid, request.getReview());
+        String id = save(null, request, null, reviewHash);
+        var result = new RestaurantSubmissionVo();
+        result.setId(id);
+        result.setStatus("PENDING");
+        if (request.getReview() != null) {
+            result.setReviewSubmission(
+                    reviewSubmissions.saveWaiting(Long.parseLong(id), uuid, request.getReview()));
+        }
+        return result;
+    }
+
+    /**
      * 驳回后重提。
      *
      * <p>仅原申请人可以基于自己的被驳回申请创建新申请；原申请保持REJECTED及原驳回原因不变，
-     * 新申请写入previous_request_id并在同一事务完成内容校验、目标校验和图片绑定。
-     * 非驳回状态统一409，不能借重提恢复已撤回或已通过的申请。
+     * 新申请写入previous_request_id并在同一事务完成内容校验、目标校验和图片绑定。 非驳回状态统一409，不能借重提恢复已撤回或已通过的申请。
      */
     @Transactional
     public String resubmit(String previousId, RestaurantChangeRequest request) {
@@ -78,6 +113,7 @@ public class RestaurantChangeService {
         if (previous == null) {
             throw new BusinessException(RestaurantErrorCode.REQUEST_NOT_FOUND);
         }
+        reviewSubmissions.requireNoAttachedReview(parentId);
         if (!"REJECTED".equals(previous.getStatus())) {
             throw new BusinessException(RestaurantErrorCode.STATE_CONFLICT, "仅被驳回申请可以重新提交");
         }
@@ -109,6 +145,15 @@ public class RestaurantChangeService {
 
     /** 唯一键原子插入或取得旧回执，再锁定核对内容；避免首次并发投稿的检查再插入竞争。 */
     private String save(Long targetId, RestaurantChangeRequest request, Long previousRequestId) {
+        return save(targetId, request, previousRequestId, null);
+    }
+
+    /** 附带点评只影响联合提交摘要，不进入管理员可修改的店铺业务快照。 */
+    private String save(
+            Long targetId,
+            RestaurantChangeRequest request,
+            Long previousRequestId,
+            String reviewHash) {
         var actor = actors.requireActor();
         // 类型来自服务端调用入口，不接收客户端自报；审核回填新商户ID后也不能改变申请类型。
         String requestType = targetId == null ? "CREATE" : "UPDATE";
@@ -127,7 +172,14 @@ public class RestaurantChangeService {
         try {
             hash =
                     MessageDigest.getInstance("SHA-256")
-                            .digest(payload.getBytes(StandardCharsets.UTF_8));
+                            .digest(
+                                    (reviewHash == null
+                                                    ? payload
+                                                    : "restaurant-review-submission-v1\n"
+                                                            + payload
+                                                            + "\n"
+                                                            + reviewHash)
+                                            .getBytes(StandardCharsets.UTF_8));
         } catch (java.security.NoSuchAlgorithmException impossible) {
             throw new IllegalStateException(impossible);
         }

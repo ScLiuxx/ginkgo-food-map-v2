@@ -98,8 +98,7 @@ def read_snapshot(cases: list[dict]) -> tuple[list[dict], list[dict], dict]:
                 r.price_per_person AS pricePerPerson, r.price_kind AS priceKind,
                 r.business_status AS businessStatus, r.latitude, r.longitude, r.needs_location AS needsLocation,
                 COALESCE(s.participant_count,0) AS participantCount, COALESCE(s.review_count,0) AS reviewCount,
-                CAST(s.overall_score_sum AS DECIMAL(40,20))/NULLIF(s.participant_count,0) AS ratingScore,
-                CAST(s.recommend_count AS DECIMAL(40,20))/NULLIF(s.participant_count,0) AS recommendRate
+                CAST(s.overall_score_sum AS DECIMAL(40,20))/NULLIF(s.participant_count,0) AS ratingScore
                 FROM restaurants r LEFT JOIN restaurant_categories c ON c.code=r.category_code
                 LEFT JOIN restaurant_review_statistics s ON s.restaurant_id=r.id
                 WHERE r.deleted_at IS NULL ORDER BY r.id""")

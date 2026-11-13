@@ -301,7 +301,7 @@ class RestaurantReadApiIntegrationTest {
                         .andReturn();
         var data = json.readTree(result.getResponse().getContentAsString()).get("data");
         assertThat(data.get("score").isNull()).isTrue();
-        assertThat(data.get("recommendRate").isNull()).isTrue();
+        assertThat(data.has("recommendRate")).isFalse();
         for (String field : new String[] {"taste", "value", "service", "ambience"}) {
             assertThat(data.get("dimensions").get(field).isNull()).isTrue();
         }
@@ -393,7 +393,7 @@ class RestaurantReadApiIntegrationTest {
                 .andExpect(jsonPath("$.data.records[0].id").value("102"));
     }
 
-    /** 统计来源同属restaurant模块，目录和详情必须返回同一组人数、历史条数和独立推荐率。 */
+    /** 目录与详情返回相同评分、人数和历史条数，不再返回推荐率。 */
     @Test
     void shouldExposeIdenticalStatisticsInListAndDetailWithoutWrites() throws Exception {
         statistics(101, 3, 2, 1, "15", "16", "15", "12", "17");
@@ -403,7 +403,7 @@ class RestaurantReadApiIntegrationTest {
                         .andExpect(jsonPath("$.data.reviewCount").value(3))
                         .andExpect(jsonPath("$.data.participantCount").value(2))
                         .andExpect(jsonPath("$.data.score").value(7.5))
-                        .andExpect(jsonPath("$.data.recommendRate").value(0.5))
+                        .andExpect(jsonPath("$.data.recommendRate").doesNotExist())
                         .andExpect(jsonPath("$.data.tier").doesNotExist())
                         .andExpect(jsonPath("$.data.dimensions.taste").value(8))
                         .andExpect(jsonPath("$.data.dimensions.value").value(7.5))
@@ -478,7 +478,7 @@ class RestaurantReadApiIntegrationTest {
         }
     }
 
-    /** 真实0分先于未知分，推荐率独立于综合分，不再产生评分分档。 */
+    /** 真实0分先于未知分，仍不产生评分分档。 */
     @Test
     void shouldDistinguishZeroUnknownAndIndependentRecommendationChoice() throws Exception {
         statistics(105, 1, 1, 1, "0", "0", "0", "0", "0");
@@ -486,7 +486,7 @@ class RestaurantReadApiIntegrationTest {
         mvc.perform(get("/api/restaurants/105"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.score").value(0))
-                .andExpect(jsonPath("$.data.recommendRate").value(1))
+                .andExpect(jsonPath("$.data.recommendRate").doesNotExist())
                 .andExpect(jsonPath("$.data.tier").doesNotExist());
         mvc.perform(get("/api/restaurants").param("pageSize", "1").param("page", "2"))
                 .andExpect(status().isOk())

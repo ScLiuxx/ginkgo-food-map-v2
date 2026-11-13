@@ -1,3 +1,4 @@
+import { isReviewRecommendation, type ReviewRecommendation } from '../model/review'
 import { httpClient } from '@/shared/api/httpClient'
 import { getAccessToken } from '@/shared/api/authSession'
 import type { ApiResponse } from '@/shared/api/api.types'
@@ -18,6 +19,9 @@ import { uploadImage, cancelImage } from '@/modules/file/api/mediaApi'
 
 /** 固定提交开始时的凭证，避免请求排队期间账号变化而以新账号发布旧草稿。 */
 export async function publishTextReview(draft: ReviewDraft): Promise<ReviewPublishReceipt> {
+  if (!isReviewRecommendation(draft.recommendation)) {
+    throw new Error('请选择推荐、一般或不推荐。')
+  }
   if (
     draft.photos.length &&
     (draft.photoIds?.length !== draft.photos.length ||
@@ -32,7 +36,7 @@ export async function publishTextReview(draft: ReviewDraft): Promise<ReviewPubli
       {
         clientRequestId: draft.clientRequestId,
         scores: { ...draft.scores },
-        recommended: draft.recommended,
+        recommendation: draft.recommendation,
         body: draft.body,
         ...(draft.photoIds?.length ? { photoIds: [...draft.photoIds] } : {}),
       },
@@ -70,7 +74,7 @@ interface GroupPageDto extends Omit<ReviewPage, 'records'> {
       id: string
       scores: Scores
       overallScore: number
-      recommended: boolean
+      recommendation: ReviewRecommendation
       body: string
       createdAt: string
       scoringStatus: 'current' | 'history'
@@ -120,7 +124,7 @@ export async function fetchReviewPage(
           typeof review.id !== 'string' ||
           review.scoringStatus !== 'current' ||
           typeof review.body !== 'string' ||
-          typeof review.recommended !== 'boolean' ||
+          !isReviewRecommendation(review.recommendation) ||
           !Number.isFinite(Date.parse(review.createdAt)) ||
           !Number.isFinite(review.overallScore) ||
           !review.scores ||
@@ -152,7 +156,7 @@ export async function fetchReviewPage(
           overallScore: review.overallScore,
           scores: review.scores,
           createdAt: review.createdAt,
-          recommended: review.recommended,
+          recommendation: review.recommendation,
           body: review.body,
           photos: review.photos.map((photo) => ({
             id: photo.id,
@@ -219,7 +223,7 @@ export async function fetchReviewHistory(
       r.id === data.currentReviewId ||
       r.scoringStatus !== 'history' ||
       typeof r.body !== 'string' ||
-      typeof r.recommended !== 'boolean' ||
+      !isReviewRecommendation(r.recommendation) ||
       !Number.isFinite(Date.parse(r.createdAt)) ||
       !Number.isFinite(r.overallScore) ||
       !r.scores ||

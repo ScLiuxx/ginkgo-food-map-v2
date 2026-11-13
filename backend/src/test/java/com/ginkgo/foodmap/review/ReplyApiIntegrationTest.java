@@ -123,8 +123,8 @@ class ReplyApiIntegrationTest {
         for (long id : List.of(1L, 2L, 3L)) {
             jdbc.update(
                     "INSERT INTO"
-                        + " reviews(id,restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,is_recommended,body,client_request_id,request_hash)"
-                        + " VALUES(?,?,11,7,7,7,7,TRUE,'测试点评正文',UUID_TO_BIN(?),UNHEX(REPEAT('01',32)))",
+                        + " reviews(id,restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,recommendation,body,client_request_id,request_hash)"
+                        + " VALUES(?,?,11,7,7,7,7,'RECOMMENDED','测试点评正文',UUID_TO_BIN(?),UNHEX(REPEAT('01',32)))",
                     id,
                     id == 3 ? 2 : 1,
                     UUID.randomUUID().toString());
@@ -581,7 +581,7 @@ class ReplyApiIntegrationTest {
     void historyRepliesStayOnOriginalReviewAndNeverChangeScores() throws Exception {
         String snapshot =
                 "SELECT"
-                    + " id,restaurant_id,author_user_id,body,created_at,updated_at,taste_score,value_score,service_score,ambience_score,overall_score,is_recommended,HEX(client_request_id),HEX(request_hash)"
+                    + " id,restaurant_id,author_user_id,body,created_at,updated_at,taste_score,value_score,service_score,ambience_score,overall_score,recommendation,HEX(client_request_id),HEX(request_hash)"
                     + " FROM reviews ORDER BY id";
         var before = jdbc.queryForList(snapshot);
         publish(owner, 1, input("旧点评回复")).andExpect(status().isCreated());

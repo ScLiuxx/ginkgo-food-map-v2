@@ -88,12 +88,9 @@ public final class RestaurantSearchProjectionPolicy {
             document.setLocation(location);
         }
 
+        // 只派生评分与计数；点评的推荐态度不再计算为店铺百分比。
         long participants = row.getParticipantCount();
-        require(
-                participants >= 0
-                        && row.getReviewCount() >= participants
-                        && row.getRecommendCount() >= 0
-                        && row.getRecommendCount() <= participants);
+        require(participants >= 0 && row.getReviewCount() >= participants);
         require(
                 row.getOverallScoreSum() != null
                         && row.getOverallScoreSum().signum() >= 0
@@ -114,10 +111,6 @@ public final class RestaurantSearchProjectionPolicy {
             var divisor = BigDecimal.valueOf(participants);
             document.setRatingScore(
                     row.getOverallScoreSum().divide(divisor, MathContext.DECIMAL128).doubleValue());
-            document.setRecommendRate(
-                    BigDecimal.valueOf(row.getRecommendCount())
-                            .divide(divisor, MathContext.DECIMAL128)
-                            .doubleValue());
         }
         return document;
     }

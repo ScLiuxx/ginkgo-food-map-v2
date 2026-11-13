@@ -221,7 +221,7 @@ Caffeine＋Redis两级缓存、MySQL持久快照、近期计算、自动事务�
 
 用户要求暂缓聚合性能优化，先以最简单方式推进，并分别量化缓存收益：
 
-1. **MySQL直读（已完成）**：联合主键读取快照，不现场聚合或逐店补查；接口见[API 24](../api.md#24-近期餐厅榜单读取)，证据见[读取报告](../history/restaurant-ranking-read-2026-11-11.md)。
+1. **MySQL直读（已完成）**：联合主键读取快照，不现场聚合或逐店补查；接口见[近期餐厅榜单读取](../api/discovery.md#rankings)，证据见[读取报告](../history/restaurant-ranking-read-2026-11-11.md)。
 2. **Redis（已完成）**：Cache Aside及年龄、故障边界，实测耗时差与MySQL查询减少量。
 3. **Caffeine（已完成）**：增加本机层并量化三模式收益，证据见[Caffeine报告](../history/restaurant-ranking-caffeine-2026-11-11.md)。
 
@@ -259,7 +259,7 @@ MySQL与Redis读取共用时间、JSON和公开字段校验。内部计算已按
 
 **当前计算结果的 JSON 内容：**
 
-当前计算器与读取器均采用格式 v1：`rules_snapshot` 含整数 `formatVersion=1`、`scoreScale=5`；`items` 每项公开投影为 `rank`、字符串 `restaurantId`、`name`、可空 `coverUrl`、五分制 `tasteScore` 及整数 `participantCount`，详情见[API](../api.md#24-近期餐厅榜单读取)。计算器同时返回下列内部证据，不透传给用户；结果由生成入口完整计算成功后自动发布入库。
+当前计算器与读取器均采用格式 v1：`rules_snapshot` 含整数 `formatVersion=1`、`scoreScale=5`；`items` 每项公开投影为 `rank`、字符串 `restaurantId`、`name`、可空 `coverUrl`、五分制 `tasteScore` 及整数 `participantCount`，详情见[近期餐厅榜单读取](../api/discovery.md#rankings)。计算器同时返回下列内部证据，不透传给用户；结果由生成入口完整计算成功后自动发布入库。
 
 - `rules_snapshot` 保存算法及格式版本、源和目标分制、权重、`C`、`m`、门槛、条数、时间及排序边界、舍入方式，以及实际校区中心、GCJ-02坐标系和半径。回源旧快照时不拿当前配置重新解释旧排名。
 - `items` 保存完整展示资料，另含五分制四维精确分数和 `scoreSums`、16位诊断分 `sortingScore`、真正排序所用的精确分子 `sortingScoreNumerator` 与分母 `sortingScoreDenominator`。口味均值内部保留16位，公开读取再舍入一位；不保存点评正文或逐用户名单。

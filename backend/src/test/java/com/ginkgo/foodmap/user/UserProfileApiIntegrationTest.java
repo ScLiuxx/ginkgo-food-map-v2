@@ -93,14 +93,16 @@ class UserProfileApiIntegrationTest {
         jdbc.update("DELETE FROM users");
         for (long id : List.of(11L, 22L)) {
             jdbc.update(
-                    "INSERT INTO users(id,username,email,password_hash,email_verified,bio) VALUES(?,?,?,?,TRUE,?)",
+                    "INSERT INTO users(id,username,email,password_hash,email_verified,bio)"
+                        + " VALUES(?,?,?,?,TRUE,?)",
                     id,
                     "profile_" + id,
                     "private_local" + id + "@std.uestc.edu.cn",
                     "test-only-private-hash",
                     id == 11 ? "原有简介" : "其他账号的简介");
             jdbc.update(
-                    "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code='ROLE_USER'",
+                    "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE"
+                        + " code='ROLE_USER'",
                     id);
         }
         when(sessions.isActive(anyString(), anyLong(), anyLong())).thenReturn(true);
@@ -154,9 +156,12 @@ class UserProfileApiIntegrationTest {
     @Test
     void publicReviewsGroupByVisibleStoreAndRetainHistoryAndAuthorLevel() throws Exception {
         jdbc.update(
-                "INSERT INTO restaurants(id,name,category_code) VALUES(71,'主页店','OTHER'),(72,'隐藏店','OTHER')");
+                "INSERT INTO restaurants(id,name,category_code)"
+                    + " VALUES(71,'主页店','OTHER'),(72,'隐藏店','OTHER')");
         jdbc.update(
-                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),deleted_by=11,delete_reason_code='ADMIN_REMOVAL' WHERE id=72");
+                "UPDATE restaurants SET"
+                    + " deleted_at=CURRENT_TIMESTAMP(6),deleted_by=11,delete_reason_code='ADMIN_REMOVAL'"
+                    + " WHERE id=72");
         profileReview(101, 71, 22, "2026-11-01 00:00:00");
         profileReview(102, 71, 22, "2026-11-02 00:00:00");
         profileReview(103, 72, 22, "2026-11-03 00:00:00");
@@ -191,7 +196,9 @@ class UserProfileApiIntegrationTest {
 
     private void profileReview(long id, long restaurant, long author, String time) {
         jdbc.update(
-                "INSERT INTO reviews(id,restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,is_recommended,body,client_request_id,request_hash,created_at) VALUES(?,?,?,8,8,8,8,TRUE,'主页公开点评正文',UUID_TO_BIN(?),UNHEX(SHA2('profile',256)),?)",
+                "INSERT INTO"
+                    + " reviews(id,restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,recommendation,body,client_request_id,request_hash,created_at)"
+                    + " VALUES(?,?,?,8,8,8,8,'RECOMMENDED','主页公开点评正文',UUID_TO_BIN(?),UNHEX(SHA2('profile',256)),?)",
                 id,
                 restaurant,
                 author,
@@ -376,7 +383,8 @@ class UserProfileApiIntegrationTest {
         doAnswer(
                         invocation -> {
                             jdbc.update(
-                                    "UPDATE users SET bio='故障注入',row_version=row_version+1 WHERE id=11");
+                                    "UPDATE users SET bio='故障注入',row_version=row_version+1 WHERE"
+                                        + " id=11");
                             throw new IllegalStateException("test-only");
                         })
                 .when(profiles)
@@ -427,10 +435,14 @@ class UserProfileApiIntegrationTest {
                             new org.springframework.jdbc.datasource.DriverManagerDataSource(
                                     url(name), username(), password()));
             db.update(
-                    "INSERT INTO users(id,username,email,password_hash,email_verified,row_version,credential_version) VALUES(7,'legacy','legacy@example.test','legacy-private-hash',TRUE,9,4)");
+                    "INSERT INTO"
+                        + " users(id,username,email,password_hash,email_verified,row_version,credential_version)"
+                        + " VALUES(7,'legacy','legacy@example.test','legacy-private-hash',TRUE,9,4)");
             var before =
                     db.queryForMap(
-                            "SELECT id,username,email,password_hash,row_version,credential_version,created_at,updated_at FROM users WHERE id=7");
+                            "SELECT"
+                                + " id,username,email,password_hash,row_version,credential_version,created_at,updated_at"
+                                + " FROM users WHERE id=7");
             var flyway =
                     Flyway.configure()
                             .dataSource(url(name), username(), password())
@@ -440,7 +452,9 @@ class UserProfileApiIntegrationTest {
             assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
             assertThat(
                             db.queryForMap(
-                                    "SELECT id,username,email,password_hash,row_version,credential_version,created_at,updated_at FROM users WHERE id=7"))
+                                    "SELECT"
+                                        + " id,username,email,password_hash,row_version,credential_version,created_at,updated_at"
+                                        + " FROM users WHERE id=7"))
                     .isEqualTo(before);
             assertThat(db.queryForObject("SELECT bio FROM users WHERE id=7", String.class))
                     .isEmpty();

@@ -40,7 +40,6 @@
         CASE WHEN r.restaurant_type='CANTEEN' THEN
             ROUND(s.overall_score_sum / NULLIF(s.participant_count,0) / 2,8)
             ELSE s.reputation_score END AS reputation_score,
-        ROUND(CAST(s.recommend_count AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0), 3) AS recommend_rate,
         CAST(s.taste_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0) AS taste,
         CAST(s.value_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0) AS value,
         CAST(s.service_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0) AS service,

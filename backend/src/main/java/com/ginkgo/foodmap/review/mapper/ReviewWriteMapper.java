@@ -12,9 +12,8 @@ import org.apache.ibatis.annotations.Select;
 @Mapper
 public interface ReviewWriteMapper {
     String COLUMNS =
-            "id,restaurant_id,window_id,author_user_id,taste_score,value_score,service_score,ambience_score,overall_score,is_recommended"
-                + " AS recommended,body,BIN_TO_UUID(client_request_id) AS"
-                + " client_request_id,HEX(request_hash) AS request_hash,created_at";
+            "id,restaurant_id,window_id,author_user_id,taste_score,value_score,service_score,ambience_score,overall_score,recommendation,body,BIN_TO_UUID(client_request_id)"
+                + " AS client_request_id,HEX(request_hash) AS request_hash,created_at";
 
     /** author+UUID是全店范围唯一，餐厅不同也不能复用同一次编号。 */
     @Select(
@@ -44,8 +43,8 @@ public interface ReviewWriteMapper {
     @Insert(
             """
 <script>
-INSERT INTO reviews(restaurant_id,window_id,author_user_id,taste_score,value_score,service_score,ambience_score,is_recommended,body,client_request_id,request_hash,created_at)
-VALUES(#{restaurantId,jdbcType=BIGINT},#{windowId,jdbcType=BIGINT},#{authorUserId},#{tasteScore},#{valueScore},#{serviceScore},#{ambienceScore},#{recommended},#{body},UUID_TO_BIN(#{clientRequestId}),UNHEX(#{requestHash}),
+INSERT INTO reviews(restaurant_id,window_id,author_user_id,taste_score,value_score,service_score,ambience_score,recommendation,body,client_request_id,request_hash,created_at)
+VALUES(#{restaurantId,jdbcType=BIGINT},#{windowId,jdbcType=BIGINT},#{authorUserId},#{tasteScore},#{valueScore},#{serviceScore},#{ambienceScore},#{recommendation},#{body},UUID_TO_BIN(#{clientRequestId}),UNHEX(#{requestHash}),
 <choose><when test="createdAt != null">GREATEST(CURRENT_TIMESTAMP(6),#{createdAt})</when><otherwise>CURRENT_TIMESTAMP(6)</otherwise></choose>)
 </script>
 """)

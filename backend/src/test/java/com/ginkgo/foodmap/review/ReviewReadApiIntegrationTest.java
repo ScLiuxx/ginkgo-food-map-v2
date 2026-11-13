@@ -87,9 +87,11 @@ class ReviewReadApiIntegrationTest {
         jdbc.update("DELETE FROM user_roles");
         jdbc.update("DELETE FROM users");
         jdbc.update(
-                "INSERT INTO users(id,username,email,password_hash,email_verified) VALUES(11,'read_owner','read11@example.test','private-password',TRUE),(22,'read_other','read22@example.test','private-password',TRUE)");
+                "INSERT INTO users(id,username,email,password_hash,email_verified)"
+                    + " VALUES(11,'read_owner','read11@example.test','private-password',TRUE),(22,'read_other','read22@example.test','private-password',TRUE)");
         jdbc.update(
-                "INSERT INTO restaurants(id,name,category_code,created_by) VALUES(1,'读取店','OTHER',11),(2,'空店','OTHER',11)");
+                "INSERT INTO restaurants(id,name,category_code,created_by)"
+                    + " VALUES(1,'读取店','OTHER',11),(2,'空店','OTHER',11)");
     }
 
     @AfterAll
@@ -108,7 +110,9 @@ class ReviewReadApiIntegrationTest {
 
     private void review(long id, long restaurant, long author, double score, String time) {
         jdbc.update(
-                "INSERT INTO reviews(id,restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,is_recommended,body,client_request_id,request_hash,created_at) VALUES(?,?,?,?,?,?,?,TRUE,?,UUID_TO_BIN(?),UNHEX(SHA2('private-hash',256)),?)",
+                "INSERT INTO"
+                    + " reviews(id,restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,recommendation,body,client_request_id,request_hash,created_at)"
+                    + " VALUES(?,?,?,?,?,?,?,'RECOMMENDED',?,UUID_TO_BIN(?),UNHEX(SHA2('private-hash',256)),?)",
                 id,
                 restaurant,
                 author,
@@ -187,7 +191,8 @@ class ReviewReadApiIntegrationTest {
 
     private void like(long review, long user, boolean active) {
         jdbc.update(
-                "INSERT INTO content_likes(target_type,target_id,user_id,active) VALUES('REVIEW',?,?,?)",
+                "INSERT INTO content_likes(target_type,target_id,user_id,active)"
+                    + " VALUES('REVIEW',?,?,?)",
                 review,
                 user,
                 active);
@@ -293,7 +298,8 @@ class ReviewReadApiIntegrationTest {
                 .andExpect(jsonPath("$.data.records[0].currentReview.overallScore").value(7.5));
         clearInvocations(reads);
         jdbc.update(
-                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM' WHERE id=1");
+                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM'"
+                    + " WHERE id=1");
         mvc.perform(get("/api/restaurants/1/reviews"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("RESTAURANT_NOT_FOUND"));
@@ -376,7 +382,10 @@ class ReviewReadApiIntegrationTest {
                             try (var c = connect(database);
                                     var s = c.createStatement()) {
                                 s.executeUpdate(
-                                        "INSERT INTO reviews(restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,is_recommended,body,client_request_id,request_hash,created_at) VALUES(1,22,9,9,9,9,TRUE,'并发的新点评正文',UUID_TO_BIN(UUID()),UNHEX(SHA2('new',256)),'2026-10-29 02:00:00')");
+                                        "INSERT INTO"
+                                            + " reviews(restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,recommendation,body,client_request_id,request_hash,created_at)"
+                                            + " VALUES(1,22,9,9,9,9,'RECOMMENDED','并发的新点评正文',UUID_TO_BIN(UUID()),UNHEX(SHA2('new',256)),'2026-10-29"
+                                            + " 02:00:00')");
                                 s.executeUpdate(
                                         "UPDATE users SET username='changed_owner' WHERE id=11");
                             }
@@ -545,7 +554,8 @@ class ReviewReadApiIntegrationTest {
         mvc.perform(get("/api/restaurants/1/reviews/authors/11/history"))
                 .andExpect(status().isOk());
         jdbc.update(
-                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM' WHERE id=1");
+                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM'"
+                    + " WHERE id=1");
         mvc.perform(get("/api/restaurants/1/reviews/authors/11/history"))
                 .andExpect(status().isNotFound());
     }
@@ -565,7 +575,10 @@ class ReviewReadApiIntegrationTest {
                             try (var c = connect(database);
                                     var st = c.createStatement()) {
                                 st.executeUpdate(
-                                        "INSERT INTO reviews(id,restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,is_recommended,body,client_request_id,request_hash,created_at) VALUES(103,1,11,9,9,9,9,TRUE,'并发更新正文',UUID_TO_BIN(UUID()),UNHEX(SHA2('new',256)),'2026-10-29 03:00:00')");
+                                        "INSERT INTO"
+                                            + " reviews(id,restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,recommendation,body,client_request_id,request_hash,created_at)"
+                                            + " VALUES(103,1,11,9,9,9,9,'RECOMMENDED','并发更新正文',UUID_TO_BIN(UUID()),UNHEX(SHA2('new',256)),'2026-10-29"
+                                            + " 03:00:00')");
                                 st.executeUpdate(
                                         "UPDATE users SET username='changed_owner' WHERE id=11");
                             }
@@ -593,7 +606,9 @@ class ReviewReadApiIntegrationTest {
             }
         }
         String sql =
-                "SELECT id,created_at FROM reviews WHERE restaurant_id=1 AND author_user_id=11 AND (created_at < '2026-10-29 01:00:00.123456' OR (created_at = '2026-10-29 01:00:00.123456' AND id<11040)) ORDER BY created_at DESC,id DESC LIMIT 6";
+                "SELECT id,created_at FROM reviews WHERE restaurant_id=1 AND author_user_id=11 AND"
+                    + " (created_at < '2026-10-29 01:00:00.123456' OR (created_at = '2026-10-29"
+                    + " 01:00:00.123456' AND id<11040)) ORDER BY created_at DESC,id DESC LIMIT 6";
         var report =
                 new StringBuilder(
                         "Isolated MySQL "

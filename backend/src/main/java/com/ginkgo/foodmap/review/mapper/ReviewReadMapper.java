@@ -13,8 +13,8 @@ import java.util.List;
 @Mapper
 public interface ReviewReadMapper {
     String READ_COLUMNS =
-            "id,author_user_id,taste_score,value_score,service_score,ambience_score,overall_score,is_recommended"
-                + " AS recommended,body,created_at";
+            "id,author_user_id,taste_score,value_score,service_score,ambience_score,overall_score,recommendation"
+                + ",body,created_at";
 
     /** 作者历史与当前主卡都以同一时间/ID顺序确定最新代表。 */
     @Select(
@@ -59,10 +59,10 @@ public interface ReviewReadMapper {
     String PAGE_SQL =
             """
 SELECT id,author_user_id,taste_score,value_score,service_score,ambience_score,
-       overall_score,recommended,body,created_at,history_count
+       overall_score,recommendation,body,created_at,history_count
 FROM (
     SELECT id,author_user_id,taste_score,value_score,service_score,ambience_score,
-           overall_score,is_recommended AS recommended,body,created_at,
+           overall_score,recommendation,body,created_at,
            COUNT(*) OVER (PARTITION BY author_user_id)-1 AS history_count,
            ROW_NUMBER() OVER (PARTITION BY author_user_id ORDER BY created_at DESC,id DESC) AS representative
     FROM reviews WHERE restaurant_id=#{restaurant}
@@ -86,7 +86,7 @@ ORDER BY created_at DESC,id DESC LIMIT #{limit} OFFSET #{offset}
 <script>
 SELECT ranked.* FROM (
     SELECT id,author_user_id,taste_score,value_score,service_score,ambience_score,
-           overall_score,is_recommended AS recommended,body,created_at,
+           overall_score,recommendation,body,created_at,
            COUNT(*) OVER (PARTITION BY author_user_id)-1 AS history_count,
            ROW_NUMBER() OVER (PARTITION BY author_user_id ORDER BY created_at DESC,id DESC) AS representative
     FROM reviews WHERE restaurant_id=#{restaurant}
@@ -149,10 +149,10 @@ ORDER BY (SELECT COUNT(*) FROM content_likes likes
     String WINDOW_PAGE_SQL =
             """
 SELECT id,author_user_id,taste_score,value_score,service_score,ambience_score,
-       overall_score,recommended,body,created_at,history_count
+       overall_score,recommendation,body,created_at,history_count
 FROM (
     SELECT id,author_user_id,taste_score,value_score,service_score,ambience_score,
-           overall_score,is_recommended AS recommended,body,created_at,
+           overall_score,recommendation,body,created_at,
            COUNT(*) OVER (PARTITION BY author_user_id)-1 AS history_count,
            ROW_NUMBER() OVER (PARTITION BY author_user_id ORDER BY created_at DESC,id DESC) AS representative
     FROM reviews WHERE window_id=#{restaurant}
@@ -176,7 +176,7 @@ ORDER BY created_at DESC,id DESC LIMIT #{limit} OFFSET #{offset}
 <script>
 SELECT ranked.* FROM (
     SELECT id,author_user_id,taste_score,value_score,service_score,ambience_score,
-           overall_score,is_recommended AS recommended,body,created_at,
+           overall_score,recommendation,body,created_at,
            COUNT(*) OVER (PARTITION BY author_user_id)-1 AS history_count,
            ROW_NUMBER() OVER (PARTITION BY author_user_id ORDER BY created_at DESC,id DESC) AS representative
     FROM reviews WHERE window_id=#{restaurant}

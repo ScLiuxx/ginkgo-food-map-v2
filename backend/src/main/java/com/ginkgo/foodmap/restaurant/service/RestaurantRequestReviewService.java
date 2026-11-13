@@ -13,6 +13,7 @@ import com.ginkgo.foodmap.restaurant.mapper.RestaurantWriteMapper;
 import com.ginkgo.foodmap.restaurant.support.RestaurantIdentifiers;
 import com.ginkgo.foodmap.restaurant.vo.RestaurantDecisionVo;
 import com.ginkgo.foodmap.restaurant.vo.RestaurantVo;
+import com.ginkgo.foodmap.review.service.ReviewSubmissionService;
 import com.ginkgo.foodmap.security.service.CurrentActorService;
 
 import lombok.RequiredArgsConstructor;
@@ -37,6 +38,7 @@ public class RestaurantRequestReviewService {
     private final ObjectMapper json;
     private final RestaurantPhotoMapper photos;
     private final MediaFileService media;
+    private final ReviewSubmissionService reviewSubmissions;
     private final com.ginkgo.foodmap.growth.service.GrowthRewardApplicationService growth;
     private final com.ginkgo.foodmap.notification.service.NotificationPublicationService
             notifications;
@@ -45,6 +47,7 @@ public class RestaurantRequestReviewService {
     public RestaurantDecisionVo approve(String id, RestaurantApproveRequest input) {
         long actor = administrator();
         var row = lockRequest(RestaurantIdentifiers.id(id));
+        reviewSubmissions.requireNoAttachedReview(row.getId());
         normalizeReview(input);
         if ("APPROVED".equals(row.getStatus())) {
             var saved = json.readValue(row.getApprovedData(), RestaurantApproveRequest.class);
@@ -122,6 +125,7 @@ public class RestaurantRequestReviewService {
             throw new BusinessException(RestaurantErrorCode.INVALID_INPUT);
         }
         var row = lockRequest(RestaurantIdentifiers.id(id));
+        reviewSubmissions.requireNoAttachedReview(row.getId());
         if ("REJECTED".equals(row.getStatus())) {
             if (!normalized.equals(row.getRejectReason())) {
                 conflict();

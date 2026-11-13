@@ -26,7 +26,6 @@ export interface RestaurantReadModel {
   reviewCount: number
   /** 每账号每店只取最新有效点评，人数不随历史条数增长。 */
   participantCount: number
-  recommendRate: number | null
   dimensions: Record<RatingDimension, number | null>
   /** 真实接口以服务端距离为准；旧快照没有此字段时才在纯逻辑测试中计算。 */
   distanceKm?: number | null

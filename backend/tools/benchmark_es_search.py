@@ -183,7 +183,7 @@ def all_results(endpoint, case):
             raise RuntimeError('Result total changed during pagination')
         ids.extend(int(row['id']) for row in data['records'])
         if page == 1:
-            rows = [{key: row.get(key) for key in ('id', 'name', 'address', 'categoryName', 'score', 'recommendRate')}
+            rows = [{key: row.get(key) for key in ('id', 'name', 'address', 'categoryName', 'score')}
                     for row in data['records'][:5]]
         if len(ids) >= total:
             break

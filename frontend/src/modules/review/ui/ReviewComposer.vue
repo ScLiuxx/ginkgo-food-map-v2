@@ -17,7 +17,8 @@ import { validBody, reviewGatewayKey, unavailableReviewGateway } from '../model/
 import { compressPhoto } from '../model/photos'
 import { useReviewPhotos } from '../model/useReviewPhotos'
 import { MAX_REVIEW_PHOTOS } from '../model/review'
-import type { ReviewPublishReceipt } from '../model/review'
+import { recommendationLabels, reviewRecommendations } from '../model/review'
+import type { ReviewPublishReceipt, ReviewRecommendation } from '../model/review'
 const props = defineProps<{
   restaurant?: RestaurantReadModel
   fixedTarget?: boolean
@@ -39,7 +40,7 @@ const dialog = ref<globalThis.HTMLDialogElement>(),
 const restaurants = ref<RestaurantReadModel[]>([]),
   selected = ref(''),
   body = ref(''),
-  recommended = ref(true)
+  recommendation = ref<ReviewRecommendation | null>(null)
 const scores = ref({ taste: 7, value: 7, service: 7, ambience: 7 })
 let requestId = '',
   submittedContent = '',
@@ -160,7 +161,7 @@ async function open() {
   submittedContent = ''
   body.value = ''
   scores.value = { taste: 7, value: 7, service: 7, ambience: 7 }
-  recommended.value = true
+  recommendation.value = null
   error.value = ''
   receipt.value = null
   opened.value = true
@@ -234,6 +235,10 @@ async function submit() {
     error.value = isCanteen.value ? '请选择具体窗口后再评价。' : '请选择要评价的餐厅。'
     return
   }
+  if (recommendation.value === null) {
+    error.value = '请选择推荐、一般或不推荐。'
+    return
+  }
   if (!validBody(body.value, 5, 500)) {
     error.value = '请填写5–500字的评价（不计首尾空白）。'
     return
@@ -246,7 +251,7 @@ async function submit() {
     isCanteen.value || dining.value?.kind === 'window' ? 'WINDOW' : 'RESTAURANT',
     publishTarget.value,
     scores.value,
-    recommended.value,
+    recommendation.value,
     body.value.trim(),
     photos.value.map((p) => p.fileId ?? p.url),
   ])
@@ -259,7 +264,7 @@ async function submit() {
         ? { windowId: publishTarget.value }
         : {}),
       scores: { ...scores.value },
-      recommended: recommended.value,
+      recommendation: recommendation.value,
       body: body.value.trim(),
       photos: photos.value.map((p) => p.file),
       photoIds: photos.value.flatMap((p) => (p.fileId ? [p.fileId] : [])),
@@ -387,11 +392,14 @@ onUnmounted(close)
           <fieldset class="attitude">
             <legend>你的态度</legend>
             <div>
-              <button type="button" :aria-pressed="recommended" @click="recommended = true">
-                推荐
-              </button>
-              <button type="button" :aria-pressed="!recommended" @click="recommended = false">
-                不推荐
+              <button
+                v-for="option in reviewRecommendations"
+                :key="option"
+                type="button"
+                :aria-pressed="recommendation === option"
+                @click="recommendation = option"
+              >
+                {{ recommendationLabels[option] }}
               </button>
             </div>
           </fieldset>

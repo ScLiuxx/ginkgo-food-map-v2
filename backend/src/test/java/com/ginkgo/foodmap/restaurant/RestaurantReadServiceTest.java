@@ -90,7 +90,6 @@ class RestaurantReadServiceTest {
         assertThat(vo.getTags()).containsExactly("测试标签");
         assertThat(vo.getScore()).isNull();
         assertThat(vo.getDimensions().getTaste()).isNull();
-        assertThat(vo.getRecommendRate()).isNull();
         assertThat(vo.getReviewCount()).isZero();
         assertThat(vo.getPricePerPerson()).isNull();
     }

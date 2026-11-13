@@ -29,7 +29,6 @@ export interface RestaurantResponse {
   score: number | null
   /** 新版接口独立返回五分制口碑分，旧score保持原十分制均分语义。 */
   reputationScore?: number | null
-  recommendRate: number | null
   reviewCount: number
   participantCount: number
   dimensions: RestaurantReadModel['dimensions']
@@ -119,7 +118,6 @@ export function toRestaurantModel(value: RestaurantResponse): RestaurantReadMode
           ? null
           : value.reputationScore * 2,
     reputationScore: value.reputationScore,
-    recommendRate: value.recommendRate,
     reviewCount: value.reviewCount,
     participantCount: value.participantCount,
     dimensions: value.dimensions,

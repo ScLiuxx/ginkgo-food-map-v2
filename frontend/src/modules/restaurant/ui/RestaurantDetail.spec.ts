@@ -203,7 +203,6 @@ describe('restaurant detail API integration', () => {
     vi.mocked(fetchRestaurant).mockResolvedValueOnce({
       ...restaurantFixture,
       score: 0,
-      recommendRate: 0,
       participantCount: 2,
       reviewCount: 7,
     })

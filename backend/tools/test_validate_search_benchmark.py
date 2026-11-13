@@ -25,5 +25,11 @@ class IndependentValidationTest(unittest.TestCase):
         actual = sorted(rows, key=lambda row: sort_key(row, {}, 'score', '茶'))
         self.assertEqual([row['id'] for row in actual], [1, 2, 4, 3])
 
+    def test_legacy_recommend_sort_uses_heat_without_recommendation_fields(self):
+        rows = [{'id': 3, 'reviewCount': 1}, {'id': 2, 'reviewCount': 7},
+                {'id': 1, 'reviewCount': 7}]
+        actual = sorted(rows, key=lambda row: sort_key(row, {}, 'recommend', '茶'))
+        self.assertEqual([row['id'] for row in actual], [1, 2, 3])
+
 
 if __name__ == '__main__':unittest.main()

@@ -18,7 +18,7 @@ const payload = () => ({
         id: '102',
         scores: { taste: 0, value: 0, service: 0, ambience: 0 },
         overallScore: 0,
-        recommended: false,
+        recommendation: 'NOT_RECOMMENDED',
         body: '零分也是真实体验',
         createdAt: '2026-11-07T00:00:00Z',
         scoringStatus: 'current',

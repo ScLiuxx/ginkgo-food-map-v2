@@ -122,17 +122,20 @@ class GrowthRewardIntegrationTest {
         }
         for (long id : List.of(11L, 22L)) {
             jdbc.update(
-                    "INSERT INTO users(id,username,email,password_hash,email_verified) VALUES(?,?,?,?,TRUE)",
+                    "INSERT INTO users(id,username,email,password_hash,email_verified)"
+                        + " VALUES(?,?,?,?,TRUE)",
                     id,
                     "growth_" + id,
                     "growth" + id + "@example.invalid",
                     "test-only");
             jdbc.update(
-                    "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code='ROLE_USER'",
+                    "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE"
+                        + " code='ROLE_USER'",
                     id);
         }
         jdbc.update(
-                "INSERT INTO restaurants(id,name,category_code,created_by) VALUES(1,'成长测试店','OTHER',11),(2,'第二家店','OTHER',11)");
+                "INSERT INTO restaurants(id,name,category_code,created_by)"
+                    + " VALUES(1,'成长测试店','OTHER',11),(2,'第二家店','OTHER',11)");
         when(sessions.isActive(anyString(), anyLong(), anyLong())).thenReturn(true);
         owner = token(11);
     }
@@ -224,7 +227,10 @@ class GrowthRewardIntegrationTest {
     @Test
     void failureAfterAwardRollsBackTheWholeReviewAndPhotoBinding() throws Exception {
         jdbc.update(
-                "INSERT INTO media_files(id,uploader_user_id,bucket_name,storage_key,content_type,byte_size,width,height,sha256,status,expires_at) VALUES(991,11,'test-bucket','growth/rollback.jpg','image/jpeg',100,10,10,UNHEX(REPEAT('00',32)),'TEMPORARY',DATE_ADD(CURRENT_TIMESTAMP(6),INTERVAL 1 HOUR))");
+                "INSERT INTO"
+                    + " media_files(id,uploader_user_id,bucket_name,storage_key,content_type,byte_size,width,height,sha256,status,expires_at)"
+                    + " VALUES(991,11,'test-bucket','growth/rollback.jpg','image/jpeg',100,10,10,UNHEX(REPEAT('00',32)),'TEMPORARY',DATE_ADD(CURRENT_TIMESTAMP(6),INTERVAL"
+                    + " 1 HOUR))");
         var body = input(UUID.randomUUID().toString());
         body.put("photoIds", List.of("991"));
         doAnswer(
@@ -377,7 +383,9 @@ class GrowthRewardIntegrationTest {
         // 其他有效奖励构造合法起点，避免通过单独修改汇总伪造一致性。
         jdbc.update("INSERT INTO growth_accounts(user_id,experience) VALUES(11,95)");
         jdbc.update(
-                "INSERT INTO growth_rewards(user_id,reward_type,business_key,source_type,source_id,amount) VALUES(11,'CORRECTION_APPROVED','baseline','RESTAURANT_REQUEST',999,95)");
+                "INSERT INTO"
+                    + " growth_rewards(user_id,reward_type,business_key,source_type,source_id,amount)"
+                    + " VALUES(11,'CORRECTION_APPROVED','baseline','RESTAURANT_REQUEST',999,95)");
         publishedId(1, input(UUID.randomUUID().toString()));
         mvc.perform(get("/api/me/growth").header("Authorization", "Bearer " + owner))
                 .andExpect(status().isOk())
@@ -484,7 +492,8 @@ class GrowthRewardIntegrationTest {
         assertThat(experience(user))
                 .isEqualTo(
                         jdbc.queryForObject(
-                                "SELECT COALESCE(SUM(amount),0) FROM growth_rewards WHERE user_id=? AND status='GRANTED'",
+                                "SELECT COALESCE(SUM(amount),0) FROM growth_rewards WHERE user_id=?"
+                                    + " AND status='GRANTED'",
                                 Long.class,
                                 user));
     }
@@ -520,8 +529,8 @@ class GrowthRewardIntegrationTest {
                         uuid,
                         "scores",
                         Map.of("taste", 8, "value", 8, "service", 8, "ambience", 8),
-                        "recommended",
-                        true,
+                        "recommendation",
+                        "RECOMMENDED",
                         "body",
                         "首次点评成长闭环测试正文"));
     }

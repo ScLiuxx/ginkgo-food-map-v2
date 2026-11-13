@@ -1,6 +1,6 @@
 # 近期餐厅榜单：Caffeine两级缓存验证（2026-11-11）
 
-本报告记录第三阶段完成时的实现与本机实测。前两阶段的[MySQL基线](restaurant-ranking-read-2026-11-11.md)、[Redis报告](restaurant-ranking-redis-2026-11-11.md)保留各自时间边界；这里的三模式比较全部来自本轮同一进程，不拿不同运行的绝对值相除。当前规则与后续工作见[榜单计划](../plans/hot-restaurants.md)，接口见[API 24](../api.md#24-近期餐厅榜单读取)。
+本报告记录第三阶段完成时的实现与本机实测。前两阶段的[MySQL基线](restaurant-ranking-read-2026-11-11.md)、[Redis报告](restaurant-ranking-redis-2026-11-11.md)保留各自时间边界；这里的三模式比较全部来自本轮同一进程，不拿不同运行的绝对值相除。当前规则与后续工作见[榜单计划](../plans/hot-restaurants.md)，接口见[近期餐厅榜单读取](../api/discovery.md#rankings)。
 
 ## 实现与一致性
 
@@ -89,4 +89,4 @@ python -X utf8 backend/tools/benchmark_restaurant_rankings.py --local-config --r
 | [缓存测试](../../backend/src/test/java/com/ginkgo/foodmap/restaurant/RestaurantRankingCacheTest.java) / [读取测试](../../backend/src/test/java/com/ginkgo/foodmap/restaurant/RestaurantRankingReadServiceTest.java) | 新增本机、并发、TTL与不可变性验证，适配原读取校验 |
 | [真实集成测试](../../backend/src/test/java/com/ginkgo/foodmap/restaurant/RestaurantRankingReadMySqlIntegrationTest.java) | 两种缓存配置复测事务/故障，增加真实HTTP及三模式对照 |
 | [基准入口](../../backend/tools/benchmark_restaurant_rankings.py) | 增加--caffeine、三模式元数据与完整样本归档 |
-| [计划](../plans/hot-restaurants.md)、[API](../api.md#24-近期餐厅榜单读取)、[功能说明](../features.md)、[开发记录](../development.md)、[导航](../README.md)及本报告 | 同步当前状态、契约、验证结论与证据入口 |
+| [计划](../plans/hot-restaurants.md)、[近期餐厅榜单读取](../api/discovery.md#rankings)、[功能说明](../features.md)、[开发记录](../development.md)、[导航](../README.md)及本报告 | 同步当前状态、契约、验证结论与证据入口 |

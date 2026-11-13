@@ -4,7 +4,12 @@ import { inject } from 'vue'
 import ReplyThread from './ReplyThread.vue'
 import StarScore from '@/shared/ui/StarScore.vue'
 import { ratingDimensions } from '@/modules/restaurant/model/catalog.logic'
-import { overall, reviewGatewayKey, unavailableReviewGateway } from '../model/review'
+import {
+  overall,
+  recommendationLabels,
+  reviewGatewayKey,
+  unavailableReviewGateway,
+} from '../model/review'
 import type { ReviewItem } from '../model/review'
 import { hasExampleMarker } from '../model/detailPhotos'
 import { UserIdentity, ContentActions } from '@/modules/community'
@@ -62,8 +67,11 @@ defineEmits<{
         ><div class="entry-rating">
           <StarScore :score="item.overallScore ?? overall(item.scores)" /><span
             class="attitude-badge"
-            :class="{ negative: !item.recommended }"
-            >{{ item.recommended ? '推荐' : '不推荐' }}</span
+            :class="{
+              negative: item.recommendation === 'NOT_RECOMMENDED',
+              neutral: item.recommendation === 'NEUTRAL',
+            }"
+            >{{ recommendationLabels[item.recommendation] }}</span
           >
         </div>
         <time v-if="!profileEntry" class="entry-date" :datetime="item.createdAt">{{
@@ -71,7 +79,7 @@ defineEmits<{
         }}</time></template
       >
       <span v-else class="verdict"
-        >{{ item.recommended ? '推荐' : '不推荐' }} ·
+        >{{ recommendationLabels[item.recommendation] }} ·
         {{ formatRating(item.overallScore ?? overall(item.scores), 2) }}</span
       >
     </header>
@@ -271,6 +279,10 @@ defineEmits<{
 .star-review .attitude-badge.negative {
   background: #f2f3f5;
   color: #8b939d;
+}
+.star-review .attitude-badge.neutral {
+  background: #f1f2eb;
+  color: #7b806d;
 }
 .star-review .entry-date {
   grid-column: 2;

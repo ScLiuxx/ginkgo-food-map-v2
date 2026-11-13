@@ -30,7 +30,6 @@ public class RestaurantSearchDocument {
     private Double ratingScore;
     /** 五分制口碑分，v004新增；保留ratingScore原十分制语义，禁止在前端重复除以2。 */
     private Double reputationScore;
-    private Double recommendRate;
     private Long participantCount;
     private Long reviewCount;
     private Boolean deleted;

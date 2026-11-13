@@ -37,10 +37,10 @@ public interface MyReviewReadMapper {
             """
 <script>
 SELECT id,restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,
-       overall_score,recommended,body,created_at,history_count
+       overall_score,recommendation,body,created_at,history_count
 FROM (
     SELECT id,restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,
-           overall_score,is_recommended AS recommended,body,created_at,
+           overall_score,recommendation,body,created_at,
            COUNT(*) OVER (PARTITION BY restaurant_id)-1 AS history_count,
            ROW_NUMBER() OVER (PARTITION BY restaurant_id ORDER BY created_at DESC,id DESC) AS representative
     FROM reviews WHERE
@@ -84,7 +84,7 @@ OR <choose><when test="windows.size()>0">window_id IN <foreach collection="windo
     @Select(
             """
 <script>SELECT * FROM (
- SELECT id,restaurant_id,window_id,author_user_id,taste_score,value_score,service_score,ambience_score,overall_score,is_recommended AS recommended,body,created_at,
+ SELECT id,restaurant_id,window_id,author_user_id,taste_score,value_score,service_score,ambience_score,overall_score,recommendation,body,created_at,
  COUNT(*) OVER(PARTITION BY restaurant_id,window_id)-1 history_count,
  ROW_NUMBER() OVER(PARTITION BY restaurant_id,window_id ORDER BY created_at DESC,id DESC) representative FROM reviews WHERE
 """

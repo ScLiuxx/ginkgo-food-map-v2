@@ -2,6 +2,7 @@ package com.ginkgo.foodmap.review.policy;
 
 import com.ginkgo.foodmap.common.exception.BusinessException;
 import com.ginkgo.foodmap.review.dto.ReviewPublishRequest;
+import com.ginkgo.foodmap.review.dto.ReviewRecommendation;
 import com.ginkgo.foodmap.review.entity.ReviewEntity;
 import com.ginkgo.foodmap.review.exception.ReviewErrorCode;
 
@@ -24,15 +25,60 @@ public final class ReviewPublishPolicy {
     /** 作者来自安全上下文；入参原对象不修改，原文不会进入日志。 */
     public static ReviewEntity normalize(
             String restaurant, long author, ReviewPublishRequest request) {
-        var row = new ReviewEntity();
+        var row = normalizeContent(author, request);
         try {
             if (restaurant == null || !restaurant.matches("[1-9][0-9]{0,18}")) {
                 throw new IllegalArgumentException();
             }
             row.setRestaurantId(Long.parseLong(restaurant));
+            // 固定版本、固定字段顺序，正文在最后，避免分隔符出现在正文时产生歧义。
+            String canonical =
+                    String.join(
+                            "\n",
+                            List.of(
+                                    row.getRecommendation() == ReviewRecommendation.NEUTRAL
+                                            ? "text-review-v3"
+                                            : "text-review-v1",
+                                    Long.toString(row.getRestaurantId()),
+                                    row.getTasteScore().toPlainString(),
+                                    row.getValueScore().toPlainString(),
+                                    row.getServiceScore().toPlainString(),
+                                    row.getAmbienceScore().toPlainString(),
+                                    row.getRecommendation().requestToken(),
+                                    row.getBody()));
+            var photos = photoIds(request);
+            // 空图保持既有text-review-v1逐字节兼容；附图版本将有序ID纳入摘要。
+            if (!photos.isEmpty()) {
+                canonical =
+                        (row.getRecommendation() == ReviewRecommendation.NEUTRAL
+                                        ? "photo-review-v3\n"
+                                        : "photo-review-v2\n")
+                                + photos.stream()
+                                        .map(String::valueOf)
+                                        .collect(java.util.stream.Collectors.joining(","))
+                                + "\n"
+                                + canonical;
+            }
+            row.setRequestHash(
+                    HexFormat.of()
+                            .formatHex(
+                                    MessageDigest.getInstance("SHA-256")
+                                            .digest(canonical.getBytes(StandardCharsets.UTF_8))));
+            return row;
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ReviewErrorCode.INVALID_INPUT);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 unavailable", exception);
+        }
+    }
+
+    /** 正式发布与待发布共用正文、四维、三态及UUID规范化，不依赖尚不存在的店铺ID。 */
+    public static ReviewEntity normalizeContent(long author, ReviewPublishRequest request) {
+        var row = new ReviewEntity();
+        try {
             if (request == null
                     || request.getScores() == null
-                    || request.getRecommended() == null) {
+                    || request.getRecommendation() == null) {
                 throw new IllegalArgumentException();
             }
             String uuid = request.getClientRequestId();
@@ -52,47 +98,16 @@ public final class ReviewPublishPolicy {
             }
             row.setBody(body);
             row.setAuthorUserId(author);
-            row.setRecommended(request.getRecommended());
+            row.setRecommendation(request.getRecommendation());
             row.setOverallScore(
                     row.getTasteScore()
                             .add(row.getValueScore())
                             .add(row.getServiceScore())
                             .add(row.getAmbienceScore())
                             .divide(BigDecimal.valueOf(4), 2, RoundingMode.HALF_UP));
-            // 固定版本、固定字段顺序，正文在最后，避免分隔符出现在正文时产生歧义。
-            String canonical =
-                    String.join(
-                            "\n",
-                            List.of(
-                                    "text-review-v1",
-                                    Long.toString(row.getRestaurantId()),
-                                    row.getTasteScore().toPlainString(),
-                                    row.getValueScore().toPlainString(),
-                                    row.getServiceScore().toPlainString(),
-                                    row.getAmbienceScore().toPlainString(),
-                                    Boolean.toString(row.isRecommended()),
-                                    body));
-            var photos = photoIds(request);
-            // 空图保持既有text-review-v1逐字节兼容；附图版本将有序ID纳入摘要。
-            if (!photos.isEmpty()) {
-                canonical =
-                        "photo-review-v2\n"
-                                + photos.stream()
-                                        .map(String::valueOf)
-                                        .collect(java.util.stream.Collectors.joining(","))
-                                + "\n"
-                                + canonical;
-            }
-            row.setRequestHash(
-                    HexFormat.of()
-                            .formatHex(
-                                    MessageDigest.getInstance("SHA-256")
-                                            .digest(canonical.getBytes(StandardCharsets.UTF_8))));
             return row;
         } catch (IllegalArgumentException exception) {
             throw new BusinessException(ReviewErrorCode.INVALID_INPUT);
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 unavailable", exception);
         }
     }
 

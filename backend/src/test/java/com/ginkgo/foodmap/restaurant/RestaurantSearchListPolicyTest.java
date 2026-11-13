@@ -51,14 +51,11 @@ class RestaurantSearchListPolicyTest {
         d.setReviewCount(3L);
         d.setRatingScore(0.0);
         d.setReputationScore(2.91666667);
-        d.setRecommendRate(0.0);
         assertThat(RestaurantSearchListPolicy.toView(d, new RestaurantListQuery()).getScore())
                 .isEqualByComparingTo("0");
         d.setRatingScore(8.25);
-        d.setRecommendRate(0.9234);
         var view = RestaurantSearchListPolicy.toView(d, new RestaurantListQuery());
         assertThat(view.getScore()).isEqualByComparingTo("8.3");
-        assertThat(view.getRecommendRate()).isEqualByComparingTo("0.923");
         assertThat(view.getReviewCount()).isEqualTo(3);
     }
 
@@ -93,7 +90,6 @@ class RestaurantSearchListPolicyTest {
         d.setParticipantCount(1L);
         d.setReviewCount(1L);
         d.setRatingScore(Double.NaN);
-        d.setRecommendRate(1.0);
         assertThatThrownBy(() -> RestaurantSearchListPolicy.toView(d, new RestaurantListQuery()))
                 .isInstanceOf(IllegalStateException.class);
     }

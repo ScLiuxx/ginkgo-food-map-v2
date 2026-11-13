@@ -4,7 +4,7 @@
 
 ## 当前读取边界
 
-列表接口直接读取现有投影：普通浏览使用match_all，关键词使用既有匹配规则，不再回查MySQL或Outbox；资料、评分及删除/恢复允许同步延迟。coverPhotoId用于组装同源图片地址，图片读取仍校验实际状态。四维及审计时间未在索引中，列表返回null，详情独立读取MySQL。地图点位仍使用身份/版本回查。字段和mapping不变，无需因本次读取改造重建索引。
+列表接口直接读取现有投影：普通浏览使用match_all，关键词使用既有匹配规则，不再回查MySQL或Outbox；资料、评分及删除/恢复允许同步延迟。coverPhotoId用于组装同源图片地址，图片读取仍校验实际状态。四维及审计时间未在索引中，列表返回null，详情独立读取MySQL。地图点位仍使用身份/版本回查。历史recommendRate仅在mapping保留，当前读写白名单均不包含；沿用现有索引即可。
 
 ## 索引设置
 
@@ -59,7 +59,7 @@
 | --- | --- | --- | --- |
 | `reputationScore` | `double` | MySQL五分制派生分 | 综合分展示与排序；无计分用户缺省，食堂保留窗口等权均分 |
 | `ratingScore` | `double` | overall_score_sum / participant_count | 原始综合均分，保留0–10口径 |
-| `recommendRate` | `double` | recommend_count / participant_count | 推荐率展示，0–1比例 |
+| `recommendRate` | `double` | 已停用的历史字段 | 现有mapping兼容保留；当前投影不生成、查询不读取、接口不返回 |
 | `participantCount` | `long` | participant_count | 计分人数 |
 | `reviewCount` | `long` | review_count | 有效点评总条数 |
 
@@ -106,7 +106,6 @@
   "location": {"lat": 30.75, "lon": 103.93},
   "needsLocation": false,
   "ratingScore": 8.0,
-  "recommendRate": 0.5,
   "participantCount": 2,
   "reviewCount": 3,
   "deleted": false,

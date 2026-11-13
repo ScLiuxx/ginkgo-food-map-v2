@@ -227,7 +227,7 @@ public class ReviewReadService {
         scores.setAmbience(row.getAmbienceScore());
         review.setScores(scores);
         review.setOverallScore(row.getOverallScore());
-        review.setRecommended(row.isRecommended());
+        review.setRecommendation(row.getRecommendation());
         review.setBody(row.getBody());
         review.setCreatedAt(row.getCreatedAt());
         review.setPhotos(

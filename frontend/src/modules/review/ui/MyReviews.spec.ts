@@ -29,7 +29,7 @@ const result = (id = '102', userId = '42', historyCount = 1): MyReviewPage => ({
         overallScore: 8,
         createdAt: '2026-11-07T00:00:00Z',
         scores: { taste: 8, value: 8, service: 8, ambience: 8 },
-        recommended: true,
+        recommendation: 'RECOMMENDED',
         body: '第' + id + '条真实点评',
         photos: [],
         canDelete: false,
@@ -186,12 +186,32 @@ describe('我的点评页面', () => {
     expect(host.textContent).toContain('第202条真实点评')
   })
   it('历史面板复用店铺、账号和游标，历史删除传递精确ID', async () => {
+    const current = result()
+    current.records[0]!.item.recommendation = 'NEUTRAL'
+    vi.mocked(fetchMyReviews).mockResolvedValueOnce(current)
+    const previous = result().records[0]!.item
+    history.mockResolvedValueOnce({
+      currentReviewId: '102',
+      records: [
+        {
+          ...previous,
+          id: '101',
+          recommendation: 'NEUTRAL',
+          scoringStatus: 'history',
+          body: '历史正文',
+        },
+      ],
+      hasMore: false,
+      nextCursor: null,
+    } satisfies ReviewHistoryPage)
     await mount()
+    expect(host.querySelector('.attitude-badge')?.textContent).toBe('一般')
     host.querySelector<HTMLButtonElement>('.history-trigger')!.click()
     await settle()
     expect(history).toHaveBeenCalledWith('1', '42', expect.any(AbortSignal), 'cursor')
     const panel = document.querySelector('.history-dialog')!
     expect(panel.textContent).toContain('历史正文')
+    expect(panel.querySelector('.attitude-badge, .verdict')?.textContent).toContain('一般')
     ;[...panel.querySelectorAll<HTMLButtonElement>('button')]
       .find((button) => button.textContent?.trim() === '删除评价')!
       .click()

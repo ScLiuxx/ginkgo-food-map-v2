@@ -164,14 +164,23 @@ class CanteenWindowApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].id").value(id));
         String review = publishReview(id, 8);
-        publishReview(id, 4);
+        // 新代表选择“一般”仍计四维评分，且窗口、个人点评读取必须保留原态度。
+        mvc.perform(
+                        post("/api/canteen-windows/" + id + "/reviews")
+                                .header("Authorization", "Bearer " + owner)
+                                .contentType("application/json")
+                                .content(reviewBody(4).replace("\"RECOMMENDED\"", "\"NEUTRAL\"")))
+                .andExpect(status().isOk());
         mvc.perform(get("/api/canteen-windows/" + id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.score").value(4))
+                .andExpect(jsonPath("$.data.recommendRate").doesNotExist())
                 .andExpect(jsonPath("$.data.participantCount").value(1))
                 .andExpect(jsonPath("$.data.reviewCount").value(2));
         mvc.perform(get("/api/canteen-windows/" + id + "/reviews"))
                 .andExpect(status().isOk())
+                .andExpect(
+                        jsonPath("$.data.records[0].currentReview.recommendation").value("NEUTRAL"))
                 .andExpect(jsonPath("$.data.totalGroups").value(1))
                 .andExpect(jsonPath("$.data.records[0].historyCount").value(1));
         mvc.perform(get("/api/canteen-windows/" + id + "/reviews/authors/11/history"))
@@ -179,7 +188,10 @@ class CanteenWindowApiIntegrationTest {
                 .andExpect(jsonPath("$.data.records[0].id").value(review));
         mvc.perform(get("/api/me/reviews").header("Authorization", "Bearer " + owner))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.records[0].restaurant.targetType").value("WINDOW"));
+                .andExpect(jsonPath("$.data.records[0].restaurant.targetType").value("WINDOW"))
+                .andExpect(
+                        jsonPath("$.data.records[0].currentReview.recommendation")
+                                .value("NEUTRAL"));
         mvc.perform(get("/api/restaurants/901"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.score").value(4));
@@ -506,8 +518,8 @@ class CanteenWindowApiIntegrationTest {
                     org.flywaydb.core.Flyway.configure()
                             .dataSource(url(isolated), "root", password())
                             .load();
-            // V37–V42为V36之后新增的迁移；V41/V42增加内容举报及举报结果通知，不改变窗口结构。
-            org.junit.jupiter.api.Assertions.assertEquals(6, flyway.migrate().migrationsExecuted);
+            // V36升级到当前V46共十次迁移；窗口原有点评和评分应保持不变。
+            org.junit.jupiter.api.Assertions.assertEquals(10, flyway.migrate().migrationsExecuted);
             org.junit.jupiter.api.Assertions.assertEquals(0, flyway.migrate().migrationsExecuted);
             org.junit.jupiter.api.Assertions.assertEquals(
                     2,
@@ -657,7 +669,7 @@ class CanteenWindowApiIntegrationTest {
                 expired = photoFile(22, "WINDOW");
         jdbc.update(
                 "UPDATE media_files SET expires_at=TIMESTAMPADD(HOUR,-1,CURRENT_TIMESTAMP(6)) WHERE"
-                    + " id=?",
+                        + " id=?",
                 expired);
         for (long id : List.of(review, foreign, expired))
             addPhoto(window, id).andExpect(status().isConflict());
@@ -801,7 +813,7 @@ class CanteenWindowApiIntegrationTest {
                 + score
                 + ",\"ambience\":"
                 + score
-                + "},\"recommended\":true,\"body\":\"窗口真实点评测试\"}";
+                + "},\"recommendation\":\"RECOMMENDED\",\"body\":\"窗口真实点评测试\"}";
     }
 
     private String token(long user) {

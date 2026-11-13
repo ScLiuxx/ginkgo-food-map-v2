@@ -148,7 +148,6 @@ class RestaurantSearchProjectionIntegrationTest {
         assertThat(regular.getCategoryName()).isEqualTo("火锅串串");
         assertThat(regular.getTags()).containsExactly("前标签", "后标签");
         assertThat(regular.getRatingScore()).isCloseTo(23.12 / 3, within(1e-14));
-        assertThat(regular.getRecommendRate()).isEqualTo(1.0 / 3);
         assertThat(regular.getLocation().getLat()).isEqualByComparingTo("30.750001");
         assertThat(regular.getCoverPhotoId()).isEqualTo("9007199254740993");
         assertThat(regular.getBusinessStatus()).isEqualTo("CLOSED");

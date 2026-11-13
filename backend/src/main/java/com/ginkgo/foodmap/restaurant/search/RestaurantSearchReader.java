@@ -332,7 +332,6 @@ public class RestaurantSearchReader {
                                 "needsLocation",
                                 "ratingScore",
                                 "reputationScore",
-                                "recommendRate",
                                 "participantCount",
                                 "reviewCount",
                                 "coverPhotoId"));

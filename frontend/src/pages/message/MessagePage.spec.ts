@@ -58,7 +58,7 @@ const target = (): ReplyTarget => ({
     body: '历史点评原文',
     createdAt: '2026-11-01T00:00:00Z',
     overallScore: 8,
-    recommended: true,
+    recommendation: 'RECOMMENDED',
   },
   replyBody: '这条回复在第十二页 <script>纯文本</script>',
   replyCreatedAt: '2026-11-07T08:00:00Z',
@@ -507,6 +507,9 @@ describe('审核通知页面', () => {
   })
   it('评论分类展示回复者且不显示正文，点击先保存已读再精确读取原点评和目标回复', async () => {
     vi.mocked(fetchNotifications).mockResolvedValue(replyPage())
+    const neutral = target()
+    neutral.review.recommendation = 'NEUTRAL'
+    vi.mocked(fetchReplyTarget).mockResolvedValueOnce(neutral)
     await mount('/messages/comments')
     expect(host.textContent).toContain('回复同学 回复了你的点评')
     expect(host.textContent).not.toContain('第十二页')
@@ -522,6 +525,9 @@ describe('审核通知页面', () => {
       expect.any(AbortSignal),
     )
     expect(document.querySelector('.reply-target-review')?.textContent).toContain('历史点评原文')
+    expect(document.querySelector('.reply-target-review .review-score')?.textContent).toContain(
+      '一般',
+    )
     expect(document.querySelector('.reply-target-highlight')?.textContent).toContain(
       '第十二页 <script>纯文本</script>',
     )
