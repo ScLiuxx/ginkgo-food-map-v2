@@ -2,6 +2,7 @@ package com.ginkgo.foodmap.restaurant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -38,6 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import tools.jackson.databind.ObjectMapper;
 
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -1028,6 +1030,277 @@ class RestaurantReadApiIntegrationTest {
         assertThat(batch.getPoints())
                 .extracting(point -> point.getId())
                 .containsExactlyElementsOf(ids);
+    }
+
+    /** 专用选店只读POST匿名可用；所有硬条件在抽样前执行，并复用公开标签。 */
+    @Test
+    void pickerFiltersBeforeSamplingAndExcludesUnknownOrUnavailableRestaurants() throws Exception {
+        jdbc.update("UPDATE restaurants SET supports_dine_in=TRUE WHERE id IN (101,102)");
+        var request = pickerRequest();
+        request.put("diningMode", "DINE_IN");
+        var data = picker(request);
+        assertThat(data.get("matchedCount").asInt()).isEqualTo(2);
+        assertThat(data.get("remainingCount").asInt()).isZero();
+        assertThat(
+                        json.treeToValue(
+                                data.get("records"),
+                                com.ginkgo.foodmap.restaurant.vo.RestaurantVo[].class))
+                .extracting(row -> row.getId())
+                .containsExactlyInAnyOrder("101", "102");
+        request.put("excludeIds", List.of("101"));
+        assertThat(picker(request).get("records").get(0).get("id").asText()).isEqualTo("102");
+        request.put("excludeIds", List.of("101", "102"));
+        assertThat(picker(request).get("records").size()).isZero();
+        request.put("excludeIds", List.of());
+        jdbc.update(
+                "UPDATE restaurants SET restaurant_type='CANTEEN',category_code=NULL WHERE id=102");
+        assertThat(picker(request).get("matchedCount").asInt()).isEqualTo(1);
+        request.put("category", "HOT_POT");
+        assertThat(picker(request).get("records").size()).isZero();
+        verifyNoInteractions(sessions);
+    }
+
+    /** 同一接口复核历史/预取ID，保留请求顺序，价格/经营变化后不返回不合格项。 */
+    @Test
+    void pickerRechecksPriceBusinessStatusAndOrderWithoutDrawingOtherRestaurants()
+            throws Exception {
+        var request = pickerRequest();
+        request.put("checkIds", List.of("102", "101"));
+        request.put("excludeIds", List.of("101", "102"));
+        var data = picker(request);
+        assertThat(data.get("records").get(0).get("id").asText()).isEqualTo("102");
+        assertThat(data.get("records").get(1).get("id").asText()).isEqualTo("101");
+        jdbc.update("UPDATE restaurants SET price_per_person=100 WHERE id=102");
+        assertThat(picker(request).get("records").size()).isEqualTo(1);
+        jdbc.update("UPDATE restaurants SET business_status='CLOSED' WHERE id=101");
+        assertThat(picker(request).get("records").size()).isZero();
+    }
+
+    /** 校区中心只由服务端解释；我附近坐标必须有效，用户半径和预算都包含边界。 */
+    @Test
+    void pickerHandlesUserOriginUnknownPricesAndRequiredSelections() throws Exception {
+        insert(108, "近处未知预算", "OTHER", null, "UNKNOWN", "夹具", 30.7544, 103.9312, "OPERATING");
+        var request = pickerRequest();
+        assertThat(picker(request).get("matchedCount").asInt()).isEqualTo(2);
+        request.put("budget", "ANY");
+        assertThat(picker(request).get("matchedCount").asInt()).isEqualTo(3);
+        request.put("range", "USER");
+        mvc.perform(
+                        post("/api/restaurant-picker/candidates")
+                                .contentType("application/json")
+                                .content(json.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+        request.put("latitude", 30.7544);
+        request.put("longitude", 103.9312);
+        request.put("distanceMeters", 1000);
+        request.put("budget", "15");
+        assertThat(picker(request).get("records").size()).isZero();
+        request.put("budget", "30");
+        assertThat(picker(request).get("matchedCount").asInt()).isEqualTo(1);
+        request.put("range", "SHAHE");
+        request.remove("latitude");
+        request.remove("longitude");
+        assertThat(picker(request).get("records").size()).isZero();
+        for (String key :
+                List.of(
+                        "range",
+                        "distanceMeters",
+                        "budget",
+                        "minRating",
+                        "category",
+                        "diningMode")) {
+            var missing = pickerRequest();
+            missing.remove(key);
+            mvc.perform(
+                            post("/api/restaurant-picker/candidates")
+                                    .contentType("application/json")
+                                    .content(json.writeValueAsString(missing)))
+                    .andExpect(status().isBadRequest());
+        }
+        for (var entry :
+                Map.<String, Object>of(
+                                "distanceMeters",
+                                2000,
+                                "budget",
+                                "20",
+                                "minRating",
+                                "5",
+                                "diningMode",
+                                "unknown",
+                                "category",
+                                "NOT_A_CATEGORY",
+                                "excludeIds",
+                                List.of("9223372036854775808"))
+                        .entrySet()) {
+            var invalid = pickerRequest();
+            invalid.put(entry.getKey(), entry.getValue());
+            mvc.perform(
+                            post("/api/restaurant-picker/candidates")
+                                    .contentType("application/json")
+                                    .content(json.writeValueAsString(invalid)))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    /** 使用真实五分制口碑生成列，验证三个门槛含边界、先过滤且不使用展示舍入或十分制均分。 */
+    @ParameterizedTest
+    @CsvSource({"3,101|102|108|109", "3.5,102|108", "4,108"})
+    void pickerFiltersByExactReputationBeforeSampling(String rating, String expected)
+            throws Exception {
+        pickerRatingFixtures();
+        var request = pickerRequest();
+        request.put("minRating", rating);
+        var data = picker(request);
+        var ids = new java.util.ArrayList<String>();
+        data.get("records").forEach(record -> ids.add(record.get("id").asText()));
+        assertThat(ids).containsExactlyInAnyOrder(expected.split("\\|"));
+        assertThat(data.get("matchedCount").asInt()).isEqualTo(ids.size());
+        assertThat(data.get("remainingCount").asInt()).isZero();
+    }
+
+    /** 不限评分允许缺统计行及零评价；明确评分时复核历史也必须应用相同门槛。 */
+    @Test
+    void pickerAllowsUnratedOnlyWhenRatingIsAnyAndRechecksRatingChanges() throws Exception {
+        pickerRatingFixtures();
+        var request = pickerRequest();
+        request.put("checkIds", List.of("110", "111"));
+        assertThat(picker(request).get("records").size()).isEqualTo(2);
+        assertThat(picker(request).get("matchedCount").asInt()).isEqualTo(6);
+        request.put("minRating", "3");
+        assertThat(picker(request).get("records").size()).isZero();
+
+        request.put("minRating", "3.5");
+        request.put("checkIds", List.of("108", "102"));
+        request.put("excludeIds", List.of("108", "102"));
+        var data = picker(request);
+        assertThat(data.get("records").get(0).get("id").asText()).isEqualTo("108");
+        assertThat(data.get("records").get(1).get("id").asText()).isEqualTo("102");
+        jdbc.update(
+                "UPDATE restaurant_review_statistics SET taste_sum=25,value_sum=25,"
+                        + "service_sum=25,ambience_sum=25 WHERE restaurant_id=108");
+        assertThat(picker(request).get("records").size()).isEqualTo(1);
+        jdbc.update(
+                "UPDATE restaurant_review_statistics SET taste_sum=25,value_sum=25,"
+                        + "service_sum=25,ambience_sum=25 WHERE restaurant_id=102");
+        data = picker(request);
+        assertThat(data.get("matchedCount").asInt()).isZero();
+        assertThat(data.get("records").size()).isZero();
+    }
+
+    /** 只有已确认的字符串枚举可用，不能把空值或任意分数静默解释成不限。 */
+    @ParameterizedTest
+    @ValueSource(strings = {"", "3.0", "3.50", "2", "4.5", "5", "NaN", " 3"})
+    void pickerRejectsUnsupportedRatingSelections(String rating) throws Exception {
+        var request = pickerRequest();
+        request.put("minRating", rating);
+        mvc.perform(
+                        post("/api/restaurant-picker/candidates")
+                                .contentType("application/json")
+                                .content(json.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+        request.put("minRating", null);
+        mvc.perform(
+                        post("/api/restaurant-picker/candidates")
+                                .contentType("application/json")
+                                .content(json.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** 口碑依次为3、3.5、4、3.4995；后两家分别缺统计行与零评价，均没有可比较分数。 */
+    private void pickerRatingFixtures() {
+        for (int id = 108; id <= 111; id++) {
+            insert(id, "评分夹具" + id, "OTHER", 20, "EXACT", "测试地址", 30.7544, 103.9312, "OPERATING");
+        }
+        statistics(101, 5, 5, 0, "25", "25", "25", "25", "25");
+        statistics(102, 5, 5, 0, "35", "35", "35", "35", "35");
+        statistics(108, 5, 5, 0, "45", "45", "45", "45", "45");
+        statistics(109, 5, 5, 0, "34.99", "34.99", "34.99", "34.99", "34.99");
+        statistics(111, 0, 0, 0, "0", "0", "0", "0", "0");
+    }
+
+    /** 10005家同条件夹具，排除其余后仍能抽到窗口之外的ID，不依赖随机命中概率。 */
+    @Test
+    void pickerDoesNotTruncateAtTheDirectoryWindow() throws Exception {
+        var args = new java.util.ArrayList<Object[]>();
+        var excluded = new java.util.ArrayList<String>(List.of("101", "102"));
+        for (int i = 20000; i < 30005; i++) {
+            args.add(new Object[] {i, "窗口外候选" + i});
+            if (i != 30004) {
+                excluded.add(Integer.toString(i));
+            }
+        }
+        jdbc.batchUpdate(
+                "INSERT INTO"
+                    + " restaurants(id,name,category_code,price_per_person,price_kind,latitude,longitude,needs_location,business_status)"
+                    + " VALUES(?,?,'OTHER',20,'EXACT',30.7544,103.9312,0,'OPERATING')",
+                args);
+        var request = pickerRequest();
+        request.put("excludeIds", excluded);
+        var data = picker(request);
+        assertThat(data.get("matchedCount").asInt()).isEqualTo(10007);
+        assertThat(data.get("records").size()).isEqualTo(1);
+        assertThat(data.get("records").get(0).get("id").asText()).isEqualTo("30004");
+    }
+
+    /** 抽样后并发删除不能使同次响应的计数、身份和标签漂移；下次请求再反映变更。 */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void pickerUsesOneSnapshotForIdsAndPublicCards() throws Exception {
+        var changed = new AtomicBoolean();
+        doAnswer(
+                        call -> {
+                            var parameters = new java.util.HashMap<String, Object>();
+                            parameters.put("query", call.getArgument(0));
+                            parameters.put("minRating", call.getArgument(1));
+                            List<Long> ids =
+                                    sqlSession.selectList(
+                                            RestaurantCatalogMapper.class.getName()
+                                                    + ".selectPickerIds",
+                                            parameters);
+                            if (changed.compareAndSet(false, true)) {
+                                try (Connection writer = connect(database);
+                                        Statement statement = writer.createStatement()) {
+                                    statement.executeUpdate(
+                                            "UPDATE restaurants SET"
+                                                + " deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM'"
+                                                + " WHERE id=101");
+                                    statement.executeUpdate(
+                                            "DELETE FROM restaurant_tags WHERE restaurant_id=101");
+                                }
+                            }
+                            return ids;
+                        })
+                .when(mapper)
+                .selectPickerIds(any(RestaurantListQuery.class), nullable(BigDecimal.class));
+        var request = pickerRequest();
+        request.put("checkIds", List.of("101"));
+        var data = picker(request);
+        assertThat(data.get("matchedCount").asInt()).isEqualTo(2);
+        assertThat(data.get("records").get(0).get("id").asText()).isEqualTo("101");
+        assertThat(data.get("records").get(0).get("tags").get(0).asText()).isEqualTo("招牌");
+        assertThat(picker(request).get("records").size()).isZero();
+    }
+
+    private Map<String, Object> pickerRequest() {
+        var request = new java.util.HashMap<String, Object>();
+        request.put("range", "QINGSHUIHE");
+        request.put("distanceMeters", 3000);
+        request.put("budget", "30");
+        request.put("minRating", "ANY");
+        request.put("category", "ANY");
+        request.put("diningMode", "ANY");
+        return request;
+    }
+
+    private tools.jackson.databind.JsonNode picker(Map<String, Object> request) throws Exception {
+        var result =
+                mvc.perform(
+                                post("/api/restaurant-picker/candidates")
+                                        .contentType("application/json")
+                                        .content(json.writeValueAsString(request)))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        return json.readTree(result.getResponse().getContentAsString()).get("data");
     }
 
     private void diningFixtures() {

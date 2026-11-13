@@ -35,6 +35,7 @@ describe('authenticated HTTP client', () => {
     await httpClient.get('/api/public/status')
     await httpClient.get('/api/restaurant-categories')
     await httpClient.get('/api/restaurant-rankings')
+    await httpClient.post('/api/restaurant-picker/candidates', {})
     await httpClient.get('/api/restaurants')
     await httpClient.get('/api/restaurants/1')
     await httpClient.get('/api/restaurants/1/photos')

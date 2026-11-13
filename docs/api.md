@@ -79,6 +79,7 @@
 | POST | `/api/canteen-windows/{id}/reviews` | Bearer | 200 | 发布窗口点评或重放 |
 | GET | `/api/restaurants` | 公开 | 200 | 餐厅目录 |
 | GET | `/api/restaurants/map-points` | 公开 | 200 | 有界地图点位 |
+| POST | `/api/restaurant-picker/candidates` | 公开 | 200 | 独立选店的随机候选与指定候选复核，只读 |
 | GET | `/api/restaurants/{id}` | 公开 | 200 | 餐厅详情 |
 | GET | `/api/restaurants/{id}/photos` | 公开 | 200 | 正式商户相册游标分页 |
 | GET | `/api/restaurants/{id}/photos/{photoId}` | 公开 | 200 JPEG | 正式商户图片字节 |
@@ -104,6 +105,52 @@
 | GET | `/actuator/health` | 公开 | 200 / 503 | 依赖健康状态 |
 
 “管理员”指数据库当前角色包含`ROLE_ADMIN`。普通用户仅可投稿、纠错申请，不能直接维护正式商户，即使是历史创建者也不例外。公开读取不会创建账号、申请、点评或图片。
+
+### 2.5 帮我选一家候选查询
+
+`POST /api/restaurant-picker/candidates`允许匿名读取，仅查询现有数据，不保存位置、偏好或本轮历史，不创建数据库/Redis会话。业务规则见[选店计划](plans/restaurant-picker.md)。请求体：
+
+```json
+{
+  "range": "QINGSHUIHE",
+  "distanceMeters": 3000,
+  "budget": "30",
+  "minRating": "3.5",
+  "category": "ANY",
+  "diningMode": "ANY",
+  "excludeIds": ["101", "102"],
+  "checkIds": []
+}
+```
+
+| 字段 | 约束及含义 |
+| --- | --- |
+| range | 必填；QINGSHUIHE、SHAHE或USER；校区中心复用服务端`app.ranking.qingshuihe/shahe`经纬度，距离上限由本请求决定 |
+| distanceMeters | 必填整数；仅1000、3000、5000，含边界 |
+| budget | 必填字符串；ANY、15、30、50、100；显式ANY才不限，未知价格不满足明确上限 |
+| minRating | 必填字符串；ANY、3、3.5、4；五分制综合口碑分的最低门槛，含边界。明确门槛时排除暂无评分，ANY允许暂无评分；比较现有`reputation_score`原始精度，不以展示的一位小数或十分制均分比较 |
+| category | 必填；ANY或当前启用的普通美食分类编码，不接受食堂/停用/不存在编码 |
+| diningMode | 必填；ANY、DINE_IN、DELIVERY；明确方式只匹配对应字段为true的店，未知不满足 |
+| latitude、longitude | USER时必须同时提供有效GCJ-02坐标，校区范围不接受自定义坐标；不写入账号或业务表 |
+| excludeIds | 可省略为空数组，不可null；最多50000个合法Long范围正整数字符串；包括本轮已展示与已预取ID，重复ID按集合处理 |
+| checkIds | 可省略为空数组，不可null；最多5个合法ID；非空进入复核模式，去重并保留请求顺序 |
+
+服务端强制普通餐厅、未删除、标注经营中与可靠位置，同时应用全部硬条件；评分门槛在抽样前执行，复核模式同样检查当前评分。抽取直接访问完整合格ID集合，不受目录10000条窗口或地图100家上限影响；采用部分Fisher–Yates从排除后的集合均匀、不放回抽取至多5家，不按评分或评价数加权。
+
+`data`示意（空结果示例）：
+
+```json
+{"records":[],"matchedCount":0,"remainingCount":0}
+```
+
+`records`采用公开餐厅对象，与目录相同的字段白名单，包含`coverPhoto`、标签和`distanceKm`。仅抽中的至多5家补充完整卡片；同次ID、资料、计数使用REPEATABLE_READ只读快照。
+
+- `matchedCount`：本次快照满足全部硬条件的餐厅总数，包含已被excludeIds排除的合格项。
+- `remainingCount`：抽取模式中，排除excludeIds及本次返回项之后的数量；复核模式中，仅排除excludeIds之后的数量。不是实时永久总数，数据变化后下一次查询可能变化。
+- `checkIds`非空时只返回其中仍符合本次条件的店，不受excludeIds影响，不补入随机餐厅；未返回的ID表示当前不存在、不可见或不再符合条件，不能当作接口故障。
+- 前端预取和已展示ID共同排除；批次只读无消费副作用，失败重试不会消耗服务端记录。客户端保存历史确保本轮不重复，任意改写排除列表不代表服务端承诺独立维护会话。
+
+成功含空结果均为200；缺必选项、非法枚举/距离、错误坐标、非法ID/数组规模等返回400 `COMMON_VALIDATION_FAILED`，JSON类型/语法错误400 `COMMON_MALFORMED_REQUEST`；停用/不存在类别或越过Long范围的ID返回400 `RESTAURANT_INVALID_INPUT`。数据库或未预期故障500，不能当成无候选。其他方法/路径不因该POST公开而放开。公开调用不附带过期Bearer，主动提供无效Bearer仍可能401。
 
 ## 3. 注册、验证码与密码重置
 

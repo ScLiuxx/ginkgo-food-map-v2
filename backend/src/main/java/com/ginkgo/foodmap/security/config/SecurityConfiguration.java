@@ -156,6 +156,11 @@ public class SecurityConfiguration {
                                                 "/api/restaurants/{id}",
                                                 "/api/restaurants/map-points")
                                         .permitAll()
+                                        // 选店POST仅承载临时查询条件，不写入；仅放行该固定路径。
+                                        .requestMatchers(
+                                                HttpMethod.POST,
+                                                "/api/restaurant-picker/candidates")
+                                        .permitAll()
                                         // 只公开明确列出的认证 POST 接口，不放开整个 /auth 路径。
                                         .requestMatchers(
                                                 HttpMethod.POST,

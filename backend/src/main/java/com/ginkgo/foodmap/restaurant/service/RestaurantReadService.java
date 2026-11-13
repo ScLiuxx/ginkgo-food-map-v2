@@ -36,6 +36,27 @@ public class RestaurantReadService {
     private final RestaurantCatalogMapper mapper;
     private final RestaurantPhotoService albums;
 
+    /** 在调用方同一只读事务中补充抽中店铺资料；按抽样顺序返回，不引入目录排名。 */
+    public List<RestaurantVo> pickerRecords(RestaurantListQuery query, List<Long> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        var rows =
+                mapper.selectSearchPage(query, ids).stream()
+                        .collect(Collectors.toMap(RestaurantEntity::getId, row -> row));
+        var tags = tagsFor(List.copyOf(rows.values()));
+        var covers = albums.covers(ids);
+        return ids.stream()
+                .filter(rows::containsKey)
+                .map(
+                        id -> {
+                            var vo = toVo(rows.get(id), tags.getOrDefault(id, List.of()));
+                            vo.setCoverPhoto(covers.get(id));
+                            return vo;
+                        })
+                .toList();
+    }
+
     /** 面向其他模块的只读可见性校验，不初始化统计、不取得写锁。 */
     public void requireVisible(long id) {
         if (mapper.selectVisibleById(id) == null) {

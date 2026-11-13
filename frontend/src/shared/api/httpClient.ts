@@ -39,7 +39,8 @@ httpClient.interceptors.request.use((config) => {
     token &&
     !publicAuthPaths.has(path) &&
     !path.startsWith('/api/public/') &&
-    !publicRestaurantRead
+    !publicRestaurantRead &&
+    !(config.method === 'post' && path === '/api/restaurant-picker/candidates')
   ) {
     config.headers.Authorization ??= `Bearer ${token}`
   }

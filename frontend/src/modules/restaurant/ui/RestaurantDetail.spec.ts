@@ -159,6 +159,21 @@ describe('restaurant detail API integration', () => {
     await settle()
     expect(host.querySelector('.detail-breadcrumb a')?.textContent).toBe('← 返回首页')
   })
+  it('选店来源直达时返回选店入口', async () => {
+    await router.push({ path: `/restaurants/${restaurantFixture.id}`, query: { from: 'picker' } })
+    await mount()
+    const link = host.querySelector<HTMLAnchorElement>('.detail-breadcrumb a')!
+    expect(link.textContent).toBe('← 返回')
+    expect(link.getAttribute('href')).toBe('/?picker=return')
+    await new Promise<void>((resolve) => {
+      const stop = router.afterEach(() => {
+        stop()
+        resolve()
+      })
+      link.click()
+    })
+    expect(router.currentRoute.value.fullPath).toBe('/?picker=return')
+  })
   it('地图来源的临时故障仍提供返回地图入口', async () => {
     await router.push({ path: `/restaurants/${restaurantFixture.id}`, query: { from: 'map' } })
     vi.mocked(fetchRestaurant).mockRejectedValueOnce(new Error('offline'))

@@ -79,6 +79,16 @@
         </if>
     </sql>
 
+    <!-- 独立抽取遍历完整合格ID；不沿用目录排序和10000条访问窗口。 -->
+    <select id="selectPickerIds" resultType="long">
+        SELECT r.id <include refid="catalogFrom"/>
+        <include refid="visibleConditions"/>
+        <!-- 评分门槛只属于独立选店；先过滤再抽样/复核，暂无评价或无统计行均不满足。 -->
+        <if test="minRating != null">
+            AND s.participant_count &gt; 0 AND s.reputation_score &gt;= #{minRating}
+        </if>
+    </select>
+
     <select id="selectCategories" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantCategoryEntity">
         SELECT code, name, sort_order, enabled FROM restaurant_categories ORDER BY sort_order, code
     </select>

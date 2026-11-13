@@ -4,17 +4,23 @@ import com.ginkgo.foodmap.restaurant.dto.RestaurantListQuery;
 import com.ginkgo.foodmap.restaurant.entity.RestaurantCategoryEntity;
 import com.ginkgo.foodmap.restaurant.entity.RestaurantEntity;
 import com.ginkgo.foodmap.restaurant.entity.RestaurantTagEntity;
+
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * 仅查询restaurant模块自己的餐厅、分类、标签和统计表，全部SQL位于同名XML。
- * 不继承通用 CRUD Mapper，防止调用默认 selectById 绕过 deleted_at 显式过滤。
+ * 仅查询restaurant模块自己的餐厅、分类、标签和统计表，全部SQL位于同名XML。 不继承通用 CRUD Mapper，防止调用默认 selectById 绕过 deleted_at
+ * 显式过滤。
  */
 @Mapper
 public interface RestaurantCatalogMapper {
+    /** 完整合格ID集合，先按五分制口碑门槛筛选，无LIMIT或目录窗口；空门槛允许暂无评分。 */
+    List<Long> selectPickerIds(
+            @Param("query") RestaurantListQuery query, @Param("minRating") BigDecimal minRating);
+
     /** 包含停用分类以支持旧记录筛选，按字典顺序和编码稳定返回。 */
     List<RestaurantCategoryEntity> selectCategories();
 
@@ -28,7 +34,8 @@ public interface RestaurantCatalogMapper {
     List<RestaurantEntity> selectVisiblePage(@Param("query") RestaurantListQuery query);
 
     /** 有界回查当前页；复用全部非关键词筛选，不能拿LIKE再次过滤ES的分词命中。 */
-    List<RestaurantEntity> selectSearchPage(@Param("query") RestaurantListQuery query, @Param("ids") List<Long> ids);
+    List<RestaurantEntity> selectSearchPage(
+            @Param("query") RestaurantListQuery query, @Param("ids") List<Long> ids);
 
     /** 当前版本仍有未完成任务时保守走SQL，防止新增/恢复商户因尚未入索引而漏召回。 */
     boolean hasUnsyncedSearchChanges();

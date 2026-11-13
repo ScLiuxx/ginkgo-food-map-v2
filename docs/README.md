@@ -30,6 +30,7 @@ ES 监控的实际故障验证见[故障演练报告](history/elasticsearch-metr
 
 ## 设计与计划
 
+- 帮我选一家：[业务规则与实施计划](plans/restaurant-picker.md)。独立六项条件（含最低评分）、等概率抽取、本轮不重复、回看及详情返回已接通；[查询接口](api.md#25-帮我选一家候选查询)不写入抽取记录、不调整表结构。
 - 餐厅榜单：[近期榜单计划](plans/hot-restaurants.md)记录规则及分阶段实施；[快照表](architecture/mysql-schema.md#restaurant-ranking-snapshots)、[读取接口与两级缓存](api.md#24-近期餐厅榜单读取)、内部计算已完成；实测见[MySQL基线](history/restaurant-ranking-read-2026-11-11.md)、[Redis对照](history/restaurant-ranking-redis-2026-11-11.md)、[Caffeine三模式对照及故障验证](history/restaurant-ranking-caffeine-2026-11-11.md)。自动发布、小时调度及防重叠已完成；首页入口及独立榜单页已按确认示意图接入，本地真实接口的空榜及模拟点评生成的20项榜单联调通过，上线验收待进行。
 - 食堂窗口：[资料、独立点评与评分汇总](api.md#22-食堂窗口资料点评与汇总)，管理员维护及用户浏览已接通，窗口资料由管理员统一录入，用户窗口投稿审核暂不规划。
 
@@ -62,6 +63,8 @@ ES 监控的实际故障验证见[故障演练报告](history/elasticsearch-metr
 - 高德：[环境配置与真实底图验收](operations/amap-setup.md)。
 
 ## 历史追溯
+
+- [帮我选一家交付验证（2026-11-13）](history/restaurant-picker-2026-11-13.md)：完整候选抽样、真实MySQL集成、详情往返、异常场景、手机布局及本机串行耗时。
 
 - [食堂窗口第1至5步验证（2026-11-08）](history/canteen-windows-2026-11-08.md)：身份、评分、并发/回滚、迁移、前端与本地运行证据及限制。
 
