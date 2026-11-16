@@ -49,7 +49,7 @@ const sessions = computed(() => [
           ? reportDecisionLabel(
               result.value.latestSystem.decision === 'DISMISSED' ? 'DISMISSED' : 'REMOVED',
             )
-          : `${result.value.latestSystem.restaurantName} · ${result.value.latestSystem.decision === 'APPROVED' ? '审核通过' : '审核未通过'}`
+          : `${result.value.latestSystem.restaurantName} · ${result.value.latestSystem.approvalMode === 'LINKED_EXISTING' ? '店铺已收录' : result.value.latestSystem.decision === 'APPROVED' ? '审核通过' : '审核未通过'}`
       : '',
     unreadCount: result.value?.unreadCounts.SYSTEM,
   },

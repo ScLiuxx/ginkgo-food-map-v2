@@ -1,6 +1,7 @@
 package com.ginkgo.foodmap.restaurant.mapper;
 
 import com.ginkgo.foodmap.restaurant.entity.RestaurantChangeEntity;
+
 import org.apache.ibatis.annotations.*;
 
 /** 申请终态只能从PENDING进入；所有审核元数据在单条更新中满足数据库CHECK约束。 */
@@ -15,18 +16,21 @@ public interface RestaurantRequestReviewMapper {
     RestaurantChangeEntity lock(long id);
 
     /** 仅在首次通过时写入目标及完整审核元数据，不触碰用户原始快照和摘要。 */
-    @Update("""
-        UPDATE restaurant_change_requests SET status='APPROVED',restaurant_id=#{restaurantId},
-          reviewed_by=#{reviewedBy},reviewed_at=CURRENT_TIMESTAMP(6),approved_data=#{approvedData},before_data=#{beforeData}
-        WHERE id=#{id} AND status='PENDING'
-        """)
+    @Update(
+            """
+UPDATE restaurant_change_requests SET status='APPROVED',restaurant_id=#{restaurantId},
+  reviewed_by=#{reviewedBy},reviewed_at=CURRENT_TIMESTAMP(6),approved_data=#{approvedData},before_data=#{beforeData},
+  approval_mode=#{approvalMode}
+WHERE id=#{id} AND status='PENDING'
+""")
     int approve(RestaurantChangeEntity row);
 
     /** 驳回不改变目标、业务快照和图片关联，重复请求由服务核对原因并返回原回执。 */
-    @Update("""
-        UPDATE restaurant_change_requests SET status='REJECTED',reviewed_by=#{reviewedBy},
-          reviewed_at=CURRENT_TIMESTAMP(6),reject_reason=#{rejectReason}
-        WHERE id=#{id} AND status='PENDING'
-        """)
+    @Update(
+            """
+            UPDATE restaurant_change_requests SET status='REJECTED',reviewed_by=#{reviewedBy},
+              reviewed_at=CURRENT_TIMESTAMP(6),reject_reason=#{rejectReason}
+            WHERE id=#{id} AND status='PENDING'
+            """)
     int reject(RestaurantChangeEntity row);
 }

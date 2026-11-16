@@ -9,6 +9,8 @@ import {
   fetchMyRequestPage,
   fetchMyRequestDetail,
   fetchMyRequestPhoto,
+  fetchMyRequestReviewPhoto,
+  withdrawMyRequest,
   type MyRequestPage,
   type MyRequestDetail,
   type MyRequestItem,
@@ -20,6 +22,8 @@ vi.mock('../api/myRestaurantRequestsApi', async (importOriginal) => ({
   fetchMyRequestPage: vi.fn(),
   fetchMyRequestDetail: vi.fn(),
   fetchMyRequestPhoto: vi.fn(),
+  fetchMyRequestReviewPhoto: vi.fn(),
+  withdrawMyRequest: vi.fn(),
 }))
 const item = (id = '101'): MyRequestItem => ({
   id,
@@ -119,9 +123,13 @@ describe('我的投稿与纠错', () => {
     if (signedIn) signIn()
     const router = createRouter({
       history: createMemoryHistory(),
-      routes: ['/', '/account/contributions', '/restaurants/submit', '/restaurants/501'].map(
-        (path) => ({ path, component: { template: '<p>目标</p>' } }),
-      ),
+      routes: [
+        '/',
+        '/account/contributions',
+        '/account/contributions/:requestId/edit',
+        '/restaurants/submit',
+        '/restaurants/501',
+      ].map((path) => ({ path, component: { template: '<p>目标</p>' } })),
     })
     await router.push(path)
     await router.isReady()
@@ -232,9 +240,11 @@ describe('我的投稿与纠错', () => {
       'session-42',
       expect.any(AbortSignal),
     )
-    expect(host.querySelector('.contribution-detail-footer a')?.getAttribute('href')).toBe(
-      '/restaurants/501',
-    )
+    expect(
+      host
+        .querySelector('.contribution-detail-footer a[href="/restaurants/501"]')
+        ?.getAttribute('href'),
+    ).toBe('/restaurants/501')
     host.querySelector<HTMLButtonElement>('[aria-label="查看附图 1"]')!.click()
     await settle()
     expect(host.querySelector<HTMLDialogElement>('.contribution-lightbox')!.open).toBe(true)
@@ -364,5 +374,72 @@ describe('我的投稿与纠错', () => {
     await settle()
     expect(host.querySelector('.contribution-card,.contribution-detail-summary')).toBeNull()
     expect(URL.revokeObjectURL).toHaveBeenCalled()
+  })
+  it('本人可查看私有点评正文和图片，关闭详情释放两类图片URL', async () => {
+    const source = detail()
+    source.reviewSubmission = {
+      id: '81',
+      status: 'WAITING',
+      publishedReviewId: null,
+      scores: { taste: 8, value: 7, service: 7, ambience: 7 },
+      recommendation: 'NEUTRAL',
+      body: '<script>纯文本点评不能执行</script>',
+      photoPositions: [0],
+    }
+    vi.mocked(fetchMyRequestDetail).mockResolvedValue(source)
+    vi.mocked(fetchMyRequestReviewPhoto).mockResolvedValue(
+      new Blob(['review'], { type: 'image/jpeg' }),
+    )
+    await mount()
+    await open()
+    expect(host.querySelector('.attached-detail')?.textContent).toContain('一般')
+    expect(host.querySelector('.attached-body')?.textContent).toContain('<script>')
+    expect(host.querySelector('.attached-detail script')).toBeNull()
+    expect(fetchMyRequestReviewPhoto).toHaveBeenCalledWith(
+      '101',
+      0,
+      'session-42',
+      expect.any(AbortSignal),
+    )
+    host.querySelector<HTMLButtonElement>('[aria-label="关闭申请详情"]')!.click()
+    await settle()
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(2)
+  })
+  it('撤回有明确确认，失败可重试，成功后列表刷新失败仍保留成功消息', async () => {
+    const source = detail()
+    source.application.status = 'PENDING'
+    vi.mocked(fetchMyRequestDetail).mockResolvedValue(source)
+    vi.mocked(withdrawMyRequest)
+      .mockRejectedValueOnce(new Error('撤回失败'))
+      .mockResolvedValue({ id: '101', status: 'WITHDRAWN' })
+    await mount()
+    await open()
+    button('撤回申请').click()
+    await settle()
+    expect(withdrawMyRequest).not.toHaveBeenCalled()
+    expect(host.querySelector('.withdraw-dialog')?.textContent).toContain('不能继续编辑或重提')
+    button('确认撤回').click()
+    await settle()
+    expect(host.textContent).toContain('撤回失败')
+    vi.mocked(fetchMyRequestPage).mockRejectedValueOnce(new Error('列表刷新失败'))
+    button('确认撤回').click()
+    await settle()
+    expect(host.textContent).toContain('申请已撤回')
+    expect(host.textContent).toContain('列表刷新失败')
+  })
+  it('已重提祖先只提供后续申请入口，不再允许从祖先重提', async () => {
+    vi.mocked(fetchMyRequestDetail).mockResolvedValue({ ...detail(), resubmittedRequestId: '102' })
+    await mount()
+    await open()
+    expect(host.querySelector('.contribution-edit')).toBeNull()
+    expect(host.textContent).toContain('点评随新申请继续保留')
+    button('查看后续申请').click()
+    await settle()
+    expect(fetchMyRequestDetail).toHaveBeenLastCalledWith(
+      '102',
+      '42',
+      'session-42',
+      expect.any(AbortSignal),
+    )
   })
 })

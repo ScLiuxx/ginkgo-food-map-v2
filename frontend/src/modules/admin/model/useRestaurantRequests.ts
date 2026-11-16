@@ -8,6 +8,7 @@ import {
   fetchRequestPhoto,
   approveRequest,
   rejectRequest,
+  linkExistingRequest,
   fetchReviewCategories,
   type ReviewInput,
   type ReviewCategory,
@@ -222,7 +223,11 @@ export function useRestaurantRequests() {
   const comparison = computed(() => {
     if (!detail.value) return []
     const before =
-        detail.value.application.status === 'APPROVED' ? detail.value.before : detail.value.current,
+        detail.value.application.approvalMode === 'LINKED_EXISTING'
+          ? detail.value.proposed
+          : detail.value.application.status === 'APPROVED'
+            ? detail.value.before
+            : detail.value.current,
       after = draft.value
     const text = (value: unknown) => (value == null || value === '' ? '未填写' : String(value))
     const yes = (value: unknown) => (value === true ? '支持' : value === false ? '不支持' : '未知')
@@ -354,7 +359,7 @@ export function useRestaurantRequests() {
   }
 
   /** 完成写入后单独刷新队列；刷新失败不能被描述为审核失败，更不能重发已确认的写请求。 */
-  async function decide(kind: 'approve' | 'reject', reason = '') {
+  async function decide(kind: 'approve' | 'reject' | 'link-existing', reason = '') {
     if (submitting.value || !token || detail.value?.application.status !== 'PENDING') return
     const id = detail.value.application.id
     let payload: ReviewInput | undefined
@@ -362,6 +367,14 @@ export function useRestaurantRequests() {
     notice.value = ''
     try {
       if (kind === 'approve') payload = input()
+      // 关联操作不校验待审资料编辑草稿，但必须显式选择有效目标，禁止空选误提交。
+      if (
+        kind === 'link-existing' &&
+        (detail.value.application.requestType !== 'CREATE' ||
+          !/^[1-9]\d{0,18}$/.test(reason) ||
+          BigInt(reason) > 9223372036854775807n)
+      )
+        throw new Error('请选择已收录的店铺')
     } catch (error) {
       decisionError.value = toErrorMessage(error)
       return
@@ -374,11 +387,14 @@ export function useRestaurantRequests() {
       const receipt =
         kind === 'approve'
           ? await approveRequest(id, payload!, token)
-          : await rejectRequest(id, reason, token)
+          : kind === 'link-existing'
+            ? await linkExistingRequest(id, reason, token)
+            : await rejectRequest(id, reason, token)
       if (disposed) return
       // 立即反映服务器已确认的终态，即使后续列表读取失败也不能再次操作此申请。
       detail.value!.application.status = receipt.status
       detail.value!.application.restaurantId = receipt.restaurantId
+      detail.value!.application.approvalMode = receipt.approvalMode
       detail.value!.reviewedBy = receipt.reviewedBy
       detail.value!.reviewedAt = receipt.reviewedAt
       detail.value!.rejectReason = receipt.rejectReason
@@ -386,7 +402,9 @@ export function useRestaurantRequests() {
       notice.value =
         kind === 'approve'
           ? `申请 #${id} 已审核通过并更新；${receipt.publishedPhotos?.length ? `已发布 ${receipt.publishedPhotos.length} 张商户相册图片。` : '本次未新增相册图片。'}`
-          : `申请 #${id} 已驳回，正式商户资料未改变。`
+          : kind === 'link-existing'
+            ? `申请 #${id} 已关联到已收录店铺；如有附带点评，已自动发布。`
+            : `申请 #${id} 已驳回，正式商户资料未改变。`
       // 审核前快照和规范化后的通过值只认服务端；读取失败保留已确认终态，不重发写入。
       loadingDetail.value = true
       try {

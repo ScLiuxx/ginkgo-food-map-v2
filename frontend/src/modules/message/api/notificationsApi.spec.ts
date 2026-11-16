@@ -40,6 +40,31 @@ const page = (): NotificationPage => ({
 afterEach(() => vi.restoreAllMocks())
 /** 校验私有身份回执、BIGINT精度和固定写路径，不把损坏数据当成空收件箱。 */
 describe('通知接口契约', () => {
+  it('通知与最新摘要保留已收录方式，拒绝与纠错类型混用', async () => {
+    const source = page()
+    source.records[0] = {
+      ...source.records[0]!,
+      requestType: 'CREATE',
+      decision: 'APPROVED',
+      approvalMode: 'LINKED_EXISTING',
+      rejectReason: null,
+    }
+    source.latestSystem = source.records[0]!
+    vi.spyOn(httpClient, 'get').mockResolvedValue({ data: { success: true, data: source } })
+    const result = await fetchNotifications(
+      'SYSTEM',
+      1,
+      '42',
+      'token',
+      new AbortController().signal,
+    )
+    expect(result.records[0]?.approvalMode).toBe('LINKED_EXISTING')
+    expect(result.latestSystem?.approvalMode).toBe('LINKED_EXISTING')
+    source.records[0]!.requestType = 'UPDATE'
+    await expect(
+      fetchNotifications('SYSTEM', 1, '42', 'token', new AbortController().signal),
+    ).rejects.toThrow('无法确认')
+  })
   it('按固定身份和消息ID删除，只接受204成功回执', async () => {
     const signal = new AbortController().signal
     const remove = vi.spyOn(httpClient, 'delete').mockResolvedValue({ status: 204 })
@@ -226,9 +251,9 @@ it('举报结果接受REMOVED/DISMISSED并拒绝混入审核字段', async () =>
       },
     },
   })
-  expect(
-    (await fetchNotifications('SYSTEM', 1, '42', 'token', signal)).records[0]?.decision,
-  ).toBe('DISMISSED')
+  expect((await fetchNotifications('SYSTEM', 1, '42', 'token', signal)).records[0]?.decision).toBe(
+    'DISMISSED',
+  )
 
   for (const patch of [
     { requestId: '9007199254740995' },
@@ -248,9 +273,7 @@ it('举报结果接受REMOVED/DISMISSED并拒绝混入审核字段', async () =>
         },
       },
     })
-    await expect(fetchNotifications('SYSTEM', 1, '42', 'token', signal)).rejects.toThrow(
-      '无法确认',
-    )
+    await expect(fetchNotifications('SYSTEM', 1, '42', 'token', signal)).rejects.toThrow('无法确认')
   }
 })
 

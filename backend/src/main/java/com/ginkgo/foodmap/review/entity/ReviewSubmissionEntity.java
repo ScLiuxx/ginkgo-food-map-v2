@@ -25,4 +25,5 @@ public class ReviewSubmissionEntity {
     private String requestHash;
     private String contentHash;
     private String publishRequestId;
+    private Long publishedReviewId;
 }

@@ -7,11 +7,13 @@ import com.ginkgo.foodmap.file.storage.OssStorageClient;
 
 import lombok.RequiredArgsConstructor;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.stream.Stream;
 
 /** 文件模块公开入口：负责媒体归属与状态，不访问点评表，不向其他模块暴露持久化实体。 */
 @Service
@@ -25,6 +27,20 @@ public class MediaFileService {
     @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public byte[] readOwnRestaurantBound(long id) {
         return readRestaurantFile(id, actors.requireActor().getUserId());
+    }
+
+    /** 待发布点评图片只允许上传者读取；调用方还必须校验申请及点评关联，不能复用正式点评的公开读取。 */
+    @PreAuthorize("isAuthenticated()")
+    public byte[] readOwnReviewBound(long id) {
+        long owner = actors.requireActor().getUserId();
+        var row = files.find(id);
+        if (row == null
+                || !"BOUND".equals(row.getStatus())
+                || !"REVIEW".equals(row.getPurpose())
+                || row.getUploaderUserId() != owner) {
+            throw new BusinessException(FileErrorCode.NOT_FOUND);
+        }
+        return storage.read(row.getBucketName(), row.getStorageKey());
     }
 
     /** 管理员查看已核对申请关联的商户图；拒绝其他用途、其他上传者及未绑定文件。 */
@@ -64,10 +80,61 @@ public class MediaFileService {
         }
     }
 
+    /** 审核自动发布只转移已绑定的本人REVIEW图片；按ID升序锁定，不重新绑定、不复制或读取OSS。 */
+    @PreAuthorize("hasRole('ADMIN')")
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void validateReviewPublication(List<Long> ids, long owner) {
+        if (ids == null || ids.size() > 5 || ids.stream().distinct().count() != ids.size()) {
+            throw new BusinessException(FileErrorCode.NOT_BINDABLE);
+        }
+        for (long id : ids.stream().sorted().toList()) {
+            var row = files.lock(id);
+            if (row == null
+                    || !"BOUND".equals(row.getStatus())
+                    || !"REVIEW".equals(row.getPurpose())
+                    || row.getUploaderUserId() != owner) {
+                throw new BusinessException(FileErrorCode.NOT_BINDABLE);
+            }
+        }
+    }
+
     /** 加入点评事务，固定ID升序加锁；展示顺序由review关联表保留。 */
     @Transactional(propagation = Propagation.MANDATORY)
     public void bind(List<Long> ids, long owner) {
         bindPurpose(ids, owner, "REVIEW");
+    }
+
+    /**
+     * 本人待发布点评替换图片：review服务已锁点评并确认原关联，本服务按并集ID升序处理避免反序加锁。
+     * 保留图片校验BOUND归属和用途；仅新增图片要求有效临时状态，移除图片登记清理，均不访问OSS。
+     */
+    @PreAuthorize("isAuthenticated()")
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void replaceOwnReviewPhotos(List<Long> existing, List<Long> replacement) {
+        long owner = actors.requireActor().getUserId();
+        if (existing == null || replacement == null || existing.size() > 5 || replacement.size() > 5
+                || existing.stream().distinct().count() != existing.size()
+                || replacement.stream().distinct().count() != replacement.size()) {
+            throw new BusinessException(FileErrorCode.NOT_BINDABLE);
+        }
+        var ids = Stream.concat(existing.stream(), replacement.stream())
+                .distinct().sorted().toList();
+        for (long id : ids) {
+            var row = files.lock(id);
+            if (row == null || row.getUploaderUserId() != owner || !"REVIEW".equals(row.getPurpose())) {
+                throw new BusinessException(FileErrorCode.NOT_BINDABLE);
+            }
+            if (existing.contains(id)) {
+                if (!"BOUND".equals(row.getStatus())) {
+                    throw new BusinessException(FileErrorCode.NOT_BINDABLE);
+                }
+                if (!replacement.contains(id) && files.releaseBound(id, owner) != 1) {
+                    throw new BusinessException(FileErrorCode.NOT_BINDABLE);
+                }
+            } else if (files.bind(id, owner) != 1) {
+                throw new BusinessException(FileErrorCode.NOT_BINDABLE);
+            }
+        }
     }
 
     /** 商户申请服务先校验申请归属；加入申请事务，任一图片不合法时全部回滚。 */

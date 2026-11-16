@@ -8,6 +8,7 @@ import {
 import type { RequestStatus } from '../api/restaurantRequestsApi'
 import ReviewInlineField from './ReviewInlineField.vue'
 import AdminSidebar from './AdminSidebar.vue'
+import LinkExistingRestaurantDialog from './LinkExistingRestaurantDialog.vue'
 
 // 身份由页面编排传入；真实查询只在管理会话校验通过后挂载，不跨模块读取认证Store。
 defineProps<{
@@ -49,6 +50,20 @@ const {
   loadPhoto,
 } = useRestaurantRequests()
 const statuses: RequestStatus[] = ['PENDING', 'APPROVED', 'REJECTED']
+const linkOpen = ref(false)
+/** 打开独立核对窗口，清除上一轮操作错误，不带入资料编辑草稿。 */
+function openLinkExisting() {
+  decisionError.value = ''
+  rejectOpen.value = false
+  linkOpen.value = true
+}
+/** 选择窗口绑定当前申请；切换记录或服务端确认终态后立即销毁，清空搜索和选择。 */
+watch(
+  () => [selectedId.value, detail.value?.application.status],
+  () => {
+    linkOpen.value = false
+  },
+)
 const changedCount = computed(() => comparison.value.filter((row) => row.changed).length)
 const photoDialog = useTemplateRef('photoDialog')
 const previewSrc = ref(''),
@@ -214,6 +229,10 @@ onBeforeUnmount(() => photoDialog.value?.close())
                   ><span v-if="detail.targetDeleted">目标商户已删除；当前资料仅供管理员核对。</span
                   ><span v-else-if="selected.status === 'PENDING'"
                     >本次提交仅为待审申请，通过后才会更新公开资料。</span
+                  ><span v-else-if="selected.approvalMode === 'LINKED_EXISTING'"
+                    >店铺已收录，申请已关联至商户 #{{
+                      selected.restaurantId
+                    }}；如有附带点评，已自动发布。</span
                   ><span v-else
                     >处理状态：{{ requestStatusNames[selected.status]
                     }}{{ detail.rejectReason ? ' · ' + detail.rejectReason : '' }}</span
@@ -227,9 +246,11 @@ onBeforeUnmount(() => photoDialog.value?.close())
                   <h3>资料核对</h3>
                   <span
                     ><i class="legend" />{{
-                      selected.requestType === 'CREATE' && !detail.current
-                        ? '新商户资料'
-                        : `${changedCount} 项变更已标出`
+                      selected.approvalMode === 'LINKED_EXISTING'
+                        ? '投稿资料与关联店铺的差异，不代表资料更新'
+                        : selected.requestType === 'CREATE' && !detail.current
+                          ? '新商户资料'
+                          : `${changedCount} 项变更已标出`
                     }}</span
                   >
                 </div>
@@ -238,10 +259,22 @@ onBeforeUnmount(() => photoDialog.value?.close())
                     <tr>
                       <th scope="col">资料项</th>
                       <th scope="col">
-                        {{ selected.status === 'APPROVED' ? '审核前资料' : '当前商户资料' }}
+                        {{
+                          selected.approvalMode === 'LINKED_EXISTING'
+                            ? '原投稿资料'
+                            : selected.status === 'APPROVED'
+                              ? '审核前资料'
+                              : '当前商户资料'
+                        }}
                       </th>
                       <th scope="col">
-                        {{ selected.status === 'APPROVED' ? '最终通过资料' : '本次提交' }}
+                        {{
+                          selected.approvalMode === 'LINKED_EXISTING'
+                            ? '关联店铺资料（处理时）'
+                            : selected.status === 'APPROVED'
+                              ? '最终通过资料'
+                              : '本次提交'
+                        }}
                       </th>
                     </tr>
                   </thead>
@@ -308,9 +341,11 @@ onBeforeUnmount(() => photoDialog.value?.close())
                         ? '通过后按顺序加入商户相册'
                         : selected.status === 'REJECTED'
                           ? '已驳回，图片仅供审核核对'
-                          : detail.publishedPhotos?.length
-                            ? `本次已发布 ${detail.publishedPhotos.length} 张`
-                            : '历史申请图片未发布到相册'
+                          : selected.approvalMode === 'LINKED_EXISTING'
+                            ? '已关联已有店铺，投稿附图保留供核对'
+                            : detail.publishedPhotos?.length
+                              ? `本次已发布 ${detail.publishedPhotos.length} 张`
+                              : '历史申请图片未发布到相册'
                     }}</span>
                   </div>
                   <p v-if="!photos.length" class="photo-note">本次申请未附图片。</p>
@@ -367,7 +402,9 @@ onBeforeUnmount(() => photoDialog.value?.close())
                 {{
                   selected.status === 'PENDING'
                     ? '通过后发布资料与附图；纠错图片追加到原相册。'
-                    : '此申请已处理，不能再次变更审核结果。'
+                    : selected.approvalMode === 'LINKED_EXISTING'
+                      ? `已关联已有店铺 #${selected.restaurantId}，申请已结束。`
+                      : '此申请已处理，不能再次变更审核结果。'
                 }}
               </div>
               <div v-if="selected.status === 'PENDING'" class="decision-controls">
@@ -382,6 +419,14 @@ onBeforeUnmount(() => photoDialog.value?.close())
                   {{ decisionError }}
                 </p>
                 <div class="buttons">
+                  <button
+                    v-if="selected.requestType === 'CREATE'"
+                    class="btn"
+                    :disabled="submitting || loadingList || !detail || loadingDetail"
+                    @click="openLinkExisting"
+                  >
+                    店铺已收录
+                  </button>
                   <div class="reject-control">
                     <button
                       class="btn reject-button"
@@ -455,7 +500,7 @@ onBeforeUnmount(() => photoDialog.value?.close())
             </p>
           </div>
         </div>
-        <footer>待审资料仅管理员可见 · 首次审核通过后附图公开</footer>
+        <footer>投稿图片保留供核对 · 发布店铺资料时附图加入相册</footer>
       </main>
     </div>
     <dialog ref="photoDialog" class="photo-viewer" aria-labelledby="admin-photo-title">
@@ -465,6 +510,16 @@ onBeforeUnmount(() => photoDialog.value?.close())
         <button class="btn" @click="photoDialog?.close()">关闭</button>
       </div>
     </dialog>
+    <LinkExistingRestaurantDialog
+      v-if="linkOpen && detail && selected?.status === 'PENDING'"
+      :key="selectedId ?? ''"
+      :restaurant-name="String(detail.proposed.name ?? '')"
+      :restaurant-type="detail.proposed.restaurantType === 'CANTEEN' ? 'CANTEEN' : 'REGULAR'"
+      :submitting="submitting"
+      :error="decisionError"
+      @close="linkOpen = false"
+      @confirm="decide('link-existing', $event)"
+    />
   </div>
 </template>
 

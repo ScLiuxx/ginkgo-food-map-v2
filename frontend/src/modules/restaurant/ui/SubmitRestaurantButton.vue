@@ -5,7 +5,7 @@ import {
   type MerchantSubmissionPlace,
 } from '../model/merchantSubmissionDraft'
 
-/** 首页与地图共用一个投稿入口；进入表单时才生成内存草稿，按钮本身不会写数据库。 */
+/** 首页与地图共用一个投稿入口；文案可按场景提供，进入表单时才生成内存草稿，不写数据库。 */
 const props = defineProps<{
   keyword?: string
   place?: MerchantSubmissionPlace
@@ -24,7 +24,7 @@ function open() {
 </script>
 <template>
   <button type="button" class="submit-restaurant-button" @click="open">
-    ＋ 提交店铺
+    <slot>＋ 提交店铺</slot>
   </button>
 </template>
 <style scoped>

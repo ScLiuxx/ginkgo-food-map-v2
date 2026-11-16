@@ -19,6 +19,14 @@ public interface RestaurantChangeMapper {
     @Select("SELECT * FROM restaurant_change_requests WHERE id=#{id} AND submitted_by=#{owner} FOR UPDATE")
     RestaurantChangeEntity lockOwn(@Param("id") long id, @Param("owner") long owner);
 
+    /** 只在本人范围预读不可变类型和目标，便于纠错重提与管理员审核统一先锁餐厅、再锁申请。 */
+    @Select("SELECT id,restaurant_id,request_type FROM restaurant_change_requests WHERE id=#{id} AND submitted_by=#{owner}")
+    RestaurantChangeEntity ownHint(@Param("id") long id, @Param("owner") long owner);
+
+    /** 先锁原申请，再锁其后续申请，最后才锁点评；重放不得反向等待正在编辑或审核的子申请。 */
+    @Select("SELECT * FROM restaurant_change_requests WHERE previous_request_id=#{id} AND submitted_by=#{owner} ORDER BY id LIMIT 1 FOR UPDATE")
+    RestaurantChangeEntity successor(@Param("id") long id, @Param("owner") long owner);
+
     @Select("SELECT id,category_code FROM restaurants WHERE id=#{id} AND deleted_at IS NULL FOR UPDATE")
     RestaurantEntity lockTarget(@Param("id") long id);
 

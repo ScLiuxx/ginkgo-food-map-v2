@@ -1,4 +1,14 @@
 import { createApp, nextTick, type App } from 'vue'
+import { createPinia, disposePinia, setActivePinia } from 'pinia'
+import { useLoginStore } from '@/modules/auth'
+import {
+  fetchMyRequestDetail,
+  fetchMyRequestPhoto,
+  fetchMyRequestReviewPhoto,
+  editMyRequest,
+  resubmitMyRequest,
+  type MyRequestDetail,
+} from '../api/myRestaurantRequestsApi'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearAccessToken, setAccessToken } from '@/shared/api/authSession'
@@ -28,6 +38,14 @@ vi.mock('@/modules/file/api/mediaApi', () => ({ uploadImage: vi.fn(), cancelImag
 vi.mock('@/modules/file/model/photos', () => ({ compressPhoto: vi.fn() }))
 
 vi.mock('@/modules/map/sdk/places', () => ({ searchAMapPlaces: vi.fn() }))
+vi.mock('../api/myRestaurantRequestsApi', async (original) => ({
+  ...(await original<typeof import('../api/myRestaurantRequestsApi')>()),
+  fetchMyRequestDetail: vi.fn(),
+  fetchMyRequestPhoto: vi.fn(),
+  fetchMyRequestReviewPhoto: vi.fn(),
+  editMyRequest: vi.fn(),
+  resubmitMyRequest: vi.fn(),
+}))
 
 vi.mock('../api/restaurantApi', () => ({
   fetchCorrectionSource: vi.fn(),
@@ -41,11 +59,14 @@ vi.mock('../api/restaurantApi', () => ({
 
 describe('商户资料补充与纠错', () => {
   let app: App, host: HTMLDivElement
+  let pinia: ReturnType<typeof createPinia>
   const settle = async () => {
     for (let i = 0; i < 10; i++) await nextTick()
   }
   beforeEach(() => {
     vi.resetAllMocks()
+    pinia = createPinia()
+    setActivePinia(pinia)
     setAccessToken('correction-user')
     vi.stubGlobal(
       'URL',
@@ -97,6 +118,7 @@ describe('商户资料补充与纠错', () => {
   })
   afterEach(() => {
     app?.unmount()
+    disposePinia(pinia)
     host.remove()
     clearAccessToken()
     vi.unstubAllGlobals()
@@ -105,6 +127,12 @@ describe('商户资料补充与纠错', () => {
     const router = createRouter({
       history: createMemoryHistory(),
       routes: [
+        {
+          path: '/account/contributions/:requestId/edit',
+          component: RestaurantCorrection,
+          props: (route) => ({ requestId: route.params.requestId, submission: true }),
+        },
+        { path: '/account/contributions', component: { template: '<div />' } },
         {
           path: '/admin/restaurants/new',
           component: RestaurantCorrection,
@@ -131,7 +159,7 @@ describe('商户资料补充与纠错', () => {
       ],
     })
     await router.push(path)
-    app = createApp(RouterView).use(router)
+    app = createApp(RouterView).use(router).use(pinia)
     app.mount(host)
     await settle()
     return router
@@ -156,6 +184,21 @@ describe('商户资料补充与纠错', () => {
       .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     await settle()
   }
+  async function clickButton(text: string) {
+    ;[...host.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.trim() === text)!
+      .click()
+    await settle()
+  }
+  async function chooseReviewPhoto() {
+    const input = host.querySelector<HTMLInputElement>('[aria-label="选择点评照片"]')!
+    Object.defineProperty(input, 'files', {
+      configurable: true,
+      value: [new File(['jpeg'], 'food.jpg', { type: 'image/jpeg' })],
+    })
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+    await settle()
+  }
   async function choosePhoto() {
     const input = host.querySelector<HTMLInputElement>('input[type="file"]')!
     Object.defineProperty(input, 'files', {
@@ -165,6 +208,290 @@ describe('商户资料补充与纠错', () => {
     input.dispatchEvent(new Event('change', { bubbles: true }))
     await settle()
   }
+  /** 同时覆盖图片用途隔离、必选态度以及网络重试，避免联合表单仅看起来可提交。 */
+  it('联合投稿态度无默认值，图片分用途，失败重试保留完整请求编号', async () => {
+    const draft = prepareMerchantSubmission({
+      name: '新店',
+      address: '校园路',
+      latitude: 30.75,
+      longitude: 103.93,
+    })!
+    await mount(`/restaurants/submit?draft=${draft}`)
+    await field('美食品类', 'OTHER')
+    vi.mocked(uploadImage).mockImplementation(async (_file, _owner, purpose) =>
+      purpose === 'REVIEW' ? '202' : '101',
+    )
+    await choosePhoto()
+    await clickButton('下一步，写点评 →')
+    expect(submitNewRestaurant).not.toHaveBeenCalled()
+    expect(host.querySelector('.restaurant-fields')?.getAttribute('style')).toContain(
+      'display: none',
+    )
+    expect(host.querySelectorAll('.choices [aria-pressed="true"]')).toHaveLength(0)
+    await submit()
+    expect(submitNewRestaurant).not.toHaveBeenCalled()
+    expect(host.textContent).toContain('请选择推荐态度')
+    await field('说说你的用餐体验', '牛肉面汤底不错，出餐也很快。')
+    ;[...host.querySelectorAll<HTMLButtonElement>('.choices button')]
+      .find((b) => b.textContent?.trim() === '一般')!
+      .click()
+    await chooseReviewPhoto()
+    vi.mocked(submitNewRestaurant)
+      .mockRejectedValueOnce(new Error('网络失败'))
+      .mockResolvedValue({ id: '71', status: 'PENDING' })
+    await submit()
+    const first = vi.mocked(submitNewRestaurant).mock.calls[0]![0]
+    expect(first).toMatchObject({
+      photoIds: ['101'],
+      review: {
+        recommendation: 'NEUTRAL',
+        body: '牛肉面汤底不错，出餐也很快。',
+        photoIds: ['202'],
+      },
+    })
+    await submit()
+    expect(vi.mocked(submitNewRestaurant).mock.calls[1]![0]).toEqual(first)
+    expect(cancelImage).not.toHaveBeenCalled()
+    expect(host.textContent).toContain('附带点评已保存')
+  })
+  function requestFixture(status: 'PENDING' | 'REJECTED' = 'PENDING'): MyRequestDetail {
+    return {
+      userId: '42',
+      application: {
+        id: '71',
+        requestType: 'CREATE',
+        status,
+        name: '原投稿店铺',
+        restaurantId: null,
+        createdAt: '2026-11-14T05:00:00Z',
+        reviewedAt: status === 'REJECTED' ? '2026-11-14T06:00:00Z' : null,
+        photoCount: 1,
+      },
+      proposed: {
+        ...responseFixture,
+        name: '原投稿店铺',
+        latitude: 30.75,
+        longitude: 103.93,
+        locationConfirmed: true,
+        tags: [],
+      },
+      approved: null,
+      rejectReason: status === 'REJECTED' ? '位置不准确' : null,
+      targetAvailable: false,
+      photoPositions: [0],
+      reviewSubmission: {
+        id: '81',
+        status: 'WAITING',
+        scores: { taste: 7.5, value: 8, service: 7, ambience: 7 },
+        recommendation: 'NEUTRAL',
+        body: '这是本人保存的待发布点评。',
+        photoPositions: [0],
+        publishedReviewId: null,
+      },
+    }
+  }
+  /** 真正切换视图再重建编辑器，确认草稿与上传队列没有随子组件卸载而丢失。 */
+  it('两步往返保留店铺资料、点评、评分及两类照片，直到最后才联合提交', async () => {
+    const draft = prepareMerchantSubmission({
+      name: '两步测试店',
+      address: '校园路',
+      latitude: 30.75,
+      longitude: 103.93,
+    })!
+    await mount(`/restaurants/submit?draft=${draft}`)
+    await field('美食品类', 'OTHER')
+    await field('每行一个标签', '好吃\n实惠')
+    vi.mocked(uploadImage).mockImplementation(async (_file, _owner, purpose) =>
+      purpose === 'REVIEW' ? '202' : '101',
+    )
+    await choosePhoto()
+    // 第一步的回车只能进入点评页，不能隐式提交店铺。
+    await submit()
+    expect(submitNewRestaurant).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(host.querySelector('h1'))
+    await field('说说你的用餐体验', '两次返回之后这条点评仍然存在。')
+    await clickButton('一般')
+    const score = host.querySelector<HTMLInputElement>('#attached-taste')!
+    score.value = '4.5'
+    score.dispatchEvent(new Event('input', { bubbles: true }))
+    await chooseReviewPhoto()
+    await clickButton('← 返回店铺资料')
+    expect(host.querySelector('.review-step')).toBeNull()
+    expect(host.querySelector<HTMLInputElement>('input')!.value).toBe('两步测试店')
+    expect(host.querySelector<HTMLTextAreaElement>('textarea')!.value).toBe('好吃\n实惠')
+    expect(host.querySelector('.merchant-photo img')).not.toBeNull()
+    await field('地址', '校园路一号')
+    await clickButton('下一步，写点评 →')
+    expect(host.querySelector('.shop-summary')?.textContent).toContain('校园路一号')
+    expect(host.querySelector<HTMLTextAreaElement>('.body-label textarea')!.value).toBe(
+      '两次返回之后这条点评仍然存在。',
+    )
+    expect(host.querySelector<HTMLInputElement>('#attached-taste')!.value).toBe('4.5')
+    expect(host.querySelector('.choices [aria-pressed="true"]')?.textContent?.trim()).toBe('一般')
+    expect(host.querySelector('.review-step img')).not.toBeNull()
+    expect(uploadImage).toHaveBeenCalledTimes(2)
+    expect(cancelImage).not.toHaveBeenCalled()
+    expect(submitNewRestaurant).not.toHaveBeenCalled()
+    vi.mocked(submitNewRestaurant).mockResolvedValue({ id: '71', status: 'PENDING' })
+    await submit()
+    expect(submitNewRestaurant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: '校园路一号',
+        tags: ['好吃', '实惠'],
+        photoIds: ['101'],
+        review: expect.objectContaining({
+          scores: expect.objectContaining({ taste: 9 }),
+          photoIds: ['202'],
+        }),
+      }),
+      'correction-user',
+    )
+  })
+  it('店铺资料无效或图片上传失败时不能进入点评页，不产生申请', async () => {
+    await mount('/restaurants/submit?keyword=尚未定位的店铺')
+    await clickButton('下一步，写点评 →')
+    expect(host.querySelector('.review-step')).toBeNull()
+    expect(host.textContent).toContain('请通过高德搜索并选择有效门店')
+    vi.mocked(uploadImage).mockRejectedValue(new Error('上传失败'))
+    await choosePhoto()
+    await submit()
+    expect(host.querySelector('.review-step')).toBeNull()
+    expect(host.textContent).toContain('请等待图片上传完成')
+    expect(submitNewRestaurant).not.toHaveBeenCalled()
+  })
+  it('联合提交失败后可返回仅提交店铺，换请求编号并仅取消未保存的点评图', async () => {
+    const draft = prepareMerchantSubmission({
+      name: '新店',
+      address: '校园路',
+      latitude: 30.75,
+      longitude: 103.93,
+    })!
+    await mount(`/restaurants/submit?draft=${draft}`)
+    await field('美食品类', 'OTHER')
+    vi.mocked(uploadImage).mockImplementation(async (_file, _owner, purpose) =>
+      purpose === 'REVIEW' ? '202' : '101',
+    )
+    await choosePhoto()
+    await clickButton('下一步，写点评 →')
+    await field('说说你的用餐体验', '这次提交决定暂时不保存点评。')
+    await clickButton('推荐')
+    await chooseReviewPhoto()
+    vi.mocked(submitNewRestaurant)
+      .mockRejectedValueOnce(new Error('请求未保存'))
+      .mockRejectedValueOnce(new Error('店铺请求未保存'))
+      .mockResolvedValue({ id: '71', status: 'PENDING' })
+    await submit()
+    const joint = vi.mocked(submitNewRestaurant).mock.calls[0]![0]
+    await clickButton('← 返回店铺资料')
+    expect(host.textContent).toContain('不会保存这条点评')
+    await clickButton('仅提交店铺')
+    const shopOnly = vi.mocked(submitNewRestaurant).mock.calls[1]![0]
+    expect(shopOnly).not.toHaveProperty('review')
+    expect(shopOnly.clientRequestId).not.toBe(joint.clientRequestId)
+    await clickButton('仅提交店铺')
+    expect(vi.mocked(submitNewRestaurant).mock.calls[2]![0]).toEqual(shopOnly)
+    expect(cancelImage).toHaveBeenCalledExactlyOnceWith('202', 'correction-user')
+    expect(host.textContent).not.toContain('附带点评已保存')
+  })
+  it('首次附带点评的草稿不阻止改为食堂，食堂只提交店铺且不附带点评', async () => {
+    const draft = prepareMerchantSubmission({
+      name: '新食堂',
+      address: '校园路',
+      latitude: 30.75,
+      longitude: 103.93,
+    })!
+    await mount(`/restaurants/submit?draft=${draft}`)
+    await field('美食品类', 'OTHER')
+    await clickButton('下一步，写点评 →')
+    await field('说说你的用餐体验', '这里应该评价具体的窗口。')
+    vi.mocked(uploadImage).mockRejectedValueOnce(new Error('点评图上传失败'))
+    await chooseReviewPhoto()
+    await clickButton('← 返回店铺资料')
+    await field('餐厅类型', 'CANTEEN')
+    expect(host.querySelector('.submission-steps')).toBeNull()
+    expect(
+      [...host.querySelectorAll<HTMLButtonElement>('button')].find(
+        (b) => b.textContent?.trim() === '提交审核',
+      )!.disabled,
+    ).toBe(false)
+    vi.mocked(submitNewRestaurant).mockResolvedValue({ id: '71', status: 'PENDING' })
+    await submit()
+    const payload = vi.mocked(submitNewRestaurant).mock.calls[0]![0]
+    expect(payload.restaurantType).toBe('CANTEEN')
+    expect(payload).not.toHaveProperty('review')
+    expect(host.textContent).not.toContain('附带点评已保存')
+  })
+  function signIn() {
+    useLoginStore().acceptSession({
+      accessToken: 'correction-user',
+      tokenType: 'Bearer',
+      expiresAt: '2099-01-01T00:00:00Z',
+      user: { id: 42, username: '本人', roles: ['ROLE_USER'] },
+    })
+    vi.mocked(fetchMyRequestPhoto).mockResolvedValue(new Blob(['shop'], { type: 'image/jpeg' }))
+    vi.mocked(fetchMyRequestReviewPhoto).mockResolvedValue(
+      new Blob(['review'], { type: 'image/jpeg' }),
+    )
+    vi.mocked(uploadImage).mockImplementation(async (_file, _token, purpose) =>
+      purpose === 'REVIEW' ? '202' : '101',
+    )
+  }
+  it('编辑本人申请保留点评与原图，使用PUT且不发送提交UUID或删除原绑定', async () => {
+    signIn()
+    vi.mocked(fetchMyRequestDetail).mockResolvedValue(requestFixture())
+    vi.mocked(editMyRequest).mockResolvedValue({ id: '71', status: 'PENDING' })
+    await mount('/account/contributions/71/edit')
+    expect(host.querySelector('.review-step')).toBeNull()
+    expect(host.querySelector<HTMLOptionElement>('option[value="CANTEEN"]')!.disabled).toBe(true)
+    expect([...host.querySelectorAll('button')].some((b) => b.textContent === '仅提交店铺')).toBe(
+      false,
+    )
+    await clickButton('下一步，写点评 →')
+    expect(editMyRequest).not.toHaveBeenCalled()
+    expect(host.querySelector('[role="switch"]')).toBeNull()
+    expect(host.querySelector<HTMLInputElement>('#attached-taste')!.value).toBe('3.75')
+    expect(host.querySelectorAll('img')).toHaveLength(2)
+    await field('说说你的用餐体验', '修改后的点评内容，保留两类原图。')
+    await submit()
+    const payload = vi.mocked(editMyRequest).mock.calls[0]![1]
+    expect(payload).not.toHaveProperty('clientRequestId')
+    expect(payload).toMatchObject({
+      photoIds: ['101'],
+      review: { scores: { taste: 7.5 }, recommendation: 'NEUTRAL', photoIds: ['202'] },
+    })
+    expect(submitNewRestaurant).not.toHaveBeenCalled()
+    expect(cancelImage).not.toHaveBeenCalled()
+  })
+  it('驳回重提保留原内容及重试编号，并显示新申请回执', async () => {
+    signIn()
+    vi.mocked(fetchMyRequestDetail).mockResolvedValue(requestFixture('REJECTED'))
+    vi.mocked(resubmitMyRequest)
+      .mockRejectedValueOnce(new Error('暂时失败'))
+      .mockResolvedValue({ id: '72', status: 'PENDING' })
+    await mount('/account/contributions/71/edit')
+    expect(host.textContent).toContain('位置不准确')
+    await clickButton('下一步，写点评 →')
+    await submit()
+    await submit()
+    expect(resubmitMyRequest).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(resubmitMyRequest).mock.calls[0]).toEqual(
+      vi.mocked(resubmitMyRequest).mock.calls[1],
+    )
+    expect(host.textContent).toContain('申请编号：72')
+    expect(editMyRequest).not.toHaveBeenCalled()
+  })
+  it('已重提的祖先申请不展示可编辑表单，不读取旧点评图', async () => {
+    signIn()
+    vi.mocked(fetchMyRequestDetail).mockResolvedValue({
+      ...requestFixture('REJECTED'),
+      resubmittedRequestId: '72',
+    })
+    await mount('/account/contributions/71/edit')
+    expect(host.querySelector('form')).toBeNull()
+    expect(host.textContent).toContain('申请状态已变化')
+    expect(fetchMyRequestReviewPhoto).not.toHaveBeenCalled()
+    expect(uploadImage).not.toHaveBeenCalled()
+  })
   it('管理员新建复用高德搜索，选择门店后直接创建而非提交审核', async () => {
     vi.mocked(createRestaurant).mockResolvedValue({ restaurant: responseFixture, deleted: false })
     const router = await mount('/admin/restaurants/new')
@@ -348,7 +675,7 @@ describe('商户资料补充与纠错', () => {
     vi.mocked(submitNewRestaurant)
       .mockRejectedValueOnce(new Error('网络失败'))
       .mockResolvedValue({ id: '61', status: 'PENDING' })
-    await submit()
+    await clickButton('仅提交店铺')
     expect(host.querySelector('input')?.value).toBe('新门店')
     const input = vi.mocked(submitNewRestaurant).mock.calls[0]![0]
     expect(input).toMatchObject({
@@ -358,7 +685,7 @@ describe('商户资料补充与纠错', () => {
       longitude: 104.099671,
       locationConfirmed: true,
     })
-    await submit()
+    await clickButton('仅提交店铺')
     expect(vi.mocked(submitNewRestaurant).mock.calls[1]![0].clientRequestId).toBe(
       input.clientRequestId,
     )

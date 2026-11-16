@@ -1,6 +1,8 @@
 package com.ginkgo.foodmap.restaurant.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.ginkgo.foodmap.review.dto.ReviewSubmissionRequest;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -31,4 +33,8 @@ public class RestaurantChangeEditRequest extends RestaurantSaveRequest {
     @Size(max = 5)
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
     private List<@NotNull @Pattern(regexp = "[1-9][0-9]{0,18}") String> photoIds = new ArrayList<>();
+
+    /** 仅CREATE普通餐厅可提供；省略或null保留原点评，完整对象整体替换，绝不进入店铺快照。 */
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    private ReviewSubmissionRequest review;
 }

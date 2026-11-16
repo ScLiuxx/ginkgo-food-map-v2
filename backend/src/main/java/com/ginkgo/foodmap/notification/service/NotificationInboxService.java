@@ -172,6 +172,7 @@ public class NotificationInboxService {
         item.setReviewId(row.getReviewId() == null ? null : row.getReviewId().toString());
         item.setActorUserId(row.getActorUserId() == null ? null : row.getActorUserId().toString());
         item.setRequestType(row.getRequestType());
+        item.setApprovalMode(row.getApprovalMode());
         item.setDecision(row.getDecision());
         item.setRestaurantName(row.getRestaurantName());
         item.setRejectReason(row.getRejectReason());

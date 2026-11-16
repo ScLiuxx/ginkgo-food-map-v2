@@ -79,9 +79,10 @@ async function changePage(page: number): Promise<void> {
         }}
       </p>
       <SubmitRestaurantButton
-        v-if="catalog.filters.keyword.trim() && catalog.resultsCurrent && catalog.total === 0"
+        v-if="catalog.resultsCurrent && catalog.total === 0"
         :keyword="catalog.filters.keyword"
-      />
+        >＋ 添加店铺</SubmitRestaurantButton
+      >
       <button
         v-if="
           catalog.filters.keyword ||
@@ -143,6 +144,22 @@ async function changePage(page: number): Promise<void> {
         下一页 →
       </button>
     </nav>
+    <!-- 只在当前条件的末页成功加载后提示，避免将加载中或查询失败误示为已经到底。 -->
+    <div
+      v-if="
+        !catalog.loading &&
+        !catalog.error &&
+        catalog.resultsCurrent &&
+        catalog.visibleRestaurants.length > 0 &&
+        catalog.page === catalog.pages
+      "
+      class="directory-add"
+    >
+      <p>没有找到想找的店铺？欢迎补充一家。</p>
+      <SubmitRestaurantButton :keyword="catalog.filters.keyword"
+        >＋ 添加店铺</SubmitRestaurantButton
+      >
+    </div>
   </section>
 </template>
 

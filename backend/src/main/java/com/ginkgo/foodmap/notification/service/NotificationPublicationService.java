@@ -43,6 +43,19 @@ public class NotificationPublicationService {
         row.setRequestId(input.getRequestId());
         row.setRequestType(input.getRequestType());
         row.setDecision(input.getDecision());
+        // 老调用方未指定方式时沿用创建/更新语义；“已收录”必须由可信业务服务显式传入。
+        String mode = input.getApprovalMode();
+        if ("APPROVED".equals(input.getDecision()) && mode == null) {
+            mode = "CREATE".equals(input.getRequestType()) ? "CREATED" : "UPDATED";
+        }
+        if (("REJECTED".equals(input.getDecision()) && mode != null)
+                || ("APPROVED".equals(input.getDecision())
+                        && !("CREATE".equals(input.getRequestType())
+                                ? "CREATED".equals(mode) || "LINKED_EXISTING".equals(mode)
+                                : "UPDATED".equals(mode)))) {
+            throw new IllegalArgumentException("Invalid restaurant approval mode");
+        }
+        row.setApprovalMode(mode);
         row.setRestaurantName(input.getRestaurantName());
         row.setRejectReason(input.getRejectReason());
         messages.insert(row);
@@ -51,6 +64,7 @@ public class NotificationPublicationService {
         if (saved == null
                 || !Objects.equals(saved.getRequestType(), row.getRequestType())
                 || !Objects.equals(saved.getDecision(), row.getDecision())
+                || !Objects.equals(saved.getApprovalMode(), row.getApprovalMode())
                 || !Objects.equals(saved.getRestaurantName(), row.getRestaurantName())
                 || !Objects.equals(saved.getRejectReason(), row.getRejectReason())) {
             throw new IllegalStateException(
@@ -136,9 +150,7 @@ public class NotificationPublicationService {
         row.setDecision(input.getDecision());
         messages.insertReportResult(row);
         changes.changed(row.getRecipientUserId());
-        var saved =
-                messages.bySource(
-                        row.getRecipientUserId(), "REPORT_RESULT", row.getSourceId());
+        var saved = messages.bySource(row.getRecipientUserId(), "REPORT_RESULT", row.getSourceId());
         if (saved == null
                 || !Objects.equals(saved.getReviewId(), row.getReviewId())
                 || !Objects.equals(saved.getDecision(), row.getDecision())) {

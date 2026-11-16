@@ -59,6 +59,8 @@
 
 SYSTEM中审核结果的sourceId=requestId，requestType为CREATE/UPDATE、decision为APPROVED/REJECTED，通过时rejectReason为null；reviewId/actorUserId/actorUsername为空。只保留审核时摘要，点击后固定进入`/account/contributions?requestId=51`，由本人申请详情重新检查归属及可访问性。
 
+列表项和latestSystem新增`approvalMode`：CREATED创建新店、UPDATED更新资料、LINKED_EXISTING表示[店铺已收录](submissions.md#link-existing)。未通过和其他类型消息为null；历史导入记录允许null。已收录通知仍为RESTAURANT_DECISION、requestType=CREATE、decision=APPROVED，restaurantName保存关联店铺的处理时名称；前端显示“店铺已收录”，不声称新建了店铺。有无附带点评及其发布回执由本人申请详情确认。
+
 COMMENTS的sourceId是回复ID、reviewId是原点评ID、actorUserId是回复者ID，actorUsername批量读取当前公开用户名，缺失时显示“用户不可用”；审核字段为空。通知不保存点评或回复正文，不接受任意跳转URL。点击成功保存单条已读后，由[本人收到的回复精确定位](#reply-target)固定目标接口重新读取原文；失效内容保留通知并提示“内容已失效或不可访问”。
 
 <a id="read"></a>

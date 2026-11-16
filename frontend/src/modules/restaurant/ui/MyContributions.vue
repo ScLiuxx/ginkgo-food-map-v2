@@ -6,8 +6,9 @@ import { authToken } from '@/shared/api/authSession'
 import { useMyRestaurantRequests } from '../model/useMyRestaurantRequests'
 import { myRequestStatusNames, type MyRequestFilter } from '../api/myRestaurantRequestsApi'
 import MyContributionSnapshot from './MyContributionSnapshot.vue'
+import { recommendationLabels } from '@/modules/review/model/review'
 
-/** 本人投稿入口只编排真实读取，不提供本轮尚未开放的修改、撤回或重提操作。 */
+/** 本人详情展示私有点评，并按服务端状态开放修改、撤回、重提与后续申请入口。 */
 const state = useMyRestaurantRequests()
 const route = useRoute()
 const auth = useLoginStore()
@@ -15,9 +16,10 @@ let openedTarget = ''
 const { filter, result, loading, error, selectedId, detail, detailLoading, detailError, photos } =
   state
 const dialog = ref<globalThis.HTMLDialogElement>(),
+  withdrawDialog = ref<globalThis.HTMLDialogElement>(),
   lightbox = ref<globalThis.HTMLDialogElement>(),
   preview = ref('')
-const filters: MyRequestFilter[] = ['ALL', 'PENDING', 'APPROVED', 'REJECTED']
+const filters: MyRequestFilter[] = ['ALL', 'PENDING', 'APPROVED', 'REJECTED', 'WITHDRAWN']
 const time = (value: string | null) =>
   value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '尚未审核'
 function open(id: string) {
@@ -25,6 +27,7 @@ function open(id: string) {
   dialog.value?.showModal()
 }
 function close() {
+  if (state.withdrawing.value) return
   dialog.value?.close()
   state.clearDetail()
 }
@@ -34,6 +37,11 @@ function onDialogClosed() {
 function viewPhoto(src: string) {
   preview.value = src
   lightbox.value?.showModal()
+}
+/** 明确解释撤回终态后再发送请求，不复用上次操作的失败提示。 */
+function askWithdraw() {
+  state.mutationError.value = ''
+  withdrawDialog.value?.showModal()
 }
 /** 消息跳转只接收申请ID，真实归属仍由本人详情接口验证；等首次列表读取完成，避免加载清理弹窗。 */
 watch(
@@ -60,6 +68,7 @@ watch(
   selectedId,
   (value) => {
     if (!value) {
+      withdrawDialog.value?.close()
       lightbox.value?.close()
       dialog.value?.close()
       preview.value = ''
@@ -75,6 +84,9 @@ watch(
       <button type="button" :disabled="loading" @click="state.load(1)">刷新</button>
       <RouterLink class="contribution-submit" to="/restaurants/submit">提交新店 ›</RouterLink>
     </header>
+    <p v-if="state.mutationMessage.value" class="contribution-result" role="status">
+      {{ state.mutationMessage.value }}
+    </p>
     <div class="contributions-filters" role="group" aria-label="申请状态筛选">
       <button
         v-for="status in filters"
@@ -113,7 +125,9 @@ watch(
               item.requestType === 'CREATE' ? '新店投稿' : '资料纠错'
             }}</span
             ><span class="contribution-badge" :data-status="item.status">{{
-              myRequestStatusNames[item.status]
+              item.approvalMode === 'LINKED_EXISTING'
+                ? '店铺已收录'
+                : myRequestStatusNames[item.status]
             }}</span></span
           >
           <strong>{{ item.name }}</strong>
@@ -145,7 +159,9 @@ watch(
         下一页
       </button>
     </nav>
-    <p class="contribution-private-note">申请记录仅你和有权处理的管理员可见。</p>
+    <p class="contribution-private-note">
+      店铺申请仅你和有权处理的管理员可见；待发布点评仅你自己可查看。
+    </p>
     <dialog
       ref="dialog"
       class="contribution-dialog"
@@ -155,7 +171,14 @@ watch(
     >
       <header class="contribution-dialog-header">
         <h2 id="contribution-title">申请详情</h2>
-        <button type="button" aria-label="关闭申请详情" @click="close">×</button>
+        <button
+          type="button"
+          aria-label="关闭申请详情"
+          :disabled="state.withdrawing.value"
+          @click="close"
+        >
+          ×
+        </button>
       </header>
       <p v-if="detailLoading" class="contribution-status" role="status">正在读取申请详情…</p>
       <div v-else-if="detailError" class="contribution-error" role="alert">
@@ -165,7 +188,9 @@ watch(
       <template v-else-if="detail">
         <div class="contribution-detail-summary">
           <span class="contribution-badge" :data-status="detail.application.status">{{
-            myRequestStatusNames[detail.application.status]
+            detail.application.approvalMode === 'LINKED_EXISTING'
+              ? '店铺已收录'
+              : myRequestStatusNames[detail.application.status]
           }}</span
           ><span>{{ detail.application.requestType === 'CREATE' ? '新店投稿' : '资料纠错' }}</span>
           <h3>{{ detail.application.name }}</h3>
@@ -183,8 +208,23 @@ watch(
           <p>{{ detail.rejectReason }}</p>
         </div>
         <section v-if="detail.approved" class="contribution-detail-section">
-          <h3>审核通过的内容</h3>
-          <p class="contribution-section-note">这是审核时确认的资料，可能包含管理员修订。</p>
+          <h3>
+            {{
+              detail.application.approvalMode === 'LINKED_EXISTING'
+                ? '关联的已收录店铺'
+                : '审核通过的内容'
+            }}
+          </h3>
+          <p class="contribution-section-note">
+            {{
+              detail.application.approvalMode === 'LINKED_EXISTING'
+                ? '管理员确认该店铺已收录，本次申请已结束。下方是处理时的店铺资料。'
+                : '这是审核时确认的资料，可能包含管理员修订。'
+            }}
+          </p>
+          <p v-if="detail.reviewSubmission?.status === 'PUBLISHED'" class="contribution-result">
+            附带点评已自动发布到关联店铺。
+          </p>
           <MyContributionSnapshot :values="detail.approved" />
         </section>
         <section class="contribution-detail-section">
@@ -220,7 +260,103 @@ watch(
             </div>
           </div>
         </section>
+        <section v-if="detail.reviewSubmission" class="contribution-detail-section attached-detail">
+          <h3>
+            我附带的点评
+            <span class="contribution-badge">{{
+              detail.reviewSubmission.status === 'PUBLISHED'
+                ? '已发布'
+                : detail.reviewSubmission.status === 'WITHDRAWN'
+                  ? '已撤回'
+                  : '待发布'
+            }}</span>
+          </h3>
+          <template v-if="detail.reviewSubmission.status === 'PUBLISHED'">
+            <p class="contribution-result">点评已自动发布，发布回执已保存。</p>
+            <RouterLink
+              v-if="detail.targetAvailable && detail.application.restaurantId"
+              :to="`/restaurants/${detail.application.restaurantId}`"
+              @click="close"
+              >前往店铺查看点评 ›</RouterLink
+            >
+            <p class="contribution-section-note">若点评后来被删除，发布回执仍会保留。</p>
+          </template>
+          <template v-else>
+            <p class="contribution-section-note">仅你自己可查看，尚未公开。</p>
+            <div v-if="detail.reviewSubmission.scores" class="attached-scores">
+              <span
+                v-for="(label, key) in {
+                  taste: '口味',
+                  value: '性价比',
+                  service: '服务',
+                  ambience: '环境',
+                }"
+                :key="key"
+                >{{ label }} <b>{{ detail.reviewSubmission.scores[key] / 2 }}</b></span
+              >
+            </div>
+            <p v-if="detail.reviewSubmission.recommendation" class="attached-attitude">
+              {{ recommendationLabels[detail.reviewSubmission.recommendation] }}
+            </p>
+            <p class="attached-body">{{ detail.reviewSubmission.body }}</p>
+            <div class="contribution-photos">
+              <div
+                v-for="photo in state.reviewPhotos.value"
+                :key="photo.position"
+                class="contribution-photo"
+              >
+                <span v-if="photo.loading" role="status">点评图片加载中…</span>
+                <div v-else-if="photo.error" class="contribution-photo-error">
+                  <span>{{ photo.error }}</span
+                  ><button type="button" @click="state.loadPhoto(photo.position, true)">
+                    重试点评图片 {{ photo.position + 1 }}
+                  </button>
+                </div>
+                <button
+                  v-else-if="photo.src"
+                  type="button"
+                  :aria-label="`查看点评图片${photo.position + 1}`"
+                  @click="viewPhoto(photo.src)"
+                >
+                  <img
+                    :src="photo.src"
+                    :alt="`点评图片${photo.position + 1}`"
+                    @error="state.imageFailed(photo.position, true)"
+                  />
+                </button>
+              </div>
+            </div>
+          </template>
+        </section>
         <footer class="contribution-detail-footer">
+          <p v-if="detail.resubmittedRequestId" class="contribution-result">
+            这条申请已重新提交，点评随新申请继续保留。<button
+              type="button"
+              @click="state.select(detail.resubmittedRequestId!)"
+            >
+              查看后续申请 ›
+            </button>
+          </p>
+          <RouterLink
+            v-if="
+              detail.application.status === 'PENDING' ||
+              (detail.application.status === 'REJECTED' && !detail.resubmittedRequestId)
+            "
+            class="contribution-edit"
+            :to="`/account/contributions/${detail.application.id}/edit`"
+            @click="close"
+            >{{
+              detail.application.status === 'REJECTED' ? '修改并重新提交' : '修改申请'
+            }}</RouterLink
+          >
+          <button
+            v-if="detail.application.status === 'PENDING'"
+            type="button"
+            :disabled="state.withdrawing.value"
+            @click="askWithdraw"
+          >
+            撤回申请
+          </button>
           <RouterLink
             v-if="detail.targetAvailable && detail.application.restaurantId"
             :to="`/restaurants/${detail.application.restaurantId}`"
@@ -228,9 +364,30 @@ watch(
             >查看店铺 ›</RouterLink
           >
           <p v-else-if="detail.application.restaurantId">关联店铺已失效，申请记录仍然保留。</p>
-          <p>当前可查看记录；修改、撤回和驳回重提暂未开放。</p>
+          <p v-if="detail.application.status === 'WITHDRAWN'">
+            本次申请已撤回，不能继续编辑或重提；内容仍为你保留。
+          </p>
         </footer>
       </template>
+    </dialog>
+    <dialog
+      ref="withdrawDialog"
+      class="withdraw-dialog"
+      aria-labelledby="withdraw-title"
+      @cancel="state.withdrawing.value && $event.preventDefault()"
+    >
+      <h3 id="withdraw-title">撤回这次申请？</h3>
+      <p>店铺和附带点评都不会发布。撤回后仍可查看内容，但不能继续编辑或重提。</p>
+      <p v-if="state.mutationError.value" role="alert" class="contribution-error">
+        {{ state.mutationError.value }}
+      </p>
+      <div>
+        <button type="button" :disabled="state.withdrawing.value" @click="withdrawDialog?.close()">
+          继续等待审核</button
+        ><button type="button" :disabled="state.withdrawing.value" @click="state.withdraw">
+          {{ state.withdrawing.value ? '正在撤回…' : '确认撤回' }}
+        </button>
+      </div>
     </dialog>
     <dialog
       ref="lightbox"

@@ -405,14 +405,14 @@ describe('restaurant catalog API integration', () => {
     expect(document.activeElement).toBe(host.querySelector('.results-toolbar'))
   })
 
-  it('only offers submission for completed empty keyword searches and carries the keyword', async () => {
+  it('offers submission for completed empty results and carries the keyword without showing stale results', async () => {
     const store = useRestaurantCatalog(pinia)
     vi.mocked(fetchRestaurants).mockResolvedValue(
       pageFixture({ total: 0, totalPages: 0, records: [] }),
     )
     await store.load()
     await settle()
-    expect(host.querySelector('.submit-restaurant-button')).toBeNull()
+    expect(host.querySelector('.submit-restaurant-button')?.textContent).toContain('添加店铺')
     store.filters.keyword = '新门店'
     await settle()
     expect(host.querySelector('.submit-restaurant-button')).toBeNull()

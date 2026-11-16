@@ -10,16 +10,16 @@ import java.util.List;
 @Mapper
 public interface NotificationMapper {
     String COLUMNS =
-            "id,recipient_user_id,notification_type,source_id,review_id,actor_user_id,request_id,request_type,decision,restaurant_name,reject_reason,created_at,read_at";
+            "id,recipient_user_id,notification_type,source_id,review_id,actor_user_id,request_id,request_type,decision,restaurant_name,reject_reason,created_at,read_at,approval_mode";
     // 只用于收件箱读取/已读；来源核验必须包含已删除记录，避免去重回执失效。
     String VISIBLE = " AND deleted_at IS NULL";
     // 分类枚举由绑定校验和服务共同限制，所有查询复用同一条件，禁止漏掉已读或计数过滤。
     String SCOPE =
             " AND (#{category}='ALL' OR (#{category}='SYSTEM' AND notification_type IN"
-                    + " ('RESTAURANT_DECISION','ANNOUNCEMENT','REPORT_RESULT')) OR (#{category}='COMMENTS' AND"
-                    + " notification_type='REVIEW_REPLY') OR (#{category}='FOLLOWERS' AND"
-                    + " notification_type='USER_FOLLOWED') OR (#{category}='LIKES' AND"
-                    + " notification_type IN ('REVIEW_LIKED','REPLY_LIKED')))";
+                + " ('RESTAURANT_DECISION','ANNOUNCEMENT','REPORT_RESULT')) OR"
+                + " (#{category}='COMMENTS' AND notification_type='REVIEW_REPLY') OR"
+                + " (#{category}='FOLLOWERS' AND notification_type='USER_FOLLOWED') OR"
+                + " (#{category}='LIKES' AND notification_type IN ('REVIEW_LIKED','REPLY_LIKED')))";
 
     // 公告按读取时可见性合并；个人状态为空即未读，撤回或本人删除后整行排除。
     String INBOX =
@@ -32,8 +32,8 @@ public interface NotificationMapper {
                     + " notification_type,a.id AS source_id,NULL AS review_id,NULL AS"
                     + " actor_user_id,NULL AS request_id,NULL AS request_type,NULL AS decision,NULL"
                     + " AS restaurant_name,NULL AS reject_reason,a.published_at AS"
-                    + " created_at,s.read_at,a.title AS announcement_title FROM"
-                    + " notification_announcements a LEFT JOIN"
+                    + " created_at,s.read_at,NULL AS approval_mode,a.title AS announcement_title"
+                    + " FROM notification_announcements a LEFT JOIN"
                     + " notification_announcement_user_states s ON s.announcement_id=a.id AND"
                     + " s.user_id=#{owner} WHERE a.status='PUBLISHED' AND s.deleted_at IS NULL)"
                     + " inbox";
@@ -41,8 +41,8 @@ public interface NotificationMapper {
     /** 同一终态申请只有一条通知；无变化分支不覆盖已读状态与原始快照。 */
     @Insert(
             "INSERT INTO"
-                + " notification_messages(recipient_user_id,notification_type,source_id,request_id,request_type,decision,restaurant_name,reject_reason)"
-                + " VALUES(#{recipientUserId},'RESTAURANT_DECISION',#{requestId},#{requestId},#{requestType},#{decision},#{restaurantName},#{rejectReason})"
+                + " notification_messages(recipient_user_id,notification_type,source_id,request_id,request_type,decision,restaurant_name,reject_reason,approval_mode)"
+                + " VALUES(#{recipientUserId},'RESTAURANT_DECISION',#{requestId},#{requestId},#{requestType},#{decision},#{restaurantName},#{rejectReason},#{approvalMode})"
                 + " ON DUPLICATE KEY UPDATE id=id")
     int insert(NotificationEntity row);
 
@@ -131,7 +131,7 @@ public interface NotificationMapper {
 
     @Select(
             "SELECT (SELECT COUNT(*) FROM notification_messages WHERE recipient_user_id=#{owner}"
-                + " AND read_at IS NULL"
+                    + " AND read_at IS NULL"
                     + VISIBLE
                     + SCOPE
                     + ") + (SELECT COUNT(*)"

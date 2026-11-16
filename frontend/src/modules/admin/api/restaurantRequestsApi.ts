@@ -2,6 +2,7 @@ import { httpClient } from '@/shared/api/httpClient'
 import type { ApiResponse } from '@/shared/api/api.types'
 
 export type RequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+export type ApprovalMode = 'CREATED' | 'UPDATED' | 'LINKED_EXISTING'
 /** 发布记录来自后端正式关联；原申请图片仍使用管理员私有读取协议。 */
 export interface PublishedRequestPhoto {
   id: string
@@ -10,6 +11,7 @@ export interface PublishedRequestPhoto {
   url: string
 }
 export interface RequestItem {
+  approvalMode?: ApprovalMode | null
   id: string
   requestType: 'CREATE' | 'UPDATE'
   status: RequestStatus
@@ -60,6 +62,7 @@ export interface ReviewInput {
   tags: string[]
 }
 export interface DecisionReceipt {
+  approvalMode?: ApprovalMode | null
   publishedPhotos?: PublishedRequestPhoto[]
   id: string
   status: RequestStatus
@@ -107,6 +110,43 @@ export async function rejectRequest(
       { reason },
       { headers: { Authorization: `Bearer ${token}` } },
     )
+  ).data.data
+}
+
+/** 已收录操作只传目标ID；不能夹带当前编辑草稿覆盖已有店铺。 */
+export async function linkExistingRequest(id: string, restaurantId: string, token: string) {
+  return (
+    await httpClient.post<ApiResponse<DecisionReceipt>>(
+      `/api/admin/restaurant-requests/${id}/link-existing`,
+      { restaurantId },
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+  ).data.data
+}
+
+/** 管理端自有的选择投影，只消费公开目录；地址和坐标用于管理员核对同名店。 */
+export interface ExistingRestaurant {
+  id: string
+  name: string
+  restaurantType: 'REGULAR' | 'CANTEEN'
+  address: string | null
+  latitude: number | null
+  longitude: number | null
+  businessStatus: 'OPERATING' | 'CLOSED'
+}
+export async function searchExistingRestaurants(
+  keyword: string,
+  restaurantType: ExistingRestaurant['restaurantType'],
+  page: number,
+  signal: AbortSignal,
+): Promise<{ records: ExistingRestaurant[]; totalPages: number; accessiblePages?: number }> {
+  return (
+    await httpClient.get<
+      ApiResponse<{ records: ExistingRestaurant[]; totalPages: number; accessiblePages?: number }>
+    >('/api/restaurants', {
+      params: { keyword, restaurantType, hideClosed: false, page, pageSize: 10 },
+      signal,
+    })
   ).data.data
 }
 

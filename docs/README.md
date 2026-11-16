@@ -31,7 +31,7 @@ ES 监控的实际故障验证见[故障演练报告](history/elasticsearch-metr
 
 ## 设计与计划
 
-- 新店附带点评：[实施范围与后续待办](plans/restaurant-review-submission.md)；表结构、正式点评三态及[后端联合提交](api/submissions.md#attached-review)已接通，待发布查询、审核自动发布和前端仍待开发。
+- 新店附带点评：[实施范围与后续待办](plans/restaurant-review-submission.md)；后端联合提交、本人读取、修改／撤回、驳回／重提及审核发布已接通，管理员只审核店铺资料。[店铺已收录](api/submissions.md#link-existing)的管理入口、本人结果及通知已接入前端；联合表单及其余本人操作页面仍待接入。
 - 帮我选一家：[业务规则与实施计划](plans/restaurant-picker.md)。独立六项条件（含最低评分）、等概率抽取、本轮不重复、回看及详情返回已接通；[查询接口](api/discovery.md#picker)不写入抽取记录、不调整表结构。
 - 餐厅榜单：[近期榜单计划](plans/hot-restaurants.md)记录规则及分阶段实施；[快照表](architecture/mysql-schema.md#restaurant-ranking-snapshots)、[读取接口与两级缓存](api/discovery.md#rankings)、内部计算已完成；实测见[MySQL基线](history/restaurant-ranking-read-2026-11-11.md)、[Redis对照](history/restaurant-ranking-redis-2026-11-11.md)、[Caffeine三模式对照及故障验证](history/restaurant-ranking-caffeine-2026-11-11.md)。自动发布、小时调度及防重叠已完成；首页入口及独立榜单页已按确认示意图接入，本地真实接口的空榜及模拟点评生成的20项榜单联调通过，上线验收待进行。
 - 食堂窗口：[资料、独立点评与评分汇总](api/windows.md#windows)，管理员维护及用户浏览已接通，窗口资料由管理员统一录入，用户窗口投稿审核暂不规划。

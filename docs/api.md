@@ -24,7 +24,7 @@
 
 ## 新店附带点评的当前范围
 
-后端已接通[联合提交](api/submissions.md#attached-review)，尚未开放待发布点评查询、图片读取及审核后自动发布。附带点评的申请在旧审核、修改、撤回及重提入口暂返回409 `REVIEW_SUBMISSION_STATE_CONFLICT`；普通申请沿用原流程。前端入口尚未接通，具体限制以联合提交协议为准。
+后端已接通[联合提交](api/submissions.md#attached-review)、[本人详情](api/submissions.md#my-detail)、[私有点评图片](api/submissions.md#my-review-photos)、[待审修改](api/submissions.md#my-edit)、[撤回](api/submissions.md#my-withdraw)、[驳回后重提](api/submissions.md#my-resubmit)、[审核通过自动发布](api/submissions.md#approve-attached-review)及[店铺已收录处理](api/submissions.md#link-existing)。发布前内容仅作者本人可读，管理员只审核店铺资料。“店铺已收录”的管理入口、本人处理结果与通知已接入前端；联合表单及本人修改、撤回、重提页面仍待接入。
 
 ## 接口文档维护
 

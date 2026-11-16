@@ -113,6 +113,12 @@ const router = createRouter({
       meta: { title: '近期推荐榜', ranking: true },
     },
     {
+      path: '/account/contributions/:requestId/edit',
+      component: () => import('@/modules/restaurant/ui/RestaurantCorrection.vue'),
+      props: (route) => ({ requestId: route.params.requestId, submission: true }),
+      meta: { title: '修改申请' },
+    },
+    {
       path: '/restaurants/submit',
       name: 'restaurant-submit',
       component: () => import('@/modules/restaurant/ui/RestaurantCorrection.vue'),

@@ -7,12 +7,14 @@ import {
   fetchMyRequestPage,
   fetchMyRequestDetail,
   fetchMyRequestPhoto,
+  fetchMyRequestReviewPhoto,
+  withdrawMyRequest,
   type MyRequestPage,
   type MyRequestDetail,
   type MyRequestFilter,
 } from '../api/myRestaurantRequestsApi'
 
-/** 只读本人记录；列表、详情、图片独立失败，固定请求凭证并隔离翻页/换号后的迟到结果。 */
+/** 本人记录与撤回；所有读取和写入固定凭证，隔离切换账号后的迟到结果。 */
 export function useMyRestaurantRequests() {
   const auth = useLoginStore()
   const filter = ref<MyRequestFilter>('ALL'),
@@ -26,6 +28,10 @@ export function useMyRestaurantRequests() {
   const photos = ref<
     { position: number; src: string; loading: boolean; error: string; attempt: number }[]
   >([])
+  const reviewPhotos = ref<typeof photos.value>([])
+  const withdrawing = ref(false),
+    mutationError = ref(''),
+    mutationMessage = ref('')
   let context = 0,
     listVersion = 0,
     detailVersion = 0,
@@ -38,10 +44,11 @@ export function useMyRestaurantRequests() {
     detail.value = null
     detailLoading.value = false
     detailError.value = ''
-    photos.value.forEach((photo) => {
+    ;[...photos.value, ...reviewPhotos.value].forEach((photo) => {
       if (photo.src) URL.revokeObjectURL(photo.src)
     })
     photos.value = []
+    reviewPhotos.value = []
   }
   /** 查询失败不保留旧列表和统计冒充当前筛选结果，重试使用原请求页码。 */
   async function load(page = requestedPage) {
@@ -72,8 +79,10 @@ export function useMyRestaurantRequests() {
     void load(1)
   }
   /** 最多五张申请附图；关闭详情、切换申请或换号时中止网络并释放所有已创建URL。 */
-  async function loadPhoto(position: number) {
-    const photo = photos.value.find((row) => row.position === position),
+  async function loadPhoto(position: number, review = false) {
+    const photo = (review ? reviewPhotos.value : photos.value).find(
+        (row) => row.position === position,
+      ),
       token = authToken.value,
       requestId = selectedId.value
     if (!photo || photo.loading || !token || !requestId || !detailAbort) return
@@ -84,7 +93,12 @@ export function useMyRestaurantRequests() {
     photo.loading = true
     photo.error = ''
     try {
-      const blob = await fetchMyRequestPhoto(requestId, position, token, signal)
+      const blob = await (review ? fetchMyRequestReviewPhoto : fetchMyRequestPhoto)(
+        requestId,
+        position,
+        token,
+        signal,
+      )
       if (
         version !== detailVersion ||
         owner !== context ||
@@ -102,8 +116,10 @@ export function useMyRestaurantRequests() {
         photo.loading = false
     }
   }
-  function imageFailed(position: number) {
-    const photo = photos.value.find((row) => row.position === position)
+  function imageFailed(position: number, review = false) {
+    const photo = (review ? reviewPhotos.value : photos.value).find(
+      (row) => row.position === position,
+    )
     if (photo?.src) {
       URL.revokeObjectURL(photo.src)
       photo.src = ''
@@ -132,6 +148,12 @@ export function useMyRestaurantRequests() {
         attempt: 0,
       }))
       photos.value.forEach((photo) => void loadPhoto(photo.position))
+      reviewPhotos.value = (
+        data.reviewSubmission?.status !== 'PUBLISHED'
+          ? (data.reviewSubmission?.photoPositions ?? [])
+          : []
+      ).map((position) => ({ position, src: '', loading: false, error: '', attempt: 0 }))
+      reviewPhotos.value.forEach((photo) => void loadPhoto(photo.position, true))
     } catch (reason) {
       if (version === detailVersion && owner === context)
         detailError.value =
@@ -140,6 +162,27 @@ export function useMyRestaurantRequests() {
             : toErrorMessage(reason)
     } finally {
       if (version === detailVersion && owner === context) detailLoading.value = false
+    }
+  }
+  /** 撤回成功与列表刷新失败分别展示；换号后禁止旧写请求结果刷新新账号页面。 */
+  async function withdraw() {
+    const token = authToken.value,
+      requestId = selectedId.value,
+      owner = context
+    if (!token || !requestId || withdrawing.value || detail.value?.application.status !== 'PENDING')
+      return
+    withdrawing.value = true
+    mutationError.value = ''
+    mutationMessage.value = ''
+    try {
+      await withdrawMyRequest(requestId, token)
+      if (owner !== context) return
+      mutationMessage.value = '申请已撤回，店铺与附带点评均未发布。'
+      await load()
+    } catch (reason) {
+      if (owner === context) mutationError.value = toErrorMessage(reason)
+    } finally {
+      if (owner === context) withdrawing.value = false
     }
   }
   watch(
@@ -154,6 +197,9 @@ export function useMyRestaurantRequests() {
       loading.value = false
       filter.value = 'ALL'
       requestedPage = 1
+      withdrawing.value = false
+      mutationError.value = ''
+      mutationMessage.value = ''
       if (auth.authenticated && authToken.value) void load(1)
     },
     { immediate: true, flush: 'sync' },
@@ -174,6 +220,11 @@ export function useMyRestaurantRequests() {
     detailLoading,
     detailError,
     photos,
+    reviewPhotos,
+    withdrawing,
+    mutationError,
+    mutationMessage,
+    withdraw,
     load,
     changeFilter,
     select,

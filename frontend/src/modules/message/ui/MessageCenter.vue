@@ -204,7 +204,10 @@ const loginTarget = computed(() => ({
                   ><strong v-else-if="item.category === 'FOLLOWERS'"
                     >{{ item.actorUsername }} 关注了你</strong
                   ><strong v-else-if="item.notificationType === 'ANNOUNCEMENT'">系统公告</strong
-                  ><strong v-else-if="item.notificationType === 'REPORT_RESULT'">举报处理结果</strong
+                  ><strong v-else-if="item.notificationType === 'REPORT_RESULT'"
+                    >举报处理结果</strong
+                  ><strong v-else-if="item.approvalMode === 'LINKED_EXISTING'"
+                    >投稿已处理 · 店铺已收录</strong
                   ><strong v-else
                     >{{ item.requestType === 'CREATE' ? '新店投稿' : '资料纠错'
                     }}{{ item.decision === 'APPROVED' ? '审核通过' : '审核未通过' }}</strong

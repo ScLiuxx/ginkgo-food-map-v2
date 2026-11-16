@@ -1,23 +1,30 @@
 package com.ginkgo.foodmap.restaurant.vo;
 
 import lombok.Data;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
 /** 管理员申请查看的白名单响应；不暴露请求摘要、邮箱、OSS对象键或文件持久化实体。 */
 public final class RestaurantRequestViews {
-    private RestaurantRequestViews() { }
+    private RestaurantRequestViews() {}
 
     @Data
     public static class Item {
         private String id;
         private String requestType;
         private String status;
+
+        /** 通过处理方式：CREATED、UPDATED、LINKED_EXISTING；未通过或历史记录可为空。 */
+        private String approvalMode;
+
         private String name;
         private String restaurantId;
+
         /** 驳回后重提的新申请指向原申请；首次提交为null，供管理员核对历史驳回原因。 */
         private String previousRequestId;
+
         private String submittedBy;
         private String submitterName;
         private Instant createdAt;
@@ -41,8 +48,10 @@ public final class RestaurantRequestViews {
         private Map<String, Object> current;
         private boolean targetDeleted;
         private List<Photo> photos;
+
         /** 原投稿照片继续私有读取；此处另列实际发布的正式相册关联，避免将BOUND误认为公开。 */
         private List<RestaurantPhotoViews.Item> publishedPhotos;
+
         private String reviewedBy;
         private Instant reviewedAt;
         private String rejectReason;
@@ -60,6 +69,10 @@ public final class RestaurantRequestViews {
     @Data
     public static class StatusCount {
         private String status;
+
+        /** 通过处理方式：CREATED、UPDATED、LINKED_EXISTING；未通过或历史记录可为空。 */
+        private String approvalMode;
+
         private long total;
     }
 }

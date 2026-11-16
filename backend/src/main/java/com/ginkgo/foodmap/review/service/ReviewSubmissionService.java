@@ -42,6 +42,10 @@ public class ReviewSubmissionService {
         long owner = actors.requireActor().getUserId();
         var normalized = ReviewSubmissionPolicy.normalize(owner, uuid, input);
         var saved = submissions.lockByRequest(requestId);
+        if (saved == null) {
+            // 驳回重提迁移后，原投稿重试仍确认同一条回执，不能在旧申请下重新绑定图片或插入点评。
+            saved = submissions.lockByClient(owner, uuid);
+        }
         if (saved != null) {
             if (!Objects.equals(saved.getAuthorUserId(), owner)
                     || !Objects.equals(saved.getOriginRequestId(), requestId)
@@ -77,16 +81,6 @@ public class ReviewSubmissionService {
             }
         }
         return receipt(row);
-    }
-
-    /**
-     * 当前步骤只开放联合提交。旧审核、修改、撤回和重提入口不能静默绕过点评联动，下一步接入具体生命周期后替换此保护。 调用方先锁申请，再做当前读；不能使用普通RR快照漏掉刚刚提交的附带点评。
-     */
-    @Transactional(propagation = Propagation.MANDATORY)
-    public void requireNoAttachedReview(long requestId) {
-        if (submissions.lockByRequest(requestId) != null) {
-            throw new BusinessException(ReviewErrorCode.SUBMISSION_STATE_CONFLICT);
-        }
     }
 
     private ReviewSubmissionReceipt receipt(ReviewSubmissionEntity row) {

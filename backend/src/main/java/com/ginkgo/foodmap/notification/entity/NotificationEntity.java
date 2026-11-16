@@ -19,6 +19,10 @@ public class NotificationEntity {
     private Long requestId;
     private String requestType;
     private String decision;
+
+    /** 通过处理方式：CREATED、UPDATED、LINKED_EXISTING；未通过或历史记录可为空。 */
+    private String approvalMode;
+
     private String restaurantName;
     private String rejectReason;
     private Instant createdAt;

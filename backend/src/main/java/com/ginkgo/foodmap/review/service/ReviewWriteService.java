@@ -28,6 +28,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionTimedOutException;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
@@ -57,6 +59,18 @@ public class ReviewWriteService {
     @PreAuthorize("isAuthenticated()")
     public ReviewPublishVo publishWindow(String id, ReviewPublishRequest request) {
         return publishTarget(id, request, true);
+    }
+
+    /**
+     * 待发布模块已锁定并验证申请、作者与独立发布UUID后调用；只加入审核事务，不启动独立提交或局部重试。
+     * 作者取待发布记录，不能用当前管理员替代；图片沿用原BOUND状态，普通HTTP发评仍只绑定临时图片。
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ReviewPublishVo publishSubmission(
+            long restaurantId, long authorUserId, ReviewPublishRequest request) {
+        var row = ReviewPublishPolicy.normalize(Long.toString(restaurantId), authorUserId, request);
+        return publishTransaction(row, ReviewPublishPolicy.photoIds(request), true);
     }
 
     private ReviewPublishVo publishTarget(
@@ -91,7 +105,7 @@ public class ReviewWriteService {
             tx.setTimeout(10);
             try {
                 return Objects.requireNonNull(
-                        tx.execute(status -> publishTransaction(row, photoIds)));
+                        tx.execute(status -> publishTransaction(row, photoIds, false)));
             } catch (DuplicateKeyException
                     | PessimisticLockingFailureException
                     | QueryTimeoutException
@@ -105,7 +119,8 @@ public class ReviewWriteService {
         throw new IllegalStateException("Unreachable publish state");
     }
 
-    private ReviewPublishVo publishTransaction(ReviewEntity row, java.util.List<Long> photoIds) {
+    private ReviewPublishVo publishTransaction(
+            ReviewEntity row, java.util.List<Long> photoIds, boolean fromSubmission) {
         if (row.getWindowId() != null) {
             windows.lockVisible(row.getWindowId(), false);
         } else {
@@ -116,6 +131,10 @@ public class ReviewWriteService {
         }
         var existing = mapper.request(row.getAuthorUserId(), row.getClientRequestId());
         if (existing != null) {
+            // 自动发布只可能与审核原子完成；成功重放由申请及待发布回执处理，不能认领另一条正式点评。
+            if (fromSubmission) {
+                throw new BusinessException(ReviewErrorCode.REQUEST_CONFLICT);
+            }
             if (!sameContent(existing, row) || !photos.ids(existing.getId()).equals(photoIds)) {
                 throw new BusinessException(ReviewErrorCode.REQUEST_CONFLICT);
             }
@@ -135,7 +154,11 @@ public class ReviewWriteService {
         // 独立回执唯一键使跨店发布/删除竞争仍然安全；重复键由外层完整事务重试。
         deletion.record(row);
         // 必须加入当前点评事务；任一图片失效或归属错误，点评、图片及评分一起回滚。
-        media.bind(photoIds, row.getAuthorUserId());
+        if (fromSubmission) {
+            media.validateReviewPublication(photoIds, row.getAuthorUserId());
+        } else {
+            media.bind(photoIds, row.getAuthorUserId());
+        }
         for (int position = 0; position < photoIds.size(); position++) {
             photos.insert(row.getId(), position, photoIds.get(position));
         }

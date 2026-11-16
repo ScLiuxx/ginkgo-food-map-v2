@@ -3,7 +3,7 @@ package com.ginkgo.foodmap.restaurant.controller;
 import com.ginkgo.foodmap.common.api.ApiResponse;
 import com.ginkgo.foodmap.restaurant.dto.MyRestaurantRequestQuery;
 import com.ginkgo.foodmap.restaurant.dto.RestaurantChangeEditRequest;
-import com.ginkgo.foodmap.restaurant.dto.RestaurantChangeRequest;
+import com.ginkgo.foodmap.restaurant.dto.RestaurantSubmissionRequest;
 import com.ginkgo.foodmap.restaurant.service.MyRestaurantRequestService;
 import com.ginkgo.foodmap.restaurant.service.RestaurantChangeService;
 import com.ginkgo.foodmap.restaurant.vo.MyRestaurantRequestViews;
@@ -74,7 +74,7 @@ public class MyRestaurantRequestController {
     /** 基于本人被驳回申请创建新申请；原驳回记录与原因保持不变。 */
     @PostMapping("/{id}/resubmit")
     public ResponseEntity<ApiResponse<Map<String, String>>> resubmit(
-            @PathVariable String id, @Valid @RequestBody RestaurantChangeRequest request) {
+            @PathVariable String id, @Valid @RequestBody RestaurantSubmissionRequest request) {
         String requestId = submissions.resubmit(id, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .cacheControl(CacheControl.noStore())
@@ -89,5 +89,15 @@ public class MyRestaurantRequestController {
                 .contentType(MediaType.IMAGE_JPEG)
                 .header("X-Content-Type-Options", "nosniff")
                 .body(service.photo(id, position));
+    }
+
+    /** 附带点评图片逐次核对本人身份和关联；与店铺附图分开，禁止缓存或暴露对象存储地址。 */
+    @GetMapping("/{id}/review/photos/{position}")
+    public ResponseEntity<byte[]> reviewPhoto(@PathVariable String id, @PathVariable String position) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .contentType(MediaType.IMAGE_JPEG)
+                .header("X-Content-Type-Options", "nosniff")
+                .body(service.reviewPhoto(id, position));
     }
 }

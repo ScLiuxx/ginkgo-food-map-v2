@@ -3,6 +3,7 @@ import type { ApiResponse } from '@/shared/api/api.types'
 import { httpClient } from '@/shared/api/httpClient'
 import type { CatalogFilters, RestaurantReadModel } from '../model/restaurant.types'
 import { restaurantPhotoUrl, type RestaurantAlbumPhoto } from './restaurantAlbumApi'
+import type { AttachedReviewInput } from '../model/attachedReview'
 
 /** API字段独立于页面模型，保留字符串ID和所有空值，不将未知价格或评分转换为0。 */
 export interface RestaurantResponse {
@@ -262,6 +263,8 @@ export async function fetchCorrectionSource(id: string, signal?: AbortSignal) {
 }
 
 export interface RestaurantCorrectionInput extends RestaurantSaveInput {
+  /** 仅新店投稿可附带点评，纠错路径不提供该字段。 */
+  review?: AttachedReviewInput
   photoIds?: string[]
   clientRequestId: string
   restaurantType: 'REGULAR' | 'CANTEEN'

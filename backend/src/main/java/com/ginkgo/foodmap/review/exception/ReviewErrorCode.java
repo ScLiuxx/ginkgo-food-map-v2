@@ -19,7 +19,7 @@ public enum ReviewErrorCode implements ErrorCode {
     INVALID_INPUT("REVIEW_INVALID_INPUT", HttpStatus.BAD_REQUEST, "请检查UUID、四维半分、推荐及5–500字正文"),
     REQUEST_CONFLICT("REVIEW_REQUEST_CONFLICT", HttpStatus.CONFLICT, "本次提交编号已用于不同内容，请核对提交结果"),
     SUBMISSION_STATE_CONFLICT(
-            "REVIEW_SUBMISSION_STATE_CONFLICT", HttpStatus.CONFLICT, "该申请附带待发布点评，当前暂不支持此操作"),
+            "REVIEW_SUBMISSION_STATE_CONFLICT", HttpStatus.CONFLICT, "申请类型、归属或点评状态不支持此操作"),
     BUSY("REVIEW_TEMPORARILY_UNAVAILABLE", HttpStatus.SERVICE_UNAVAILABLE, "操作暂时繁忙，请稍后重试");
 
     private final String code;

@@ -3,6 +3,7 @@ import { httpClient } from '@/shared/api/httpClient'
 
 export type NotificationCategory = 'ALL' | 'SYSTEM' | 'COMMENTS' | 'LIKES' | 'FOLLOWERS'
 export interface NotificationItem {
+  approvalMode?: 'CREATED' | 'UPDATED' | 'LINKED_EXISTING' | null
   announcementId?: string | null
   announcementTitle?: string | null
   id: string
@@ -47,6 +48,17 @@ const invalid = () => new Error('消息资料无法确认，请重新加载。')
 function item(row: NotificationItem): NotificationItem {
   const announcement = row?.notificationType === 'ANNOUNCEMENT'
   const reportResult = row?.notificationType === 'REPORT_RESULT'
+  if (
+    row?.approvalMode != null &&
+    (announcement ||
+      reportResult ||
+      row.category !== 'SYSTEM' ||
+      row.decision !== 'APPROVED' ||
+      !(row.requestType === 'CREATE' ? ['CREATED', 'LINKED_EXISTING'] : ['UPDATED']).includes(
+        row.approvalMode,
+      ))
+  )
+    throw invalid()
   if (
     !row ||
     !(announcement
@@ -156,6 +168,7 @@ function item(row: NotificationItem): NotificationItem {
     actorUsername: row.actorUsername,
     requestType: row.requestType,
     decision: row.decision,
+    ...(row.approvalMode != null ? { approvalMode: row.approvalMode } : {}),
     restaurantName: row.restaurantName,
     rejectReason: row.rejectReason,
     createdAt: row.createdAt,

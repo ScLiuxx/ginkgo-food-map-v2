@@ -211,7 +211,7 @@ position范围0～7；同一餐厅内标签及位置分别唯一。
 | 字段 | 类型 | 可空 | 说明 |
 | --- | --- | --- | --- |
 | `id` | `bigint unsigned` | 否 | 自增主键，申请编号 |
-| `restaurant_id` | `bigint unsigned` | 是 | UPDATE始终为原商户ID；CREATE待审/驳回/撤回为空，通过时填入新建的正式商户ID |
+| `restaurant_id` | `bigint unsigned` | 是 | UPDATE始终为原商户ID；CREATE待审/驳回/撤回为空，通过时为新建或关联的已有正式商户ID |
 | `previous_request_id` | `bigint unsigned` | 是 | 驳回后重提所依据的原申请ID；首次提交为空，普通重试不改变 |
 | `request_type` | `varchar(16)`，ascii_bin | 否 | CREATE新店投稿、UPDATE已有商户纠错；无默认值，由服务端提交入口确定，审核后保持不变 |
 | `submitted_by` | `bigint unsigned` | 否 | 提交账号逻辑ID，由服务端填写 |
@@ -219,12 +219,13 @@ position范围0～7；同一餐厅内标签及位置分别唯一。
 | `request_hash` | `binary(32)` | 否 | 规范化申请内容的SHA-256，判断重试内容一致性 |
 | `proposed_data` | `json` | 否 | 用户原始业务申请快照，管理员修订不得覆盖；原始图片顺序和提交摘要继续用于重试核对 |
 | `status` | `varchar(16)`，ascii_bin | 否 | PENDING待审、APPROVED通过、REJECTED驳回、WITHDRAWN本人撤回；默认PENDING |
+| `approval_mode` | `varchar(24)`，ascii_bin | 是 | 默认NULL；CREATED创建新店、UPDATED更新资料、LINKED_EXISTING关联已有店铺 |
 | `created_at` | `timestamp(6)` | 否 | 提交时间；默认CURRENT_TIMESTAMP(6) |
 | `reviewed_by` | `bigint unsigned` | 是 | 审核人逻辑ID；已处理时必填且大于0，由服务端身份确定 |
 | `reviewed_at` | `timestamp(6)` | 是 | 审核完成时间，由服务端填写 |
 | `withdrawn_at` | `timestamp(6)` | 是 | 本人撤回待审申请的时间；仅WITHDRAWN必填 |
 | `reject_reason` | `varchar(200)` | 是 | 仅驳回时必填，禁止空字符串及纯空白 |
-| `approved_data` | `json` | 是 | 仅通过时必填的JSON对象：实际生效的完整业务资料，保留管理员修订；不写密码、权限或评分统计 |
+| `approved_data` | `json` | 是 | 仅通过时必填的JSON对象：实际通过资料或关联已有店铺时的资料快照；不写密码、权限或评分统计 |
 | `before_data` | `json` | 是 | 仅UPDATE通过时必填的JSON对象：更新前实际正式业务资料，CREATE没有旧资料 |
 
 主键`(id)`；唯一索引`(submitted_by,client_request_id)`；普通索引`(status,created_at,id)`、`(restaurant_id,created_at,id)`、`(status,reviewed_at,id)`、`(submitted_by,created_at,id)`；外键列`previous_request_id`由外键自动建立索引。
@@ -237,7 +238,7 @@ position范围0～7；同一餐厅内标签及位置分别唯一。
 | --- | --- | --- | --- | --- | --- | --- |
 | CREATE + PENDING | 必须NULL | 必须NULL | NULL | NULL | NULL | NULL |
 | UPDATE + PENDING | 原商户ID | 必须NULL | NULL | NULL | NULL | NULL |
-| CREATE + APPROVED | 必填，新建商户ID | 必填 | NULL | NULL | 必填JSON对象 | NULL |
+| CREATE + APPROVED | 必填，新建或关联已有商户ID | 必填 | NULL | NULL | 必填JSON对象 | NULL |
 | UPDATE + APPROVED | 必填，原商户ID | 必填 | NULL | NULL | 必填JSON对象 | 必填JSON对象 |
 | CREATE + REJECTED | 必须NULL | 必填 | NULL | 必填非空白 | NULL | NULL |
 | UPDATE + REJECTED | 原商户ID | 必填 | NULL | 必填非空白 | NULL | NULL |
@@ -245,6 +246,8 @@ position范围0～7；同一餐厅内标签及位置分别唯一。
 | UPDATE + WITHDRAWN | 原商户ID | 必须NULL | 必填 | NULL | NULL | NULL |
 
 类型和状态使用精确编码；proposed_data保存原始申请资料，approved_data保存通过后的资料，before_data保存纠错前资料。previous_request_id只指向另一条历史申请且不参与审核状态约束，原驳回记录保持REJECTED不变。
+
+约束`chk_request_approval_mode`：approval_mode可为空以兼容历史记录；非空时必须为APPROVED，CREATE只允许CREATED或LINKED_EXISTING，UPDATE只允许UPDATED。
 
 ### `restaurant_change_photos`：商户申请图片
 
@@ -741,6 +744,7 @@ notification模块拥有`notification_messages`、`notification_announcements`�
 | `request_id` | `bigint unsigned` | 是 | 审核申请逻辑ID。 |
 | `request_type` | `varchar(8)`，ASCII | 是 | CREATE新店投稿、UPDATE纠错。 |
 | `decision` | `varchar(16)`，ASCII | 是 | APPROVED审核通过、REJECTED驳回、REMOVED举报成立且内容已删除、DISMISSED举报未认定违规。 |
+| `approval_mode` | `varchar(24)`，ascii_bin | 是 | 默认NULL；CREATED创建新店、UPDATED更新资料、LINKED_EXISTING关联已有店铺；非通过审核消息为空。 |
 | `restaurant_name` | `varchar(120)` | 是 | 审核时店名快照。 |
 | `reject_reason` | `varchar(200)` | 是 | 驳回原因快照。 |
 | `review_id` | `bigint unsigned` | 是 | 回复或被赞内容所属点评逻辑ID。 |
@@ -764,6 +768,7 @@ notification模块拥有`notification_messages`、`notification_announcements`�
 
 - 收件人、来源及非空申请/点评/回复者ID范围为1～9223372036854775807。
 - 审核消息：request_id、request_type、decision、restaurant_name必填，source_id=request_id；review_id、actor_user_id为空。店名长度1～120字符；通过时reject_reason为空，驳回时必填且长度1～200字符。
+- 约束chk_notification_approval_mode：approval_mode可为空以兼容历史记录；非空时必须为RESTAURANT_DECISION且decision=APPROVED，CREATE只允许CREATED或LINKED_EXISTING，UPDATE只允许UPDATED。
 - 回复及获赞消息：review_id、actor_user_id必填，操作者不等于收件人；request_id、request_type、decision、restaurant_name、reject_reason为空。
 - 关注消息：actor_user_id必填且不等于收件人；review_id及全部审核字段为空，source_id为关注关系逻辑ID。
 - 类型与状态编码精确匹配；非空read_at不得早于created_at；约束chk_notification_deleted要求非空deleted_at不得早于created_at。

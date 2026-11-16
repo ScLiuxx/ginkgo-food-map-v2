@@ -197,6 +197,7 @@ public class RestaurantRequestReadService {
         var result = new RestaurantRequestViews.Item();
         result.setId(row.getId().toString());
         result.setRequestType(row.getRequestType());
+        result.setApprovalMode(row.getApprovalMode());
         result.setStatus(row.getStatus());
         result.setName(name == null ? "未命名商户" : name);
         result.setRestaurantId(

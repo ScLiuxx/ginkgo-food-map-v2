@@ -13,7 +13,8 @@ import com.ginkgo.foodmap.restaurant.mapper.RestaurantWriteMapper;
 import com.ginkgo.foodmap.restaurant.support.RestaurantIdentifiers;
 import com.ginkgo.foodmap.restaurant.vo.RestaurantDecisionVo;
 import com.ginkgo.foodmap.restaurant.vo.RestaurantVo;
-import com.ginkgo.foodmap.review.service.ReviewSubmissionService;
+import com.ginkgo.foodmap.review.service.ReviewSubmissionLifecycleService;
+import com.ginkgo.foodmap.review.service.ReviewSubmissionPublicationService;
 import com.ginkgo.foodmap.security.service.CurrentActorService;
 
 import lombok.RequiredArgsConstructor;
@@ -38,7 +39,8 @@ public class RestaurantRequestReviewService {
     private final ObjectMapper json;
     private final RestaurantPhotoMapper photos;
     private final MediaFileService media;
-    private final ReviewSubmissionService reviewSubmissions;
+    private final ReviewSubmissionLifecycleService reviewLifecycle;
+    private final ReviewSubmissionPublicationService reviewPublication;
     private final com.ginkgo.foodmap.growth.service.GrowthRewardApplicationService growth;
     private final com.ginkgo.foodmap.notification.service.NotificationPublicationService
             notifications;
@@ -47,8 +49,18 @@ public class RestaurantRequestReviewService {
     public RestaurantDecisionVo approve(String id, RestaurantApproveRequest input) {
         long actor = administrator();
         var row = lockRequest(RestaurantIdentifiers.id(id));
-        reviewSubmissions.requireNoAttachedReview(row.getId());
+        // “已收录”与“创建/更新”是不同操作，即使内容一致也不能跨操作重放。
+        if ("LINKED_EXISTING".equals(row.getApprovalMode())) {
+            conflict();
+        }
         normalizeReview(input);
+        // 先锁申请再锁附带点评；管理员只传最终店铺资料，不读取或修改私有点评正文。
+        reviewPublication.validateApproval(
+                row.getId(),
+                row.getSubmittedBy(),
+                row.getRequestType(),
+                input.getRestaurantType(),
+                "APPROVED".equals(row.getStatus()));
         if ("APPROVED".equals(row.getStatus())) {
             var saved = json.readValue(row.getApprovedData(), RestaurantApproveRequest.class);
             normalizeReview(saved);
@@ -77,17 +89,76 @@ public class RestaurantRequestReviewService {
             published = writes.update(row.getRestaurantId().toString(), input).getRestaurant();
         }
         row.setRestaurantId(Long.parseLong(published.getId()));
+        row.setApprovalMode("CREATE".equals(row.getRequestType()) ? "CREATED" : "UPDATED");
         publishPhotos(row);
         row.setReviewedBy(actor);
         row.setApprovedData(json.writeValueAsString(input));
         if (requests.approve(row) != 1) {
             conflict();
         }
+        // 必须加入当前审核事务；正式点评、评分、两类奖励及通知失败时连同新店一起回滚。
+        reviewPublication.publishApproved(row.getId(), row.getRestaurantId(), row.getSubmittedBy());
         // 业务锁在前、成长账户锁在后；计奖失败回滚商户、相册、搜索任务及审核结果。
         // 已通过重放在上方直接返回，不给历史已通过申请补发奖励。
         growth.grantApprovedRequest(
                 row.getSubmittedBy(), row.getRestaurantId(), row.getId(), row.getRequestType());
         notifyDecision(row, "APPROVED", input.getName());
+        return receipt(requests.lock(row.getId()), false);
+    }
+
+    /**
+     * 将待审新店申请关联到已有店铺，附带点评以原作者身份发布。
+     *
+     * <p>统一先锁目标店铺、再锁申请及点评，与公开点评/店铺维护保持锁顺序。申请终态、点评、 评分、正常点评奖励及通知在同一事务提交；原投稿资料和店铺附图只保留私有核对，不覆盖正式资料。
+     */
+    public RestaurantDecisionVo linkExisting(String id, String restaurantId) {
+        long actor = administrator();
+        long requestId = RestaurantIdentifiers.id(id);
+        long targetId = RestaurantIdentifiers.id(restaurantId);
+        // 即使目标后来删除，同目标的成功重试仍返回原回执，不再发布点评或补发通知。
+        var target = restaurants.lockById(targetId);
+        var row = requests.lock(requestId);
+        if (row == null) {
+            throw new BusinessException(RestaurantErrorCode.REQUEST_NOT_FOUND);
+        }
+        if ("APPROVED".equals(row.getStatus())) {
+            if (!"LINKED_EXISTING".equals(row.getApprovalMode())
+                    || !Long.valueOf(targetId).equals(row.getRestaurantId())) {
+                conflict();
+            }
+            return receipt(row, true);
+        }
+        pending(row);
+        if (!"CREATE".equals(row.getRequestType())) {
+            conflict();
+        }
+        if (target == null || target.getDeletedAt() != null) {
+            throw new BusinessException(RestaurantErrorCode.NOT_FOUND);
+        }
+        // 锁查询只含身份/类型字段；持有主行锁后再读取完整资料，避免把空字段写进处理快照。
+        target = restaurants.selectManagementById(targetId);
+        String proposedType =
+                json.readTree(row.getProposedData()).path("restaurantType").asString("REGULAR");
+        if (!target.getRestaurantType().equals(proposedType)) {
+            throw new BusinessException(RestaurantErrorCode.STATE_CONFLICT, "请选择与申请类型一致的店铺");
+        }
+        reviewPublication.validateApproval(
+                row.getId(),
+                row.getSubmittedBy(),
+                row.getRequestType(),
+                target.getRestaurantType(),
+                false);
+        row.setRestaurantId(targetId);
+        row.setApprovalMode("LINKED_EXISTING");
+        row.setReviewedBy(actor);
+        // 保存处理时目标的真实资料；用户原始proposed_data和摘要保持不变。
+        row.setApprovedData(json.writeValueAsString(snapshot(target)));
+        if (requests.approve(row) != 1) {
+            conflict();
+        }
+        reviewPublication.publishApproved(row.getId(), targetId, row.getSubmittedBy());
+        // 未新增店铺，不发新增店铺奖励；点评服务自行处理正常的首评奖励。
+        notifyDecision(row, "APPROVED", target.getName());
         return receipt(requests.lock(row.getId()), false);
     }
 
@@ -125,7 +196,6 @@ public class RestaurantRequestReviewService {
             throw new BusinessException(RestaurantErrorCode.INVALID_INPUT);
         }
         var row = lockRequest(RestaurantIdentifiers.id(id));
-        reviewSubmissions.requireNoAttachedReview(row.getId());
         if ("REJECTED".equals(row.getStatus())) {
             if (!normalized.equals(row.getRejectReason())) {
                 conflict();
@@ -133,6 +203,7 @@ public class RestaurantRequestReviewService {
             return receipt(row, true);
         }
         pending(row);
+        reviewLifecycle.validateRejection(row.getId(), row.getSubmittedBy(), row.getRequestType());
         row.setReviewedBy(actor);
         row.setRejectReason(normalized);
         if (requests.reject(row) != 1) {
@@ -150,6 +221,7 @@ public class RestaurantRequestReviewService {
         notice.setRequestId(row.getId());
         notice.setRequestType(row.getRequestType());
         notice.setDecision(decision);
+        notice.setApprovalMode(row.getApprovalMode());
         notice.setRestaurantName(name);
         notice.setRejectReason(row.getRejectReason());
         notifications.restaurantDecision(notice);
@@ -223,6 +295,7 @@ public class RestaurantRequestReviewService {
         var result = new RestaurantDecisionVo();
         result.setId(row.getId().toString());
         result.setStatus(row.getStatus());
+        result.setApprovalMode(row.getApprovalMode());
         result.setRestaurantId(
                 row.getRestaurantId() == null ? null : row.getRestaurantId().toString());
         result.setReviewedBy(row.getReviewedBy().toString());
