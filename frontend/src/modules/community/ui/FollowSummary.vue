@@ -4,7 +4,7 @@ import { useLoginStore } from '@/modules/auth'
 import { authToken } from '@/shared/api/authSession'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 import { fetchFollowSummary, setFollow, type FollowSummary } from '../api/followsApi'
-const props = defineProps<{ userId: string }>(),
+const props = defineProps<{ userId: string; profileLayout?: boolean }>(),
   auth = useLoginStore()
 const own = computed(() => props.userId === String(auth.user?.id))
 const data = ref<FollowSummary | null>(null),
@@ -73,34 +73,48 @@ onBeforeUnmount(() => {
 })
 </script>
 <template>
-  <div class="follow-summary" :aria-busy="loading">
-    <div class="follow-counts">
-      <RouterLink :to="path('following')"
-        ><strong>{{ data?.followingCount ?? '—' }}</strong> 关注</RouterLink
-      ><RouterLink :to="path('followers')"
-        ><strong>{{ data?.followersCount ?? '—' }}</strong> 粉丝</RouterLink
-      >
-    </div>
+  <div class="follow-summary" :class="{ 'profile-layout': profileLayout }" :aria-busy="loading">
+    <!-- 主页资料与关注共用一个状态源，通过插槽排版，避免为右上角按钮重复查询关系。 -->
+    <div v-if="profileLayout" class="follow-profile-identity"><slot name="identity" /></div>
     <button
       v-if="!own"
+      class="follow-toggle"
+      :class="{ 'is-following': known && data?.following }"
       type="button"
       :disabled="loading || busy"
       :aria-pressed="known ? data?.following : undefined"
+      :aria-label="known ? (data?.following ? '取消关注' : '关注') : '重新读取关注状态'"
       @click="toggle"
     >
       {{
         loading
-          ? '读取关注中…'
+          ? '读取中…'
           : busy
             ? '正在保存…'
             : !known
-              ? '重新读取关注状态'
+              ? '重试'
               : data?.following
-                ? '已关注 · 取消'
+                ? '已关注'
                 : '关注'
       }}
     </button>
-    <p v-if="error" role="alert">{{ error }} <button v-if="own" @click="load">重新读取</button></p>
+    <div
+      class="follow-statistics"
+      :class="{ 'public-profile-statistics': profileLayout }"
+      aria-label="互动统计"
+    >
+      <div class="follow-counts">
+        <RouterLink :to="path('following')"
+          ><strong>{{ data?.followingCount ?? '—' }}</strong> 关注</RouterLink
+        ><RouterLink :to="path('followers')"
+          ><strong>{{ data?.followersCount ?? '—' }}</strong> 粉丝</RouterLink
+        >
+      </div>
+      <slot name="likes" />
+    </div>
+    <p v-if="error" class="follow-error" role="alert">
+      {{ error }} <button v-if="own" @click="load">重新读取</button>
+    </p>
   </div>
 </template>
 <style scoped>
@@ -133,6 +147,47 @@ onBeforeUnmount(() => {
 }
 .follow-summary button:disabled {
   opacity: 0.5;
+}
+.follow-summary .follow-toggle {
+  min-width: 76px;
+  border: 0;
+  background: #fb8b24;
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+}
+.follow-summary .follow-toggle.is-following {
+  background: #f3f4f6;
+  color: #87919e;
+}
+.follow-toggle:focus-visible {
+  outline: 2px solid #a5adb7;
+  outline-offset: 3px;
+}
+/* 身份和按钮处于同一网格行，统计独占下一行；错误反馈不挤占按钮，也不覆盖长简介。 */
+.follow-summary.profile-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'identity action' 'statistics statistics' 'error error';
+  column-gap: 12px;
+  margin: 0;
+}
+.follow-profile-identity {
+  grid-area: identity;
+  min-width: 0;
+}
+.profile-layout > .follow-toggle {
+  grid-area: action;
+  align-self: start;
+  margin-top: 4px;
+  padding: 7px 12px;
+}
+.profile-layout > .follow-statistics {
+  grid-area: statistics;
+}
+.profile-layout > .follow-error {
+  grid-area: error;
+  margin-bottom: 0;
 }
 .follow-summary p {
   font-size: 12px;

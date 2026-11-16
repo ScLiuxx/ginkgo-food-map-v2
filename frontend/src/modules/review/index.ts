@@ -5,6 +5,7 @@ export { default as MyReviews } from './ui/MyReviews.vue'
 export { default as ReviewHistoryPreview } from './ui/ReviewHistoryPreview.vue'
 export { textReviewGateway } from './api/reviewApi'
 export { reviewGatewayKey } from './model/review'
+export { notifyReviewPublished } from './model/reviewPublication'
 
 export { useRestaurantReviewPreview } from './model/useRestaurantReviewPreview'
 export { default as DetailPhotoGallery } from './ui/DetailPhotoGallery.vue'

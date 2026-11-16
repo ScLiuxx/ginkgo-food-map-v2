@@ -6,21 +6,6 @@
 .my-contributions a {
   font: inherit;
 }
-.contributions-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 22px;
-  font-size: 13px;
-}
-.contributions-toolbar p {
-  flex: 1;
-  min-width: 180px;
-  color: #8a939d;
-  margin: 0;
-  line-height: 1.7;
-}
 .my-contributions button {
   cursor: pointer;
   border: 1px solid #e7e9ec;
@@ -38,28 +23,41 @@
   text-decoration: none;
 }
 .my-contributions button:focus-visible,
-.my-contributions a:focus-visible {
+.my-contributions a:focus-visible,
+.my-contributions select:focus-visible {
   outline: 2px solid #d8a23b;
   outline-offset: 3px;
 }
+.contributions-list-panel {
+  padding: 0 28px;
+  border: 1px solid #e5e8ec;
+  border-radius: 16px;
+  background: #fff;
+  overflow: hidden;
+}
+/* 窄屏保持一行筛选并允许横滑，不挤压条目或隐藏状态入口。 */
 .contributions-filters {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin: 0 0 18px;
+  gap: 24px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  border-bottom: 1px solid #eef0f2;
 }
-.contributions-filters button {
+.my-contributions .contributions-filters button {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
-  gap: 7px;
-  border-radius: 18px;
+  gap: 5px;
+  white-space: nowrap;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   font-size: 13px;
-  padding: 8px 14px;
+  padding: 20px 0 17px;
 }
-.contributions-filters button[aria-pressed='true'] {
-  color: #9a6a1d;
-  background: #fff5e4;
-  border-color: #f5dfb4;
+.my-contributions .contributions-filters button[aria-pressed='true'] {
+  color: #b77d29;
+  border-bottom-color: #d59a39;
 }
 .contributions-filters span {
   font-size: 11px;
@@ -69,36 +67,35 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  border-top: 1px solid #eef0f2;
 }
 .my-contributions .contribution-card {
   display: block;
   text-align: left;
   width: 100%;
-  padding: 22px 0;
+  padding: 16px 0;
   background: transparent;
   border: 0;
   border-radius: 0;
   border-bottom: 1px solid #eef0f2;
 }
+.contribution-list li:last-child .contribution-card {
+  border-bottom: 0;
+}
 .contribution-card:hover strong {
   color: #a97825;
 }
-.contribution-card-heading,
-.contribution-meta,
-.contribution-card-footer {
+.contribution-card-heading {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-}
-.contribution-card-heading {
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 7px;
 }
-.contribution-type {
-  color: #8a939d;
-  font-size: 12px;
+.contribution-card .contribution-badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 3px 8px;
 }
 .contribution-badge {
   display: inline-block;
@@ -119,32 +116,19 @@
 .contribution-card strong {
   display: block;
   color: #303b47;
-  font-size: 17px;
+  min-width: 0;
+  font-size: 15px;
   font-weight: 600;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   line-height: 1.6;
 }
 .contribution-meta {
+  display: block;
   color: #929ba4;
   font-size: 12px;
-  margin-top: 11px;
   line-height: 1.7;
-}
-.contribution-card-footer {
-  justify-content: space-between;
-  color: #a0a7ae;
-  font-size: 12px;
-  margin-top: 14px;
-  overflow-wrap: anywhere;
-}
-.contribution-card-footer span:last-child {
-  color: #aa7b2a;
-}
-.contribution-private-note {
-  color: #a0a7ae;
-  font-size: 12px;
-  line-height: 1.8;
-  margin-top: 28px;
 }
 .contribution-status,
 .contribution-empty {
@@ -168,18 +152,53 @@
 .contribution-pagination {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
-  gap: 13px;
-  margin-top: 24px;
+  gap: 12px 24px;
+  padding: 20px 2px 0;
   font-size: 12px;
   color: #858f99;
 }
+.contribution-page-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+.contribution-total {
+  white-space: nowrap;
+}
+.contribution-page-size,
+.contribution-page-navigation {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  white-space: nowrap;
+}
+.contribution-page-size select {
+  font: inherit;
+  color: #606b76;
+  background: #fff;
+  border: 1px solid #e0e4e8;
+  border-radius: 6px;
+  min-height: 36px;
+  padding: 0 7px;
+}
+.contribution-page-number {
+  min-width: 88px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.my-contributions .contribution-page-navigation button {
+  font-size: 12px;
+  min-height: 36px;
+  padding: 7px 10px;
+}
 .contribution-dialog {
   box-sizing: border-box;
-  width: min(700px, calc(100vw - 32px));
-  max-height: 85dvh;
-  padding: 26px 30px;
+  width: min(600px, calc(100vw - 24px));
+  max-height: 90dvh;
+  padding: 0;
   border: 0;
   border-radius: 14px;
   color: #303b47;
@@ -191,16 +210,20 @@
   background: rgb(20 25 30 / 50%);
 }
 .contribution-dialog-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fff;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   border-bottom: 1px solid #eef0f2;
-  padding-bottom: 16px;
-  margin-bottom: 22px;
+  padding: 13px 24px;
+  margin: 0;
 }
 .contribution-dialog-header h2 {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 600;
   margin: 0;
 }
@@ -208,10 +231,19 @@
   border: 0;
   padding: 3px 9px;
   font-size: 25px;
+  min-width: 38px;
+  min-height: 38px;
+  margin-right: -9px;
+}
+.contribution-dialog-body {
+  padding: 20px 24px 0;
+}
+.contribution-dialog > .contribution-error {
+  padding: 20px 24px;
 }
 .contribution-detail-summary {
   font-size: 12px;
-  color: #8a939d;
+  color: #74818c;
   line-height: 1.7;
   overflow-wrap: anywhere;
 }
@@ -219,9 +251,9 @@
   margin-left: 12px;
 }
 .contribution-detail-summary h3 {
-  font-size: 21px;
+  font-size: 20px;
   color: #303b47;
-  margin: 13px 0;
+  margin: 10px 0 6px;
   font-weight: 600;
 }
 .contribution-detail-summary p {
@@ -229,13 +261,13 @@
 }
 .contribution-detail-section {
   border-top: 1px solid #eef0f2;
-  margin-top: 24px;
-  padding-top: 22px;
+  margin-top: 20px;
+  padding-top: 18px;
 }
 .contribution-detail-section h3,
 .contribution-rejection h3 {
-  font-size: 15px;
-  margin: 0 0 18px;
+  font-size: 14px;
+  margin: 0 0 14px;
   font-weight: 600;
 }
 .contribution-detail-section h3 span {
@@ -247,7 +279,7 @@
 .contribution-section-note,
 .contribution-detail-footer p {
   font-size: 12px;
-  color: #969fa8;
+  color: #74818c;
   line-height: 1.8;
 }
 .contribution-section-note {
@@ -315,10 +347,183 @@
   padding: 5px 7px;
 }
 .contribution-detail-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  background: #fff;
   border-top: 1px solid #eef0f2;
-  margin-top: 24px;
-  padding-top: 20px;
+  margin-top: 16px;
+  padding: 15px 24px 18px;
   font-size: 13px;
+}
+.contribution-detail-footer:empty {
+  display: none;
+}
+.contribution-detail-footer > p {
+  flex-basis: 100%;
+  margin: 0;
+}
+.my-contributions .contribution-visit {
+  display: block;
+  flex-basis: 100%;
+  padding: 11px 14px;
+  border-radius: 8px;
+  background: #bd862f;
+  color: #fff;
+  text-align: center;
+}
+.contribution-outcome {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 13px 14px;
+  border-radius: 10px;
+  background: #eff7f1;
+  color: #337751;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.contribution-outcome-icon {
+  flex-shrink: 0;
+  width: 19px;
+  height: 19px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: #39815b;
+  color: #fff;
+  text-align: center;
+  line-height: 19px;
+}
+.contribution-outcome p {
+  font-size: 12px;
+  margin: 3px 0 0;
+  color: #587362;
+}
+/* 仅展开真实修改项，原投稿始终展示；原生details保留键盘展开与收起能力。 */
+.contribution-changes {
+  margin-top: 16px;
+  border: 1px solid #edddc1;
+  border-radius: 9px;
+  background: #fffdf9;
+  overflow: hidden;
+}
+.contribution-changes summary {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  cursor: pointer;
+  color: #916021;
+  font-size: 12px;
+  list-style: none;
+}
+.contribution-changes summary::-webkit-details-marker {
+  display: none;
+}
+.change-expand,
+.change-collapse {
+  flex-shrink: 0;
+  font-size: 11px;
+}
+.change-expand::after {
+  content: ' ⌄';
+}
+.change-collapse::after {
+  content: ' ⌃';
+}
+.change-collapse,
+.contribution-changes[open] .change-expand {
+  display: none;
+}
+.contribution-changes[open] .change-collapse {
+  display: inline;
+}
+.contribution-changes-body {
+  padding: 0 12px 12px;
+}
+.contribution-change {
+  border-top: 1px solid #eee3d1;
+  padding-top: 12px;
+  margin-top: 10px;
+}
+.contribution-change:first-child {
+  margin-top: 0;
+}
+.contribution-change h4 {
+  font-size: 12px;
+  color: #53616d;
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+.contribution-change dl,
+.contribution-application-info dl {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 7px 10px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.contribution-change dt,
+.contribution-application-info dt {
+  color: #74818c;
+}
+.contribution-change dd,
+.contribution-application-info dd {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.change-after {
+  color: #885c20;
+  font-weight: 600;
+}
+.contribution-application-info {
+  margin-top: 18px;
+  border-top: 1px solid #edf0f2;
+}
+.contribution-application-info summary {
+  padding: 15px 0;
+  font-size: 12px;
+  color: #667580;
+  cursor: pointer;
+}
+.contribution-application-info dl {
+  padding: 0 0 14px;
+}
+.contribution-changes summary:focus-visible,
+.contribution-application-info summary:focus-visible {
+  outline: 2px solid #c69445;
+  outline-offset: -2px;
+}
+.attached-published {
+  padding: 14px 16px;
+  border: 1px solid #e5e9ed;
+  border-radius: 10px;
+  background: #fbfcfd;
+}
+.attached-published h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  font-size: 13px;
+}
+.attached-published h3 .contribution-badge {
+  color: #39815b;
+  background: transparent;
+  padding: 0;
+}
+.contribution-published-note {
+  font-size: 12px;
+  color: #74818c;
+  margin: 0;
 }
 .contribution-lightbox {
   width: min(1000px, calc(100vw - 24px));
@@ -345,30 +550,50 @@
   object-fit: contain;
 }
 @media (max-width: 540px) {
-  .contributions-toolbar {
-    gap: 10px;
-  }
-  .contributions-toolbar p {
-    flex-basis: 100%;
+  .contributions-list-panel {
+    padding: 0 16px;
+    border-radius: 12px;
   }
   .contributions-filters {
-    gap: 7px;
+    gap: 20px;
   }
-  .contributions-filters button {
-    padding: 7px 11px;
+  .my-contributions .contributions-filters button {
+    padding: 16px 0 13px;
     font-size: 12px;
   }
   .contribution-dialog {
-    padding: 20px 18px;
+    padding: 0;
+  }
+  .contribution-dialog-header {
+    padding: 10px 20px;
+  }
+  .contribution-dialog-body {
+    padding: 18px 20px 0;
+  }
+  .contribution-detail-footer {
+    padding: 14px 20px 16px;
+  }
+  .contribution-detail-summary h3 {
+    font-size: 19px;
+  }
+  .contribution-change dl {
+    grid-template-columns: 55px minmax(0, 1fr);
+    gap: 6px 8px;
   }
   .contribution-photos {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .contribution-card-footer {
-    gap: 8px;
-  }
   .contribution-pagination {
-    gap: 9px;
+    gap: 16px;
+  }
+  /* 手机将条数设置和翻页各放一行，避免长页码或统计数字挤压按钮。 */
+  .contribution-page-options {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .contribution-page-navigation {
+    width: 100%;
+    justify-content: center;
   }
 }
 /* 私有点评采用独立区域，避免与管理员可见的店铺投稿快照混淆。 */
@@ -403,11 +628,12 @@
 .contribution-detail-footer .contribution-edit {
   display: inline-block;
   padding: 9px 14px;
-  border: 1px solid #e8ba7c;
+  flex: 1;
+  text-align: center;
+  border: 1px solid #bd862f;
   border-radius: 6px;
-  background: #fff7e9;
-  color: #a76f29;
-  margin-right: 12px;
+  background: #bd862f;
+  color: #fff;
 }
 .withdraw-dialog {
   width: min(420px, calc(100vw - 40px));

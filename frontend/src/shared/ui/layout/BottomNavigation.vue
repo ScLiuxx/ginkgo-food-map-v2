@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
-// 共享导航只接收身份状态；写评回跳沿用认证页面的白名单验证。
+import WriteReviewLink from '@/shared/ui/WriteReviewLink.vue'
+// 所有写评入口使用同一组件，在当前页面打开，不依赖入口自行拼接首页地址。
 defineProps<{ authenticated: boolean; discovery?: boolean; hasUnreadNotifications?: boolean }>()
 </script>
 
@@ -23,16 +24,11 @@ defineProps<{ authenticated: boolean; discovery?: boolean; hasUnreadNotification
           <circle cx="12" cy="10" r="2" />
         </svg>
       </RouterLink>
-      <RouterLink
-        class="compose-nav"
-        :to="authenticated ? '/?writeReview=1' : '/login?redirect=%2F%3FwriteReview%3D1'"
-        aria-label="写点评"
-        title="写点评"
-      >
+      <WriteReviewLink class="compose-nav" aria-label="写点评" title="写点评">
         <span class="compose-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
         </span>
-      </RouterLink>
+      </WriteReviewLink>
       <RouterLink
         to="/messages"
         :aria-label="authenticated && hasUnreadNotifications ? '消息（有未读）' : '消息'"

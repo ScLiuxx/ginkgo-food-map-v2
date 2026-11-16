@@ -1,0 +1,559 @@
+/* 星级详情卡按确认稿排列：作者与日期一行，评分、正文沿头像后的文字列对齐。 */
+.star-review.review-card {
+  --entry-indent: 47px;
+  padding: 25px 0 22px;
+  margin: 0;
+  border-color: #edf0f3;
+}
+.star-review header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px 12px;
+}
+.entry-author {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+.author-identity {
+  min-width: 0;
+}
+.entry-avatar {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff0e3;
+  color: #e89952;
+  font-size: 15px;
+  font-weight: 600;
+}
+.star-review .entry-author {
+  grid-column: 1;
+  grid-row: 1;
+}
+.star-review .author-identity :deep(.user-identity) {
+  font-size: 15px;
+  font-weight: 700;
+  color: #2b3441;
+}
+.star-review .author-identity :deep(.identity-level) {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 500;
+  color: #d99a62;
+  background: #fff7ef;
+  padding: 2px 5px;
+  margin-left: 7px;
+  border-radius: 3px;
+}
+.entry-rating {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.star-review .entry-rating {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  margin-left: var(--entry-indent);
+}
+.star-review .entry-rating :deep(.star-score) {
+  font-size: 14px;
+  color: #e77c22;
+}
+.star-review .entry-rating :deep(.star-score strong) {
+  font-weight: 700;
+}
+.star-review .entry-rating :deep(.star-symbols) {
+  font-size: 16px;
+}
+.star-review .attitude-badge {
+  background: #fff4e9;
+  color: #d58a46;
+  font-size: 10px;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+.star-review .attitude-badge.negative {
+  background: #f2f3f5;
+  color: #8b939d;
+}
+.star-review .attitude-badge.neutral {
+  background: #f1f2eb;
+  color: #7b806d;
+}
+.star-review .entry-date {
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0;
+  color: #929ca9;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.star-review .body {
+  margin: 18px 0 15px var(--entry-indent);
+  color: #303b49;
+  font-size: 16px;
+  line-height: 1.85;
+}
+.star-review .chips {
+  margin: 0 0 0 var(--entry-indent);
+  font-size: 12px;
+  color: #8a95a2;
+  gap: 8px 17px;
+}
+.star-review .scoring-state.history {
+  padding: 0;
+  background: none;
+  color: #a5adb5;
+  margin: 8px 12px 0 var(--entry-indent);
+}
+.star-review .example-review {
+  font-size: 11px;
+  margin: 8px 0 0 var(--entry-indent);
+}
+.star-review .example-body {
+  margin: 8px 0;
+}
+.star-review .photos {
+  margin-left: var(--entry-indent);
+}
+.star-review .photos img {
+  width: 104px;
+  height: 104px;
+  border-radius: 5px;
+}
+/* 仅星级卡将回复容器展开为网格子项，回复逻辑、焦点与草稿生命周期继续由原组件管理。 */
+.star-review .entry-interactions {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0 23px;
+  align-items: center;
+  margin: 16px 0 0 var(--entry-indent);
+  color: #6c7a8b;
+  font-size: 12px;
+}
+.star-review .entry-interactions > :deep(.content-actions) {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
+  margin: 6px 0 0;
+  gap: 16px;
+  color: #6c7a8b;
+}
+.star-review .entry-interactions > :deep(.reply-thread) {
+  display: contents;
+}
+.star-review .entry-interactions > :deep(.reply-thread > .thread-actions) {
+  grid-column: 2;
+  grid-row: 1;
+  flex-wrap: wrap;
+  gap: 8px 23px;
+  font-size: 12px;
+}
+.star-review .entry-interactions > :deep(.reply-thread > .thread-actions .text-action) {
+  color: #6c7a8b;
+}
+.star-review .entry-interactions > :deep(.reply-thread > .thread-content),
+.star-review .entry-interactions > :deep(.reply-thread > .reply-notice),
+.star-review .entry-interactions > :deep(.reply-thread > .reply-composer),
+.star-review .entry-interactions > .replies {
+  grid-column: 1 / -1;
+}
+.star-review .delete-review {
+  grid-column: 3;
+  grid-row: 1;
+  border: 0;
+  padding: 8px 0;
+  color: #98a1ad;
+  background: none;
+  font-size: 12px;
+  min-height: 44px;
+  white-space: nowrap;
+}
+/* 主页只有一个作者，正文沿店名左对齐；日期移至底部，回复展开仍独占整行。 */
+.profile-review.star-review {
+  --entry-indent: 0px;
+}
+.profile-review.star-review header {
+  display: block;
+}
+.profile-review.star-review .body {
+  font-size: 15px;
+  margin-top: 15px;
+  margin-bottom: 9px;
+}
+.profile-review.star-review .chips {
+  font-size: 11px;
+}
+.profile-review.star-review .entry-interactions {
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 0 18px;
+  margin-top: 18px;
+}
+.entry-footer-date {
+  grid-column: 1;
+  grid-row: 1;
+  color: #969eaa;
+  font-size: 12px;
+}
+.profile-review.star-review .entry-interactions > :deep(.content-actions) {
+  grid-column: 2;
+}
+.profile-review.star-review .entry-interactions > :deep(.reply-thread > .thread-actions) {
+  grid-column: 3;
+  gap: 8px 14px;
+}
+.profile-review.star-review .delete-review {
+  grid-column: 4;
+  grid-row: 1;
+  font-size: 11px;
+}
+@media (max-width: 600px) {
+  .star-review .entry-interactions {
+    gap: 0 14px;
+  }
+  .star-review .entry-interactions > :deep(.reply-thread > .thread-actions) {
+    gap: 0 16px;
+  }
+  .star-review .delete-review {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+}
+@media (max-width: 480px) {
+  .profile-review.star-review .entry-interactions {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 0 14px;
+  }
+  .profile-review .entry-footer-date {
+    grid-row: 1;
+    grid-column: 1 / -1;
+    margin-bottom: 6px;
+  }
+  .profile-review.star-review .entry-interactions > :deep(.content-actions) {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .profile-review.star-review .entry-interactions > :deep(.reply-thread > .thread-actions) {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .profile-review.star-review .delete-review {
+    grid-column: 3;
+    grid-row: 2;
+  }
+  .star-review.review-card {
+    --entry-indent: 0px;
+  }
+  .star-review .entry-date {
+    font-size: 11px;
+  }
+  .star-review .photos img {
+    width: 80px;
+    height: 80px;
+  }
+}
+.example-body {
+  margin: 14px 0;
+  color: #687583;
+  font-size: 12px;
+}
+.example-body summary {
+  cursor: pointer;
+  padding: 6px 0;
+}
+.review-card {
+  padding: 22px 0;
+  border-top: 1px solid #e8dfd0;
+  margin-top: 20px;
+  min-width: 0;
+}
+.example-review {
+  font-size: 12px;
+  line-height: 1.8;
+  color: #976319;
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+header > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.avatar {
+  background: #e9b949;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.verdict {
+  margin-left: auto;
+  color: #8d6535;
+  white-space: nowrap;
+}
+time {
+  display: block;
+  font-size: 11px;
+  color: #92836b;
+  margin-top: 5px;
+}
+.scoring-state {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.scoring-state.current {
+  color: #8c610e;
+  background: #fff1cf;
+}
+.scoring-state.history {
+  color: #737985;
+  background: #f0f2f5;
+}
+.body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.8;
+  font-size: 14px;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: #8c754f;
+}
+button {
+  font: inherit;
+  background: transparent;
+  border: 1px solid #d9cfbb;
+  border-radius: 7px;
+  padding: 8px 12px;
+  color: #74603d;
+  cursor: pointer;
+}
+.photos {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 14px 0;
+}
+.photos:empty {
+  display: none;
+}
+.photos button {
+  padding: 0;
+  border: 0;
+}
+.photos img {
+  width: 82px;
+  height: 82px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.replies {
+  background: #f6f0e4;
+  padding: 14px;
+  border-radius: 10px;
+  margin-top: 14px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.replies form {
+  display: flex;
+  gap: 8px;
+}
+.replies form button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.replies input {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid #dfd2ba;
+  border-radius: 7px;
+  padding: 10px;
+  font: inherit;
+}
+.review-history {
+  margin-top: 20px;
+  border: 1px solid #e6e0d4;
+  border-radius: 12px;
+  background: #faf9f6;
+  padding: 0 14px;
+}
+.review-history > summary {
+  padding: 14px 0;
+  cursor: pointer;
+  font-size: 13px;
+  color: #78654a;
+  line-height: 1.8;
+}
+.review-history > summary span {
+  display: block;
+  font-size: 11px;
+  color: #9a9080;
+  margin-left: 14px;
+}
+.history-note {
+  font-size: 11px;
+  color: #9a9080;
+  line-height: 1.8;
+}
+.review-history .review-card {
+  margin-top: 0;
+  padding-top: 18px;
+}
+.review-history[open] {
+  padding-bottom: 4px;
+}
+@media (max-width: 400px) {
+  header {
+    gap: 8px;
+  }
+  .verdict {
+    font-size: 11px;
+  }
+  .replies {
+    padding: 8px;
+  }
+  .review-history {
+    padding: 0 10px;
+  }
+}
+
+/* 仅本人列表启用卡片变体，隔离店铺详情、公开主页与历史点评的既有外观。 */
+.list-card-review.profile-review.star-review header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.list-card-review.star-review .entry-rating {
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0;
+  gap: 8px;
+}
+.list-card-review.star-review .entry-date {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 11px;
+  color: #929ca8;
+}
+.list-card-review.profile-review.star-review .body {
+  margin: 15px 0 8px;
+  font-size: 15px;
+  line-height: 1.8;
+}
+.list-card-review.star-review .photos {
+  margin: 10px 0 12px;
+  gap: 8px;
+}
+.list-card-review.star-review .photos:empty {
+  display: none;
+}
+.list-card-review.star-review .photos img {
+  width: 92px;
+  height: 92px;
+  border: 1px solid #eef0f3;
+  border-radius: 9px;
+}
+.dimension-details {
+  margin: 0 0 11px;
+}
+.dimension-details summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  min-height: 32px;
+  list-style: none;
+  cursor: pointer;
+  color: #8793a1;
+  font-size: 11px;
+}
+.dimension-details summary::-webkit-details-marker {
+  display: none;
+}
+.dimension-details summary svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dimension-details[open] summary svg {
+  transform: rotate(180deg);
+}
+.dimension-values {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 2px 0 12px;
+  border-radius: 7px;
+  padding: 9px 10px;
+  background: #f7f8fa;
+  color: #8894a1;
+  font-size: 10px;
+  line-height: 1.8;
+}
+.dimension-values b {
+  display: block;
+  color: #586676;
+  font-size: 12px;
+  font-weight: 500;
+}
+.dimension-details summary:focus-visible {
+  outline: 2px solid #cf9f53;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.list-card-review.profile-review.star-review .entry-interactions {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0 20px;
+  min-height: 47px;
+  margin: 0;
+  border-top: 1px solid #f0f2f4;
+  color: #85919f;
+  font-size: 11px;
+}
+.list-card-review.profile-review.star-review .entry-interactions > :deep(.content-actions) {
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0;
+  align-self: center;
+}
+.list-card-review.profile-review.star-review
+  .entry-interactions
+  > :deep(.reply-thread > .thread-actions) {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 11px;
+}
+.list-card-review .entry-interactions > :deep(.review-actions-menu) {
+  grid-column: 3;
+  grid-row: 1;
+}
+.list-card-review .entry-interactions :deep(.like-entry) {
+  min-height: 44px;
+}
+.list-card-review .entry-interactions :deep(.thread-content) {
+  margin-top: 8px;
+}

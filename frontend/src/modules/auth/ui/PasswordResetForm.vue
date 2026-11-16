@@ -9,6 +9,9 @@ import PasswordInput from './PasswordInput.vue'
 import './auth-inputs.css'
 import { prepareResetLogin } from '../model/loginPrefill'
 
+// 取消入口由页面按会话选择；这里只影响返回链接，重置成功仍清理旧凭证并转往登录页。
+withDefaults(defineProps<{ returnTo?: '/account/settings' | '/login' }>(), { returnTo: '/login' })
+
 const form = reactive({ email: '', verificationCode: '', newPassword: '', confirmPassword: '' })
 const router = useRouter()
 const sendingCode = ref(false)
@@ -230,7 +233,11 @@ onBeforeUnmount(() => {
       <strong>密码重置成功</strong>
       <p>请使用新密码重新登录。</p>
     </div>
-    <p class="form-footnote"><RouterLink to="/login">返回登录</RouterLink></p>
+    <p class="form-footnote">
+      <RouterLink :to="returnTo">
+        {{ returnTo === '/account/settings' ? '返回个人设置' : '返回登录' }}
+      </RouterLink>
+    </p>
   </form>
 </template>
 

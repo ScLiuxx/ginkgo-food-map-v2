@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { reviewDestination } from '@/shared/lib/reviewNavigation'
 import { useLoginStore } from '@/modules/auth/model/login.store'
 import { authToken } from '@/shared/api/authSession'
 import { fetchRestaurant } from '@/modules/restaurant/api/restaurantApi'
@@ -25,6 +26,8 @@ const props = defineProps<{
   targetHint?: string
   /** 详情对象可定制短操作文案，发布及认证流程共用。 */
   triggerLabel?: string
+  /** 布局只承载弹窗，入口由全站统一链接提供。 */
+  hideTrigger?: boolean
 }>()
 const emit = defineEmits<{ published: [] }>()
 const auth = useLoginStore(),
@@ -149,9 +152,7 @@ async function open() {
     await router.push({
       path: '/login',
       query: {
-        redirect: props.restaurant
-          ? `/${props.restaurant.dining?.kind === 'window' ? 'canteen-windows' : 'restaurants'}/${props.restaurant.id}?writeReview=1`
-          : '/?writeReview=1',
+        redirect: router.resolve(reviewDestination(route)).fullPath,
       },
     })
     return
@@ -165,11 +166,13 @@ async function open() {
   error.value = ''
   receipt.value = null
   opened.value = true
+  const ticket = ++generation
   await nextTick()
+  // 布局跨页存活，打开与实际显示之间若已返回或换号，不再显示已作废的草稿。
+  if (ticket !== generation || !opened.value) return
   if (dialog.value?.showModal) dialog.value.showModal()
   else if (dialog.value) dialog.value.open = true
   loading.value = true
-  ++generation
   controller = new globalThis.AbortController()
   restaurants.value = props.restaurant ? [props.restaurant] : []
   floor.value = ''
@@ -301,10 +304,29 @@ watch(
   },
   { flush: 'sync' },
 )
+// 布局中的编辑器跨页面存活；真实地址变化（含同路径的历史查询）只清理资源。
+// 打开意图的加入／消费不是离开来源页，比较时必须排除它，避免打开后立即关窗。
+watch(
+  () => {
+    const query = { ...route.query }
+    delete query.writeReview
+    return router.resolve({ path: route.path, query, hash: route.hash }).fullPath
+  },
+  close,
+  { flush: 'sync' },
+)
 watch(
   () => [route.query.writeReview, auth.authenticated],
   () => {
-    if (route.query.writeReview === '1' && auth.authenticated) {
+    if (route.query.writeReview === '1') {
+      // 未登录时先去认证，回跳仍指向原阅读页；不能同时消费意图造成导航竞争。
+      if (!auth.authenticated) {
+        void router.replace({
+          path: '/login',
+          query: { redirect: router.resolve(reviewDestination(route)).fullPath },
+        })
+        return
+      }
       void open()
       // 回跳意图只消费一次，避免发布刷新详情后再次弹出空表单。
       const query = { ...route.query }
@@ -317,7 +339,7 @@ watch(
 onUnmounted(close)
 </script>
 <template>
-  <button type="button" class="review-open" @click="open">
+  <button v-if="!hideTrigger" type="button" class="review-open" @click="open">
     {{ triggerLabel || '写评价' }}
   </button>
   <dialog ref="dialog" class="review-dialog" @cancel.prevent="requestClose">

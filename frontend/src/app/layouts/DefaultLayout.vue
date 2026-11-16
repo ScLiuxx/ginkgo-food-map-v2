@@ -4,6 +4,8 @@ import AppHeader from '@/shared/ui/layout/AppHeader.vue'
 import AdminLayout from './AdminLayout.vue'
 import BottomNavigation from '@/shared/ui/layout/BottomNavigation.vue'
 import { useLoginStore } from '@/modules/auth'
+import { ReviewComposer, notifyReviewPublished } from '@/modules/review'
+import { hasDetailComposer } from '@/shared/lib/reviewNavigation'
 
 import { useRoute, useRouter } from 'vue-router'
 import { computed, ref, watchEffect } from 'vue'
@@ -32,11 +34,14 @@ const mapPage = computed(() => route.path === '/map' || route.path === '/preview
   <!-- 管理端沿用示意图的独立页头与侧栏，不叠加前台页头及底部导航。 -->
   <AdminLayout v-if="route.meta.layout === 'admin'" />
   <section
-    v-else-if="resolvingIdentity || auth.isAdministrator"
+    v-else-if="!routeReady || resolvingIdentity || auth.isAdministrator"
     class="identity-check"
     role="status"
   >
-    <h1>{{ auth.error ? '暂时无法验证登录状态' : '正在验证登录状态' }}</h1>
+    <!-- 首次路由尚未就绪时不展示导航，避免把当前来路误读成默认首页。 -->
+    <h1>
+      {{ !routeReady ? '正在加载页面' : auth.error ? '暂时无法验证登录状态' : '正在验证登录状态' }}
+    </h1>
     <p>{{ auth.error || '验证完成后进入对应页面。' }}</p>
     <template v-if="auth.error"
       ><button :disabled="auth.restoring" @click="auth.restore">重新验证</button
@@ -62,6 +67,12 @@ const mapPage = computed(() => route.path === '/map' || route.path === '/preview
     <main>
       <RouterView />
     </main>
+    <!-- 全站写评留在来源页；店铺和窗口详情继续使用自己的固定对象编辑器。 -->
+    <ReviewComposer
+      v-if="!hasDetailComposer(route.path)"
+      hide-trigger
+      @published="notifyReviewPublished"
+    />
     <BottomNavigation
       v-if="!detailPage"
       :has-unread-notifications="hasUnreadNotifications"

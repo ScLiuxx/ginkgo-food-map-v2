@@ -4,10 +4,22 @@ import { useLoginStore } from '@/modules/auth'
 import { authToken } from '@/shared/api/authSession'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 import { fetchFollowPage, setFollow, type FollowKind, type FollowMember } from '../api/followsApi'
+import { useRoute } from 'vue-router'
+import { useListRouteState } from '@/shared/lib/useListRouteState'
+import { userProfilePath } from '@/shared/lib/userProfileNavigation'
 const props = defineProps<{ userId?: string; kind: FollowKind }>(),
   auth = useLoginStore()
+// 总数只来自已获授权的名单；读取中或私密拒绝时通知页头隐藏数量，不冒充零人。
+const emit = defineEmits<{ total: [value: number | null] }>()
 const subject = computed(() => props.userId || String(auth.user?.id ?? '')),
   own = computed(() => subject.value === String(auth.user?.id))
+const route = useRoute()
+const viewState = useListRouteState(
+  () =>
+    route.path ===
+    `${props.userId ? `/users/${props.userId}` : '/account'}/${props.kind === 'FOLLOWING' ? 'following' : 'followers'}`,
+)
+let initialized = false
 const records = ref<FollowMember[]>([]),
   page = ref(1),
   total = ref(0),
@@ -27,12 +39,14 @@ async function load(target = page.value) {
   controller?.abort()
   records.value = []
   loaded.value = false
+  emit('total', null)
   error.value = ''
   loading.value = false
   const token = authToken.value
   if (!auth.authenticated || !token) return
   controller = new globalThis.AbortController()
   requested = target
+  void viewState.save({ page: target === 1 ? undefined : target })
   loading.value = true
   try {
     const result = await fetchFollowPage(
@@ -48,6 +62,7 @@ async function load(target = page.value) {
       total.value = result.total
       pages.value = result.totalPages
       loaded.value = true
+      emit('total', result.total)
     }
   } catch (reason) {
     if (ticket === generation) error.value = toErrorMessage(reason)
@@ -55,22 +70,23 @@ async function load(target = page.value) {
     if (ticket === generation) loading.value = false
   }
 }
-async function cancel(member: FollowMember) {
-  if (!own.value || props.kind !== 'FOLLOWING' || busy.value) return
+/** 每行操作作用于访问者与该用户的关系；仅本人关注名单取消后回首页，其他名单保留当前页。 */
+async function toggle(member: FollowMember) {
+  if (member.userId === String(auth.user?.id) || busy.value) return
   const token = authToken.value,
     owner = context
   if (!token) return
   busy.value = true
   notice.value = ''
   try {
-    await setFollow(member.userId, false, token)
+    await setFollow(member.userId, !member.following, token)
     if (owner === context) {
-      notice.value = '已取消关注'
-      await load(1)
+      notice.value = member.following ? '已取消关注' : '已关注'
+      await load(own.value && props.kind === 'FOLLOWING' ? 1 : page.value)
     }
   } catch (reason) {
     if (owner === context) {
-      notice.value = `取消结果未确认：${toErrorMessage(reason)}，请刷新核对。`
+      notice.value = `关注结果未确认：${toErrorMessage(reason)}，请核对当前名单。`
       await load()
     }
   } finally {
@@ -87,7 +103,9 @@ watch(
     total.value = pages.value = 0
     busy.value = false
     notice.value = ''
-    void load(1)
+    const target = !initialized ? viewState.page() : 1
+    if (auth.authenticated && authToken.value) initialized = true
+    void load(target)
   },
   { immediate: true, flush: 'sync' },
 )
@@ -98,29 +116,41 @@ onBeforeUnmount(() => {
 })
 </script>
 <template>
-  <section class="follow-list" :aria-label="kind === 'FOLLOWING' ? '关注名单' : '粉丝名单'">
-    <header>
-      <h2>{{ kind === 'FOLLOWING' ? '关注名单' : '粉丝名单' }}</h2>
-      <button :disabled="loading || busy" @click="load(1)">刷新名单</button>
-    </header>
-    <p v-if="notice" role="status">{{ notice }}</p>
-    <p v-if="loading" role="status">正在加载名单…</p>
-    <div v-else-if="error" role="alert">
+  <section
+    class="follow-list"
+    :aria-label="kind === 'FOLLOWING' ? '关注名单' : '粉丝名单'"
+    :aria-busy="loading"
+  >
+    <p v-if="notice" class="follow-feedback" role="status">{{ notice }}</p>
+    <p v-if="loading" class="follow-message" role="status">正在加载名单…</p>
+    <div v-else-if="error" class="follow-message" role="alert">
       <p>{{ error }}</p>
       <button @click="load(requested)">重新加载</button>
     </div>
-    <template v-else-if="loaded"
-      ><p>共 {{ total }} 人</p>
-      <p v-if="!records.length">
+    <template v-else-if="loaded">
+      <p v-if="!records.length" class="follow-message">
         {{ total ? '当前页已变化，请返回第一页。' : '暂无可展示的用户。' }}
       </p>
-      <article v-for="member in records" :key="member.userId">
-        <RouterLink :to="`/users/${member.userId}`"
-          >{{ member.username }}
-          <small v-if="member.level">Lv.{{ member.level }}</small></RouterLink
-        ><button v-if="own && kind === 'FOLLOWING'" :disabled="busy" @click="cancel(member)">
-          取消关注</button
-        ><span v-else-if="member.following">已关注</span>
+      <article v-for="member in records" :key="member.userId" class="follow-member">
+        <RouterLink class="follow-identity" :to="userProfilePath(member.userId, auth.user?.id)">
+          <span class="follow-avatar" aria-hidden="true">{{
+            Array.from(member.username.trim() || '?')[0]!.toUpperCase()
+          }}</span>
+          <span class="follow-info">
+            <span class="follow-name">{{ member.username }}</span>
+            <small v-if="member.level" class="follow-level">Lv.{{ member.level }}</small>
+          </span>
+        </RouterLink>
+        <button
+          v-if="member.userId !== String(auth.user?.id)"
+          class="follow-toggle"
+          :class="{ 'is-following': member.following }"
+          :aria-label="`${member.following ? '取消关注' : '关注'} ${member.username}`"
+          :disabled="busy"
+          @click="toggle(member)"
+        >
+          {{ member.following ? '已关注' : '关注' }}
+        </button>
       </article>
       <nav v-if="pages > 1 || page > 1" aria-label="名单分页">
         <button :disabled="page <= 1 || busy" @click="load(page - 1)">上一页</button
@@ -133,44 +163,112 @@ onBeforeUnmount(() => {
 </template>
 <style scoped>
 .follow-list {
-  padding: 20px 0;
+  min-width: 0;
+  padding: 0;
 }
-.follow-list header,
-.follow-list article,
 .follow-list nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
 }
-.follow-list article {
-  padding: 20px 0;
-  border-bottom: 1px solid #eee;
+.follow-member {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 80px;
+  padding: 12px 0;
+  box-sizing: border-box;
+  border-bottom: 1px solid #f0f1f3;
 }
-.follow-list a {
-  color: #6e5326;
-  overflow-wrap: anywhere;
+.follow-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+  color: #303943;
+  text-decoration: none;
 }
-.follow-list small,
-.follow-list p,
-.follow-list span {
+.follow-avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #f5f0e8;
+  color: #a58b67;
+  font-size: 18px;
+  font-weight: 600;
+}
+.follow-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.follow-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.follow-level {
+  color: #929ba5;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.follow-message,
+.follow-feedback {
   font-size: 13px;
   color: #87919e;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.follow-message {
+  padding: 24px 0;
+  margin: 0;
+}
+.follow-feedback {
+  margin: 0 0 8px;
 }
 .follow-list button {
   min-height: 44px;
-  border: 1px solid #ded6c8;
-  background: white;
+  border: 0;
+  background: #f3f4f6;
   border-radius: 6px;
   padding: 7px 12px;
-  color: #876323;
+  color: #78828e;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.follow-list .follow-toggle {
+  min-width: 76px;
+  flex-shrink: 0;
+  background: #fb8b24;
+  color: #fff;
+}
+.follow-list .follow-toggle.is-following {
+  background: #f3f4f6;
+  color: #87919e;
 }
 .follow-list button:disabled {
   opacity: 0.5;
+  cursor: default;
+}
+.follow-list :is(a, button):focus-visible {
+  outline: 2px solid #a5adb7;
+  outline-offset: 3px;
 }
 .follow-list nav {
   justify-content: center;
   margin-top: 20px;
+  color: #87919e;
+  font-size: 12px;
 }
 </style>

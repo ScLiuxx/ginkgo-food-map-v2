@@ -8,10 +8,25 @@ import { reviewGatewayKey, unavailableReviewGateway, type ReviewItem } from '../
 import { activeReplyEditorKey } from '../model/replyEditor'
 import ReviewEntry from './ReviewEntry.vue'
 import ReviewHistory from './ReviewHistory.vue'
+import { useRoute } from 'vue-router'
+import { useListRouteState } from '@/shared/lib/useListRouteState'
+import WriteReviewLink from '@/shared/ui/WriteReviewLink.vue'
+import { reviewPublicationRevision } from '../model/reviewPublication'
 
-/** 本人跨店列表；归组、计数及可见性均由服务端完成，历史和删除复用现有点评能力。 */
-const props = defineProps<{ publicUserId?: string; profileLayout?: boolean }>()
+/** 本人和公开跨店列表共用卡片；归组、计数及可见性由服务端完成，操作仍按实际作者授权。 */
+const props = defineProps<{
+  publicUserId?: string
+  profileLayout?: boolean
+  cardLayout?: boolean
+}>()
 const emit = defineEmits<{ total: [value: number | null] }>()
+const route = useRoute()
+const viewState = useListRouteState(() =>
+  props.publicUserId
+    ? route.path === `/users/${props.publicUserId}`
+    : route.path === '/account/reviews',
+)
+let initialized = false
 const auth = useLoginStore()
 const gateway = inject(reviewGatewayKey, unavailableReviewGateway)
 provide(activeReplyEditorKey, ref<string | null>(null))
@@ -30,6 +45,8 @@ const deleting = ref<ReviewItem | null>(null)
 const confirm = ref<globalThis.HTMLDialogElement>()
 const lightbox = ref<globalThis.HTMLDialogElement>()
 const photo = ref('')
+// 折叠菜单中的删除按钮会隐藏，取消确认后需要回到可见的更多入口。
+let restoreDeleteFocus: (() => void) | undefined
 const viewerId = computed(() =>
   auth.authenticated && auth.user ? String(auth.user.id) : undefined,
 )
@@ -48,6 +65,7 @@ async function load(target = page.value) {
   controller?.abort()
   controller = new globalThis.AbortController()
   requestedPage = target
+  void viewState.save({ page: target === 1 ? undefined : target })
   records.value = []
   loaded.value = false
   emit('total', null)
@@ -82,11 +100,14 @@ function cancelDelete() {
   confirm.value?.close()
   deleting.value = null
   deleteError.value = ''
+  restoreDeleteFocus?.()
+  restoreDeleteFocus = undefined
 }
-function askDelete(item: ReviewItem) {
+function askDelete(item: ReviewItem, restoreFocus?: () => void) {
   if (busy.value || !viewerId.value || item.authorId !== viewerId.value) return
   deleteError.value = ''
   deleting.value = item
+  restoreDeleteFocus = restoreFocus
   confirm.value?.showModal()
 }
 /** 删除失败留在确认框；204后只刷新第一页，不因读取失败再次发送删除请求。 */
@@ -101,6 +122,7 @@ async function remove() {
     if (owner !== context) return
     confirm.value?.close()
     deleting.value = null
+    restoreDeleteFocus = undefined
     notice.value = '点评已删除。'
     await load(1)
   } catch (reason) {
@@ -124,27 +146,34 @@ watch(
     lightbox.value?.close()
     records.value = []
     deleting.value = null
+    restoreDeleteFocus = undefined
     photo.value = error.value = deleteError.value = notice.value = ''
     loading.value = loaded.value = busy.value = false
     totalGroups.value = totalReviews.value = totalPages.value = 0
     page.value = 1
-    if (viewerId.value) void load(1)
+    if (viewerId.value) {
+      const target = !initialized ? viewState.page() : 1
+      initialized = true
+      void load(target)
+    }
   },
   { immediate: true, flush: 'sync' },
 )
+// 全站编辑器不再卸载来源页，成功后主动更新当前列表，取消则不触发请求。
+watch(reviewPublicationRevision, () => {
+  if (viewerId.value) void load(page.value)
+})
 onBeforeUnmount(() => {
   context++
   generation++
   controller?.abort()
 })
-// 主页的统一工具栏只代理当前列表刷新，读取与写入进行中均禁用重复操作。
-defineExpose({ refresh: () => load(1), refreshing: computed(() => loading.value || busy.value) })
 </script>
 
 <template>
   <section
     class="my-reviews"
-    :class="{ 'profile-review-list': profileLayout }"
+    :class="{ 'profile-review-list': profileLayout, 'card-review-list': cardLayout }"
     :aria-label="publicUserId ? '用户公开点评' : '本人点评列表'"
     :aria-busy="loading"
   >
@@ -154,12 +183,11 @@ defineExpose({ refresh: () => load(1), refreshing: computed(() => loading.value 
         <strong>{{ totalReviews }}</strong> 条点评
       </p>
       <p v-else>每家店保留最新体验，历史点评随时回看。</p>
-      <button type="button" :disabled="loading || busy" @click="load(1)">刷新</button>
-      <RouterLink v-if="!publicUserId" to="/?writeReview=1">写点评 ›</RouterLink>
+      <WriteReviewLink v-if="!publicUserId">写点评 ›</WriteReviewLink>
     </header>
     <p v-if="notice" role="status" class="my-review-notice">{{ notice }}</p>
     <p v-if="loading" class="my-review-status" role="status">
-      {{ publicUserId ? '正在加载公开点评…' : '正在加载我的点评…' }}
+      {{ publicUserId ? '正在加载公开点评…' : '正在加载点评…' }}
     </p>
     <div v-else-if="error" class="my-review-error" role="alert">
       <p>{{ notice ? '删除已完成，但列表刷新失败：' : '' }}{{ error }}</p>
@@ -177,7 +205,7 @@ defineExpose({ refresh: () => load(1), refreshing: computed(() => loading.value 
         }}
       </p>
       <button v-if="totalGroups" type="button" @click="load(1)">返回第一页</button>
-      <RouterLink v-else-if="!publicUserId" to="/?writeReview=1">写第一条点评 →</RouterLink>
+      <WriteReviewLink v-else-if="!publicUserId">写第一条点评 →</WriteReviewLink>
     </div>
     <article v-for="group in records" :key="group.item.id" class="my-review-group">
       <header class="my-review-store">
@@ -192,7 +220,10 @@ defineExpose({ refresh: () => load(1), refreshing: computed(() => loading.value 
       <ReviewEntry
         :item="group.item"
         star-scale
-        :profile-entry="profileLayout"
+        :profile-entry="profileLayout || cardLayout"
+        :list-card="cardLayout"
+        :store-name="group.restaurant.name"
+        :store-to="`/${group.restaurant.targetType === 'WINDOW' ? 'canteen-windows' : 'restaurants'}/${group.restaurant.id}`"
         :authenticated="auth.authenticated"
         :viewer-id="viewerId"
         :busy="busy"
@@ -202,13 +233,14 @@ defineExpose({ refresh: () => load(1), refreshing: computed(() => loading.value 
         @delete="askDelete"
         @photo="viewPhoto"
       >
-        <template v-if="group.item.historyCount" #history>
+        <template v-if="group.item.historyCount" #history="{ restoreFocus }">
           <ReviewHistory
             :restaurant-id="group.restaurant.id"
             :window="group.restaurant.targetType === 'WINDOW'"
             :item="group.item"
             :viewer-id="viewerId"
             star-scale
+            :restore-focus="restoreFocus"
             @delete="askDelete"
             @photo="viewPhoto"
             @refresh="load(1)"

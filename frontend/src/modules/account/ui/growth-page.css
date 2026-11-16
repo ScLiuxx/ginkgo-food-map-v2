@@ -28,17 +28,6 @@
   font-size: 14px;
   color: #727d8b;
 }
-.growth-refresh {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 0;
-  background: transparent;
-  padding: 5px 0;
-  color: #8a939f;
-  font-size: 12px;
-  cursor: pointer;
-}
 .account-growth .growth-numbers {
   align-items: baseline;
   gap: 16px;

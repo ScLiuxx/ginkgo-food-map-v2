@@ -9,6 +9,8 @@ import type { RestaurantCorrectionInput } from './restaurantApi'
 
 export type MyRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'WITHDRAWN'
 export type MyRequestFilter = 'ALL' | MyRequestStatus
+/** 本人投稿列表的可选条数；不持久化为其他账号的偏好。 */
+export const myRequestPageSizes = [10, 20, 50] as const
 export interface MyRequestItem {
   previousRequestId?: string | null
   withdrawnAt?: string | null
@@ -117,9 +119,12 @@ export async function fetchMyRequestPage(
   userId: string,
   token: string,
   signal: AbortSignal,
+  pageSize = 10,
 ): Promise<MyRequestPage> {
+  // 与服务端1–50的边界一致；响应必须匹配本次条数，防止旧分页混入当前列表。
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 50) throw invalid()
   const response = await httpClient.get<ApiResponse<MyRequestPage>>(base, {
-    params: { status, page, pageSize: 10 },
+    params: { status, page, pageSize },
     signal,
     headers: { Authorization: `Bearer ${token}` },
   })
@@ -129,10 +134,10 @@ export async function fetchMyRequestPage(
     !value ||
     value.userId !== userId ||
     value.page !== page ||
-    value.pageSize !== 10 ||
+    value.pageSize !== pageSize ||
     !count(value.total) ||
     !count(value.totalPages) ||
-    value.totalPages !== Math.ceil(value.total / 10) ||
+    value.totalPages !== Math.ceil(value.total / pageSize) ||
     !value.counts ||
     !(['ALL', 'PENDING', 'APPROVED', 'REJECTED'] as const).every((key) =>
       count(value.counts[key]),
@@ -145,7 +150,7 @@ export async function fetchMyRequestPage(
         (value.counts.WITHDRAWN ?? 0) ||
     value.total !== value.counts[status] ||
     !Array.isArray(value.records) ||
-    value.records.length > 10 ||
+    value.records.length > pageSize ||
     value.records.length > value.total
   )
     throw invalid()
@@ -168,7 +173,7 @@ export async function fetchMyRequestPage(
     total: value.total,
     totalPages: value.totalPages,
     page,
-    pageSize: 10,
+    pageSize,
   }
 }
 const snapshotFields = [

@@ -1,0 +1,183 @@
+/* 列表只保留预览，面板进入浏览器顶层，避免卡片和底部导航限制其尺寸或焦点。 */
+.discussion-thread {
+  display: contents;
+}
+.thread-actions {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+.discussion-reply-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  color: #85919f;
+  cursor: pointer;
+}
+.discussion-reply-action svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.discussion-preview {
+  grid-column: 1/-1;
+  display: block;
+  width: 100%;
+  margin: 0 0 14px;
+  border: 0;
+  border-radius: 8px;
+  padding: 11px 12px;
+  background: #f5f6f8;
+  color: #46505c;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.8;
+  text-align: left;
+  cursor: pointer;
+}
+.preview-line {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  margin-bottom: 5px;
+}
+.preview-author {
+  color: #87929f;
+}
+.preview-link {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: #b5813c;
+  margin-top: 5px;
+}
+.preview-link svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+.discussion-preview-error,
+.discussion-preview-loading {
+  grid-column: 1/-1;
+  border: 0;
+  background: none;
+  color: #929dab;
+  font: inherit;
+  font-size: 11px;
+  padding: 0 0 12px;
+  text-align: left;
+}
+.discussion-preview-error {
+  cursor: pointer;
+}
+.discussion-dialog {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: #fff;
+  color: #344252;
+  overflow: hidden;
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  box-sizing: border-box;
+}
+.discussion-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.discussion-dialog::backdrop {
+  background: #24314245;
+}
+.discussion-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 61px;
+  flex-shrink: 0;
+  padding: 0 14px;
+  border-bottom: 1px solid #edf0f3;
+  background: #fff;
+}
+.discussion-header h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+.discussion-header button {
+  display: grid;
+  place-items: center;
+  min-width: 40px;
+  height: 44px;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: #929dab;
+  cursor: pointer;
+}
+.discussion-header button:last-child {
+  margin-left: auto;
+}
+.discussion-header svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.discussion-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-bottom: 160px;
+}
+.discussion-thread :is(button, a):focus-visible,
+.discussion-dialog button:focus-visible {
+  outline: 2px solid #a5adb7;
+  outline-offset: 2px;
+}
+@media (min-width: 800px) {
+  .discussion-dialog {
+    left: auto;
+    right: 0;
+    width: min(470px, 100vw);
+    box-shadow: -10px 0 40px #24314214;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .discussion-dialog[open] {
+    animation: discussion-enter 0.15s ease-out;
+  }
+  @keyframes discussion-enter {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

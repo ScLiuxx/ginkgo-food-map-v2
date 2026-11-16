@@ -10,6 +10,7 @@ import LikeNotificationTarget from '@/modules/community/ui/LikeNotificationTarge
 import { AnnouncementReader } from '@/modules/announcement'
 import ReplyNotificationTarget from '@/modules/review/ui/ReplyNotificationTarget.vue'
 import { ReportResultDialog, reportDecisionLabel } from '@/modules/moderation'
+import { userProfilePath } from '@/shared/lib/userProfileNavigation'
 
 // 页面编排真实收件箱和固定站内跳转；摘要绝不提供可执行HTML或任意目标地址。
 const props = defineProps<{ category?: string }>()
@@ -63,7 +64,7 @@ async function open(item: NotificationItem) {
   else if (selected?.category === 'SYSTEM' && selected.requestId)
     await router.push({ path: '/account/contributions', query: { requestId: selected.requestId } })
   else if (selected?.category === 'FOLLOWERS' && selected.actorUserId)
-    await router.push(`/users/${selected.actorUserId}`)
+    await router.push(userProfilePath(selected.actorUserId, auth.user?.id))
   else if (selected?.category === 'COMMENTS' || selected?.category === 'LIKES')
     replyTarget.value = selected
 }

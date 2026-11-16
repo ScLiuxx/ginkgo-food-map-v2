@@ -19,6 +19,7 @@ import CanteenWindows from './CanteenWindows.vue'
 import RestaurantManagementActions from './RestaurantManagementActions.vue'
 import { useRestaurantCatalog } from '../model/catalog.store'
 import { isProvenanceTag } from './restaurantPresentation'
+import { useReturnNavigation } from '@/shared/lib/useReturnNavigation'
 
 const props = defineProps<{ id: string; window?: boolean }>()
 const restaurant = ref<RestaurantReadModel | null>(null)
@@ -32,22 +33,21 @@ const router = useRouter()
 const fromMap = computed(() => route.query.from === 'map')
 const fromPicker = computed(() => route.query.from === 'picker')
 const picker = useRestaurantPicker()
+const { returnTarget, returnToPrevious } = useReturnNavigation(() =>
+  isWindow.value && dining.value?.parent ? router.resolve(parentLink.value).fullPath : '/',
+)
 const backTarget = computed(() =>
-  fromMap.value ? '/map' : fromPicker.value ? '/?picker=return' : '/',
+  fromMap.value ? '/map' : fromPicker.value ? '/?picker=return' : returnTarget.value,
 )
 /** 地图/选店入口显式标记来源；普通点击回到原历史条目，直达或新标签页回到固定站内入口。
  * 保留修饰键和新标签页打开链接的行为，不把用户提供的任意地址作为返回目标。
  */
 function returnToSource(event: globalThis.MouseEvent) {
-  if (
-    (!fromMap.value && !fromPicker.value) ||
-    event.button !== 0 ||
-    event.metaKey ||
-    event.ctrlKey ||
-    event.shiftKey ||
-    event.altKey
-  )
+  if (!fromMap.value && !fromPicker.value) {
+    returnToPrevious(event)
     return
+  }
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
   event.preventDefault()
   const previous = router.options.history.state.back
   if (fromPicker.value) {
@@ -158,15 +158,13 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="detail-page">
+  <div class="detail-page" :aria-busy="loading">
     <section v-if="loading" class="missing-restaurant" role="status">正在加载餐厅资料…</section>
     <section v-else-if="error" class="missing-restaurant" role="alert">
       <h1>餐厅资料暂时无法加载。</h1>
       <p>{{ error }}</p>
       <button type="button" class="primary-action" @click="loadDetail">重新加载</button>
-      <RouterLink :to="backTarget" @click.capture="returnToSource">{{
-        fromMap || fromPicker ? '返回' : '返回首页'
-      }}</RouterLink>
+      <RouterLink :to="backTarget" @click.capture="returnToSource">返回</RouterLink>
     </section>
     <article
       v-else-if="restaurant && dining"
@@ -175,13 +173,7 @@ onUnmounted(() => {
       aria-labelledby="restaurant-title"
     >
       <nav class="detail-breadcrumb" aria-label="详情导航">
-        <RouterLink v-if="isWindow && dining.parent" :to="parentLink"
-          >← 返回 {{ dining.parent.name
-          }}<template v-if="dining.floor">（{{ dining.floor }}）</template></RouterLink
-        >
-        <RouterLink v-else :to="backTarget" @click.capture="returnToSource">{{
-          fromMap || fromPicker ? '← 返回' : '← 返回首页'
-        }}</RouterLink>
+        <RouterLink :to="backTarget" @click.capture="returnToSource">← 返回</RouterLink>
       </nav>
 
       <header class="detail-hero" :class="{ 'canteen-hero': isCanteen }">
@@ -339,9 +331,9 @@ onUnmounted(() => {
     <section v-else class="missing-restaurant" aria-labelledby="missing-title">
       <h1 id="missing-title">没有找到这家店。</h1>
       <p>餐厅可能已删除或链接有误，回去看看其他好味道吧。</p>
-      <RouterLink class="primary-action" :to="backTarget" @click.capture="returnToSource">{{
-        fromMap || fromPicker ? '返回' : '返回餐厅目录'
-      }}</RouterLink>
+      <RouterLink class="primary-action" :to="backTarget" @click.capture="returnToSource"
+        >返回</RouterLink
+      >
     </section>
   </div>
 </template>

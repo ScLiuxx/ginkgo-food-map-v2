@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { authToken, getAccessToken } from '@/shared/api/authSession'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
+import { useReturnNavigation } from '@/shared/lib/useReturnNavigation'
 import { MerchantPlacePicker } from '@/modules/map'
 import { compressPhoto } from '@/modules/file/model/photos'
 import { useSubmissionPhotos } from '../model/useSubmissionPhotos'
@@ -163,6 +164,7 @@ const detailPath = computed(() =>
         ? '/'
         : `/restaurants/${encodeURIComponent(props.id)}`,
 )
+const { returnTarget, returnToPrevious } = useReturnNavigation(detailPath)
 const visibleCategories = computed(() =>
   categories.value.filter((c) => c.enabled || c.code === originalCategory.value),
 )
@@ -495,15 +497,12 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="correction-page" :class="{ 'submission-page': submission && !admin }">
-    <RouterLink :to="detailPath">{{
-      requestId
-        ? '← 返回我的投稿'
-        : admin
-          ? '← 返回商户管理'
-          : submission
-            ? '← 返回首页'
-            : '← 返回商户详情'
-    }}</RouterLink>
+    <RouterLink
+      :to="admin ? detailPath : returnTarget"
+      aria-label="返回"
+      @click.capture="!admin && returnToPrevious($event)"
+      ><span aria-hidden="true">←</span></RouterLink
+    >
     <p v-if="submission && !admin" class="submission-eyebrow">一起补全这张美食地图</p>
     <h1 ref="heading" tabindex="-1">
       {{ step === 'review' && !receipt ? '写一条点评' : pageTitle }}
@@ -534,9 +533,11 @@ onBeforeUnmount(() => {
         :to="{ path: '/account/contributions', query: { requestId: receipt } }"
         >查看申请 ›</RouterLink
       >
-      <RouterLink :to="detailPath">{{
-        requestId ? '返回我的投稿' : submission ? '返回首页' : '返回商户详情'
-      }}</RouterLink>
+      <RouterLink
+        :to="admin ? detailPath : returnTarget"
+        @click.capture="!admin && returnToPrevious($event)"
+        >返回</RouterLink
+      >
     </section>
     <form v-else novalidate :aria-busy="saving" @submit.prevent="submitCurrentStep">
       <ol v-if="canAttachReview" class="submission-steps" aria-label="投稿步骤">

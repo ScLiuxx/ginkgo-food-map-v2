@@ -81,7 +81,9 @@ async function mount(component: Component, login = true) {
   return router
 }
 const button = (label: string) =>
-  [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === label)!
+  [...host.querySelectorAll('button')].find(
+    (b) => b.getAttribute('aria-label') === label || b.textContent?.trim() === label,
+  )!
 it('sends guests to login without querying or writing favorites', async () => {
   const router = await mount(FavoriteButton, false)
   button('☆ 收藏').click()
@@ -156,7 +158,7 @@ it('shows private-list rejection without inventing zero records and never offers
   expect(host.textContent).toContain('仅本人可见')
   expect(host.textContent).not.toContain('共 0')
   expect(
-    [...host.querySelectorAll('button')].some((b) => b.textContent?.includes('取消收藏')),
+    [...host.querySelectorAll('button')].some((b) => b.getAttribute('aria-label') === '取消收藏'),
   ).toBe(false)
 })
 it('clears private list data immediately on logout', async () => {

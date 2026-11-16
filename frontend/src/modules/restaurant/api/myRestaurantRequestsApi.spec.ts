@@ -45,6 +45,50 @@ afterEach(() => vi.restoreAllMocks())
 
 /** 传输契约验证身份/申请绑定和白名单，图片只使用本站固定路径，不跟随响应中的任意URL。 */
 describe('本人投稿传输', () => {
+  it.each([20, 50])('按所选%d条查询并校验对应页数和记录上限', async (pageSize) => {
+    const source = {
+      ...page(),
+      pageSize,
+      total: 51,
+      totalPages: Math.ceil(51 / pageSize),
+      counts: { ALL: 51, PENDING: 51, APPROVED: 0, REJECTED: 0 },
+      records: Array.from({ length: pageSize }, (_, index) => ({
+        ...row,
+        id: String(101 + index),
+      })),
+    }
+    const get = vi
+      .spyOn(httpClient, 'get')
+      .mockResolvedValue({ data: { success: true, data: source } })
+    expect(
+      (await fetchMyRequestPage('ALL', 1, '42', 'token', signal(), pageSize)).records,
+    ).toHaveLength(pageSize)
+    expect(get).toHaveBeenCalledWith(
+      '/api/me/restaurant-requests',
+      expect.objectContaining({ params: { status: 'ALL', page: 1, pageSize } }),
+    )
+    source.pageSize = 10
+    await expect(fetchMyRequestPage('ALL', 1, '42', 'token', signal(), pageSize)).rejects.toThrow(
+      '无法确认',
+    )
+    source.pageSize = pageSize
+    source.totalPages = 1
+    await expect(fetchMyRequestPage('ALL', 1, '42', 'token', signal(), pageSize)).rejects.toThrow(
+      '无法确认',
+    )
+    source.totalPages = Math.ceil(51 / pageSize)
+    source.records.push({ ...row, id: '999' })
+    await expect(fetchMyRequestPage('ALL', 1, '42', 'token', signal(), pageSize)).rejects.toThrow(
+      '无法确认',
+    )
+  })
+  it.each([0, 51, 1.5, NaN])('非法每页条数%s不发送请求', async (pageSize) => {
+    const get = vi.spyOn(httpClient, 'get')
+    await expect(fetchMyRequestPage('ALL', 1, '42', 'token', signal(), pageSize)).rejects.toThrow(
+      '无法确认',
+    )
+    expect(get).not.toHaveBeenCalled()
+  })
   it('读取私有点评与后续申请仅保留白名单，不暴露图片ID和内部摘要', async () => {
     const source = {
       ...detail(),

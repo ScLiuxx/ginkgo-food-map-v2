@@ -172,7 +172,7 @@ id为新店申请ID，reviewSubmission.id为私有待发布点评ID，不是正�
 
 **请求参数**
 
-`GET /api/me/restaurant-requests`参数：status默认ALL，可选ALL/PENDING/APPROVED/REJECTED/WITHDRAWN；page默认1、范围1–1000000；pageSize默认20、范围1–50。前端每页10条。按createdAt、id依次降序，先按本人和所选状态筛选再分页；同一店铺的不同申请独立展示，不按店铺合并。
+`GET /api/me/restaurant-requests`参数：status默认ALL，可选ALL/PENDING/APPROVED/REJECTED/WITHDRAWN；page默认1、范围1–1000000；pageSize默认20、范围1–50。前端显式传入pageSize，默认10，用户可选10／20／50；更改条数时page回到1，筛选、翻页和失败重试沿用所选条数，仅在当前页面会话内保留。按createdAt、id依次降序，先按本人和所选状态筛选再分页；同一店铺的不同申请独立展示，不按店铺合并。
 
 **响应**
 

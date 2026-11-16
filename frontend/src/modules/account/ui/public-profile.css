@@ -9,11 +9,6 @@
   gap: 17px;
   margin-bottom: 25px;
 }
-.public-profile-back {
-  font-size: 13px;
-  color: #78828f;
-  padding: 12px 0;
-}
 .public-profile-page .account-profile,
 .public-profile-content {
   border: 1px solid #e5e8ec;
@@ -25,25 +20,27 @@
 }
 .public-profile-page .profile-heading h2 {
   font-size: 29px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.public-profile-statistics {
+.public-profile-page :deep(.public-profile-statistics) {
   display: flex;
   width: min(360px, 100%);
   margin: 23px 0 0 68px;
   align-items: flex-start;
 }
-.public-profile-statistics :deep(.follow-summary) {
+.public-profile-page :deep(.public-profile-statistics .follow-counts) {
   flex: 2;
   min-width: 0;
   margin: 0;
-}
-.public-profile-statistics :deep(.follow-counts) {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0;
   margin: 0;
 }
-.public-profile-statistics :deep(.follow-counts a),
+.public-profile-page :deep(.public-profile-statistics .follow-counts a),
 .public-profile-likes {
   display: flex;
   flex-direction: column;
@@ -58,13 +55,13 @@
   flex: 1;
   min-width: 0;
 }
-.public-profile-statistics :deep(strong) {
+.public-profile-page :deep(.public-profile-statistics strong) {
   color: #26313e;
   font-size: 23px;
   line-height: 30px;
   font-weight: 650;
 }
-.public-profile-statistics :deep(.follow-counts a + a)::before,
+.public-profile-page :deep(.public-profile-statistics .follow-counts a + a)::before,
 .public-profile-likes::before {
   content: '';
   position: absolute;
@@ -74,14 +71,20 @@
   top: 10px;
   background: #edf0f3;
 }
-/* 他人主页仍有关注及失败重读入口，不用纯展示统计替代真实互动组件。 */
-.public-profile-statistics :deep(.follow-summary > button) {
-  display: block;
-  margin: 16px auto 0;
-}
 .public-profile-content {
   margin-top: 20px;
   padding: 0 28px 8px;
+}
+/* 点评复用逐店白色卡片，外层只承载标签，避免出现卡片里面再套卡片；收藏保留原容器。 */
+.public-profile-content.profile-reviews-content {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+.public-profile-content.profile-reviews-content .profile-tabs {
+  min-height: 52px;
+  margin-bottom: 16px;
+  padding: 0 4px;
 }
 .public-profile-content .profile-tabs {
   margin: 0;
@@ -117,11 +120,6 @@
   color: #939ca6;
   font-weight: 400;
 }
-.public-profile-content .profile-tabs .profile-refresh {
-  margin-left: auto;
-  font-size: 12px;
-  color: #8a939f;
-}
 @media (max-width: 600px) {
   .public-profile-page .account-profile {
     padding: 22px 18px;
@@ -139,9 +137,9 @@
     gap: 8px;
   }
   .public-profile-page .profile-heading h2 {
-    font-size: 25px;
+    font-size: 22px;
   }
-  .public-profile-statistics {
+  .public-profile-page :deep(.public-profile-statistics) {
     width: 100%;
     margin: 22px 0 0;
   }

@@ -1,4 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { nextTick } from 'vue'
+import { waitForPageLayout } from '@/shared/lib/restorePageScroll'
+
+let scrollGeneration = 0
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -187,7 +191,21 @@ const router = createRouter({
     },
   ],
   // 浏览器前进/后退恢复列表阅读位置，普通跳转仍从新页面顶部开始。
-  scrollBehavior: (_to, _from, savedPosition) => savedPosition ?? { top: 0 },
+  scrollBehavior: async (to, from, savedPosition) => {
+    const ticket = ++scrollGeneration
+    // 替换分页或筛选参数不重置阅读位置；真正的历史回退等待列表读取后再恢复。
+    if (!savedPosition) return to.path === from.path && to.hash === from.hash ? false : { top: 0 }
+    const selector = /^\/(?:account|users)(?:\/|$)/.test(to.path)
+      ? '.account-center'
+      : /^\/(?:restaurants|canteen-windows)\/[1-9]\d*$/.test(to.path)
+        ? '.detail-page'
+        : undefined
+    if (selector) {
+      await nextTick()
+      if (!(await waitForPageLayout(() => ticket === scrollGeneration, selector))) return false
+    }
+    return ticket === scrollGeneration ? savedPosition : false
+  },
 })
 
 // 单页应用切换路由时同步浏览器标题，便于用户识别当前页面。

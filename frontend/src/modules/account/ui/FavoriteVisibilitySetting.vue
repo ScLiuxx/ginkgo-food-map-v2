@@ -79,9 +79,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="favorite-privacy privacy-setting">
     <label class="privacy-row"
-      ><span class="privacy-copy"
-        ><span class="privacy-label">公开收藏列表</span
-        ><span class="privacy-description">允许其他登录用户查看有效店铺</span></span
+      ><span class="privacy-copy"><span class="privacy-label">公开收藏列表</span></span
       ><input
         class="privacy-switch"
         type="checkbox"

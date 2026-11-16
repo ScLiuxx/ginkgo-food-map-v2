@@ -140,7 +140,7 @@ describe('restaurant detail API integration', () => {
     expect(host.querySelector('.manual-copy')).toBeNull()
     expect(host.querySelector('.location-links a')?.textContent).toContain('在高德中打开')
   })
-  it('地图入口显示返回并回到地图，普通入口仍返回首页', async () => {
+  it('地图入口返回地图，普通入口使用统一返回文案', async () => {
     await router.push({ path: `/restaurants/${restaurantFixture.id}`, query: { from: 'map' } })
     await mount()
     const link = host.querySelector<HTMLAnchorElement>('.detail-breadcrumb a')!
@@ -157,7 +157,7 @@ describe('restaurant detail API integration', () => {
     expect(router.currentRoute.value.path).toBe('/map')
     await router.push(`/restaurants/${restaurantFixture.id}`)
     await settle()
-    expect(host.querySelector('.detail-breadcrumb a')?.textContent).toBe('← 返回首页')
+    expect(host.querySelector('.detail-breadcrumb a')?.textContent).toBe('← 返回')
   })
   it('选店来源直达时返回选店入口', async () => {
     await router.push({ path: `/restaurants/${restaurantFixture.id}`, query: { from: 'picker' } })

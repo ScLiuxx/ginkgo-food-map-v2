@@ -13,6 +13,8 @@ const props = defineProps<{
   item: ReviewItem
   viewerId?: string
   starScale?: boolean
+  /** 折叠菜单选中后原按钮已隐藏，关闭历史时回到仍可见的更多入口。 */
+  restoreFocus?: () => void
 }>()
 const emit = defineEmits<{
   photo: [url: string]
@@ -66,7 +68,8 @@ function close() {
   cancel()
   dialog.value?.close()
   unlockScroll()
-  trigger.value?.focus({ preventScroll: true })
+  if (props.restoreFocus) props.restoreFocus()
+  else trigger.value?.focus({ preventScroll: true })
 }
 /** close也处理浏览器或外部代码关闭对话框的情况，清理必须可重复执行。 */
 function closed() {
@@ -184,7 +187,7 @@ function refresh() {
           <div v-else-if="error" role="alert" class="history-error">
             <p>{{ error }}</p>
             <button type="button" class="history-more" @click="load">重试历史点评</button>
-            <button type="button" class="history-more" @click="refresh">刷新点评列表</button>
+            <button type="button" class="history-more" @click="refresh">重新加载点评列表</button>
           </div>
           <button v-else-if="loaded && hasMore" type="button" class="history-more" @click="load">
             加载更多历史点评

@@ -73,6 +73,39 @@
   border-top: 0;
   padding: 18px 0 26px;
 }
+/* 本人点评页和他人主页均可启用逐店卡片，回复摘要及详情共用同一交互。 */
+.card-review-list .my-review-group,
+.card-review-list.profile-review-list .my-review-group {
+  padding: 18px 18px 0;
+  margin: 0 0 14px;
+  border: 1px solid #e5e8ec;
+  border-radius: 14px;
+  background: #fff;
+}
+.card-review-list.profile-review-list .my-review-group:last-of-type {
+  border-bottom: 1px solid #e5e8ec;
+}
+.card-review-list .my-review-store {
+  gap: 6px;
+  margin-bottom: 7px;
+}
+.card-review-list .my-review-store a {
+  gap: 5px;
+}
+.card-review-list .my-review-store h2 {
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.6;
+}
+.card-review-list .my-review-group :deep(.review-card),
+.card-review-list.profile-review-list .my-review-group :deep(.review-card) {
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+.card-review-list .my-reviews-toolbar {
+  margin-bottom: 14px;
+}
 /* 主页工具栏已由标签区域提供；列表内部仅保留店铺、内容和实际交互。 */
 .profile-review-list .my-review-group {
   padding-top: 23px;

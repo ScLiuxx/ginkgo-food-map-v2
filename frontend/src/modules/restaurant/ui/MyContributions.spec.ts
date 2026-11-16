@@ -149,15 +149,157 @@ describe('我的投稿与纠错', () => {
       node.textContent?.includes(text),
     )!
   }
+  async function chooseSize(size: number) {
+    const select = host.querySelector<HTMLSelectElement>('[aria-label="每页条数"]')!
+    select.value = String(size)
+    select.dispatchEvent(new Event('change', { bubbles: true }))
+    await settle()
+  }
+
+  it('回到原地址恢复筛选、第二页和条数，切换账号清除这些选项', async () => {
+    vi.mocked(fetchMyRequestPage).mockImplementation(
+      async (_status, requestedPage, userId, _token, _signal, size = 10) => ({
+        ...page(userId),
+        page: requestedPage,
+        pageSize: size,
+        total: 41,
+        totalPages: Math.ceil(41 / size),
+        counts: { ALL: 41, PENDING: 0, APPROVED: 41, REJECTED: 0 },
+      }),
+    )
+    const router = await mount(true, '/account/contributions?status=APPROVED&page=2&pageSize=20')
+    expect(fetchMyRequestPage).toHaveBeenLastCalledWith(
+      'APPROVED',
+      2,
+      '42',
+      'session-42',
+      expect.any(AbortSignal),
+      20,
+    )
+    expect(host.querySelector<HTMLSelectElement>('[aria-label="每页条数"]')?.value).toBe('20')
+    expect(button('已通过').getAttribute('aria-pressed')).toBe('true')
+    signIn(88)
+    await vi.waitFor(() =>
+      expect(fetchMyRequestPage).toHaveBeenLastCalledWith(
+        'ALL',
+        1,
+        '88',
+        'session-88',
+        expect.any(AbortSignal),
+        10,
+      ),
+    )
+    await vi.waitFor(() => expect(router.currentRoute.value.query).toEqual({}))
+  })
+
+  it('单页也可改条数，从第二页切换回首页，筛选和翻页沿用所选条数', async () => {
+    vi.mocked(fetchMyRequestPage).mockImplementation(
+      async (_status, requestedPage, userId, _token, _signal, size = 10) => ({
+        ...page(userId),
+        page: requestedPage,
+        pageSize: size,
+        total: 51,
+        totalPages: Math.ceil(51 / size),
+        counts: { ALL: 51, PENDING: 0, APPROVED: 0, REJECTED: 51 },
+      }),
+    )
+    await mount()
+    button('下一页').click()
+    await settle()
+    await chooseSize(20)
+    expect(fetchMyRequestPage).toHaveBeenLastCalledWith(
+      'ALL',
+      1,
+      '42',
+      'session-42',
+      expect.any(AbortSignal),
+      20,
+    )
+    button('已驳回').click()
+    await settle()
+    button('下一页').click()
+    await settle()
+    expect(fetchMyRequestPage).toHaveBeenLastCalledWith(
+      'REJECTED',
+      2,
+      '42',
+      'session-42',
+      expect.any(AbortSignal),
+      20,
+    )
+    expect(host.querySelector<HTMLSelectElement>('select')!.value).toBe('20')
+    await chooseSize(50)
+    expect(fetchMyRequestPage).toHaveBeenLastCalledWith(
+      'REJECTED',
+      1,
+      '42',
+      'session-42',
+      expect.any(AbortSignal),
+      50,
+    )
+    vi.mocked(fetchMyRequestPage).mockResolvedValueOnce({ ...page(), pageSize: 50 })
+    button('全部').click()
+    await settle()
+    expect(host.querySelector<HTMLSelectElement>('select')!.value).toBe('50')
+  })
+  it('条数请求失败后保留选择，重试仍从所选条数的第一页读取', async () => {
+    await mount()
+    expect(host.querySelector<HTMLSelectElement>('select')!.value).toBe('10')
+    vi.mocked(fetchMyRequestPage).mockRejectedValueOnce(new Error('条数切换失败'))
+    await chooseSize(20)
+    expect(host.textContent).toContain('条数切换失败')
+    expect(host.querySelector<HTMLSelectElement>('select')!.value).toBe('20')
+    button('重试加载').click()
+    await settle()
+    expect(fetchMyRequestPage).toHaveBeenLastCalledWith(
+      'ALL',
+      1,
+      '42',
+      'session-42',
+      expect.any(AbortSignal),
+      20,
+    )
+  })
+  it('快速切换条数取消旧查询并忽略迟到结果，换号恢复默认10条', async () => {
+    await mount()
+    let finish: ((value: MyRequestPage) => void) | undefined
+    vi.mocked(fetchMyRequestPage).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    await chooseSize(20)
+    const oldSignal = vi.mocked(fetchMyRequestPage).mock.calls.at(-1)![4]
+    vi.mocked(fetchMyRequestPage).mockResolvedValueOnce({
+      ...page(),
+      pageSize: 50,
+      records: [{ ...item(), name: '最新50条结果' }],
+    })
+    await chooseSize(50)
+    expect(oldSignal.aborted).toBe(true)
+    finish!({ ...page(), pageSize: 20, records: [{ ...item(), name: '过时20条结果' }] })
+    await settle()
+    expect(host.textContent).toContain('最新50条结果')
+    expect(host.textContent).not.toContain('过时20条结果')
+    signIn(88)
+    await settle()
+    expect(host.querySelector<HTMLSelectElement>('select')!.value).toBe('10')
+    expect(fetchMyRequestPage).toHaveBeenLastCalledWith(
+      'ALL',
+      1,
+      '88',
+      'session-88',
+      expect.any(AbortSignal),
+      10,
+    )
+  })
 
   it('展示真实记录、计数和状态筛选，店名按纯文本显示', async () => {
     await mount()
     expect(host.querySelectorAll('.contribution-card')).toHaveLength(1)
     expect(host.textContent).toContain('<img src=x> 纠错店名')
     expect(host.querySelector('.contribution-card img')).toBeNull()
-    expect(host.querySelector('.contribution-submit')?.getAttribute('href')).toBe(
-      '/restaurants/submit',
-    )
     button('待审核').click()
     await settle()
     expect(fetchMyRequestPage).toHaveBeenLastCalledWith(
@@ -166,6 +308,7 @@ describe('我的投稿与纠错', () => {
       '42',
       'session-42',
       expect.any(AbortSignal),
+      10,
     )
     expect(fetchMyRequestDetail).not.toHaveBeenCalled()
   })
@@ -214,6 +357,7 @@ describe('我的投稿与纠错', () => {
       '42',
       'session-42',
       expect.any(AbortSignal),
+      10,
     )
     button('已驳回').click()
     await settle()
@@ -223,12 +367,14 @@ describe('我的投稿与纠错', () => {
       '42',
       'session-42',
       expect.any(AbortSignal),
+      10,
     )
   })
   it('详情保留原提交、驳回原因、附图和店铺入口，关闭释放URL', async () => {
     await mount()
     await open()
     expect(host.querySelector<HTMLDialogElement>('.contribution-dialog')!.open).toBe(true)
+    expect(host.querySelector('.contribution-application-info dd')?.textContent).toBe('101')
     expect(host.textContent).toContain('原提交店名')
     expect(host.querySelector('.contribution-rejection')?.textContent).toContain(
       '<script>不能执行</script>',
@@ -254,7 +400,94 @@ describe('我的投稿与纠错', () => {
     expect(host.querySelector('.contribution-rejection')).toBeNull()
     expect(host.querySelector<HTMLDialogElement>('.contribution-lightbox')!.open).toBe(false)
   })
-  it('审核通过显示最终快照，失效目标不提供链接', async () => {
+  it('已通过筛选合并新建、更新和已收录，列表与详情保留处理方式且不提供再次审核操作', async () => {
+    const records: MyRequestItem[] = [
+      {
+        ...item('101'),
+        requestType: 'CREATE',
+        status: 'APPROVED',
+        approvalMode: 'CREATED',
+        name: '新建店铺',
+      },
+      {
+        ...item('102'),
+        requestType: 'UPDATE',
+        status: 'APPROVED',
+        approvalMode: 'UPDATED',
+        name: '纠错店铺',
+      },
+      {
+        ...item('103'),
+        requestType: 'CREATE',
+        status: 'APPROVED',
+        approvalMode: 'LINKED_EXISTING',
+        name: '已有店铺',
+      },
+    ]
+    vi.mocked(fetchMyRequestPage).mockResolvedValue({
+      ...page(),
+      records,
+      total: 3,
+      counts: { ALL: 3, PENDING: 0, APPROVED: 3, REJECTED: 0 },
+    })
+    vi.mocked(fetchMyRequestDetail).mockImplementation(async (id) => ({
+      ...detail(id),
+      application: records.find((record) => record.id === id)!,
+      approved: { name: '审核结果店名' },
+      rejectReason: null,
+      photoPositions: [],
+      ...(id === '103'
+        ? { reviewSubmission: { status: 'PUBLISHED', publishedReviewId: '901' } }
+        : {}),
+    }))
+    await mount()
+    button('已通过').click()
+    await settle()
+    expect(fetchMyRequestPage).toHaveBeenLastCalledWith(
+      'APPROVED',
+      1,
+      '42',
+      'session-42',
+      expect.any(AbortSignal),
+      10,
+    )
+    expect(button('已通过').textContent).toContain('3')
+    expect(
+      [...host.querySelectorAll('.contribution-card .contribution-badge')].map(
+        (node) => node.textContent,
+      ),
+    ).toEqual(['已通过', '已通过', '店铺已收录'])
+    for (const [index, message] of [
+      '已按审核结果新增店铺',
+      '已按审核结果更新店铺资料',
+      '店铺已收录',
+    ].entries()) {
+      host.querySelectorAll<HTMLButtonElement>('.contribution-card')[index]!.click()
+      await settle()
+      const dialog = host.querySelector('.contribution-dialog')!
+      expect(dialog.textContent).toContain(message)
+      expect(dialog.querySelector('.contribution-badge')?.textContent).toBe(
+        index === 2 ? '店铺已收录' : '已通过',
+      )
+      expect(dialog.querySelector('.contribution-edit')).toBeNull()
+      expect(
+        [...dialog.querySelectorAll('button')].some((node) =>
+          node.textContent?.includes('撤回申请'),
+        ),
+      ).toBe(false)
+      if (index === 2) {
+        expect(dialog.querySelector('.contribution-outcome strong')?.textContent).toBe('店铺已收录')
+        expect(dialog.querySelector('.contribution-outcome p')).toBeNull()
+        expect(dialog.textContent).toContain('点评已发布，可前往店铺查看')
+        expect(dialog.querySelector('.contribution-changes')).toBeNull()
+        expect(dialog.querySelectorAll('a[href="/restaurants/501"]')).toHaveLength(1)
+        expect(dialog.querySelector('.attached-body')).toBeNull()
+      }
+      host.querySelector<HTMLButtonElement>('[aria-label="关闭申请详情"]')!.click()
+      await settle()
+    }
+  })
+  it('默认仅显示原投稿，管理员修改可展开对照，失效目标不提供链接', async () => {
     const value = detail()
     value.application.status = 'APPROVED'
     value.rejectReason = null
@@ -262,14 +495,68 @@ describe('我的投稿与纠错', () => {
     value.targetAvailable = false
     value.photoPositions = []
     value.application.photoCount = 0
+    value.approved = {
+      ...value.proposed,
+      name: '实际通过店名',
+      priceKind: 'EXACT',
+      pricePerPerson: 18,
+    }
     vi.mocked(fetchMyRequestDetail).mockResolvedValue(value)
     await mount()
     await open()
-    expect(host.textContent).toContain('审核通过的内容')
-    expect(host.textContent).toContain('实际通过店名')
-    expect(host.textContent).toContain('原提交店名')
+    expect(host.querySelector('.contribution-detail-summary h3')?.textContent).toBe('原提交店名')
+    expect(host.querySelectorAll('.contribution-submitted')).toHaveLength(1)
+    expect(host.querySelector('.contribution-submitted')?.textContent).toContain('我提交的资料')
+    expect(host.querySelector('.contribution-submitted')?.textContent).toContain('未知')
+    expect(host.querySelector('.contribution-changes summary')?.textContent).toContain(
+      '管理员修改了 2 项',
+    )
+    const comparison = host.querySelector<HTMLDetailsElement>('.contribution-changes')!
+    expect(comparison.open).toBe(false)
+    comparison.querySelector('summary')!.click()
+    await settle()
+    expect(comparison.open).toBe(true)
+    expect(comparison.textContent).toContain('实际通过店名')
+    expect(comparison.textContent).toContain('¥18 / 人')
+    expect(comparison.querySelectorAll('.contribution-change')).toHaveLength(2)
+    expect(host.querySelector('.contribution-submitted-photos')).toBeNull()
+    expect(host.textContent).not.toMatch(/快照|审核通过的内容/)
     expect(host.querySelector('.contribution-detail-footer a')).toBeNull()
     expect(host.textContent).toContain('关联店铺已失效')
+  })
+  it('无修改不提示，详情切换后收起申请信息，保留完整时间和标签，不展示坐标', async () => {
+    const value = detail()
+    value.application.status = 'APPROVED'
+    value.rejectReason = null
+    value.proposed = {
+      ...value.proposed,
+      latitude: 30.67,
+      longitude: 104.1,
+      locationConfirmed: true,
+      tags: ['原有标签'],
+    }
+    value.approved = { ...value.proposed }
+    vi.mocked(fetchMyRequestDetail).mockResolvedValue(value)
+    await mount()
+    await open()
+    expect(host.querySelector('.contribution-changes')).toBeNull()
+    const metadata = host.querySelector<HTMLDetailsElement>('.contribution-application-info')!
+    expect(metadata.open).toBe(false)
+    metadata.querySelector('summary')!.click()
+    expect(metadata.open).toBe(true)
+    expect(metadata.querySelector('dd')?.textContent).toBe('101')
+    expect(metadata.textContent).toContain('审核时间')
+    expect(metadata.textContent).toContain('2026')
+    expect(host.textContent).toContain('原有标签')
+    expect(host.textContent).not.toContain('地图位置')
+    expect(host.textContent).not.toContain('30.67')
+    expect(host.querySelector('.contribution-more-properties')).toBeNull()
+    host.querySelector<HTMLButtonElement>('[aria-label="关闭申请详情"]')!.click()
+    await settle()
+    await open()
+    expect(host.querySelector<HTMLDetailsElement>('.contribution-application-info')!.open).toBe(
+      false,
+    )
   })
   it('详情失败不触发图片读取，可在同一弹窗重试', async () => {
     vi.mocked(fetchMyRequestDetail).mockRejectedValueOnce(new Error('详情故障'))

@@ -30,10 +30,9 @@
   font-weight: 500;
   color: #53606e;
 }
-.account-settings .username-setting + .fine-print {
+/* 用户名说明移除后，分隔线直接跟随该设置行，个人简介预览保留。 */
+.account-settings .username-setting {
   border-bottom: 1px solid #edf0f3;
-  margin: -2px 0 2px;
-  padding-bottom: 18px;
 }
 .account-settings .pending-tag,
 .account-settings .masked-email {
@@ -47,12 +46,6 @@
 }
 .account-settings :deep(.favorite-privacy) {
   border-bottom: 1px solid #edf0f3;
-}
-.settings-privacy-note {
-  margin: 0 0 8px;
-  color: #939ca7;
-  font-size: 12px;
-  line-height: 1.8;
 }
 .account-settings .setting-link {
   border-top: 1px solid #edf0f3;

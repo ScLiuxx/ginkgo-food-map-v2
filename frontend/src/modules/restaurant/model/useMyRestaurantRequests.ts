@@ -3,12 +3,15 @@ import axios from 'axios'
 import { useLoginStore } from '@/modules/auth'
 import { authToken } from '@/shared/api/authSession'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
+import { useRoute } from 'vue-router'
+import { useListRouteState } from '@/shared/lib/useListRouteState'
 import {
   fetchMyRequestPage,
   fetchMyRequestDetail,
   fetchMyRequestPhoto,
   fetchMyRequestReviewPhoto,
   withdrawMyRequest,
+  myRequestPageSizes,
   type MyRequestPage,
   type MyRequestDetail,
   type MyRequestFilter,
@@ -17,7 +20,11 @@ import {
 /** 本人记录与撤回；所有读取和写入固定凭证，隔离切换账号后的迟到结果。 */
 export function useMyRestaurantRequests() {
   const auth = useLoginStore()
+  const route = useRoute()
+  const viewState = useListRouteState(() => route.path === '/account/contributions')
+  let initialized = false
   const filter = ref<MyRequestFilter>('ALL'),
+    pageSize = ref(10),
     result = ref<MyRequestPage | null>(null),
     loading = ref(false),
     error = ref('')
@@ -50,23 +57,29 @@ export function useMyRestaurantRequests() {
     photos.value = []
     reviewPhotos.value = []
   }
-  /** 查询失败不保留旧列表和统计冒充当前筛选结果，重试使用原请求页码。 */
+  /** 查询失败不保留旧列表和统计冒充当前筛选结果，重试沿用页码和条数；版本隔离快速切换的迟到响应。 */
   async function load(page = requestedPage) {
     const token = authToken.value,
       userId = auth.authenticated && auth.user ? String(auth.user.id) : null
     if (!token || !userId) return
     const version = ++listVersion,
       owner = context,
-      status = filter.value
+      status = filter.value,
+      size = pageSize.value
     listAbort?.abort()
     listAbort = new AbortController()
     clearDetail()
     requestedPage = page
+    void viewState.save({
+      page: page === 1 ? undefined : page,
+      status: status === 'ALL' ? undefined : status,
+      pageSize: size === 10 ? undefined : size,
+    })
     loading.value = true
     error.value = ''
     result.value = null
     try {
-      const data = await fetchMyRequestPage(status, page, userId, token, listAbort.signal)
+      const data = await fetchMyRequestPage(status, page, userId, token, listAbort.signal, size)
       if (version === listVersion && owner === context) result.value = data
     } catch (reason) {
       if (version === listVersion && owner === context) error.value = toErrorMessage(reason)
@@ -76,6 +89,12 @@ export function useMyRestaurantRequests() {
   }
   function changeFilter(value: MyRequestFilter) {
     filter.value = value
+    void load(1)
+  }
+  /** 更改条数从第一页重新查询，筛选和重试继续保留本页内的选择。 */
+  function changePageSize(value: number) {
+    if (!myRequestPageSizes.some((size) => size === value) || value === pageSize.value) return
+    pageSize.value = value
     void load(1)
   }
   /** 最多五张申请附图；关闭详情、切换申请或换号时中止网络并释放所有已创建URL。 */
@@ -195,12 +214,23 @@ export function useMyRestaurantRequests() {
       result.value = null
       error.value = ''
       loading.value = false
-      filter.value = 'ALL'
-      requestedPage = 1
+      // 仅首次恢复当前历史条目的筛选与分页；换号或会话变化必须回到默认状态。
+      const restore = !initialized && auth.authenticated && !!authToken.value
+      const savedFilter = restore ? viewState.read('status') : undefined
+      filter.value =
+        (['ALL', 'PENDING', 'APPROVED', 'REJECTED', 'WITHDRAWN'] as const).find(
+          (value) => value === savedFilter,
+        ) ?? 'ALL'
+      const savedSize = restore ? Number(viewState.read('pageSize')) : 10
+      pageSize.value = myRequestPageSizes.find((size) => size === savedSize) ?? 10
+      requestedPage = restore ? viewState.page() : 1
       withdrawing.value = false
       mutationError.value = ''
       mutationMessage.value = ''
-      if (auth.authenticated && authToken.value) void load(1)
+      if (auth.authenticated && authToken.value) {
+        initialized = true
+        void load(requestedPage)
+      }
     },
     { immediate: true, flush: 'sync' },
   )
@@ -212,6 +242,7 @@ export function useMyRestaurantRequests() {
   })
   return {
     filter,
+    pageSize,
     result,
     loading,
     error,
@@ -227,6 +258,7 @@ export function useMyRestaurantRequests() {
     withdraw,
     load,
     changeFilter,
+    changePageSize,
     select,
     clearDetail,
     loadPhoto,

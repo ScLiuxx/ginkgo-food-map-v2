@@ -4,8 +4,15 @@ import { useLoginStore } from '@/modules/auth'
 import { authToken } from '@/shared/api/authSession'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 import { favoritePage, setFavorite, type FavoriteItem } from '../api/favoriteApi'
+import { useRoute } from 'vue-router'
+import { useListRouteState } from '@/shared/lib/useListRouteState'
 const props = defineProps<{ userId?: string; profileLayout?: boolean }>()
 const emit = defineEmits<{ total: [value: number | null] }>()
+const route = useRoute()
+const viewState = useListRouteState(() =>
+  props.userId ? route.path === `/users/${props.userId}` : route.path === '/account/favorites',
+)
+let initialized = false
 const auth = useLoginStore(),
   own = computed(() => !props.userId || props.userId === String(auth.user?.id))
 const records = ref<FavoriteItem[]>([]),
@@ -34,6 +41,7 @@ async function load(target = page.value) {
     user = props.userId || String(auth.user?.id ?? '')
   if (!auth.authenticated || !token || !user) return
   requested = target
+  void viewState.save({ page: target === 1 ? undefined : target })
   controller = new globalThis.AbortController()
   loading.value = true
   try {
@@ -76,7 +84,7 @@ async function remove(item: FavoriteItem) {
     }
   } catch (reason) {
     if (ticket === generation) {
-      notice.value = `取消结果未确认：${toErrorMessage(reason)}。请刷新列表核对。`
+      notice.value = `取消结果未确认：${toErrorMessage(reason)}。请核对当前列表。`
       await load(page.value)
     }
   } finally {
@@ -94,7 +102,9 @@ watch(
     page.value = 1
     busy.value = false
     notice.value = ''
-    void load(1)
+    const target = !initialized ? viewState.page() : 1
+    if (auth.authenticated && authToken.value) initialized = true
+    void load(target)
   },
   { immediate: true, flush: 'sync' },
 )
@@ -103,8 +113,6 @@ onBeforeUnmount(() => {
   generation++
   controller?.abort()
 })
-/** 主页工具栏复用列表原有刷新流程，不绕过隐私检查或取消收藏期间的禁用状态。 */
-defineExpose({ refresh: () => load(1), refreshing: computed(() => loading.value || busy.value) })
 </script>
 <template>
   <section
@@ -114,8 +122,7 @@ defineExpose({ refresh: () => load(1), refreshing: computed(() => loading.value 
     :aria-busy="loading"
   >
     <header v-if="!profileLayout">
-      <h2>{{ own ? '我的收藏' : '收藏店铺' }}</h2>
-      <button type="button" :disabled="loading || busy" @click="load(1)">刷新列表</button>
+      <h2>{{ own ? '收藏' : '收藏店铺' }}</h2>
     </header>
     <p v-if="notice" role="status">{{ notice }}</p>
     <p v-if="loading" role="status">正在加载收藏…</p>
@@ -152,8 +159,21 @@ defineExpose({ refresh: () => load(1), refreshing: computed(() => loading.value 
             >收藏于 {{ new Date(item.createdAt).toLocaleDateString('zh-CN') }}</time
           >
         </div>
-        <button v-if="own" type="button" :disabled="busy || loading" @click="remove(item)">
-          取消收藏
+        <!-- 收藏状态用实心星呈现；图标保留操作名称和44px触控范围，避免手机另占一行。 -->
+        <button
+          v-if="own"
+          type="button"
+          class="favorite-remove"
+          aria-label="取消收藏"
+          title="取消收藏"
+          :disabled="busy || loading"
+          @click="remove(item)"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="m12 3 2.78 5.63 6.22.9-4.5 4.39 1.06 6.2L12 17.2l-5.56 2.92 1.06-6.2L3 9.53l6.22-.9L12 3Z"
+            />
+          </svg>
         </button>
       </article>
       <nav v-if="totalPages > 1" aria-label="收藏分页">
@@ -280,13 +300,24 @@ defineExpose({ refresh: () => load(1), refreshing: computed(() => loading.value 
   display: block;
   margin-bottom: 7px;
 }
-.profile-favorites article > button {
+.favorites-list .favorite-remove {
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
   border: 0;
-  padding: 8px 0;
+  padding: 0;
   background: transparent;
-  color: #939ca7;
-  font-size: 12px;
-  white-space: nowrap;
+  color: #c28a2c;
+}
+.favorite-remove svg {
+  width: 23px;
+  height: 23px;
+  fill: currentColor;
+}
+.favorite-remove:hover:not(:disabled) {
+  color: #a96c16;
 }
 .favorites-list :is(a, button):focus-visible {
   outline: 2px solid #cf9f53;
@@ -294,14 +325,9 @@ defineExpose({ refresh: () => load(1), refreshing: computed(() => loading.value 
 }
 @media (max-width: 600px) {
   .profile-favorites article {
-    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-columns: 40px minmax(0, 1fr) auto;
     gap: 10px 12px;
     padding: 20px 0;
-  }
-  .profile-favorites article > button {
-    grid-column: 2;
-    justify-self: end;
-    min-height: 32px;
   }
   .favorite-store-icon {
     width: 40px;

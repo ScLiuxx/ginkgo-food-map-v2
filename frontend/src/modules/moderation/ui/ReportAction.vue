@@ -4,11 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { authToken } from '@/shared/api/authSession'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 import { submitContentReport } from '../api/contentReportsApi'
-import {
-  reportReasons,
-  reportTargetLabel,
-  type ReportReason,
-} from '../model/reportReasons'
+import { reportTargetLabel, type ReportReason } from '../model/reportReasons'
+import ReportReasonSelect from './ReportReasonSelect.vue'
 import type { ReportTargetType } from '../api/contentReportsApi'
 
 /** 举报入口只出现在他人内容旁；本人内容不渲染，服务端仍独立校验归属与目标可见性。 */
@@ -20,6 +17,8 @@ const props = defineProps<{
 const router = useRouter(),
   route = useRoute()
 const dialog = useTemplateRef('dialog')
+const successDialog = useTemplateRef('successDialog')
+const entry = useTemplateRef('entry')
 const open = ref(false),
   reason = ref<ReportReason | ''>(''),
   detail = ref(''),
@@ -37,6 +36,7 @@ function reset() {
   context++
   controller?.abort()
   dialog.value?.close()
+  successDialog.value?.close()
   open.value = false
   reason.value = ''
   detail.value = ''
@@ -66,6 +66,12 @@ function close() {
   dialog.value?.close()
   open.value = false
   error.value = ''
+}
+/** 成功反馈只存在于独立弹窗；关闭后入口始终保持“举报”，不在原内容旁追加回执。 */
+function closeSuccess() {
+  successDialog.value?.close()
+  notice.value = ''
+  entry.value?.focus({ preventScroll: true })
 }
 
 /** 重复提交由服务端返回原记录，与首次提交一样视为成功，避免用户重复点击产生歧义。 */
@@ -97,14 +103,15 @@ async function submit() {
       controller.signal,
     )
     if (owner !== context) return
-    notice.value = '已提交举报。'
     dialog.value?.close()
     open.value = false
     reason.value = ''
     detail.value = ''
+    notice.value = '举报成功'
+    await nextTick()
+    if (owner === context) successDialog.value?.showModal()
   } catch (reasonValue) {
-    if (owner === context)
-      error.value = `${toErrorMessage(reasonValue)}。未确认提交，可重试。`
+    if (owner === context) error.value = `${toErrorMessage(reasonValue)}。未确认提交，可重试。`
   } finally {
     if (owner === context) sending.value = false
   }
@@ -113,8 +120,9 @@ async function submit() {
 
 <template>
   <span class="report-action">
-    <button type="button" class="report-entry" :disabled="sending" @click="show">举报</button>
-    <span v-if="notice" role="status" class="report-notice">{{ notice }}</span>
+    <button ref="entry" type="button" class="report-entry" :disabled="sending" @click="show">
+      举报
+    </button>
     <Teleport to="body">
       <dialog
         v-if="open"
@@ -127,17 +135,11 @@ async function submit() {
         <form @submit.prevent="submit">
           <h2 :id="'report-title-' + uniqueId">{{ title }}</h2>
           <label :for="'report-reason-' + uniqueId">举报原因 <span>必选</span></label>
-          <select
-            :id="'report-reason-' + uniqueId"
+          <ReportReasonSelect
             v-model="reason"
-            required
+            :input-id="'report-reason-' + uniqueId"
             :disabled="sending"
-          >
-            <option value="" disabled>请选择举报原因</option>
-            <option v-for="item in reportReasons" :key="item.value" :value="item.value">
-              {{ item.label }}
-            </option>
-          </select>
+          />
           <label :for="'report-detail-' + uniqueId">补充说明 <span>选填</span></label>
           <textarea
             :id="'report-detail-' + uniqueId"
@@ -147,10 +149,8 @@ async function submit() {
             :disabled="sending"
             :aria-invalid="length > 200 || !!error"
           />
-          <p class="report-count" :class="{ invalid: length > 200 }">{{ length }} / 200</p>
-          <p v-if="error" role="alert" class="report-error">{{ error }}</p>
-          <p class="report-note">
-            举报后由管理员核查，内容不会因举报立即下架。处理结果将通过系统通知告知。
+          <p v-if="error || length > 200" role="alert" class="report-error">
+            {{ error || '补充说明最多200字。' }}
           </p>
           <footer>
             <button type="button" :disabled="sending" @click="close">取消</button>
@@ -159,6 +159,28 @@ async function submit() {
             </button>
           </footer>
         </form>
+      </dialog>
+      <dialog
+        v-if="notice"
+        ref="successDialog"
+        class="report-success-dialog"
+        :aria-labelledby="'report-success-title-' + uniqueId"
+        @cancel.prevent="closeSuccess"
+        @close="notice = ''"
+      >
+        <button
+          type="button"
+          class="report-success-close"
+          aria-label="关闭举报成功提示"
+          autofocus
+          @click="closeSuccess"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6" /></svg>
+        </button>
+        <span class="report-success-icon" aria-hidden="true"
+          ><svg viewBox="0 0 24 24"><path d="m6 12 4 4 8-8" /></svg
+        ></span>
+        <h2 :id="'report-success-title-' + uniqueId" role="status">{{ notice }}</h2>
       </dialog>
     </Teleport>
   </span>
@@ -190,11 +212,6 @@ dialog button {
   cursor: default;
   opacity: 0.55;
 }
-.report-notice {
-  color: #68804b;
-  font-size: 11px;
-  white-space: nowrap;
-}
 .report-dialog {
   width: min(440px, calc(100% - 32px));
   padding: 24px;
@@ -202,8 +219,10 @@ dialog button {
   border-radius: 12px;
   color: #38434e;
   font-size: 13px;
+  overflow: visible;
 }
-.report-dialog::backdrop {
+.report-dialog::backdrop,
+.report-success-dialog::backdrop {
   background: #1f293755;
 }
 .report-dialog h2 {
@@ -220,7 +239,6 @@ dialog button {
   color: #98a0a8;
   font-size: 12px;
 }
-.report-dialog select,
 .report-dialog textarea {
   display: block;
   width: 100%;
@@ -232,18 +250,10 @@ dialog button {
   background: #fafbfc;
   color: #38434e;
 }
-.report-count {
-  margin: 6px 0 0;
-  text-align: right;
-  color: #98a0a8;
-  font-size: 12px;
-}
-.report-count.invalid,
 .report-error {
   color: #a53c2e;
 }
-.report-error,
-.report-note {
+.report-error {
   line-height: 1.8;
   overflow-wrap: anywhere;
 }
@@ -270,10 +280,72 @@ dialog button {
   opacity: 0.55;
   cursor: default;
 }
-button:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline: 2px solid #cf9f53;
+button:focus-visible {
+  outline: 2px solid #a5adb7;
   outline-offset: 3px;
+}
+/* 补充说明保留原浅灰边框，输入时只显示光标，不加描边或光晕。 */
+.report-dialog textarea:focus {
+  outline: none;
+  box-shadow: none;
+  border-color: #e6e8eb;
+}
+.report-success-dialog {
+  width: min(300px, calc(100% - 32px));
+  box-sizing: border-box;
+  padding: 38px 24px 30px;
+  border: 1px solid #e6e8eb;
+  border-radius: 12px;
+  background: #fff;
+  color: #38434e;
+  text-align: center;
+}
+.report-success-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: #9aa4af;
+}
+.report-success-close svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.report-success-close:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.report-success-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: #edf5eb;
+  color: #7e9d70;
+}
+.report-success-icon svg {
+  width: 25px;
+  height: 25px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.report-success-dialog h2 {
+  margin: 13px 0 0;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 600;
 }
 </style>
