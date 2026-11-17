@@ -14,7 +14,8 @@ import AdminSidebar from './AdminSidebar.vue'
 defineProps<{ username: string; loggingOut: boolean; sessionError: string | null }>()
 defineEmits<{ logout: [] }>()
 const state = useAdminContentReports()
-const { status, page, result, detail, loading, inspecting, busy, error, actionError, notice } = state
+const { status, page, result, detail, loading, inspecting, busy, error, actionError, notice } =
+  state
 const statuses: ContentReportStatus[] = ['PENDING', 'RESOLVED', 'DISMISSED']
 const detailDialog = useTemplateRef('detailDialog'),
   confirmDialog = useTemplateRef('confirmDialog')
@@ -88,7 +89,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="report-workspace">
+  <div class="report-workspace admin-theme">
     <header class="report-topbar">
       <RouterLink class="brand" to="/admin/reviews"
         ><em>泥电</em><span>美食地图</span><small>管理工作台</small></RouterLink
@@ -224,19 +225,13 @@ onBeforeUnmount(() => {
             :disabled="busy"
             :aria-invalid="noteLength > 200"
           />
-          <p class="report-count" :class="{ invalid: noteLength > 200 }">
-            {{ noteLength }} / 200
-          </p>
+          <p class="report-count" :class="{ invalid: noteLength > 200 }">{{ noteLength }} / 200</p>
           <p v-if="actionError" role="alert" class="report-error">{{ actionError }}</p>
           <footer class="report-decisions">
             <button :disabled="busy || noteLength > 200" @click="dismissReport">
               {{ busy ? '处理中…' : '驳回举报' }}
             </button>
-            <button
-              class="danger"
-              :disabled="busy || noteLength > 200"
-              @click="askRemove"
-            >
+            <button class="danger" :disabled="busy || noteLength > 200" @click="askRemove">
               确认违规并删除
             </button>
           </footer>
@@ -257,9 +252,9 @@ onBeforeUnmount(() => {
     >
       <h2 id="report-confirm-title">确认永久删除内容？</h2>
       <p v-if="pendingRemoval" class="report-confirm-target">
-        {{ reportTargetLabel(pendingRemoval.targetType) }} #{{
-          pendingRemoval.targetId
-        }}：{{ pendingRemoval.contentSnapshot }}
+        {{ reportTargetLabel(pendingRemoval.targetType) }} #{{ pendingRemoval.targetId }}：{{
+          pendingRemoval.contentSnapshot
+        }}
       </p>
       <p>删除后无法恢复，并将同一内容下的待处理举报一并结案。</p>
       <p v-if="actionError" role="alert" class="report-error">{{ actionError }}</p>

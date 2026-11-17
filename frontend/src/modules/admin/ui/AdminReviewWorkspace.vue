@@ -95,7 +95,7 @@ onBeforeUnmount(() => photoDialog.value?.close())
 </script>
 
 <template>
-  <div class="admin-review-preview">
+  <div class="admin-review-preview admin-theme">
     <header class="topbar">
       <RouterLink class="brand" to="/admin/reviews"><em>泥</em><span>泥电管理端</span></RouterLink>
       <div class="account">

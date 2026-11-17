@@ -1,8 +1,8 @@
 /* 发布页遵循确认稿：单列纯文本表单，不增加预览、定向接收或草稿区域。 */
 .announcement-workspace {
   min-height: 100vh;
-  color: #242a30;
-  background: #faf9f7;
+  color: var(--admin-text);
+  background: var(--admin-canvas);
   font-family: Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 .announcement-workspace * {
@@ -15,31 +15,31 @@
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  background: #fff;
-  border-bottom: 1px solid #e6e6e6;
+  background: var(--admin-surface);
+  border-bottom: 1px solid var(--admin-divider);
 }
 .brand {
   display: flex;
   align-items: center;
   gap: 10px;
   text-decoration: none;
-  color: #151515;
+  color: var(--admin-text);
   white-space: nowrap;
   font-size: 29px;
   font-weight: 700;
 }
 .brand em {
-  color: #e97913;
+  color: var(--admin-brand);
   font-size: 38px;
   font-style: normal;
 }
 .brand small {
   margin-left: 18px;
   padding-left: 24px;
-  border-left: 1px solid #ddd;
+  border-left: 1px solid var(--admin-border);
   font-size: 21px;
   font-weight: 400;
-  color: #606060;
+  color: var(--admin-secondary);
 }
 .admin-identity {
   display: flex;
@@ -60,19 +60,19 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #fff0e0;
-  color: #ce6b16;
+  background: var(--admin-surface-hover);
+  color: var(--admin-secondary);
 }
 .admin-identity button {
   white-space: nowrap;
   flex-shrink: 0;
   border: 0;
-  border-left: 1px solid #ddd;
+  border-left: 1px solid var(--admin-border);
   border-radius: 0;
   margin-left: 8px;
   padding-left: 24px;
   background: transparent;
-  color: #666;
+  color: var(--admin-secondary);
 }
 .announcement-shell {
   display: grid;
@@ -84,7 +84,7 @@
   min-width: 0;
 }
 .announcement-breadcrumb {
-  color: #777;
+  color: var(--admin-muted);
   font-size: 15px;
   margin-bottom: 24px;
 }
@@ -97,20 +97,20 @@ h1 {
 .announcement-tabs {
   display: flex;
   gap: 28px;
-  border-bottom: 1px solid #dcdcdc;
+  border-bottom: 1px solid var(--admin-border);
 }
 .announcement-tabs button {
   padding: 12px 12px 18px;
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;
-  color: #666;
+  color: var(--admin-secondary);
   background: transparent;
   font-size: 19px;
 }
 .announcement-tabs .active {
-  border-bottom-color: #e97913;
-  color: #e97913;
+  border-bottom-color: var(--admin-brand);
+  color: var(--admin-accent-text);
   font-weight: 600;
 }
 .announcement-editor,
@@ -118,9 +118,9 @@ h1 {
   max-width: 1110px;
   margin: 26px auto 0;
   padding: 28px 32px 24px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--admin-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--admin-surface);
 }
 h2 {
   margin: 0;
@@ -132,7 +132,7 @@ h2 {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #777;
+  color: var(--admin-muted);
   margin: 9px 0 28px;
   font-size: 17px;
 }
@@ -154,19 +154,19 @@ h2 {
   margin-bottom: 12px;
 }
 .announcement-field label span {
-  color: #e97913;
+  color: var(--admin-accent-text);
 }
 .announcement-field input,
 .announcement-field textarea {
-  border: 1px solid #c9c9c9;
+  border: 1px solid var(--admin-border);
   border-radius: 6px;
   padding: 12px 18px;
   width: 100%;
   min-width: 0;
   font: inherit;
   font-size: 17px;
-  color: #222;
-  background: #fff;
+  color: var(--admin-text);
+  background: var(--admin-surface);
 }
 .announcement-field input {
   height: 48px;
@@ -179,15 +179,15 @@ h2 {
 .announcement-field small {
   text-align: right;
   margin-top: 7px;
-  color: #888;
+  color: var(--admin-muted);
   font-size: 14px;
 }
 .announcement-field .invalid,
 .announcement-error {
-  color: #b33d2e;
+  color: var(--admin-danger);
 }
 .announcement-reminder {
-  color: #888;
+  color: var(--admin-muted);
   display: flex;
   gap: 10px;
   align-items: baseline;
@@ -202,7 +202,7 @@ h2 {
   display: flex;
   gap: 24px;
   justify-content: flex-end;
-  border-top: 1px solid #e2e2e2;
+  border-top: 1px solid var(--admin-divider);
   padding-top: 24px;
   margin-top: 24px;
 }
@@ -210,11 +210,11 @@ button,
 select {
   font: inherit;
   font-size: 15px;
-  border: 1px solid #c7c7c7;
+  border: 1px solid var(--admin-border);
   border-radius: 7px;
   padding: 10px 20px;
-  background: #fff;
-  color: #333;
+  background: var(--admin-surface);
+  color: var(--admin-text);
   cursor: pointer;
 }
 button:disabled {
@@ -222,9 +222,9 @@ button:disabled {
   cursor: default;
 }
 button.primary {
-  border-color: #e97913;
-  background: #ed7900;
-  color: #fff;
+  border-color: var(--admin-primary);
+  background: var(--admin-primary);
+  color: var(--admin-surface);
   font-weight: 600;
 }
 .announcement-actions button {
@@ -232,10 +232,8 @@ button.primary {
   font-size: 17px;
 }
 button:focus-visible,
-input:focus-visible,
-textarea:focus-visible,
 select:focus-visible {
-  outline: 2px solid #bd6816;
+  outline: 2px solid var(--admin-focus);
   outline-offset: 3px;
 }
 .announcement-error,
@@ -244,7 +242,7 @@ select:focus-visible {
   overflow-wrap: anywhere;
 }
 .announcement-notice {
-  color: #597242;
+  color: var(--admin-success);
   padding: 12px 0;
 }
 .announcement-record-toolbar {
@@ -268,7 +266,7 @@ select:focus-visible {
   align-items: center;
   gap: 18px;
   padding: 22px 0;
-  border-bottom: 1px solid #ececec;
+  border-bottom: 1px solid var(--admin-divider);
 }
 .record-title {
   text-align: left;
@@ -284,20 +282,20 @@ select:focus-visible {
   gap: 12px;
   margin: 9px 0 0;
   font-size: 12px;
-  color: #888;
+  color: var(--admin-muted);
 }
 .announcement-status {
   display: inline-block;
   font-size: 12px;
   padding: 5px 10px;
-  color: #b46117;
-  background: #fff2e4;
+  color: var(--admin-success);
+  background: var(--admin-success-soft);
   border-radius: 4px;
   white-space: nowrap;
 }
 .announcement-status.withdrawn {
-  color: #777;
-  background: #f0f0f0;
+  color: var(--admin-muted);
+  background: var(--admin-surface-hover);
 }
 .record-actions {
   display: flex;
@@ -309,7 +307,7 @@ select:focus-visible {
 }
 .announcement-empty {
   text-align: center;
-  color: #888;
+  color: var(--admin-muted);
   padding: 50px 0;
 }
 .announcement-pagination {
@@ -320,23 +318,23 @@ select:focus-visible {
   gap: 12px;
   margin-top: 24px;
   font-size: 13px;
-  color: #777;
+  color: var(--admin-muted);
 }
 .announcement-pagination button {
   font-size: 13px;
   padding: 8px 12px;
 }
 .announcement-dialog {
-  border: 1px solid #ddd;
+  border: 1px solid var(--admin-border);
   border-radius: 9px;
   padding: 30px;
   width: min(560px, calc(100% - 32px));
   max-height: 85vh;
-  color: #303030;
+  color: var(--admin-text);
   overflow: auto;
 }
 .announcement-dialog::backdrop {
-  background: rgb(30 25 20 / 30%);
+  background: var(--admin-backdrop);
 }
 .announcement-dialog p {
   line-height: 1.8;
@@ -358,7 +356,7 @@ select:focus-visible {
   font-size: 24px;
 }
 .announcement-detail-meta {
-  color: #888;
+  color: var(--admin-muted);
   font-size: 13px;
 }
 .announcement-body {

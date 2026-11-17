@@ -50,7 +50,7 @@ onBeforeRouteUpdate(() => !busy.value)
 </script>
 
 <template>
-  <div class="management">
+  <div class="management admin-theme">
     <header>
       <RouterLink class="brand" to="/admin/reviews"
         ><em>泥电</em>美食地图 <small>管理工作台</small></RouterLink
@@ -262,17 +262,18 @@ onBeforeRouteUpdate(() => !busy.value)
 </template>
 
 <style scoped>
-/* 沿用审核页的橙色品牌、白底和细分隔线；窄屏表格独立滚动，不挤压操作按钮。 */
+/* 四个管理入口共用灰底、白色内容区与橙色操作；窄屏表格仍独立滚动。 */
 .management {
   min-height: 100vh;
-  background: #fff;
-  color: #25313d;
+  background: var(--admin-canvas);
+  color: var(--admin-text);
   font-family: Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 header {
+  background: var(--admin-surface);
   height: 84px;
   padding: 0 40px;
-  border-bottom: 1px solid #e9ecef;
+  border-bottom: 1px solid var(--admin-divider);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -287,14 +288,14 @@ header {
 }
 .brand em {
   font-style: normal;
-  color: #e97913;
+  color: var(--admin-brand);
   font-size: 35px;
 }
 .brand small {
   font-size: 13px;
-  color: #78818b;
+  color: var(--admin-muted);
   font-weight: 400;
-  border-left: 1px solid #e1e5e8;
+  border-left: 1px solid var(--admin-border);
   padding-left: 20px;
 }
 .account {
@@ -319,7 +320,7 @@ main {
 }
 .breadcrumb {
   font-size: 12px;
-  color: #89919a;
+  color: var(--admin-muted);
   margin-bottom: 28px;
 }
 .heading {
@@ -338,7 +339,7 @@ h2 {
   margin: 0 0 12px;
 }
 .muted {
-  color: #89919a;
+  color: var(--admin-muted);
   font-size: 13px;
   line-height: 1.8;
 }
@@ -356,9 +357,9 @@ a.primary {
   cursor: pointer;
 }
 button {
-  border: 1px solid #e1e5e8;
+  border: 1px solid var(--admin-border);
   border-radius: 5px;
-  background: white;
+  background: var(--admin-surface);
   padding: 9px 14px;
   color: inherit;
 }
@@ -368,20 +369,20 @@ button:disabled {
 }
 .primary {
   display: inline-block;
-  border: 1px solid #df821e;
+  border: 1px solid var(--admin-primary);
   border-radius: 5px;
-  background: #e98a20;
-  color: white;
+  background: var(--admin-primary);
+  color: var(--admin-surface);
   padding: 10px 17px;
   white-space: nowrap;
 }
 input,
 select {
-  border: 1px solid #dfe3e7;
+  border: 1px solid var(--admin-border);
   border-radius: 5px;
   padding: 10px 12px;
   min-width: 0;
-  background: white;
+  background: var(--admin-surface);
   color: inherit;
 }
 input {
@@ -402,6 +403,7 @@ input {
   font-size: 13px;
 }
 .table-wrap {
+  background: var(--admin-surface);
   overflow: auto;
 }
 table {
@@ -413,20 +415,20 @@ table {
 }
 th {
   font-weight: 500;
-  color: #89919a;
-  background: #fafbfc;
+  color: var(--admin-muted);
+  background: var(--admin-surface-muted);
   padding: 14px;
 }
 td {
   padding: 18px 14px;
-  border-bottom: 1px solid #edf0f2;
+  border-bottom: 1px solid var(--admin-divider);
 }
 td:first-child {
   width: 42%;
 }
 td small {
   display: block;
-  color: #89919a;
+  color: var(--admin-muted);
   font-size: 12px;
   line-height: 1.8;
   overflow-wrap: anywhere;
@@ -436,16 +438,16 @@ strong {
 }
 .badge {
   display: inline-block;
-  background: #edf7ef;
-  color: #458458;
+  background: var(--admin-success-soft);
+  color: var(--admin-success);
   padding: 5px 8px;
   border-radius: 4px;
   font-size: 12px;
   white-space: nowrap;
 }
 .closed {
-  background: #f2f3f5;
-  color: #818a94;
+  background: var(--admin-surface-hover);
+  color: var(--admin-muted);
 }
 .actions {
   white-space: nowrap;
@@ -453,7 +455,7 @@ strong {
 .actions > a,
 .actions > button {
   display: inline-block;
-  color: #b16c22;
+  color: var(--admin-accent-text);
   margin-right: 12px;
   font-size: 13px;
 }
@@ -470,9 +472,9 @@ strong {
   font-size: 13px;
 }
 .current-page {
-  background: #e98a20;
-  color: white;
-  border-color: #e98a20;
+  background: var(--admin-primary);
+  color: var(--admin-surface);
+  border-color: var(--admin-primary);
 }
 .page-jump {
   display: flex;
@@ -487,7 +489,7 @@ strong {
   white-space: nowrap;
 }
 .lookup {
-  border-top: 1px solid #e9ecef;
+  border-top: 1px solid var(--admin-divider);
   padding-top: 30px;
   margin-top: 20px;
 }
@@ -495,8 +497,9 @@ strong {
   max-width: 560px;
 }
 .detail {
+  background: var(--admin-surface);
   margin-top: 22px;
-  border: 1px solid #e5e8ec;
+  border: 1px solid var(--admin-border);
   border-radius: 8px;
   padding: 24px;
   overflow-wrap: anywhere;
@@ -516,13 +519,16 @@ strong {
   line-height: 1.8;
 }
 .notice {
-  background: #edf7ef;
-  color: #458458;
+  background: var(--admin-success-soft);
+  color: var(--admin-success);
 }
-.alert,
+.alert {
+  background: var(--admin-danger-soft);
+  color: var(--admin-danger);
+}
 .confirm {
-  background: #fff3e8;
-  color: #9a5022;
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent-text);
 }
 .confirm {
   padding: 16px;
@@ -533,18 +539,17 @@ strong {
   margin-right: 10px;
 }
 .danger {
-  color: #ab493e !important;
+  color: var(--admin-danger) !important;
 }
 .empty {
   padding: 60px 15px;
   text-align: center;
-  color: #89919a;
+  color: var(--admin-muted);
 }
 button:focus-visible,
 a:focus-visible,
-input:focus-visible,
 select:focus-visible {
-  outline: 2px solid #b57932;
+  outline: 2px solid var(--admin-focus);
   outline-offset: 3px;
 }
 @media (max-width: 800px) {
@@ -598,7 +603,7 @@ select:focus-visible {
   tr {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    border-bottom: 1px solid #edf0f2;
+    border-bottom: 1px solid var(--admin-divider);
     padding: 12px 0;
   }
   td {

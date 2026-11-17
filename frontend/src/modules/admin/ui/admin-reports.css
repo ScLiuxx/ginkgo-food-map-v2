@@ -1,8 +1,8 @@
 /* 举报处理页沿用管理端顶栏、侧栏和卡片节奏，不引入独立视觉体系。 */
 .report-workspace {
   min-height: 100vh;
-  color: #242a30;
-  background: #faf9f7;
+  color: var(--admin-text);
+  background: var(--admin-canvas);
   font-family: Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 .report-workspace * {
@@ -15,31 +15,31 @@
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  background: #fff;
-  border-bottom: 1px solid #e6e6e6;
+  background: var(--admin-surface);
+  border-bottom: 1px solid var(--admin-divider);
 }
 .brand {
   display: flex;
   align-items: center;
   gap: 10px;
   text-decoration: none;
-  color: #151515;
+  color: var(--admin-text);
   white-space: nowrap;
   font-size: 29px;
   font-weight: 700;
 }
 .brand em {
-  color: #e97913;
+  color: var(--admin-brand);
   font-size: 38px;
   font-style: normal;
 }
 .brand small {
   margin-left: 18px;
   padding-left: 24px;
-  border-left: 1px solid #ddd;
+  border-left: 1px solid var(--admin-border);
   font-size: 21px;
   font-weight: 400;
-  color: #606060;
+  color: var(--admin-secondary);
 }
 .admin-identity {
   display: flex;
@@ -60,19 +60,19 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #fff0e0;
-  color: #ce6b16;
+  background: var(--admin-surface-hover);
+  color: var(--admin-secondary);
 }
 .admin-identity button {
   white-space: nowrap;
   flex-shrink: 0;
   border: 0;
-  border-left: 1px solid #ddd;
+  border-left: 1px solid var(--admin-border);
   border-radius: 0;
   margin-left: 8px;
   padding-left: 24px;
   background: transparent;
-  color: #666;
+  color: var(--admin-secondary);
 }
 .report-shell {
   display: grid;
@@ -84,7 +84,7 @@
   min-width: 0;
 }
 .report-breadcrumb {
-  color: #777;
+  color: var(--admin-muted);
   font-size: 15px;
   margin-bottom: 24px;
 }
@@ -95,36 +95,36 @@ h1 {
   font-weight: 700;
 }
 .report-intro {
-  color: #818a94;
+  color: var(--admin-muted);
   font-size: 14px;
   margin: 0 0 20px;
 }
 .report-tabs {
   display: flex;
   gap: 28px;
-  border-bottom: 1px solid #dcdcdc;
+  border-bottom: 1px solid var(--admin-border);
 }
 .report-tabs button {
   padding: 12px 12px 18px;
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;
-  color: #666;
+  color: var(--admin-secondary);
   background: transparent;
   font-size: 19px;
 }
 .report-tabs .active {
-  border-bottom-color: #e97913;
-  color: #e97913;
+  border-bottom-color: var(--admin-brand);
+  color: var(--admin-accent-text);
   font-weight: 600;
 }
 .report-panel {
   max-width: 1110px;
   margin: 26px auto 0;
   padding: 24px 32px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--admin-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--admin-surface);
 }
 .report-toolbar {
   display: flex;
@@ -132,7 +132,7 @@ h1 {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 12px;
-  color: #777;
+  color: var(--admin-muted);
   font-size: 13px;
 }
 button,
@@ -140,11 +140,11 @@ select,
 textarea {
   font: inherit;
   font-size: 15px;
-  border: 1px solid #c7c7c7;
+  border: 1px solid var(--admin-border);
   border-radius: 7px;
   padding: 10px 20px;
-  background: #fff;
-  color: #333;
+  background: var(--admin-surface);
+  color: var(--admin-text);
   cursor: pointer;
 }
 button:disabled {
@@ -152,8 +152,8 @@ button:disabled {
   cursor: default;
 }
 button:focus-visible,
-textarea:focus-visible {
-  outline: 2px solid #bd6816;
+select:focus-visible {
+  outline: 2px solid var(--admin-focus);
   outline-offset: 3px;
 }
 .report-list {
@@ -167,7 +167,7 @@ textarea:focus-visible {
   align-items: start;
   gap: 18px;
   padding: 20px 0;
-  border-bottom: 1px solid #ececec;
+  border-bottom: 1px solid var(--admin-divider);
 }
 .report-row-main {
   min-width: 0;
@@ -186,26 +186,26 @@ textarea:focus-visible {
   display: inline-block;
   font-size: 12px;
   padding: 4px 9px;
-  color: #b46117;
-  background: #fff2e4;
+  color: var(--admin-accent-text);
+  background: var(--admin-accent-soft);
   border-radius: 4px;
   white-space: nowrap;
 }
 .report-status.resolved {
-  color: #a0372b;
-  background: #fdecea;
+  color: var(--admin-danger);
+  background: var(--admin-danger-soft);
 }
 .report-status.dismissed {
-  color: #777;
-  background: #f0f0f0;
+  color: var(--admin-muted);
+  background: var(--admin-surface-hover);
 }
 .report-reason {
-  color: #888;
+  color: var(--admin-muted);
   font-size: 12px;
 }
 .report-snapshot {
   margin: 10px 0 0;
-  color: #444;
+  color: var(--admin-text);
   font-size: 14px;
   line-height: 1.8;
   overflow-wrap: anywhere;
@@ -218,7 +218,7 @@ textarea:focus-visible {
   display: block;
   padding: 14px;
   border-radius: 6px;
-  background: #faf9f7;
+  background: var(--admin-canvas);
   white-space: pre-wrap;
   max-height: 260px;
   overflow: auto;
@@ -228,7 +228,7 @@ textarea:focus-visible {
   flex-wrap: wrap;
   gap: 14px;
   margin: 9px 0 0;
-  color: #888;
+  color: var(--admin-muted);
   font-size: 12px;
 }
 .report-meta.detail {
@@ -236,7 +236,7 @@ textarea:focus-visible {
 }
 .report-empty {
   text-align: center;
-  color: #888;
+  color: var(--admin-muted);
   padding: 50px 0;
 }
 .report-pagination {
@@ -247,7 +247,7 @@ textarea:focus-visible {
   gap: 12px;
   margin-top: 22px;
   font-size: 13px;
-  color: #777;
+  color: var(--admin-muted);
 }
 .report-pagination button,
 .report-list li > button {
@@ -260,23 +260,23 @@ textarea:focus-visible {
   overflow-wrap: anywhere;
 }
 .report-notice {
-  color: #597242;
+  color: var(--admin-success);
   padding: 12px 0;
 }
 .report-error {
-  color: #b33d2e;
+  color: var(--admin-danger);
 }
 .report-dialog {
-  border: 1px solid #ddd;
+  border: 1px solid var(--admin-border);
   border-radius: 9px;
   padding: 30px;
   width: min(720px, calc(100% - 32px));
   max-height: 85vh;
-  color: #303030;
+  color: var(--admin-text);
   overflow: auto;
 }
 .report-dialog::backdrop {
-  background: rgb(30 25 20 / 30%);
+  background: var(--admin-backdrop);
 }
 .report-dialog p {
   line-height: 1.8;
@@ -295,14 +295,14 @@ textarea:focus-visible {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  color: #777;
+  color: var(--admin-muted);
   font-size: 13px;
 }
 .report-detail-reason {
   margin-top: 18px;
 }
 .report-detail-note {
-  color: #666;
+  color: var(--admin-secondary);
 }
 .report-dialog h2 {
   font-size: 18px;
@@ -316,7 +316,7 @@ textarea:focus-visible {
   font-weight: 600;
 }
 .report-dialog label span {
-  color: #888;
+  color: var(--admin-muted);
   font-size: 12px;
   font-weight: 400;
 }
@@ -329,31 +329,31 @@ textarea:focus-visible {
 .report-count {
   text-align: right;
   margin: 6px 0 0;
-  color: #888;
+  color: var(--admin-muted);
   font-size: 12px;
 }
 .report-count.invalid {
-  color: #b33d2e;
+  color: var(--admin-danger);
 }
 .report-decisions {
   display: flex;
   justify-content: flex-end;
   gap: 14px;
-  border-top: 1px solid #e2e2e2;
+  border-top: 1px solid var(--admin-divider);
   padding-top: 20px;
   margin-top: 20px;
 }
 .report-decisions .danger {
-  border-color: #b33d2e;
-  background: #b33d2e;
-  color: #fff;
+  border-color: var(--admin-danger);
+  background: var(--admin-danger);
+  color: var(--admin-surface);
   font-weight: 600;
 }
 .report-handled {
   margin-top: 20px;
   padding-top: 16px;
-  border-top: 1px solid #e2e2e2;
-  color: #777;
+  border-top: 1px solid var(--admin-divider);
+  color: var(--admin-muted);
   font-size: 13px;
 }
 .report-confirm {
@@ -362,7 +362,7 @@ textarea:focus-visible {
 .report-confirm-target {
   padding: 12px;
   border-radius: 6px;
-  background: #faf9f7;
+  background: var(--admin-canvas);
   white-space: pre-wrap;
   max-height: 160px;
   overflow: auto;

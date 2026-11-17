@@ -90,7 +90,7 @@ onBeforeUnmount(() => {
 })
 </script>
 <template>
-  <div class="announcement-workspace">
+  <div class="announcement-workspace admin-theme">
     <header class="announcement-topbar">
       <RouterLink class="brand" to="/admin/reviews"
         ><em>泥电</em><span>美食地图</span><small>管理工作台</small></RouterLink

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import './admin-theme.css'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { getAccessToken } from '@/shared/api/authSession'
@@ -83,14 +84,14 @@ const items = [
 <style scoped>
 .admin-sidebar {
   box-sizing: border-box;
-  border-right: 1px solid #eceef0;
+  border-right: 1px solid var(--admin-divider);
   padding: 28px 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   font-family: Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  color: #25313d;
-  background: #fff;
+  color: var(--admin-text);
+  background: var(--admin-surface);
   min-height: 0;
 }
 .sidebar-item {
@@ -107,7 +108,7 @@ const items = [
   text-align: left;
   text-decoration: none;
   background: transparent;
-  color: #626d7b;
+  color: var(--admin-secondary);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -117,8 +118,8 @@ const items = [
   flex-shrink: 0;
 }
 .sidebar-item.selected {
-  background: #fbefdf;
-  color: #a55d1f;
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent-text);
   font-weight: 600;
 }
 .sidebar-count {
@@ -126,7 +127,7 @@ const items = [
   font-size: 11px;
 }
 .sidebar-item:focus-visible {
-  outline: 2px solid #929aa5;
+  outline: 2px solid var(--admin-focus);
   outline-offset: 3px;
 }
 @media (max-width: 800px) {
@@ -135,7 +136,7 @@ const items = [
     overflow: auto;
     padding: 9px 16px;
     border-right: 0;
-    border-bottom: 1px solid #eceef0;
+    border-bottom: 1px solid var(--admin-divider);
     gap: 0;
   }
   .sidebar-item {

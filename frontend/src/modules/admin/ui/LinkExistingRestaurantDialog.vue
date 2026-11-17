@@ -188,15 +188,15 @@ onBeforeUnmount(() => {
   width: min(680px, calc(100vw - 32px));
   max-height: 90dvh;
   box-sizing: border-box;
-  border: 1px solid #e2e5df;
+  border: 1px solid var(--admin-border);
   border-radius: 18px;
   padding: 26px;
-  color: #26382d;
-  background: #fff;
-  box-shadow: 0 24px 90px #15251b30;
+  color: var(--admin-text);
+  background: var(--admin-surface);
+  box-shadow: 0 24px 90px var(--admin-shadow);
 }
 dialog::backdrop {
-  background: #17251c70;
+  background: var(--admin-backdrop);
 }
 header,
 footer,
@@ -210,7 +210,7 @@ header {
 }
 header span {
   font-size: 12px;
-  color: #768477;
+  color: var(--admin-muted);
 }
 h2 {
   margin: 5px 0 0;
@@ -218,9 +218,9 @@ h2 {
 }
 button {
   cursor: pointer;
-  border: 1px solid #dce2d9;
+  border: 1px solid var(--admin-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--admin-surface);
   color: inherit;
   padding: 9px 14px;
   font: inherit;
@@ -237,7 +237,7 @@ header button {
 .effect {
   font-size: 14px;
   line-height: 1.7;
-  color: #637064;
+  color: var(--admin-secondary);
 }
 .search-label {
   display: grid;
@@ -245,7 +245,7 @@ header button {
   font-size: 13px;
 }
 .search-label input {
-  border: 1px solid #cbd5c7;
+  border: 1px solid var(--admin-border);
   border-radius: 9px;
   padding: 12px;
   font: inherit;
@@ -262,13 +262,13 @@ header button {
   gap: 12px;
   padding: 14px 12px;
   margin: 8px 0;
-  border: 1px solid #e3e8df;
+  border: 1px solid var(--admin-border);
   border-radius: 10px;
   cursor: pointer;
 }
 .candidate.chosen {
-  border-color: #728c55;
-  background: #f4f8ef;
+  border-color: var(--admin-primary);
+  background: var(--admin-accent-soft);
 }
 .candidate > span {
   display: grid;
@@ -279,12 +279,12 @@ header button {
 .candidate span span,
 small {
   font-size: 12px;
-  color: #6b7767;
+  color: var(--admin-secondary);
   overflow-wrap: anywhere;
 }
 .candidate a {
   font-size: 12px;
-  color: #547139;
+  color: var(--admin-accent-text);
   white-space: nowrap;
 }
 nav {
@@ -292,7 +292,7 @@ nav {
   font-size: 13px;
 }
 .effect {
-  background: #f5f6f2;
+  background: var(--admin-surface-muted);
   padding: 12px;
   border-radius: 9px;
 }
@@ -306,18 +306,17 @@ footer > span {
   overflow-wrap: anywhere;
 }
 .confirm {
-  background: #556f3d;
-  color: white;
-  border-color: #556f3d;
+  background: var(--admin-primary);
+  color: var(--admin-surface);
+  border-color: var(--admin-primary);
 }
 .error {
-  color: #a3372a;
+  color: var(--admin-danger);
   font-size: 14px;
 }
-input:focus-visible,
 button:focus-visible,
 a:focus-visible {
-  outline: 2px solid #728c55;
+  outline: 2px solid var(--admin-focus);
   outline-offset: 3px;
 }
 </style>

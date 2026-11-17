@@ -151,7 +151,7 @@ function cancel() {
 .edit-pencil {
   flex: none;
   opacity: 0.7;
-  color: #929ba8;
+  color: var(--admin-muted);
   transition: opacity 0.16s ease;
 }
 .editable-value:hover .edit-pencil,
@@ -161,22 +161,22 @@ function cancel() {
 .inline-input {
   width: 100%;
   min-width: 0;
-  border: 1px solid #dfe3e8;
+  border: 1px solid var(--admin-border);
   border-radius: 4px;
   padding: 6px 8px;
   font: inherit;
   color: inherit;
-  background: #f6f7f9;
+  background: var(--admin-surface-muted);
   outline: none;
   box-shadow: none;
 }
 /* 鼠标编辑只保留光标；键盘仍能识别尚未打开的编辑入口。 */
 .editable-value:focus-visible {
-  outline: 2px solid #929aa5;
+  outline: 2px solid var(--admin-focus);
   outline-offset: 3px;
 }
 .inline-input:focus {
-  border-color: #dfe3e8;
+  border-color: var(--admin-border);
   outline: none;
   box-shadow: none;
 }
