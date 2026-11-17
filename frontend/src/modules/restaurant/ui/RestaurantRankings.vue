@@ -116,9 +116,6 @@ onScopeDispose(() => {
         >{{ updatedAt }} 更新</time
       >
     </div>
-    <p class="ranking-explanation">
-      按本周期四维评分与评价人数计算推荐分，每小时更新；首页综合分参考全部历史评价。
-    </p>
     <div class="ranking-results" :aria-busy="loading" aria-live="polite">
       <div v-if="loading" class="ranking-state" role="status">正在加载榜单…</div>
       <div v-else-if="failed" class="ranking-state" role="alert">
@@ -144,7 +141,7 @@ onScopeDispose(() => {
             <RouterLink
               class="ranking-row"
               :to="`/restaurants/${encodeURIComponent(item.restaurantId)}`"
-              :aria-label="`第${item.rank}名，${item.name}，推荐分${item.recommendationScore.toFixed(1)}分，${item.participantCount}人评价`"
+              :aria-label="`第${item.rank}名，${item.name}，${item.recommendationScore.toFixed(1)}分，${item.participantCount}人评价`"
             >
               <span
                 class="ranking-number"
@@ -173,16 +170,14 @@ onScopeDispose(() => {
               <div class="ranking-info">
                 <h2 class="ranking-name">{{ item.name }}</h2>
                 <span class="ranking-mobile-score" aria-hidden="true"
-                  ><strong>{{ item.recommendationScore.toFixed(1) }}</strong
-                  ><small>推荐分</small></span
+                  ><strong>{{ item.recommendationScore.toFixed(1) }}</strong></span
                 >
                 <span class="ranking-count"
                   >近{{ days }}天 · {{ item.participantCount }}人评价</span
                 >
               </div>
               <div class="ranking-score" aria-hidden="true">
-                <strong>{{ item.recommendationScore.toFixed(1) }}</strong
-                ><small>近期推荐分</small>
+                <strong>{{ item.recommendationScore.toFixed(1) }}</strong>
               </div>
               <svg class="ranking-chevron" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="m9 6 6 6-6 6" />
@@ -197,12 +192,3 @@ onScopeDispose(() => {
 </template>
 
 <style scoped src="./restaurant-rankings.css"></style>
-
-<style scoped>
-.ranking-explanation {
-  color: #71717a;
-  font-size: 12px;
-  line-height: 1.7;
-  margin: 0 0 20px;
-}
-</style>

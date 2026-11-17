@@ -44,9 +44,7 @@ describe('approved homepage composition', () => {
     expect(host.querySelector('.filter-toolbar .random-banner')?.textContent).toContain(
       '帮我选一家',
     )
-    expect(host.querySelector('input[type="search"]')?.getAttribute('placeholder')).toBe(
-      '搜索餐厅、食堂或窗口…',
-    )
+    expect(host.querySelector('input[type="search"]')?.getAttribute('aria-label')).toBe('搜索餐厅')
     expect(host.querySelector('.catalog-ranking-entry')?.getAttribute('href')).toBe(
       '/restaurant-rankings',
     )

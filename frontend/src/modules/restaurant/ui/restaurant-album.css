@@ -149,3 +149,49 @@ button:disabled {
   cursor: wait;
   opacity: 0.6;
 }
+/* 紧凑模式的页首只保留封面和已加载数量；完整选图控件在大图内继续提供。 */
+.album-compact .gallery-empty {
+  min-height: 54px;
+  padding: 12px;
+  font-size: 12px;
+}
+.album-compact .gallery-empty button + button {
+  margin-top: 8px;
+}
+.gallery-main .gallery-count {
+  inset: auto 10px 10px auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 20px;
+  padding: 4px 9px;
+  background: #27313c99;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.gallery-count svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+.album-lightbox .gallery-thumbnails {
+  width: min(680px, 85vw);
+  margin-top: 14px;
+}
+.album-lightbox .gallery-thumbnails button {
+  flex: 0 0 52px;
+  height: 48px;
+  padding: 0;
+}
+.album-lightbox .gallery-thumbnails img {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+}
+.album-lightbox .album-pagination {
+  flex-wrap: wrap;
+  max-width: min(680px, 85vw);
+}

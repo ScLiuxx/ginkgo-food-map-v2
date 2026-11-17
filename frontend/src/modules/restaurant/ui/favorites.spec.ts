@@ -60,7 +60,7 @@ afterEach(() => {
   host.remove()
   clearAccessToken()
 })
-async function mount(component: Component, login = true) {
+async function mount(component: Component, login = true, iconOnly = false) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/:pathMatch(.*)*', component: { template: '<p />' } }],
@@ -73,7 +73,14 @@ async function mount(component: Component, login = true) {
       expiresAt: '2099-01-01T00:00:00Z',
       user: { id: 11, username: '测试账号', roles: ['ROLE_USER'] },
     })
-  app = createApp({ render: () => h(component, { restaurantId: id.value, userId: subject.value }) })
+  app = createApp({
+    render: () =>
+      h(component, {
+        restaurantId: id.value,
+        userId: subject.value,
+        ...(iconOnly ? { iconOnly } : {}),
+      }),
+  })
     .use(pinia)
     .use(router)
   app.mount(host)
@@ -140,6 +147,24 @@ it('drops old store responses when the target changes', async () => {
   done({ restaurantId: '1', favorited: true })
   await settle()
   expect(host.querySelector('button')?.getAttribute('aria-pressed')).toBe('false')
+})
+it('星形收藏保留确认状态和失败重读，不因失败盲目重复写入', async () => {
+  await mount(FavoriteButton, true, true)
+  expect(host.querySelector('.favorite-entry')?.textContent).toBe('')
+  expect(host.querySelector('.favorite-entry svg')).not.toBeNull()
+  vi.mocked(setFavorite).mockRejectedValueOnce(new Error('网络中断'))
+  button('收藏').click()
+  await settle()
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain('结果未确认')
+  expect(host.querySelector('.favorite-entry')?.getAttribute('aria-pressed')).toBeNull()
+  vi.mocked(favoriteState).mockResolvedValueOnce({ restaurantId: '1', favorited: true })
+  button('重试读取').click()
+  await settle()
+  expect(button('取消收藏').getAttribute('aria-pressed')).toBe('true')
+  expect(setFavorite).toHaveBeenCalledTimes(1)
+  button('取消收藏').click()
+  await settle()
+  expect(setFavorite).toHaveBeenLastCalledWith('1', false, 'viewer-session')
 })
 it('retains unavailable own records and cancels them using the exact target', async () => {
   await mount(RestaurantFavorites)

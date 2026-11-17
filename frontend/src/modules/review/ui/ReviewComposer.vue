@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, nextTick, onUnmounted, ref, watch } from 'vue'
+import { computed, inject, nextTick, onUnmounted, ref, useId, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { reviewDestination } from '@/shared/lib/reviewNavigation'
 import { useLoginStore } from '@/modules/auth/model/login.store'
@@ -23,7 +23,6 @@ import type { ReviewPublishReceipt, ReviewRecommendation } from '../model/review
 const props = defineProps<{
   restaurant?: RestaurantReadModel
   fixedTarget?: boolean
-  targetHint?: string
   /** 详情对象可定制短操作文案，发布及认证流程共用。 */
   triggerLabel?: string
   /** 布局只承载弹窗，入口由全站统一链接提供。 */
@@ -34,6 +33,7 @@ const auth = useLoginStore(),
   route = useRoute(),
   router = useRouter()
 const gateway = inject(reviewGatewayKey, unavailableReviewGateway)
+const titleId = 'review-composer-title-' + useId()
 const dialog = ref<globalThis.HTMLDialogElement>(),
   opened = ref(false),
   loading = ref(false),
@@ -87,10 +87,45 @@ const publishTarget = computed(() => (isCanteen.value ? chosenWindow.value?.id :
 const targetName = computed(() =>
   isCanteen.value ? chosenWindow.value?.name : current.value?.name,
 )
-const lockedName = computed(() =>
-  [dining.value?.parent?.name, dining.value?.floor, current.value?.name]
-    .filter(Boolean)
-    .join(' · '),
+// 窗口名始终是主标题，父食堂和楼层作为上下文，不裁剪或猜测正式店名。
+const lockedContext = computed(() =>
+  [dining.value?.parent?.name, dining.value?.floor].filter(Boolean).join(' · '),
+)
+let previousOverflow: string | undefined
+let returnFocus: globalThis.HTMLElement | undefined
+/** 全屏编辑锁住背景，关闭和卸载时恢复；草稿仍由原有关闭流程清理。 */
+function unlockPage() {
+  if (previousOverflow === undefined) return
+  globalThis.document.documentElement.style.overflow = previousOverflow
+  previousOverflow = undefined
+}
+/** 部分手机键盘只缩小可视视口；发布区跟随可见高度，缩放时交给浏览器处理。 */
+function fitViewport() {
+  const viewport = globalThis.visualViewport
+  if (opened.value && viewport && globalThis.innerWidth <= 700 && viewport.scale === 1) {
+    dialog.value?.style.setProperty('height', `${viewport.height}px`)
+    dialog.value?.style.setProperty('top', `${viewport.offsetTop}px`)
+  } else {
+    dialog.value?.style.removeProperty('height')
+    dialog.value?.style.removeProperty('top')
+  }
+}
+function stopViewport() {
+  globalThis.visualViewport?.removeEventListener('resize', fitViewport)
+  globalThis.visualViewport?.removeEventListener('scroll', fitViewport)
+  globalThis.removeEventListener('resize', fitViewport)
+}
+watch(
+  opened,
+  (value) => {
+    if (value) {
+      globalThis.visualViewport?.addEventListener('resize', fitViewport)
+      globalThis.visualViewport?.addEventListener('scroll', fitViewport)
+      globalThis.addEventListener('resize', fitViewport)
+    } else stopViewport()
+    fitViewport()
+  },
+  { flush: 'post' },
 )
 // 同步清空级联，防止切换食堂或楼层后将旧窗口作为新对象提交。
 watch(
@@ -130,6 +165,7 @@ watch(
 )
 /** 原生dialog提供焦点圈定和Escape；关闭后释放草稿图片URL，旧异步请求不得回填。 */
 function close() {
+  const wasOpened = opened.value
   const published = opened.value && !!receipt.value
   generation++
   controller?.abort()
@@ -137,6 +173,10 @@ function close() {
   busy.value = false
   processing.value = false
   dialog.value?.close?.()
+  stopViewport()
+  unlockPage()
+  if (wasOpened && returnFocus?.isConnected) returnFocus.focus({ preventScroll: true })
+  returnFocus = undefined
   photoDraft.clear(!!receipt.value)
   if (published) emit('published')
 }
@@ -158,6 +198,12 @@ async function open() {
     return
   }
   owner = authToken.value
+  returnFocus =
+    globalThis.document.activeElement instanceof globalThis.HTMLElement
+      ? globalThis.document.activeElement
+      : undefined
+  previousOverflow = globalThis.document.documentElement.style.overflow
+  globalThis.document.documentElement.style.overflow = 'hidden'
   requestId = globalThis.crypto.randomUUID()
   submittedContent = ''
   body.value = ''
@@ -342,9 +388,14 @@ onUnmounted(close)
   <button v-if="!hideTrigger" type="button" class="review-open" @click="open">
     {{ triggerLabel || '写评价' }}
   </button>
-  <dialog ref="dialog" class="review-dialog" @cancel.prevent="requestClose">
+  <dialog
+    ref="dialog"
+    class="review-dialog"
+    :aria-labelledby="titleId"
+    @cancel.prevent="requestClose"
+  >
     <section v-if="receipt" class="publish-receipt" role="status">
-      <h2>{{ receipt.replayed ? '已确认此前发布成功' : '点评发布成功' }}</h2>
+      <h2 :id="titleId">{{ receipt.replayed ? '已确认此前发布成功' : '点评发布成功' }}</h2>
       <p>你的点评已发布成功，所选照片已按顺序绑定。</p>
       <dl>
         <dt>餐厅</dt>
@@ -356,53 +407,55 @@ onUnmounted(close)
       <button type="button" class="publish" @click="finish">完成</button>
     </section>
     <form v-else @submit.prevent="submit">
-      <header>
-        <h2>写一条评价</h2>
+      <header class="composer-header">
+        <h2 :id="titleId">写点评</h2>
         <button type="button" aria-label="关闭评价" :disabled="busy" @click="requestClose">
-          ×
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg>
         </button>
       </header>
       <div v-show="!locked" class="review-fields">
         <fieldset class="review-inputs" :disabled="busy || locked">
-          <span class="target-label">评价对象</span>
-          <ReviewTargetSearch
-            v-if="opened && !targetLocked"
-            :selected="current"
-            :disabled="busy || locked"
-            @select="chooseRestaurant"
-            @leave="close"
-          />
-          <div v-if="targetLocked" class="locked-target">
-            <strong>{{ lockedName }}</strong>
-          </div>
-          <div v-if="isCanteen" class="window-selectors">
-            <label
-              >楼层<select v-model="floor" aria-label="楼层" :disabled="!windows.length">
-                <option value="">请选择楼层</option>
-                <option v-for="f in floors" :key="f" :value="f">{{ f }}</option>
-              </select></label
-            >
-            <label
-              >窗口<select v-model="windowId" aria-label="窗口" :disabled="!floor">
-                <option value="">请选择具体窗口（必选）</option>
-                <option v-for="w in floorWindows" :key="w.id" :value="w.id">
-                  {{ w.name }}
-                </option>
-              </select></label
-            >
-          </div>
-          <p v-if="isCanteen && !windows.length" class="target-empty">
-            该食堂暂无收录窗口，请先添加窗口后再评价。
-          </p>
-          <p v-else-if="isCanteen" class="hint target-note">评价将发布到所选窗口</p>
-          <p v-if="targetHint && !isCanteen" class="hint target-note">
-            {{ targetHint }}
-          </p>
+          <section class="target-section" aria-label="评价对象">
+            <ReviewTargetSearch
+              v-if="opened && !targetLocked"
+              :selected="current"
+              :disabled="busy || locked"
+              @select="chooseRestaurant"
+              @leave="close"
+            />
+            <div v-if="targetLocked" class="locked-target">
+              <strong>{{ current?.name }}</strong>
+              <span v-if="lockedContext">{{ lockedContext }}</span>
+            </div>
+            <div v-if="isCanteen" class="window-selectors">
+              <label class="window-select"
+                ><select v-model="floor" aria-label="楼层" :disabled="!windows.length">
+                  <option value="">请选择楼层</option>
+                  <option v-for="f in floors" :key="f" :value="f">{{ f }}</option></select
+                ><svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="m6 9 6 6 6-6" /></svg
+              ></label>
+              <label class="window-select"
+                ><select v-model="windowId" aria-label="窗口" :disabled="!floor">
+                  <option value="">请选择窗口</option>
+                  <option v-for="w in floorWindows" :key="w.id" :value="w.id">
+                    {{ w.name }}
+                  </option></select
+                ><svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="m6 9 6 6 6-6" /></svg
+              ></label>
+            </div>
+            <p v-if="isCanteen && !windows.length" class="target-empty">
+              该食堂暂无收录窗口，请先添加窗口后再评价。
+            </p>
+          </section>
           <section class="ratings-section" aria-label="四维评分">
             <div class="section-heading">
-              <h3>四维评分 <small>支持半星</small></h3>
-              <span
-                >本条均分 <b>{{ total.toFixed(2) }}</b></span
+              <h3>四维评分</h3>
+              <span class="review-average" :aria-label="`本条均分 ${total.toFixed(2)} 分`"
+                ><b>{{ total.toFixed(2).replace(/0$/, '') }}</b> 分</span
               >
             </div>
             <div v-for="d in ratingDimensions" :key="d.key" class="slider-row">
@@ -426,16 +479,12 @@ onUnmounted(close)
             </div>
           </fieldset>
           <div class="section-heading body-heading">
-            <label for="review-body">写点什么</label
-            ><small>发布账号：{{ auth.user?.username }}</small>
+            <label for="review-body">用餐体验</label>
           </div>
           <div class="body-editor">
-            <textarea
-              id="review-body"
-              v-model="body"
-              rows="4"
-              placeholder="比如：酱汁很香，分量足，下课高峰排队约5分钟…"
-            /><span class="body-count">{{ Array.from(body.trim()).length }}/500 · 至少5字</span>
+            <textarea id="review-body" v-model="body" rows="4" /><span class="body-count"
+              >{{ Array.from(body.trim()).length }} / 500</span
+            >
           </div>
           <!-- 初始上传框与缩略图列表共用一个选图入口，图片不再堆在大框下方。 -->
           <section
@@ -456,15 +505,20 @@ onUnmounted(close)
                 ;($event.target as HTMLInputElement).value = ''
               "
             />
-            <button
-              v-if="!photos.length"
-              type="button"
-              class="dropzone"
-              :disabled="processing || !supportsPhotos"
-              @click="photoInput?.click()"
-            >
-              照片 <span>最多5张，拖拽或点击选择</span>
-            </button>
+            <div v-if="!photos.length" class="photo-empty">
+              <button
+                type="button"
+                class="dropzone"
+                aria-label="添加照片"
+                :disabled="processing || !supportsPhotos"
+                @click="photoInput?.click()"
+              >
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </button>
+              <span class="photo-label">添加照片<small>最多 5 张</small></span>
+            </div>
             <div v-else class="thumbs">
               <div v-for="(photo, i) in photos" :key="photo.url" class="photo-card">
                 <div class="photo-preview">
@@ -529,7 +583,7 @@ onUnmounted(close)
           />
         </label>
       </section>
-      <footer>
+      <footer class="composer-footer">
         <!-- 反馈与提交按钮放在同一个固定区域，校验、网络错误和等待状态始终可见。 -->
         <p v-if="error" role="alert" class="error submit-feedback">
           {{ error }}
@@ -543,9 +597,6 @@ onUnmounted(close)
                 : '正在处理照片，请稍候…'
           }}
         </p>
-        <button type="button" class="cancel-publish" :disabled="busy" @click="requestClose">
-          取消
-        </button>
         <button
           class="publish"
           :disabled="
@@ -559,7 +610,7 @@ onUnmounted(close)
           "
           type="submit"
         >
-          {{ busy ? '发布中…' : uploadingPhotos ? '照片上传中…' : '发布评价' }}
+          {{ busy ? '发布中…' : uploadingPhotos ? '照片上传中…' : '发布点评' }}
         </button>
       </footer>
     </form>

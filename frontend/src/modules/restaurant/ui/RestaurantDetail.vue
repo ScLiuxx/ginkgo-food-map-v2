@@ -27,7 +27,17 @@ const dining = computed(() => (restaurant.value ? diningDetails(restaurant.value
 const isCanteen = computed(() => dining.value?.kind === 'canteen')
 const isWindow = computed(() => dining.value?.kind === 'window')
 const navigation = computed(() => (restaurant.value ? navigationUrl(restaurant.value) : null))
+const diningMethods = computed(() =>
+  [
+    restaurant.value?.supportsDineIn === true ? '堂食' : '',
+    restaurant.value?.supportsDelivery === true ? '外卖' : '',
+  ]
+    .filter(Boolean)
+    .join(' / '),
+)
 const failedDishes = ref<string[]>([])
+// 相册自行判断空态与故障；只有成功读到空列表才收起媒体列，不把读取失败当作无图。
+const albumVisible = ref(true)
 const route = useRoute()
 const router = useRouter()
 const fromMap = computed(() => route.query.from === 'map')
@@ -173,25 +183,32 @@ onUnmounted(() => {
       aria-labelledby="restaurant-title"
     >
       <nav class="detail-breadcrumb" aria-label="详情导航">
-        <RouterLink :to="backTarget" @click.capture="returnToSource">← 返回</RouterLink>
+        <RouterLink :to="backTarget" aria-label="返回" @click.capture="returnToSource"
+          ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg
+        ></RouterLink>
       </nav>
 
-      <header class="detail-hero" :class="{ 'canteen-hero': isCanteen }">
+      <header class="detail-hero" :class="{ 'canteen-hero': isCanteen, 'has-album': albumVisible }">
         <WindowAlbum
           v-if="isWindow"
           :id="restaurant.id"
           :key="`window-${restaurant.id}`"
           :name="restaurant.name"
+          compact
+          @visibility="albumVisible = $event"
         />
         <RestaurantAlbum
           v-if="!isWindow"
           :key="restaurant.id"
           :restaurant-id="restaurant.id"
           :name="restaurant.name"
+          compact
+          @visibility="albumVisible = $event"
         />
         <div class="detail-heading">
           <div class="hero-topline">
             <h1 id="restaurant-title">{{ restaurant.name }}</h1>
+            <FavoriteButton v-if="!isWindow" :restaurant-id="restaurant.id" icon-only />
           </div>
           <p v-if="isWindow" class="detail-affiliation">
             <RouterLink v-if="dining.parent" :to="parentLink">{{ dining.parent.name }}</RouterLink
@@ -201,21 +218,22 @@ onUnmounted(() => {
           <p v-if="isWindow && dining.description" class="detail-affiliation">
             {{ dining.description }}
           </p>
+          <div v-if="!isWindow && !isCanteen" class="detail-service-tags">
+            <span class="category-tag">{{ restaurant.category }}</span>
+            <span v-if="diningMethods" class="service-tag">{{ diningMethods }}</span>
+          </div>
           <div class="detail-subtitle">
             <StarScore class="hero-score" :score="displayScore" />
             <span v-if="!isCanteen">{{ restaurant.reviewCount }} 条点评</span>
             <span v-if="!isCanteen" class="hero-price"
               >{{ priceLabel(restaurant)
-              }}<small v-if="restaurant.price !== null"> / 人</small></span
+              }}<small v-if="restaurant.price !== null && restaurant.price > 0"> / 人</small></span
             >
             <span v-if="isCanteen" class="detail-affiliation">{{
               dining.campus || '校园食堂'
             }}</span>
           </div>
           <div v-if="!isCanteen" class="score-summary">
-            <p v-if="!isWindow" class="reputation-explanation">
-              综合口碑分参考四维评分与评价人数；评价较少时向3.5分参考值平滑。四维数值为真实均分。
-            </p>
             <div class="score-dimensions">
               <span v-for="d in ratingDimensions" :key="d.key"
                 >{{ d.label }}
@@ -228,15 +246,23 @@ onUnmounted(() => {
             </div>
           </div>
           <div class="detail-location-actions">
-            <span v-if="!isWindow && restaurant.supportsDineIn === true" class="service-tag"
-              >支持堂食</span
-            ><span v-if="!isWindow && restaurant.supportsDelivery === true" class="service-tag"
-              >支持外卖</span
-            >
-            <span v-if="!isWindow && !isCanteen" class="category-tag">{{
-              restaurant.category
-            }}</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 0 1 14 0Z" />
+              <circle cx="12" cy="10" r="2.3" />
+            </svg>
             <span class="detail-location">{{ restaurant.address || '地址待补充' }}</span>
+            <a
+              v-if="navigation"
+              class="detail-navigation"
+              :href="navigation"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="在高德中打开导航"
+            >
+              导航<svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m3 10 18-7-7 18-3-8Z" />
+              </svg>
+            </a>
           </div>
           <!-- 主操作与次要入口统一排列，收藏回执仍保留在原控件内。 -->
           <div class="detail-primary-actions">
@@ -247,7 +273,6 @@ onUnmounted(() => {
               :trigger-label="isCanteen ? '＋ 评窗口' : isWindow ? '＋ 评此窗口' : '＋ 写点评'"
               @published="published"
             />
-            <FavoriteButton v-if="!isWindow" :restaurant-id="restaurant.id" />
             <RouterLink
               v-if="!isWindow"
               class="correction-entry"
@@ -320,11 +345,6 @@ onUnmounted(() => {
         />
       </section>
       <footer class="detail-extra">
-        <div class="location-links">
-          <a v-if="navigation" :href="navigation" target="_blank" rel="noopener noreferrer"
-            >在高德中打开 ↗</a
-          >
-        </div>
         <RestaurantManagementActions v-if="!isWindow" :id="restaurant.id" :key="restaurant.id" />
       </footer>
     </article>
@@ -339,13 +359,3 @@ onUnmounted(() => {
 </template>
 
 <style scoped src="./restaurant-detail.css"></style>
-
-<style scoped>
-.reputation-explanation {
-  margin: 0 0 10px;
-  max-width: 52em;
-  color: #6b7280;
-  font-size: 12px;
-  line-height: 1.7;
-}
-</style>

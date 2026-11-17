@@ -51,11 +51,12 @@ describe('review interactions matching the original site', () => {
     )
     const button = (text: string) =>
       [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === text)!
-    button('时间排序').click()
+    expect(host.querySelectorAll('.sort-toggle')).toHaveLength(1)
+    button('按推荐').click()
     await settle()
     const oldSignal = list.mock.calls.at(-1)![1]
     expect(list.mock.calls.at(-1)?.slice(2)).toEqual([1, 'TIME'])
-    button('默认排序').click()
+    button('按时间').click()
     await settle()
     expect(oldSignal.aborted).toBe(true)
     expect(list.mock.calls.at(-1)?.slice(2)).toEqual([1, 'DEFAULT'])
@@ -69,7 +70,7 @@ describe('review interactions matching the original site', () => {
     })
     await settle()
     expect(host.textContent).not.toContain('旧排序结果')
-    expect(button('默认排序').getAttribute('aria-pressed')).toBe('true')
+    expect(button('按推荐').getAttribute('aria-label')).toContain('切换为按时间排序')
   })
 
   beforeEach(async () => {
@@ -126,6 +127,7 @@ describe('review interactions matching the original site', () => {
     host.remove()
     clearAccessToken()
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
   function login() {
     setAccessToken('test-session')
@@ -369,9 +371,8 @@ describe('review interactions matching the original site', () => {
     await mount(ReviewComposer, { restaurant: record })
     await open()
     expect(fetchRestaurants).not.toHaveBeenCalled()
-    expect(host.querySelector('.locked-target')?.textContent).toContain(
-      '测试食堂 · 二楼 · 测试独立窗口',
-    )
+    expect(host.querySelector('.locked-target strong')?.textContent).toBe('测试独立窗口')
+    expect(host.querySelector('.locked-target > span')?.textContent).toBe('测试食堂 · 二楼')
     expect(host.querySelector('.locked-target')?.textContent).not.toContain('已锁定')
     expect(host.querySelector('.locked-target [aria-hidden]')).toBeNull()
     const star = host.querySelector<HTMLInputElement>('[type=range]')!
@@ -417,9 +418,9 @@ describe('review interactions matching the original site', () => {
     expect(host.querySelector('[aria-label="点评筛选"]')).toBeNull()
     expect(host.querySelector('.scoring-rule')).toBeNull()
     expect(host.querySelector('h2')?.textContent).toContain('(2)')
-    expect(
-      [...host.querySelectorAll('.content-filters button')].map((el) => el.textContent?.trim()),
-    ).toEqual(['默认排序', '时间排序'])
+    expect([...host.querySelectorAll('.sort-toggle')].map((el) => el.textContent?.trim())).toEqual([
+      '按推荐',
+    ])
     expect(gateway.list).toHaveBeenCalledTimes(1)
     expect(host.querySelector('.body')?.textContent).toBe('第一页普通点评')
     ;[...host.querySelectorAll<HTMLButtonElement>('button')]
@@ -476,7 +477,6 @@ describe('review interactions matching the original site', () => {
       ]),
     ).toEqual(Array(4).fill(['3.5', '0', '5', '0.5']))
     expect(host.querySelector('.attitude [aria-pressed=true]')).toBeNull()
-    expect(host.textContent).toContain('发布账号：测试社员')
   })
   it('requires an explicit attitude and clears it when reopening', async () => {
     login()
@@ -492,6 +492,40 @@ describe('review interactions matching the original site', () => {
     await settle()
     await open()
     expect(host.querySelector('.attitude [aria-pressed=true]')).toBeNull()
+  })
+
+  it('fits the visible mobile viewport and restores background scrolling and focus on close', async () => {
+    login()
+    const viewport = Object.assign(new EventTarget(), { height: 700, offsetTop: 0, scale: 1 })
+    const remove = vi.spyOn(viewport, 'removeEventListener')
+    vi.stubGlobal('visualViewport', viewport)
+    vi.stubGlobal('innerWidth', 390)
+    await mount(ReviewComposer, { restaurant: restaurantFixture, fixedTarget: true })
+    const trigger = host.querySelector<HTMLButtonElement>('.review-open')!
+    trigger.focus()
+    const originalOverflow = document.documentElement.style.overflow
+    await open()
+    const dialog = host.querySelector('dialog')!
+    expect(document.documentElement.style.overflow).toBe('hidden')
+    expect(dialog.style.height).toBe('700px')
+    viewport.height = 390
+    viewport.offsetTop = 24
+    viewport.dispatchEvent(new Event('resize'))
+    expect(dialog.style.height).toBe('390px')
+    expect(dialog.style.top).toBe('24px')
+    // 浏览器缩放时取消手工高度，避免把放大后的页面锁在错误视口里。
+    viewport.scale = 2
+    viewport.dispatchEvent(new Event('resize'))
+    expect(dialog.style.height).toBe('')
+    viewport.scale = 1
+    viewport.dispatchEvent(new Event('resize'))
+    host.querySelector<HTMLButtonElement>('[aria-label="关闭评价"]')!.click()
+    await settle()
+    expect(document.documentElement.style.overflow).toBe(originalOverflow)
+    expect(document.activeElement).toBe(trigger)
+    expect(dialog.style.height).toBe('')
+    expect(remove).toHaveBeenCalledWith('resize', expect.any(Function))
+    expect(remove).toHaveBeenCalledWith('scroll', expect.any(Function))
   })
   it.each(['RECOMMENDED', 'NEUTRAL', 'NOT_RECOMMENDED'] as const)(
     'publishes the explicit %s attitude and keeps it when retrying',
@@ -528,13 +562,11 @@ describe('review interactions matching the original site', () => {
     await mount(ReviewComposer, {
       restaurant: { ...restaurantFixture, id: '201', name: '测试窗口' },
       fixedTarget: true,
-      targetHint: '只评价这个窗口',
     })
     await open()
     expect(fetchRestaurants).not.toHaveBeenCalled()
     expect(host.querySelector('.review-target-search')).toBeNull()
     expect(host.querySelector('.locked-target')?.textContent).toContain('测试窗口')
-    expect(host.textContent).toContain('只评价这个窗口')
     await fill('测试窗口的独立评价正文')
     await submit()
     expect(vi.mocked(gateway.publish).mock.calls[0]?.[0].restaurantId).toBe('201')
@@ -599,9 +631,7 @@ describe('review interactions matching the original site', () => {
     await settle()
     expect(gateway.publish).toHaveBeenCalledTimes(1)
     expect(host.querySelector('footer [role=status]')?.textContent).toContain('正在发布点评')
-    const cancel = [...host.querySelectorAll<HTMLButtonElement>('footer button')].find(
-      (el) => el.textContent?.trim() === '取消',
-    )!
+    const cancel = host.querySelector<HTMLButtonElement>('[aria-label="关闭评价"]')!
     expect(cancel.disabled).toBe(true)
     cancel.click()
     expect(host.querySelector('dialog')!.open).toBe(true)
@@ -743,7 +773,7 @@ describe('review interactions matching the original site', () => {
     expect(document.querySelector('dialog[open]')).toBeNull()
     expect(vi.mocked(gateway.list).mock.calls.at(-1)?.[2]).toBe(1)
   })
-  it('paginates author groups and resets to page one on refresh or publication', async () => {
+  it('paginates author groups and resets to page one on sorting or publication', async () => {
     gateway.supportsReplies = false
     gateway.list = vi.fn().mockImplementation(async (_id, _signal, page = 1) => ({
       records: [{ ...review, id: String(page), historyCount: 2, canDelete: false }],
@@ -766,7 +796,8 @@ describe('review interactions matching the original site', () => {
     }
     await click('下一页点评')
     expect(host.textContent).toContain('第2 / 2页')
-    await click('刷新评价')
+    expect(host.textContent).not.toContain('刷新评价')
+    await click('按推荐')
     expect(host.textContent).toContain('第1 / 2页')
     await click('下一页点评')
     revision.value++

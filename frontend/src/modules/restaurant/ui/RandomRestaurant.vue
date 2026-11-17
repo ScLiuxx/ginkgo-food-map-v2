@@ -20,38 +20,38 @@ const categoriesLoading = ref(false)
 const userPoint = ref<[number, number] | null>(null)
 const waitingLocation = ref(false)
 const imageFailed = ref(false)
+// 展开状态只属于当前表单，不写入选店会话；收起不能清空用户已选的条件。
+const expandedGroup = ref<keyof PickerDraft | null>(null)
 let categoryController: globalThis.AbortController | undefined
 let disposed = false
 
 const ranges = [
-  { value: 'QINGSHUIHE', label: '清水河附近', icon: 'campus' },
-  { value: 'SHAHE', label: '沙河附近', icon: 'campus' },
-  { value: 'USER', label: '我附近', icon: 'locate' },
+  { value: 'QINGSHUIHE', label: '清水河附近' },
+  { value: 'SHAHE', label: '沙河附近' },
+  { value: 'USER', label: '我附近' },
 ] as const
 const budgets = ['15', '30', '50', '100', 'ANY'].map((value) => ({
   value,
   label: value === 'ANY' ? '不限预算' : `${value}元以内`,
 }))
 const modes = [
-  { value: 'DINE_IN', label: '堂食', icon: 'bowl' },
-  { value: 'DELIVERY', label: '外卖', icon: 'bag' },
-  { value: 'ANY', label: '不限', icon: undefined },
+  { value: 'DINE_IN', label: '堂食' },
+  { value: 'DELIVERY', label: '外卖' },
+  { value: 'ANY', label: '不限' },
 ] as const
 const groups = computed(
   () =>
     [
-      { key: 'range', label: '在哪里吃', hint: '选择一个出发点', options: ranges },
+      { key: 'range', label: '出发位置', options: ranges },
       {
         key: 'distanceMeters',
-        label: '距离范围',
-        hint: '按直线距离筛选',
+        label: '直线距离',
         options: [1000, 3000, 5000].map((value) => ({ value, label: `${value / 1000}公里内` })),
       },
-      { key: 'budget', label: '人均预算', hint: '按店铺标注人均筛选', options: budgets },
+      { key: 'budget', label: '人均预算', options: budgets },
       {
         key: 'minRating',
         label: '最低评分',
-        hint: '五分制综合口碑分',
         options: ['ANY', '3', '3.5', '4'].map((value) => ({
           value,
           label: value === 'ANY' ? '不限评分' : `${value}分及以上`,
@@ -59,8 +59,7 @@ const groups = computed(
       },
       {
         key: 'category',
-        label: '想吃哪一类',
-        hint: '单选，也可以不限',
+        label: '餐厅分类',
         options: [
           { value: 'ANY', label: '不限类别' },
           ...categories.value
@@ -68,12 +67,12 @@ const groups = computed(
             .map((c) => ({ value: c.code, label: c.name })),
         ],
       },
-      { key: 'diningMode', label: '怎么吃', hint: '', options: modes },
+      { key: 'diningMode', label: '用餐方式', options: modes },
     ] as const,
 )
 const originLabel = computed(() =>
   picker.confirmed?.range === 'USER'
-    ? '我'
+    ? '你'
     : picker.confirmed?.range === 'SHAHE'
       ? '沙河'
       : '清水河',
@@ -81,16 +80,7 @@ const originLabel = computed(() =>
 const summary = computed(() => {
   const c = picker.confirmed
   if (!c) return []
-  return [
-    ranges.find((r) => r.value === c.range)?.label,
-    `${c.distanceMeters / 1000}公里内`,
-    c.budget === 'ANY' ? '不限预算' : `${c.budget}元以内`,
-    c.minRating === 'ANY' ? '不限评分' : `${c.minRating}分及以上`,
-    c.category === 'ANY'
-      ? '不限类别'
-      : (categories.value.find((v) => v.code === c.category)?.name ?? '所选类别'),
-    modes.find((m) => m.value === c.diningMode)?.label,
-  ]
+  return [ranges.find((r) => r.value === c.range)?.label, `${c.distanceMeters / 1000}公里内`]
 })
 const locating = computed(() => waitingLocation.value && (location.preparing || location.locating))
 const ready = computed(
@@ -99,14 +89,36 @@ const ready = computed(
 const navigation = computed(() => (picker.current ? navigationUrl(picker.current) : null))
 const canGo = computed(() => !picker.loading && !picker.unavailable && !picker.error)
 const atLast = computed(() => picker.cursor === picker.history.length - 1)
-const subtitle = computed(() =>
-  picker.phase === 'conditions'
-    ? '选好这一顿的条件，剩下的交给随机。'
-    : '这一顿，不妨就从这家开始。',
-)
+// 校区距离不能标成“距你”；未知距离保持缺失提示，不用0公里替代。
+const distanceLabel = computed(() => {
+  const distance = picker.current?.distanceKm
+  return distance === null || distance === undefined || !Number.isFinite(distance) || distance < 0
+    ? '距离待补'
+    : `距${originLabel.value} ${distance.toFixed(1)} 公里`
+})
 const nextLabel = computed(() =>
   !atLast.value ? '下一家' : picker.exhausted ? '重新抽一轮' : '换一家',
 )
+const submitLabel = computed(() => {
+  if (!picker.complete) return `还需选择 ${groups.value.length - picker.completedCount} 项`
+  if (locating.value) return '正在定位…'
+  if (picker.draft.range === 'USER' && !userPoint.value) return '请先完成定位'
+  return picker.editing ? '按新条件重新选' : '帮我选一家'
+})
+
+/** 摘要按选项值匹配，显式“不限”与尚未选择保持区别；字典故障不伪造分类名称。 */
+function selectedLabel(key: keyof PickerDraft) {
+  const value = picker.draft[key]
+  if (!value) return '请选择'
+  return (
+    groups.value.find((group) => group.key === key)?.options.find((o) => o.value === value)
+      ?.label ?? '所选类别'
+  )
+}
+
+function toggleGroup(key: keyof PickerDraft) {
+  expandedGroup.value = expandedGroup.value === key ? null : key
+}
 
 /** 分类独立读取，仅缓存字典而不缓存用户选择；失败单独重试，不影响返回后的结果回看。 */
 async function loadCategories() {
@@ -137,7 +149,19 @@ function choose(key: keyof PickerDraft, value: string | number) {
     userPoint.value = null
     if (value === 'USER') void locateMe()
   }
+  expandedGroup.value = null
+  // 选项隐藏后把焦点还给该行；键盘用户可以继续Tab选择下一项，不掉回页面底层。
+  void nextTick(() => {
+    if (dialog.value?.open && picker.phase === 'conditions' && expandedGroup.value === null)
+      dialog.value.querySelector<globalThis.HTMLButtonElement>(`#picker-${key}`)?.focus()
+  })
 }
+watch(
+  () => picker.phase,
+  () => {
+    expandedGroup.value = null
+  },
+)
 watch(
   () => location.location,
   (point) => {
@@ -155,6 +179,7 @@ watch(
 )
 
 async function open(resume = false) {
+  expandedGroup.value = null
   if (!resume) {
     picker.reset()
     userPoint.value = null
@@ -208,10 +233,9 @@ onUnmounted(() => {
     <div class="picker-shell">
       <header class="dialog-header">
         <div class="heading">
-          <span class="heading-icon"><PickerIcon name="shuffle" :size="22" /></span>
           <div>
             <h2 id="random-title">帮我选一家</h2>
-            <p class="subtitle">{{ subtitle }}</p>
+            <p v-if="picker.phase === 'conditions'" class="subtitle">今天吃什么，交给随机</p>
           </div>
         </div>
         <button type="button" class="close" aria-label="关闭选店" @click="close">
@@ -221,39 +245,60 @@ onUnmounted(() => {
       <form v-if="picker.phase === 'conditions'" class="picker-form" @submit.prevent="draw">
         <div class="form-body">
           <section v-for="group in groups" :key="group.key" class="field" :data-group="group.key">
-            <div class="field-heading">
-              <h3 :id="`picker-${group.key}`">{{ group.label }}</h3>
-              <small>{{ group.hint }}</small>
-            </div>
-            <div class="chips" role="group" :aria-labelledby="`picker-${group.key}`">
-              <button
-                v-for="option in group.options"
-                :key="option.value"
-                type="button"
-                class="chip"
-                :class="{ selected: picker.draft[group.key] === option.value }"
-                :aria-pressed="picker.draft[group.key] === option.value"
-                :data-value="option.value"
-                @click="choose(group.key, option.value)"
-              >
-                <PickerIcon
-                  v-if="'icon' in option && option.icon"
-                  :name="option.icon"
-                  :size="15"
-                />{{ option.label }}
-              </button>
-            </div>
-            <p
-              v-if="group.key === 'category' && categoriesLoading"
-              class="inline-note"
-              role="status"
+            <button
+              :id="`picker-${group.key}`"
+              type="button"
+              class="field-toggle"
+              :aria-expanded="expandedGroup === group.key"
+              :aria-controls="`picker-options-${group.key}`"
+              @click="toggleGroup(group.key)"
             >
-              正在加载类别…
-            </p>
-            <p v-if="group.key === 'category' && categoriesError" class="inline-error" role="alert">
-              {{ categoriesError }}
-              <button type="button" class="text-button" @click="loadCategories">重试</button>
-            </p>
+              <span class="field-label">{{ group.label }}</span>
+              <span class="field-value" :class="{ placeholder: !picker.draft[group.key] }">{{
+                selectedLabel(group.key)
+              }}</span>
+              <PickerIcon
+                name="left"
+                class="field-arrow"
+                :class="{ expanded: expandedGroup === group.key }"
+                :size="15"
+              />
+            </button>
+            <div
+              v-show="expandedGroup === group.key"
+              :id="`picker-options-${group.key}`"
+              class="field-options"
+            >
+              <div class="chips" role="group" :aria-labelledby="`picker-${group.key}`">
+                <button
+                  v-for="option in group.options"
+                  :key="option.value"
+                  type="button"
+                  class="chip"
+                  :class="{ selected: picker.draft[group.key] === option.value }"
+                  :aria-pressed="picker.draft[group.key] === option.value"
+                  :data-value="option.value"
+                  @click="choose(group.key, option.value)"
+                >
+                  {{ option.label }}
+                </button>
+              </div>
+              <p
+                v-if="group.key === 'category' && categoriesLoading"
+                class="inline-note"
+                role="status"
+              >
+                正在加载类别…
+              </p>
+              <p
+                v-if="group.key === 'category' && categoriesError"
+                class="inline-error"
+                role="alert"
+              >
+                {{ categoriesError }}
+                <button type="button" class="text-button" @click="loadCategories">重试</button>
+              </p>
+            </div>
             <div
               v-if="group.key === 'range' && picker.draft.range === 'USER'"
               class="location-feedback"
@@ -270,21 +315,8 @@ onUnmounted(() => {
         </div>
         <footer class="form-footer">
           <p v-if="picker.error" class="inline-error" role="alert">{{ picker.error }}</p>
-          <div class="form-progress">
-            <span>{{
-              picker.completedCount === groups.length
-                ? '条件已选好，可以开始了'
-                : `已选 ${picker.completedCount} / ${groups.length} 项条件`
-            }}</span
-            ><span class="dots" aria-hidden="true"
-              ><i
-                v-for="group in groups"
-                :key="group.key"
-                :class="{ done: !!picker.draft[group.key] }"
-            /></span>
-          </div>
           <button type="submit" class="primary" :disabled="!ready">
-            <PickerIcon name="shuffle" />{{ picker.editing ? '按新条件重新选' : '帮我选一家' }}
+            {{ submitLabel }}
           </button>
           <button
             v-if="picker.editing"
@@ -294,18 +326,15 @@ onUnmounted(() => {
           >
             取消修改，返回本轮
           </button>
-          <p v-else class="form-note">仅选普通餐厅 · 排除标注停业 · 每次进入重新选择条件</p>
         </footer>
       </form>
       <div v-else class="picker-results" :aria-busy="picker.loading">
         <div class="result-body">
           <div class="condition-summary">
-            <div class="summary-tags" aria-label="本轮条件">
+            <div class="summary-tags" aria-label="本轮位置与直线距离">
               <span v-for="tag in summary" :key="tag">{{ tag }}</span>
             </div>
-            <button type="button" class="text-button" @click="picker.edit">
-              修改条件 <PickerIcon name="edit" :size="13" />
-            </button>
+            <button type="button" class="text-button" @click="picker.edit">修改条件</button>
           </div>
           <p v-if="picker.loading" class="inline-note" role="status">
             {{ picker.current ? '正在核对店铺资料…' : '正在按条件选择餐厅…' }}
@@ -331,97 +360,37 @@ onUnmounted(() => {
             本轮已经看完，可以回看或重新抽一轮。
           </p>
           <template v-if="picker.current">
-            <div
-              class="restaurant-photo"
-              :class="{ 'empty-photo': !picker.current.coverPhoto || imageFailed }"
-            >
+            <!-- 缺图或图片失败时直接收起，不用占位图和装饰文案挤占店铺资料。 -->
+            <div v-if="picker.current.coverPhoto && !imageFailed" class="restaurant-photo">
               <img
-                v-if="picker.current.coverPhoto && !imageFailed"
                 :src="picker.current.coverPhoto.url"
                 :alt="`${picker.current.name}的商户相册封面`"
                 @error="imageFailed = true"
               />
-              <div v-else class="photo-placeholder">
-                <PickerIcon name="bowl" :size="48" /><small>{{
-                  imageFailed ? '图片暂时无法加载' : '暂无商户照片'
-                }}</small>
-              </div>
-              <span v-if="picker.current.coverPhoto && !imageFailed" class="photo-label"
-                >商户相册</span
-              >
             </div>
-            <p class="match-label">
-              <PickerIcon name="check" :size="14" />{{
-                picker.unavailable ? '本轮看过的店铺' : '从符合条件的餐厅中随机选出'
-              }}
-            </p>
             <div class="restaurant-title">
               <h3>{{ picker.current.name }}</h3>
               <span v-if="picker.current.category" class="category-label">{{
                 picker.current.category
               }}</span>
             </div>
-            <div class="rating">
-              <template v-if="picker.current.score !== null"
-                ><span class="stars" aria-hidden="true">★</span
-                ><strong>{{ formatRating(picker.current.score) }}分</strong></template
-              ><span v-else>暂无评分</span><span class="divider">·</span
-              ><span>{{ picker.current.reviewCount }}条点评</span>
-            </div>
-            <div class="facts">
-              <div class="fact">
-                <PickerIcon name="wallet" :size="23" />
-                <div>
-                  <small>标注人均</small><strong>{{ priceLabel(picker.current) }}</strong>
-                </div>
+            <div class="rating-row">
+              <div class="rating">
+                <template v-if="picker.current.score !== null"
+                  ><span class="stars" aria-hidden="true">★</span
+                  ><strong>{{ formatRating(picker.current.score) }}分</strong></template
+                ><span v-else>暂无评分</span><span class="divider">·</span
+                ><span>{{ picker.current.reviewCount }}条点评</span>
               </div>
-              <div class="fact">
-                <PickerIcon name="pin" :size="23" />
-                <div>
-                  <small>距{{ originLabel }}</small
-                  ><strong
-                    >{{
-                      picker.current.distanceKm === null || picker.current.distanceKm === undefined
-                        ? '距离待补'
-                        : picker.current.distanceKm.toFixed(1)
-                    }}<span
-                      v-if="
-                        picker.current.distanceKm !== null &&
-                        picker.current.distanceKm !== undefined
-                      "
-                    >
-                      公里</span
-                    ></strong
-                  >
-                </div>
-              </div>
+              <span class="distance">{{ distanceLabel }}</span>
             </div>
-            <p class="address">
-              <PickerIcon name="pin" :size="14" />{{ picker.current.address || '详细地址待补充' }}
+            <p class="price">
+              {{ priceLabel(picker.current)
+              }}<span v-if="picker.current.price !== null && picker.current.price > 0"> / 人</span>
             </p>
-            <div class="actions">
-              <RouterLink
-                v-if="canGo"
-                class="primary"
-                :to="`/restaurants/${encodeURIComponent(picker.current.id)}?from=picker`"
-                @click.capture="toDetails"
-                >查看详情 <PickerIcon name="arrow"
-              /></RouterLink>
-              <button v-else type="button" class="primary" disabled>
-                查看详情 <PickerIcon name="arrow" />
-              </button>
-              <a
-                v-if="navigation && canGo"
-                class="secondary"
-                :href="navigation"
-                target="_blank"
-                rel="noopener noreferrer"
-                ><PickerIcon name="navigation" />去导航</a
-              >
-              <button v-else type="button" class="secondary" disabled>
-                <PickerIcon name="navigation" />去导航
-              </button>
-            </div>
+            <p class="address">
+              {{ picker.current.address || '详细地址待补充' }}
+            </p>
           </template>
           <section v-else-if="!picker.loading && !picker.error" class="empty-body">
             <span class="empty-icon"><PickerIcon name="search" :size="32" /></span>
@@ -431,6 +400,34 @@ onUnmounted(() => {
           </section>
         </div>
         <footer v-if="picker.current" class="result-footer">
+          <!-- 主操作始终可见；回看时先前进历史，末尾耗尽才重新开启一轮。 -->
+          <button
+            type="button"
+            class="primary next"
+            :disabled="picker.loading"
+            @click="picker.exhausted && atLast ? picker.restart() : picker.next()"
+          >
+            {{ nextLabel }}
+          </button>
+          <div class="actions">
+            <RouterLink
+              v-if="canGo"
+              class="detail-link"
+              :to="`/restaurants/${encodeURIComponent(picker.current.id)}?from=picker`"
+              @click.capture="toDetails"
+              >查看详情</RouterLink
+            >
+            <button v-else type="button" class="detail-link" disabled>查看详情</button>
+            <a
+              v-if="navigation && canGo"
+              class="navigation-link"
+              :href="navigation"
+              target="_blank"
+              rel="noopener noreferrer"
+              >导航</a
+            >
+            <button v-else type="button" class="navigation-link" disabled>导航</button>
+          </div>
           <div class="history-row">
             <button
               type="button"
@@ -440,17 +437,9 @@ onUnmounted(() => {
             >
               <PickerIcon name="left" :size="14" />上一家</button
             ><span class="history-label"
-              >已看 <strong>{{ picker.history.length }}</strong> 家 · 本轮不重复</span
-            ><button
-              type="button"
-              class="history-button next"
-              :disabled="picker.loading"
-              @click="picker.exhausted && atLast ? picker.restart() : picker.next()"
+              >已看 <strong>{{ picker.history.length }}</strong> 家</span
             >
-              <PickerIcon name="shuffle" :size="14" />{{ nextLabel }}
-            </button>
           </div>
-          <p class="result-note">人均为参考值，距离为直线距离。</p>
         </footer>
       </div>
     </div>

@@ -3,15 +3,11 @@
   display: flex;
   align-items: center;
   gap: 13px;
-  height: 56px;
-  padding: 0 20px;
-  border-radius: 10px;
+  height: 44px;
+  padding: 0 13px;
+  border-radius: 7px;
   background: #f2f3f5;
-  margin-top: 8px;
-}
-.target-search-field:focus-within {
-  outline: 2px solid #b47c3b;
-  outline-offset: 2px;
+  margin-top: 0;
 }
 .target-search-field > svg {
   width: 21px;
@@ -30,7 +26,7 @@
   color: #303946;
   background: transparent;
   font: inherit;
-  font-size: 16px;
+  font-size: 14px;
 }
 .target-search-field input::placeholder {
   color: #626e7b;
@@ -150,7 +146,7 @@
   overflow-wrap: anywhere;
 }
 .review-target-search :is(button, input):focus-visible {
-  outline: 2px solid #cf9f53;
+  outline: 2px solid #a2a8af;
   outline-offset: 2px;
 }
 .review-target-search input:focus-visible {

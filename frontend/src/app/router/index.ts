@@ -195,11 +195,15 @@ const router = createRouter({
     const ticket = ++scrollGeneration
     // 替换分页或筛选参数不重置阅读位置；真正的历史回退等待列表读取后再恢复。
     if (!savedPosition) return to.path === from.path && to.hash === from.hash ? false : { top: 0 }
-    const selector = /^\/(?:account|users)(?:\/|$)/.test(to.path)
-      ? '.account-center'
-      : /^\/(?:restaurants|canteen-windows)\/[1-9]\d*$/.test(to.path)
-        ? '.detail-page'
-        : undefined
+    // 首页返回同样等待目录挂载/首批读取；手机缓存已有全部卡片时可直接恢复原位置。
+    const selector =
+      to.path === '/'
+        ? '.restaurant-directory'
+        : /^\/(?:account|users)(?:\/|$)/.test(to.path)
+          ? '.account-center'
+          : /^\/(?:restaurants|canteen-windows)\/[1-9]\d*$/.test(to.path)
+            ? '.detail-page'
+            : undefined
     if (selector) {
       await nextTick()
       if (!(await waitForPageLayout(() => ticket === scrollGeneration, selector))) return false

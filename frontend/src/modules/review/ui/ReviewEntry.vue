@@ -25,7 +25,7 @@ const props = defineProps<{
   starScale?: boolean
   /** 个人主页已展示作者，仅当前点评省去重复署名，历史记录保持完整展示。 */
   profileEntry?: boolean
-  /** 本人点评列表使用独立卡片，折叠细分评分与次要操作；店铺详情和历史保持原布局。 */
+  /** 点评列表统一折叠细分评分与次要操作；店铺列表保留作者，个人列表省去重复署名。 */
   listCard?: boolean
   /** 历史记录沿用原卡片外观，但正文同样能打开对应ID的详情。 */
   detailEntry?: boolean

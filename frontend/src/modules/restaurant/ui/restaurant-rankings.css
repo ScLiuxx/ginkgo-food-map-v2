@@ -207,11 +207,6 @@
   letter-spacing: -0.8px;
   font-variant-numeric: tabular-nums;
 }
-.ranking-score small,
-.ranking-mobile-score small {
-  color: #969da7;
-  font-size: 10px;
-}
 .ranking-chevron {
   width: 16px;
   height: 16px;
@@ -336,9 +331,6 @@
   .ranking-mobile-score strong {
     font-size: 23px;
     letter-spacing: -0.5px;
-  }
-  .ranking-mobile-score small {
-    font-size: 9px;
   }
   .ranking-mobile-score + .ranking-count {
     margin-top: 5px;

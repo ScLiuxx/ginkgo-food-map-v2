@@ -74,6 +74,26 @@
   gap: 6px;
   margin-top: 26px;
 }
+/* 加载状态保持轻量，不增加常驻刷新入口或大块边框。 */
+.catalog-load-more {
+  padding: 20px 0;
+  text-align: center;
+  color: #69727e;
+  font-size: 13px;
+}
+.catalog-load-more p {
+  margin: 0 0 8px;
+}
+.catalog-load-more button {
+  min-height: 44px;
+  padding: 8px 20px;
+  border: 0;
+  border-radius: 6px;
+  background: #f5f6f7;
+  color: #56616e;
+  font: inherit;
+  cursor: pointer;
+}
 .catalog-pagination button {
   min-height: 40px;
   min-width: 36px;
@@ -96,7 +116,7 @@
 }
 button:focus-visible,
 a:focus-visible {
-  outline: 2px solid #ad6f26;
+  outline: 2px solid #9ca3af;
   outline-offset: 3px;
 }
 @media (max-width: 1000px) {

@@ -5,6 +5,8 @@
 }
 /* 首页榜单只新增搜索框右侧入口，不改动分类、排序和现有工具栏。 */
 .catalog-search-line {
+  /* 搜索框与榜单入口共用高度，避免不同断点下各自覆盖后错位。 */
+  --catalog-search-height: 48px;
   display: flex;
   align-items: center;
   gap: 22px;
@@ -19,7 +21,7 @@
   align-items: center;
   gap: 10px;
   flex: none;
-  height: 48px;
+  height: var(--catalog-search-height);
   padding: 0 16px;
   border: 1px solid #e9e2d8;
   border-radius: 8px;
@@ -37,7 +39,7 @@
   stroke-linejoin: round;
 }
 .catalog-ranking-entry:focus-visible {
-  outline: 2px solid #ad6f26;
+  outline: 2px solid #a8adb3;
   outline-offset: 3px;
 }
 button,
@@ -51,7 +53,7 @@ select {
 }
 button:focus-visible,
 select:focus-visible {
-  outline: 2px solid #ad6f26;
+  outline: 2px solid #a8adb3;
   outline-offset: 3px;
 }
 .search-field {
@@ -59,15 +61,11 @@ select:focus-visible {
   align-items: center;
   gap: 13px;
   width: min(900px, 100%);
-  height: 56px;
+  height: var(--catalog-search-height);
   padding: 0 20px;
   border: 0;
   border-radius: 10px;
   background: #f2f3f5;
-}
-.search-field:focus-within {
-  outline: 2px solid #b47c3b;
-  outline-offset: 2px;
 }
 .search-field > svg {
   width: 21px;
@@ -188,12 +186,6 @@ select:focus-visible {
   display: inline;
   font-size: 12px;
 }
-.catalog-result-count {
-  flex: 0 0 auto;
-  margin: 0;
-  color: #687583;
-  font-size: 12px;
-}
 .advanced-tags {
   display: flex;
   flex-wrap: wrap;
@@ -213,9 +205,6 @@ select:focus-visible {
   .filter-toolbar {
     gap: 18px;
   }
-  .catalog-result-count {
-    font-size: 11px;
-  }
   .hide-closed {
     padding-left: 16px;
   }
@@ -225,17 +214,13 @@ select:focus-visible {
     flex-wrap: wrap;
     gap: 6px 18px;
   }
-  .catalog-result-count {
-    flex-basis: 100%;
-    text-align: right;
-  }
 }
 @media (max-width: 700px) {
   .catalog-search-line {
+    --catalog-search-height: 44px;
     gap: 10px;
   }
   .catalog-ranking-entry {
-    height: 44px;
     padding: 0 10px;
     gap: 6px;
     font-size: 12px;
@@ -245,7 +230,6 @@ select:focus-visible {
     height: 16px;
   }
   .search-field {
-    height: 48px;
     padding: 0 14px;
     gap: 10px;
   }
@@ -283,13 +267,6 @@ select:focus-visible {
     padding-left: 12px;
     font-size: 11px;
   }
-  .catalog-result-count {
-    grid-column: 1/3;
-    grid-row: 2;
-    width: auto;
-    margin: 3px 0 0;
-    font-size: 10px;
-  }
   .filter-toolbar :deep(.random-banner button) {
     grid-column: 3;
     grid-row: 2;
@@ -300,7 +277,6 @@ select:focus-visible {
 /* 水平工具栏：排序胶囊在左，筛选和随机入口在右，小屏自然换行。 */
 .search-field {
   width: min(960px, 100%);
-  height: 60px;
   border-radius: 13px;
 }
 .filter-toolbar {
@@ -332,8 +308,5 @@ select:focus-visible {
   .hide-closed {
     border-left: 0;
     padding-left: 0;
-  }
-  .catalog-result-count {
-    width: auto;
   }
 }

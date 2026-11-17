@@ -272,7 +272,6 @@ onUnmounted(() => {
           type="search"
           maxlength="100"
           aria-label="搜索餐厅、地址"
-          placeholder="搜索餐厅、地址"
         />
       </div>
       <div ref="filterArea" class="map-filter-area">

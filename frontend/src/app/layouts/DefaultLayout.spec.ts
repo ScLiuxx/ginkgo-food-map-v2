@@ -172,7 +172,7 @@ async function launch() {
   await vi.waitFor(() => expect(router.currentRoute.value.query.writeReview).toBeUndefined())
 }
 
-it('完成发布后关闭仍保留原页面，只发布一次；提交期间不能通过取消或Esc关闭', async () => {
+it('完成发布后关闭仍保留原页面，只发布一次；提交期间不能通过叉号或Esc关闭', async () => {
   let finishPublish!: (receipt: ReviewPublishReceipt) => void
   publish.mockReturnValue(
     new Promise((resolve) => {
@@ -194,7 +194,7 @@ it('完成发布后关闭仍保留原页面，只发布一次；提交期间不�
   host.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }))
   await settle()
   expect(publish).toHaveBeenCalledOnce()
-  expect(host.querySelector<HTMLButtonElement>('.cancel-publish')!.disabled).toBe(true)
+  expect(host.querySelector<HTMLButtonElement>('[aria-label="关闭评价"]')!.disabled).toBe(true)
   dialog().dispatchEvent(new Event('cancel', { cancelable: true }))
   expect(dialog().open).toBe(true)
   finishPublish({ reviewId: '901', restaurantId: restaurantFixture.id, replayed: false })
@@ -235,11 +235,11 @@ it.each([
   await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/restaurant-rankings'))
 })
 
-it.each(['取消', 'Escape'])('%s 关闭与叉号使用相同机制，连续打开不会残留意图', async (action) => {
+it.each(['关闭', 'Escape'])('%s 关闭与叉号使用相同机制，连续打开不会残留意图', async (action) => {
   await mount('/account')
   await launch()
   if (action === 'Escape') dialog().dispatchEvent(new Event('cancel', { cancelable: true }))
-  else host.querySelector<HTMLButtonElement>('.cancel-publish')!.click()
+  else host.querySelector<HTMLButtonElement>('[aria-label="关闭评价"]')!.click()
   await settle()
   expect(dialog().open).toBe(false)
   expect(router.currentRoute.value.fullPath).toBe('/account')
@@ -259,7 +259,7 @@ it('未登录写评在认证后回原页，保留安全展示参数并仅打开�
   await router.replace(destination)
   await vi.waitFor(() => expect(dialog().open).toBe(true))
   await vi.waitFor(() => expect(router.currentRoute.value.fullPath).toBe(source))
-  host.querySelector<HTMLButtonElement>('.cancel-publish')!.click()
+  host.querySelector<HTMLButtonElement>('[aria-label="关闭评价"]')!.click()
   await router.replace(source)
   expect(dialog().open).toBe(false)
 })
@@ -273,7 +273,7 @@ it.each(['/restaurants/1', '/canteen-windows/1'])(
     expect(host.querySelectorAll('.review-dialog')).toHaveLength(1)
     expect(host.querySelector('.locked-target')).not.toBeNull()
     expect(host.querySelector('.review-target-search')).toBeNull()
-    host.querySelector<HTMLButtonElement>('.cancel-publish')!.click()
+    host.querySelector<HTMLButtonElement>('[aria-label="关闭评价"]')!.click()
     expect(router.currentRoute.value.fullPath).toBe(source)
   },
 )

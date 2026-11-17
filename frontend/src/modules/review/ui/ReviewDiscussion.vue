@@ -6,7 +6,7 @@ import { replyScopeVisibleKey } from '../model/replyEditor'
 import { reviewGatewayKey, unavailableReviewGateway, type ReplyPage } from '../model/review'
 import ReplyThread from './ReplyThread.vue'
 
-/** 本人卡片的两条回复预览与独立详情；关闭不卸载编辑器，草稿和失败UUID保留在原组件。 */
+/** 各入口共用两条回复预览与独立详情；关闭不卸载编辑器，草稿和失败UUID保留在原组件。 */
 const props = defineProps<{
   reviewId: string
   username: string

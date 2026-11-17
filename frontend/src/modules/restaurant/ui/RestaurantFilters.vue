@@ -27,7 +27,6 @@ const cuisineCategories = computed(() =>
         <input
           v-model="catalog.filters.keyword"
           aria-label="搜索餐厅"
-          placeholder="搜索餐厅、食堂或窗口…"
           maxlength="100"
           type="search"
         />
@@ -75,9 +74,6 @@ const cuisineCategories = computed(() =>
       </button>
       <RestaurantAdvancedFilters campus-filters />
       <RandomRestaurant />
-      <p class="catalog-result-count" role="status" aria-live="polite">
-        {{ catalog.loading ? '正在加载…' : `共 ${catalog.total} 家餐厅与食堂` }}
-      </p>
     </div>
     <div
       v-if="

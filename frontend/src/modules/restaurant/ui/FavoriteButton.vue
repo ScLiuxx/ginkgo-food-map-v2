@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { ref, watch, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useLoginStore } from '@/modules/auth'
 import { authToken } from '@/shared/api/authSession'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 import { favoriteState, setFavorite } from '../api/favoriteApi'
-const props = defineProps<{ restaurantId: string }>()
+const props = defineProps<{
+  restaurantId: string
+  /** 店铺标题只展示星形；读写状态仍通过无障碍名称、禁用及错误重试完整表达。 */
+  iconOnly?: boolean
+}>()
 const auth = useLoginStore(),
   route = useRoute(),
   router = useRouter()
@@ -16,6 +20,13 @@ const known = ref(false),
   error = ref('')
 let controller: globalThis.AbortController | undefined,
   generation = 0
+const label = computed(() => {
+  if (loading.value) return '读取收藏中…'
+  if (busy.value) return '正在保存…'
+  if (auth.authenticated && !known.value) return '重新读取收藏状态'
+  if (known.value && active.value) return props.iconOnly ? '取消收藏' : '★ 已收藏'
+  return props.iconOnly ? '收藏' : '☆ 收藏'
+})
 /** 收藏成功由按钮状态体现；仅失败时展示说明，换店和换号清空旧状态。 */
 async function load() {
   const ticket = ++generation
@@ -81,29 +92,34 @@ onBeforeUnmount(() => {
 })
 </script>
 <template>
-  <div class="favorite-control">
+  <div class="favorite-control" :class="{ 'icon-only': iconOnly }">
     <button
       type="button"
       class="favorite-entry"
+      :aria-label="iconOnly ? label : undefined"
+      :title="iconOnly ? label : undefined"
+      :aria-busy="loading || busy"
       :aria-pressed="known ? active : undefined"
       :disabled="loading || busy"
       @click="toggle"
     >
-      {{
-        loading
-          ? '读取收藏中…'
-          : busy
-            ? '正在保存…'
-            : !auth.authenticated
-              ? '☆ 收藏'
-              : !known
-                ? '重新读取收藏状态'
-                : active
-                  ? '★ 已收藏'
-                  : '☆ 收藏'
-      }}
+      <svg v-if="iconOnly" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="m12 3 2.8 5.7 6.3.9-4.6 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9Z" />
+      </svg>
+      <template v-else>{{ label }}</template>
     </button>
-    <p v-if="error" role="alert">{{ error }}</p>
+    <p v-if="error" role="alert">
+      {{ error }}
+      <button
+        v-if="iconOnly"
+        type="button"
+        class="favorite-retry"
+        :disabled="loading || busy"
+        @click="load"
+      >
+        重试读取
+      </button>
+    </p>
   </div>
 </template>
 <style scoped>
@@ -132,5 +148,57 @@ onBeforeUnmount(() => {
 .favorite-entry:disabled {
   opacity: 0.6;
   cursor: wait;
+}
+/* 标题行不因错误说明挤窄店名；失败说明贴近星形，重试只读取状态，不重复写入。 */
+.favorite-control.icon-only {
+  position: relative;
+  flex-shrink: 0;
+  margin: -5px 0 0;
+}
+.icon-only .favorite-entry {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #e79947;
+}
+.icon-only .favorite-entry svg {
+  width: 23px;
+  height: 23px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+.icon-only .favorite-entry[aria-pressed='true'] svg {
+  fill: #f2a447;
+}
+.icon-only p {
+  position: absolute;
+  z-index: 3;
+  top: 100%;
+  right: 0;
+  width: min(260px, calc(100vw - 80px));
+  margin: 3px 0 0;
+  border: 1px solid #e8ebef;
+  border-radius: 8px;
+  padding: 12px;
+  background: white;
+  box-shadow: 0 6px 20px #26354514;
+  color: #7c8794;
+  line-height: 1.7;
+}
+.favorite-retry {
+  display: block;
+  margin-top: 6px;
+  border: 0;
+  padding: 4px 0;
+  background: none;
+  color: #b57d43;
+  font: inherit;
+  cursor: pointer;
 }
 </style>

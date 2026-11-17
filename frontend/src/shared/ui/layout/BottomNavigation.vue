@@ -107,7 +107,7 @@ defineProps<{ authenticated: boolean; discovery?: boolean; hasUnreadNotification
 }
 /* 隐藏可见文字后仍通过名称、悬停提示和键盘焦点保留入口识别能力。 */
 .navigation-items a:focus-visible {
-  outline: 2px solid #ad6f26;
+  outline: 2px solid #a8adb3;
   outline-offset: 2px;
 }
 .navigation-items svg {

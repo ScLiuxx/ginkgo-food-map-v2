@@ -94,7 +94,8 @@ describe('restaurant detail API integration', () => {
       null,
       expect.any(AbortSignal),
     )
-    expect(host.querySelector('.restaurant-album')?.textContent).toContain('暂无商户照片')
+    expect(host.querySelector<HTMLElement>('.restaurant-album')?.style.display).toBe('none')
+    expect(host.querySelector('.detail-hero')?.classList.contains('has-album')).toBe(false)
     expect(host.querySelector('.detail-preview')).toBeNull()
     expect(host.querySelector('.detail-extra details')).toBeNull()
     expect(host.querySelector('.detail-tags')?.textContent ?? '').not.toContain('联调模拟')
@@ -138,13 +139,16 @@ describe('restaurant detail API integration', () => {
     expect(host.querySelector('.copy-address')).toBeNull()
     expect(host.querySelector('.share-button')).toBeNull()
     expect(host.querySelector('.manual-copy')).toBeNull()
-    expect(host.querySelector('.location-links a')?.textContent).toContain('在高德中打开')
+    const navigation = host.querySelector<HTMLAnchorElement>('.detail-navigation')!
+    expect(navigation.getAttribute('aria-label')).toBe('在高德中打开导航')
+    expect(navigation.href).toContain('uri.amap.com')
+    expect(host.querySelector('.detail-extra .location-links')).toBeNull()
   })
   it('地图入口返回地图，普通入口使用统一返回文案', async () => {
     await router.push({ path: `/restaurants/${restaurantFixture.id}`, query: { from: 'map' } })
     await mount()
     const link = host.querySelector<HTMLAnchorElement>('.detail-breadcrumb a')!
-    expect(link.textContent).toBe('← 返回')
+    expect(link.getAttribute('aria-label')).toBe('返回')
     expect(link.getAttribute('href')).toBe('/map')
     await new Promise<void>((resolve) => {
       const stop = router.afterEach(() => {
@@ -157,13 +161,13 @@ describe('restaurant detail API integration', () => {
     expect(router.currentRoute.value.path).toBe('/map')
     await router.push(`/restaurants/${restaurantFixture.id}`)
     await settle()
-    expect(host.querySelector('.detail-breadcrumb a')?.textContent).toBe('← 返回')
+    expect(host.querySelector('.detail-breadcrumb a')?.getAttribute('aria-label')).toBe('返回')
   })
   it('选店来源直达时返回选店入口', async () => {
     await router.push({ path: `/restaurants/${restaurantFixture.id}`, query: { from: 'picker' } })
     await mount()
     const link = host.querySelector<HTMLAnchorElement>('.detail-breadcrumb a')!
-    expect(link.textContent).toBe('← 返回')
+    expect(link.getAttribute('aria-label')).toBe('返回')
     expect(link.getAttribute('href')).toBe('/?picker=return')
     await new Promise<void>((resolve) => {
       const stop = router.afterEach(() => {

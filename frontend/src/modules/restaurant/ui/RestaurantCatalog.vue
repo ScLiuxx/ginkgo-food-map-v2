@@ -1,15 +1,59 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, useTemplateRef } from 'vue'
+import { nextTick, onMounted, onUnmounted, useTemplateRef, watch } from 'vue'
 import { useRestaurantCatalog } from '../model/catalog.store'
 import RestaurantFilters from './RestaurantFilters.vue'
 import RestaurantCard from './RestaurantCard.vue'
 import SubmitRestaurantButton from './SubmitRestaurantButton.vue'
 
 const catalog = useRestaurantCatalog()
+const loadTrigger = useTemplateRef('loadTrigger')
+let media: ReturnType<typeof globalThis.matchMedia> | undefined
+let observer: InstanceType<typeof globalThis.IntersectionObserver> | undefined
+/** 屏幕模式改变时重新按对应批量读取，不混用8条分页与20条连续批次。 */
+function updateMode(): void {
+  catalog.activate(media?.matches ?? false)
+}
 onMounted(() => {
-  void catalog.load()
+  media = globalThis.matchMedia?.('(max-width: 700px)')
+  media?.addEventListener('change', updateMode)
+  updateMode()
 })
-onUnmounted(catalog.cancelPending)
+onUnmounted(() => {
+  media?.removeEventListener('change', updateMode)
+  observer?.disconnect()
+  catalog.pause()
+})
+// 每次追加完成后重新观察，短列表的末尾仍在屏内时也能继续加载；失败只由用户重试。
+watch(
+  () => [
+    loadTrigger.value,
+    catalog.hasMore,
+    catalog.loading,
+    catalog.loadingMore,
+    catalog.moreError,
+  ],
+  () => {
+    observer?.disconnect()
+    if (
+      !loadTrigger.value ||
+      !catalog.hasMore ||
+      catalog.loading ||
+      catalog.loadingMore ||
+      catalog.moreError
+    )
+      return
+    if (!globalThis.IntersectionObserver) return
+    observer = new globalThis.IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting) && !catalog.moreError)
+          void catalog.loadMore()
+      },
+      { rootMargin: '240px 0px' },
+    )
+    observer.observe(loadTrigger.value)
+  },
+  { flush: 'post' },
+)
 const resultsHeading = useTemplateRef('resultsHeading')
 /** 分页继续由服务端完成；翻页后将键盘焦点移回结果栏，不重新排列当前页。 */
 async function changePage(page: number): Promise<void> {
@@ -24,7 +68,12 @@ async function changePage(page: number): Promise<void> {
 </script>
 
 <template>
-  <section id="restaurant-directory" class="restaurant-directory" aria-labelledby="directory-title">
+  <section
+    id="restaurant-directory"
+    class="restaurant-directory"
+    aria-labelledby="directory-title"
+    :aria-busy="catalog.loading"
+  >
     <h2 id="directory-title" class="catalog-sr-only">餐厅与食堂目录</h2>
     <RestaurantFilters />
     <p v-if="catalog.searchNotice && !catalog.loading" role="status">{{ catalog.searchNotice }}</p>
@@ -36,9 +85,9 @@ async function changePage(page: number): Promise<void> {
     >
       <p role="status" aria-live="polite">
         {{ catalog.loading ? '正在加载 · ' : '' }}找到
-        <strong>{{ catalog.total }}</strong> 家餐厅<span v-if="catalog.total">
-          · 第 {{ catalog.page }} / {{ catalog.pages }} 页</span
-        >
+        <strong>{{ catalog.total }}</strong> 家餐厅<span v-if="catalog.continuous">
+          · 已显示 {{ catalog.visibleRestaurants.length }} 家</span
+        ><span v-else-if="catalog.total"> · 第 {{ catalog.page }} / {{ catalog.pages }} 页</span>
       </p>
     </div>
     <div v-if="catalog.error" class="directory-empty" role="alert">
@@ -101,6 +150,15 @@ async function changePage(page: number): Promise<void> {
         清除筛选
       </button>
     </div>
+    <!-- 按钮同时是无观察器环境和键盘操作的后备入口，常规浏览由接近底部自动触发。 -->
+    <div v-if="catalog.hasMore && !catalog.error" ref="loadTrigger" class="catalog-load-more">
+      <template v-if="catalog.moreError">
+        <p role="alert">{{ catalog.moreError }}</p>
+        <button type="button" @click="catalog.loadMore">重试</button>
+      </template>
+      <p v-else-if="catalog.loadingMore" role="status">正在加载…</p>
+      <button v-else type="button" @click="catalog.loadMore">加载更多</button>
+    </div>
     <div class="preview-notice" role="note">
       <p>营业、地址及消费请出发前核实。</p>
     </div>
@@ -114,7 +172,7 @@ async function changePage(page: number): Promise<void> {
       >
     </p>
     <nav
-      v-if="!catalog.error && catalog.pages > 1"
+      v-if="!catalog.continuous && !catalog.error && catalog.pages > 1"
       class="catalog-pagination"
       aria-label="餐厅分页"
     >
@@ -151,7 +209,7 @@ async function changePage(page: number): Promise<void> {
         !catalog.error &&
         catalog.resultsCurrent &&
         catalog.visibleRestaurants.length > 0 &&
-        catalog.page === catalog.pages
+        catalog.atEnd
       "
       class="directory-add"
     >

@@ -22,7 +22,7 @@ button {
 a:focus-visible,
 button:focus-visible,
 summary:focus-visible {
-  outline: 2px solid #f19741;
+  outline: 2px solid #a5adb7;
   outline-offset: 4px;
 }
 .detail-breadcrumb {
@@ -34,25 +34,49 @@ summary:focus-visible {
   margin-bottom: 24px;
 }
 .detail-breadcrumb a {
-  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
 }
+.detail-breadcrumb svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* 空相册不占一列；有图时桌面左图右资料，手机将封面放在同一白色资料区顶部。 */
 .detail-hero {
   display: grid;
-  grid-template-columns: 224px minmax(0, 1fr);
-  gap: 28px;
-  padding: 26px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  padding: 22px;
   background: white;
   border: 1px solid #eceef1;
   border-radius: 16px;
+}
+.detail-hero.has-album {
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
 }
 .detail-heading {
   min-width: 0;
 }
 .hero-topline {
-  margin-bottom: 15px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 0;
+}
+.hero-topline h1 {
+  flex: 1;
+  min-width: 0;
 }
 h1 {
-  font-size: 28px;
+  font-size: 25px;
   font-weight: 750;
   line-height: 1.35;
   letter-spacing: -0.8px;
@@ -64,48 +88,25 @@ h1 {
 .detail-primary-actions {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 10px;
-  margin-top: 22px;
+  align-items: center;
+  gap: 20px;
+  margin-top: 16px;
 }
 .detail-primary-actions :deep(.review-open) {
-  min-height: 40px;
+  min-height: 38px;
   white-space: nowrap;
   background: #fb8b24;
   color: white;
-  padding: 10px 22px;
+  padding: 9px 30px;
   border: 0;
   border-radius: 7px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 650;
-}
-.detail-primary-actions :deep(.favorite-control) {
-  margin: 0;
-}
-.detail-primary-actions :deep(.favorite-entry) {
-  min-height: 40px;
-  padding: 9px 17px;
-  border: 1px solid #e3e6eb;
-  border-radius: 7px;
-  color: #525f70;
-  background: white;
-  font: inherit;
-  font-size: 14px;
-}
-.detail-primary-actions :deep(.favorite-entry[aria-pressed='true']) {
-  background: #fff3e9;
-  border-color: #f5c99f;
-  color: #df7b23;
-}
-.detail-primary-actions :deep(.favorite-control p) {
-  max-width: 230px;
-  margin: 6px 0 0;
-  color: #7c8794;
 }
 .detail-affiliation {
   color: #818b96;
   font-size: 13px;
-  margin: 0 0 12px;
+  margin: 9px 0 0;
 }
 .detail-affiliation a {
   color: #666f7a;
@@ -114,15 +115,18 @@ h1 {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px 12px;
-  font-size: 13px;
+  gap: 8px;
+  margin-top: 17px;
+  font-size: 11px;
   color: #727d89;
 }
 .detail-subtitle .detail-affiliation {
   margin: 0;
 }
 .hero-score {
-  font-size: 34px;
+  flex-direction: row-reverse;
+  gap: 8px;
+  font-size: 29px;
   color: #ed7918;
 }
 .hero-score :deep(strong) {
@@ -130,32 +134,44 @@ h1 {
   letter-spacing: -1px;
 }
 .hero-score :deep(.star-symbols) {
-  font-size: 22px;
+  font-size: 14px;
 }
 .hero-price {
   margin-left: auto;
   color: #828c98;
   font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 .hero-price small {
-  font-size: 12px;
+  font-size: 10px;
+  font-weight: 400;
   color: #8d959f;
 }
 .score-summary {
-  margin: 12px 0 0;
+  margin: 13px 0 0;
 }
 .score-dimensions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 7px 20px;
-  font-size: 12px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  max-width: 420px;
+  gap: 6px;
+  font-size: 11px;
   color: #929aa4;
 }
 .score-dimensions strong {
   font-weight: 500;
   color: #66717f;
   margin-left: 3px;
+}
+.detail-service-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 9px;
+  font-size: 11px;
+  color: #89939d;
 }
 .panel-note {
   font-size: 12px;
@@ -166,28 +182,53 @@ h1 {
 .detail-location-actions {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 10px;
-  margin-top: 19px;
-  color: #647080;
-  font-size: 13px;
+  gap: 6px;
+  margin-top: 17px;
+  padding-top: 14px;
+  border-top: 1px solid #f0f2f5;
+  color: #89939f;
+  font-size: 11px;
 }
 .detail-location {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.7;
   overflow-wrap: anywhere;
+}
+.detail-location-actions svg {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.detail-navigation {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  gap: 4px;
+  min-height: 32px;
+  padding-left: 8px;
+  color: #bf8a53;
+}
+.detail-navigation svg {
+  width: 13px;
+  height: 13px;
 }
 .category-tag {
   background: #f5f6f8;
-  padding: 4px 8px;
+  padding: 3px 7px;
   border-radius: 4px;
   color: #657080;
-  font-size: 12px;
+  font-size: 11px;
 }
 .service-tag {
   font-size: 11px;
-  color: #788575;
-  background: #f3f6f2;
-  border-radius: 4px;
-  padding: 3px 7px;
+  color: #89939d;
 }
 .detail-tags {
   display: flex;
@@ -202,7 +243,7 @@ h1 {
   font-size: 12px;
   margin: 10px 0 0;
 }
-/* 首图列的缩略图横向滚动；图片及来源标识沿用点评响应。 */
+/* 顶部只留正式相册封面；缩略图、分页和错误重试由相册的大图面板管理。 */
 .detail-hero :deep(.detail-gallery) {
   margin: 0;
   min-width: 0;
@@ -210,12 +251,12 @@ h1 {
 }
 .detail-hero :deep(.gallery-main) {
   width: 100%;
-  height: 208px;
+  height: 170px;
   border-radius: 10px;
 }
 .detail-hero :deep(.gallery-empty) {
   min-height: 0;
-  height: 208px;
+  height: auto;
   border-radius: 10px;
   background: #f5f6f8;
   padding: 16px;
@@ -225,23 +266,6 @@ h1 {
   font-size: 12px;
   font-weight: 400;
   color: #9aa2ad;
-}
-.detail-hero :deep(.gallery-credit) {
-  padding: 14px 8px 6px;
-  font-size: 10px;
-}
-.detail-hero :deep(.gallery-credit > span) {
-  display: none;
-}
-.detail-hero :deep(.gallery-thumbnails) {
-  display: flex;
-  gap: 6px;
-  margin-top: 7px;
-  overflow-x: auto;
-}
-.detail-hero :deep(.gallery-thumbnails button) {
-  flex: 0 0 42px;
-  height: 38px;
 }
 .detail-dishes {
   margin-top: 22px;
@@ -314,19 +338,6 @@ h2 {
   font-size: 12px;
   line-height: 1.8;
 }
-.location-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 24px;
-  margin-bottom: 14px;
-}
-.location-links a {
-  border: 0;
-  background: none;
-  color: #76828f;
-  padding: 6px 0;
-  font: inherit;
-}
 .detail-extra details {
   margin: 12px 0;
 }
@@ -360,10 +371,10 @@ h2 {
 .correction-entry {
   display: inline-flex;
   align-items: center;
-  min-height: 40px;
-  padding: 9px 3px;
-  color: #7c8794;
-  font-size: 12px;
+  min-height: 38px;
+  padding: 9px 0;
+  color: #929ba6;
+  font-size: 11px;
   text-decoration: none;
 }
 .correction-entry:hover {
@@ -374,12 +385,9 @@ h2 {
     padding-right: 24px;
     padding-left: 24px;
   }
-  .detail-hero {
+  .detail-hero.has-album {
     grid-template-columns: 190px minmax(0, 1fr);
     gap: 22px;
-  }
-  .hero-price {
-    margin-left: 0;
   }
   .dish-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -387,51 +395,49 @@ h2 {
 }
 @media (max-width: 600px) {
   .restaurant-detail {
-    padding: 18px 16px 32px;
+    padding: 10px 14px 32px;
   }
   .detail-breadcrumb {
-    margin-bottom: 18px;
+    margin-bottom: 10px;
     font-size: 12px;
   }
-  .detail-hero {
+  .detail-hero,
+  .detail-hero.has-album {
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    padding: 18px;
+    align-items: stretch;
+    gap: 18px;
+    padding: 20px;
     border-radius: 12px;
   }
   h1 {
-    font-size: 24px;
+    font-size: 23px;
   }
   .detail-subtitle {
-    gap: 8px 10px;
-    font-size: 12px;
+    gap: 8px;
+    font-size: 11px;
   }
   .hero-score {
-    font-size: 30px;
+    font-size: 29px;
   }
   .hero-score :deep(.star-symbols) {
-    font-size: 20px;
+    font-size: 14px;
   }
-  .score-dimensions {
-    gap: 8px 14px;
-  }
-  .detail-primary-actions {
-    gap: 8px;
+  .detail-primary-actions > :first-child:not(.correction-entry) {
+    flex: 1;
+    min-width: 0;
   }
   .detail-primary-actions :deep(.review-open) {
-    padding: 10px 15px;
+    width: 100%;
+    padding: 9px 15px;
   }
-  .detail-primary-actions :deep(.favorite-entry) {
-    padding: 9px 13px;
+  .detail-hero :deep(.detail-gallery) {
+    width: calc(100% + 40px);
+    margin: -20px -20px 0;
   }
-  .detail-hero :deep(.gallery-main),
-  .detail-hero :deep(.gallery-empty) {
-    height: 180px;
-  }
-  .detail-hero :deep(.gallery-thumbnails button) {
-    flex-basis: 52px;
-    height: 44px;
+  .detail-hero :deep(.gallery-main) {
+    height: 128px;
+    border-radius: 12px 12px 0 0;
   }
   .dish-list {
     grid-template-columns: 1fr;
@@ -442,5 +448,32 @@ h2 {
   }
   .detail-dishes {
     padding: 18px;
+  }
+}
+@media (max-width: 360px) {
+  .detail-hero,
+  .detail-hero.has-album {
+    padding: 16px;
+  }
+  .detail-hero :deep(.detail-gallery) {
+    width: calc(100% + 32px);
+    margin: -16px -16px 0;
+  }
+  .hero-score {
+    font-size: 25px;
+    gap: 5px;
+  }
+  .hero-score :deep(.star-symbols) {
+    font-size: 11px;
+  }
+  .detail-subtitle {
+    gap: 6px;
+    font-size: 10px;
+  }
+  .hero-price {
+    font-size: 12px;
+  }
+  .score-dimensions {
+    font-size: 10px;
   }
 }
