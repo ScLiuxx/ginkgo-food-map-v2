@@ -11,7 +11,7 @@ import json
 
 from benchmark_es_search import database_state, digest
 from evaluate_restaurant_search import connect, read_snapshot
-from setup_restaurant_search_index import ALIAS, LocalElasticsearch, load_spec, verify_definition
+from setup_restaurant_search_index import ALIAS, LocalElasticsearch, load_spec, mappings_match, verify_definition
 
 INDEX = 'restaurant-search-v003'
 PREVIOUS = 'restaurant-search-v002'
@@ -57,7 +57,7 @@ def verify_candidate(client):
     spec = load_spec("003")
     actual = client.request('GET', '/' + INDEX)[INDEX]
     settings = actual['settings']['index']
-    if actual['mappings'] != spec['mappings'] or settings['analysis'] != spec['settings']['analysis']:
+    if not mappings_match(actual['mappings'], spec['mappings']) or settings['analysis'] != spec['settings']['analysis']:
         raise RuntimeError('Candidate schema drift; no alias change')
     for key in ('number_of_shards', 'number_of_replicas', 'refresh_interval'):
         if str(settings[key]) != str(spec['settings'][key]):

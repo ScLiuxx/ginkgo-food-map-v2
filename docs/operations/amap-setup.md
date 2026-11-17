@@ -8,7 +8,7 @@
 4. 本地修改环境变量后重启Vite；生产环境需在构建时提供浏览器配置，安全密钥仅在运行代理配置中提供。禁止打印完整环境或带密钥的转发URL。
 5. 使用真实餐厅验证底图、落点、移动后自动查询、悬停、失败降级及手机布局；确认高德标识/版权不被面板遮挡。测试查询接口与真实SDK分别记录证据。浏览器本人定位仍需要HTTPS和授权，当前地图查询无需本人定位。
 
-SDK能力以[JS API 2.0参考](https://a.amap.com/jsapi/static/doc/index.html)为准；跳转使用[官方URI地点入口](https://developer.amap.com/api/uri-api/gettingstarted?type=spa)：只传GCJ-02目的地坐标、店名、coordinate=gaode、src=ginkgo及callnative=1，不传固定起点或本站定位坐标，由高德处理定位、交通方式和路线。按钮为“在高德中打开”。移动端尝试唤起App，电脑使用高德地点页；按用户要求，本轮跳过线上及真机外部验收，不承诺已验证自动定位或App唤起。
+SDK能力以[JS API 2.0参考](https://a.amap.com/jsapi/static/doc/index.html)为准；跳转使用[官方URI地点入口](https://developer.amap.com/api/uri-api/gettingstarted?type=spa)：只传GCJ-02目的地坐标、店名、coordinate=gaode、src=foodmap及callnative=1，不传固定起点或本站定位坐标，由高德处理定位、交通方式和路线。按钮为“在高德中打开”。移动端尝试唤起App，电脑使用高德地点页；按用户要求，本轮跳过线上及真机外部验收，不承诺已验证自动定位或App唤起。
 
 地点搜索使用AMap.PlaceSearch插件，复用既有Web端（JS API）Key，不额外索要Web服务Key；当前本地已通过真实搜索200/OK验收，账号权限/配额仍以控制台为准。关键词停顿500毫秒后发送给高德，优先成都但不强制锁城，不传当前地图边界或用户精确定位；SDK只返回基础地点，不绑定自动地图/结果面板。SDK加载、插件和搜索合计15秒上限，序号与取消信号拦截迟到响应；错误提示不输出原始URL或凭据。结果仅页面内存保留，不批量导入；本站匹配每页最多10个地点、3路并发，各读取100米矩形内最多100条候选，唯一同名80米内才确认匹配，失败或候选截断显示待核实。地点名和地址差异不能当成权威的未收录证明。
 

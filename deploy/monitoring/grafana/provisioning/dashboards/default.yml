@@ -2,9 +2,9 @@ apiVersion: 1
 
 # 看板以仓库JSON为准，重建容器后自动恢复；UI不能覆盖配置源。
 providers:
-  - name: ginkgo-search
+  - name: foodmap-search
     orgId: 1
-    folder: Ginkgo
+    folder: Foodmap
     type: file
     disableDeletion: true
     allowUiUpdates: false

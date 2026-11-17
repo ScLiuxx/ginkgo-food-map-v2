@@ -69,7 +69,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: checked-backend
-          path: backend/target/ginkgo-food-map-backend-*.jar
+          path: backend/target/foodmap-backend-*.jar
           retention-days: 7
           if-no-files-found: error
 
@@ -105,11 +105,11 @@ jobs:
     needs: [backend, frontend, deployment-checks]
     # 服务器 Runner 只执行本仓库可信 develop 的发布，构建与测试仍在 GitHub 托管机器运行。
     if: github.repository == 'kanno111/ginkgo-food-map-v2' && github.event_name == 'push' && github.ref == 'refs/heads/develop'
-    runs-on: [self-hosted, Linux, X64, ginkgo-deploy]
+    runs-on: [self-hosted, Linux, X64, foodmap-deploy]
     timeout-minutes: 20
     # 不取消正在切换版本的部署，避免进程被中断后留下半完成状态。
     concurrency:
-      group: ginkgo-server-deployment
+      group: foodmap-server-deployment
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
@@ -129,7 +129,7 @@ jobs:
           request = urllib.request.Request(url, headers={
               'Authorization': 'Bearer ' + os.environ['GITHUB_TOKEN'],
               'Accept': 'application/vnd.github+json',
-              'User-Agent': 'ginkgo-deployment',
+              'User-Agent': 'foodmap-deployment',
           })
           with urllib.request.urlopen(request, timeout=30) as response:
               latest = json.load(response)['object']['sha']
@@ -167,11 +167,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Runner 由 ginkgo-deploy 运行，本地复制产物；自动发布不再连接入站 SSH。
-          [[ "$(id -un)" == 'ginkgo-deploy' ]]
+          # Runner 由 foodmap-deploy 运行，本地复制产物；自动发布不再连接入站 SSH。
+          [[ "$(id -un)" == 'foodmap-deploy' ]]
           release_id="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           [[ "$release_id" =~ ^[a-f0-9]{40}-[0-9]+-[0-9]+$ ]]
-          incoming="/opt/ginkgo/incoming/${release_id}"
+          incoming="/opt/foodmap/incoming/${release_id}"
           mkdir -m 700 "$incoming"
           cp release.tar.gz SHA256SUMS deploy/deploy.sh deploy/healthcheck.py "$incoming/"
           bash "$incoming/deploy.sh" "$release_id"

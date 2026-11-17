@@ -5,9 +5,9 @@ spring:
       max-file-size: 300KB
       max-request-size: 320KB
   application:
-    name: ginkgo-food-map-v2
+    name: foodmap
   datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/ginkgo_food_map?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    url: ${DB_URL:jdbc:mysql://localhost:3306/foodmap?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:}
     hikari:
@@ -36,7 +36,7 @@ spring:
   cache:
     type: redis
     redis:
-      key-prefix: "ginkgo:"
+      key-prefix: "foodmap:"
       time-to-live: 10m
   flyway:
     enabled: true
@@ -87,7 +87,7 @@ app:
     # 单实例榜单Cache Aside；关闭仅用于MySQL对照或暂时回源，认证Redis不受影响。
     redis-enabled: true
     max-snapshot-age: 24h
-    redis-key-prefix: "ginkgo:restaurant-rankings:v1:"
+    redis-key-prefix: "foodmap:restaurant-rankings:v1:"
     redis-ttl: 2h
     preparing-ttl: 5s
     lock-wait: 1s
@@ -173,7 +173,7 @@ app:
     verification-mail:
       # 发件地址必须显式配置，避免开发默认值被误用于生产邮件。
       from: ${AUTH_MAIL_FROM:}
-      subject-prefix: "[银杏美食地图]"
+      subject-prefix: "[泥电美食地图]"
   security:
     metrics:
       # 默认关闭机器采集；固定用户名prometheus，仅能GET指标端点，不具备业务权限。
@@ -182,8 +182,8 @@ app:
     authentication:
       # 私钥仅用于签发 JWT，公钥用于请求验证；密钥文件本身不得提交到 Git。
       jwt:
-        issuer: ${JWT_ISSUER:ginkgo-food-map}
-        audience: ${JWT_AUDIENCE:ginkgo-food-map-api}
+        issuer: ${JWT_ISSUER:foodmap}
+        audience: ${JWT_AUDIENCE:foodmap-api}
         time-to-live: ${JWT_TTL:7d}
         private-key-location: ${JWT_PRIVATE_KEY_LOCATION:file:./secrets/jwt-private.pem}
         public-key-location: ${JWT_PUBLIC_KEY_LOCATION:file:./secrets/jwt-public.pem}

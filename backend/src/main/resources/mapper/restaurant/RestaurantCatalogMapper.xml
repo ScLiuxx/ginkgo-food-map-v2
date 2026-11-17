@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.ginkgo.foodmap.restaurant.mapper.RestaurantCatalogMapper">
+<mapper namespace="com.foodmap.restaurant.mapper.RestaurantCatalogMapper">
     <!-- 兼容旧版本后建餐厅缺失零统计行；公开读取不初始化数据，不跨模块关联reviews。 -->
     <sql id="catalogFrom">
         <!-- 食堂没有美食品类，必须保留左侧商户，不能因NULL分类丢失详情、计数或地图点位。 -->
@@ -44,7 +44,7 @@
         CAST(s.value_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0) AS value,
         CAST(s.service_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0) AS service,
         CAST(s.ambience_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0) AS ambience,
-        (<include refid="com.ginkgo.foodmap.restaurant.mapper.RestaurantCatalogMapper.distanceMetersExpression"/>) / 1000 AS distance_km
+        (<include refid="com.foodmap.restaurant.mapper.RestaurantCatalogMapper.distanceMetersExpression"/>) / 1000 AS distance_km
     </sql>
 
     <!-- COUNT和分页复用同一可见集合；EXISTS使同店多个命中标签仍只算一家店。 -->
@@ -88,11 +88,11 @@
         </if>
     </select>
 
-    <select id="selectCategories" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantCategoryEntity">
+    <select id="selectCategories" resultType="com.foodmap.restaurant.entity.RestaurantCategoryEntity">
         SELECT code, name, sort_order, enabled FROM restaurant_categories ORDER BY sort_order, code
     </select>
 
-    <select id="selectVisibleById" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantEntity">
+    <select id="selectVisibleById" resultType="com.foodmap.restaurant.entity.RestaurantEntity">
         SELECT <include refid="publicColumns"/>
         <include refid="catalogFrom"/>
         WHERE r.id = #{id} AND r.deleted_at IS NULL
@@ -118,7 +118,7 @@
     </sql>
 
     <!-- 身份有界且保留全部非关键词条件；排序由ES身份顺序决定，不能在SQL里重排当前页。 -->
-    <select id="selectSearchPage" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantEntity">
+    <select id="selectSearchPage" resultType="com.foodmap.restaurant.entity.RestaurantEntity">
         SELECT <include refid="publicColumns"/> <include refid="catalogFrom"/>
         <include refid="visibleConditions"/>
         AND r.id IN <foreach collection="ids" item="id" open="(" close=")" separator=",">#{id}</foreach>
@@ -130,7 +130,7 @@
             WHERE o.status IN ('PENDING','FAILED') LIMIT 1)
     </select>
 
-    <select id="selectVisiblePage" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantEntity">
+    <select id="selectVisiblePage" resultType="com.foodmap.restaurant.entity.RestaurantEntity">
         SELECT <include refid="publicColumns"/>
         <include refid="catalogFrom"/>
         <include refid="visibleConditions"/>
@@ -139,7 +139,7 @@
         LIMIT #{query.pageSize} OFFSET #{query.offset}
     </select>
 
-    <select id="selectMapPoints" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantEntity">
+    <select id="selectMapPoints" resultType="com.foodmap.restaurant.entity.RestaurantEntity">
         SELECT <include refid="publicColumns"/>
         <include refid="catalogFrom"/>
         <include refid="visibleConditions"/>
@@ -147,7 +147,7 @@
         LIMIT 100
     </select>
 
-    <select id="selectVisibleTags" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantTagEntity">
+    <select id="selectVisibleTags" resultType="com.foodmap.restaurant.entity.RestaurantTagEntity">
         SELECT t.restaurant_id, t.tag, t.position
         FROM restaurant_tags t JOIN restaurants r ON r.id = t.restaurant_id
         WHERE r.deleted_at IS NULL AND t.restaurant_id IN

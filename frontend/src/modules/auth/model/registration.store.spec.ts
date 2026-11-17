@@ -15,8 +15,8 @@ vi.mock('../api/authApi', () => ({
 const request: RegistrationRequest = {
   email: 'student@std.uestc.edu.cn',
   verificationCode: '123456',
-  username: 'ginkgo_user',
-  password: 'Ginkgo2026',
+  username: 'foodmap_user',
+  password: 'Foodmap2026',
 }
 
 describe('registration store', () => {
@@ -52,7 +52,7 @@ describe('registration store', () => {
       accessToken: 'registered-session',
       tokenType: 'Bearer',
       expiresAt: '2099-01-01T00:00:00Z',
-      user: { id: 42, username: 'ginkgo_user', roles: ['ROLE_USER'] },
+      user: { id: 42, username: 'foodmap_user', roles: ['ROLE_USER'] },
     })
     const store = useRegistrationStore()
 

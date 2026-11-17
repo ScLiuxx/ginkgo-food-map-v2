@@ -101,7 +101,7 @@ describe('login form', () => {
 
   it('shows a server error and clears the password after failure', async () => {
     vi.mocked(login).mockRejectedValue(new Error('用户名或密码错误'))
-    await fillAndSubmit('ginkgo_user', 'wrong-password')
+    await fillAndSubmit('foodmap_user', 'wrong-password')
     await vi.waitFor(() => {
       expect(host.querySelector('[role="alert"]')?.textContent).toContain('用户名或密码错误')
       expect(host.querySelector<HTMLInputElement>('#login-password')?.value).toBe('')
@@ -114,11 +114,11 @@ describe('login form', () => {
       accessToken: 'test-session',
       tokenType: 'Bearer',
       expiresAt: '2099-01-01T00:00:00Z',
-      user: { id: 42, username: 'ginkgo_user', roles: ['ROLE_USER'] },
+      user: { id: 42, username: 'foodmap_user', roles: ['ROLE_USER'] },
     })
-    await fillAndSubmit(' ginkgo_user ', ' Ginkgo2026 ')
+    await fillAndSubmit(' foodmap_user ', ' Foodmap2026 ')
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/'))
-    expect(login).toHaveBeenCalledWith({ username: 'ginkgo_user', password: ' Ginkgo2026 ' })
+    expect(login).toHaveBeenCalledWith({ username: 'foodmap_user', password: ' Foodmap2026 ' })
     expect(host.querySelector<HTMLInputElement>('#login-password')?.value).toBe('')
   })
 
@@ -127,7 +127,7 @@ describe('login form', () => {
       accessToken: 'email-session',
       tokenType: 'Bearer',
       expiresAt: '2099-01-01T00:00:00Z',
-      user: { id: 42, username: 'ginkgo_user', roles: ['ROLE_USER'] },
+      user: { id: 42, username: 'foodmap_user', roles: ['ROLE_USER'] },
     })
     await fillAndSubmit(' student@std.uestc.edu.cn ', ' secret ')
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/'))
@@ -148,9 +148,9 @@ describe('login form', () => {
       accessToken: 'test-return-session',
       tokenType: 'Bearer',
       expiresAt: '2099-01-01T00:00:00Z',
-      user: { id: 42, username: 'ginkgo_user', roles: ['ROLE_USER'] },
+      user: { id: 42, username: 'foodmap_user', roles: ['ROLE_USER'] },
     })
-    await fillAndSubmit('ginkgo_user', 'Ginkgo2026')
+    await fillAndSubmit('foodmap_user', 'Foodmap2026')
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe(expected))
   })
 })

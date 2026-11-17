@@ -7,14 +7,14 @@ import type { CurrentUser, LoginResponse } from './login.types'
 
 vi.mock('../api/authApi', () => ({ login: vi.fn(), fetchCurrentUser: vi.fn(), logout: vi.fn() }))
 
-const user: CurrentUser = { id: 42, username: 'ginkgo_user', roles: ['ROLE_USER'] }
+const user: CurrentUser = { id: 42, username: 'foodmap_user', roles: ['ROLE_USER'] }
 const result: LoginResponse = {
   accessToken: 'test-session',
   tokenType: 'Bearer',
   expiresAt: '2099-01-01T00:00:00Z',
   user,
 }
-const request = { username: 'ginkgo_user', password: 'Ginkgo2026' }
+const request = { username: 'foodmap_user', password: 'Foodmap2026' }
 
 describe('login store', () => {
   it('accepts only the backend ROLE_ADMIN role for management access', async () => {
@@ -53,8 +53,8 @@ describe('login store', () => {
     expect(store.authenticated).toBe(true)
     expect(store.user).toEqual(user)
     expect(getAccessToken()).toBe('test-session')
-    expect(localStorage.getItem('ginkgo.access-token')).toBe('test-session')
-    expect(sessionStorage.getItem('ginkgo.access-token')).toBeNull()
+    expect(localStorage.getItem('foodmap.access-token')).toBe('test-session')
+    expect(sessionStorage.getItem('foodmap.access-token')).toBeNull()
     expect(JSON.stringify(store.$state)).not.toContain(request.password)
   })
 
@@ -100,7 +100,7 @@ describe('login store', () => {
     await store.signOut()
     expect(getAccessToken()).toBeNull()
     expect(store.user).toBeNull()
-    expect(localStorage.getItem('ginkgo.access-token')).toBeNull()
+    expect(localStorage.getItem('foodmap.access-token')).toBeNull()
     expect(store.authenticated).toBe(false)
   })
 

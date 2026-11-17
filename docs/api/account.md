@@ -115,7 +115,7 @@ fileId为正Long十进制字符串，只接受本人上传、未过期且可绑�
 | `password` | 4–32位ASCII字母、数字或英文符号，不含空格、中文或控制字符，不强制组合，不执行trim |
 
 ```json
-{"email":"student@std.uestc.edu.cn","verificationCode":"012345","username":"ginkgo_user","password":"ExamplePassword2026"}
+{"email":"student@std.uestc.edu.cn","verificationCode":"012345","username":"foodmap_user","password":"ExamplePassword2026"}
 ```
 
 **响应**
@@ -181,7 +181,7 @@ fileId为正Long十进制字符串，只接受本人上传、未过期且可绑�
 `POST /auth/login`无需认证：
 
 ```json
-{"username":"ginkgo_user","password":"ExamplePassword2026"}
+{"username":"foodmap_user","password":"ExamplePassword2026"}
 ```
 
 `username`字段必填，可填写用户名或注册邮箱，原始输入最多254个UTF-16单元，去首尾空白后查询；含`@`时按邮箱查询并转小写，否则按用户名查询。两种方式共用同一用户ID的登录失败限流。密码必填，DTO最多72个UTF-16单元，服务端额外限制UTF-8不超过72字节，原样匹配BCrypt，不trim。
@@ -191,7 +191,7 @@ fileId为正Long十进制字符串，只接受本人上传、未过期且可绑�
 成功200、`Cache-Control:no-store`，`data`：
 
 ```json
-{"accessToken":"<accessToken>","tokenType":"Bearer","expiresAt":"2026-11-10T06:00:00Z","user":{"id":42,"username":"ginkgo_user","roles":["ROLE_USER"]}}
+{"accessToken":"<accessToken>","tokenType":"Bearer","expiresAt":"2026-11-10T06:00:00Z","user":{"id":42,"username":"foodmap_user","roles":["ROLE_USER"]}}
 ```
 
 **错误码**

@@ -329,7 +329,7 @@ MySQL 仅保留每个“校区＋周期”最近一次成功生成的完整榜�
 
 24小时是生成失败时的容忍上限，正常每轮完成后等待1小时再更新。数据年龄从统计截止时刻计算，生成耗时、跨层回填及重启均不重置；三层读取在刚好24小时时仍可用，超过后不返回旧条目。Redis回填TTL不超过剩余可用时间，本机逐次检查业务年龄；刚好边界时可返回但不新回填。
 
-Redis阶段运行参数统一位于`app.ranking`：`redis-enabled=true`（此开关只控制榜单Redis）、`redis-key-prefix=ginkgo:restaurant-rankings:v1:`、`redis-ttl=2h`、`preparing-ttl=5s`、`lock-wait=1s`、`redis-command-timeout=200ms`、`redis-connect-timeout=200ms`、`repair-delay=5s`、`repair-attempts=3`、`repair-cooldown=1m`。键后缀为`{campusCode}:{periodType}`，固定四键，不支持请求自定义。关闭榜单Redis仍使用相同MySQL校验投影，便于分阶段对照；不会关闭认证Redis。
+Redis阶段运行参数统一位于`app.ranking`：`redis-enabled=true`（此开关只控制榜单Redis）、`redis-key-prefix=foodmap:restaurant-rankings:v1:`、`redis-ttl=2h`、`preparing-ttl=5s`、`lock-wait=1s`、`redis-command-timeout=200ms`、`redis-connect-timeout=200ms`、`repair-delay=5s`、`repair-attempts=3`、`repair-cooldown=1m`。键后缀为`{campusCode}:{periodType}`，固定四键，不支持请求自定义。关闭榜单Redis仍使用相同MySQL校验投影，便于分阶段对照；不会关闭认证Redis。
 
 Caffeine阶段增加`app.ranking.caffeine-enabled=true`、`caffeine-ttl=30m`。仅关闭本机缓存可复跑Redis模式；两开关均关闭为MySQL基线，均使用同一公开投影。只关闭榜单Redis仍允许Caffeine→MySQL，提交后仍清本机缓存；不提供客户端切换来源的参数。
 

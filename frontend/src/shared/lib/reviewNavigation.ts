@@ -16,7 +16,7 @@ export function reviewDestination(route: RouteLocationNormalizedLoaded): RouteLo
 /** 登录只放行阅读页的写评意图和明确的展示参数，拒绝嵌套重定向与任意额外参数。 */
 export function isReviewLoginDestination(value: string): boolean {
   if (!isReturnDestination(value)) return false
-  const url = new URL(value, 'https://ginkgo.invalid')
+  const url = new URL(value, 'https://foodmap.invalid')
   if (
     url.searchParams.getAll('writeReview').length !== 1 ||
     url.searchParams.get('writeReview') !== '1'

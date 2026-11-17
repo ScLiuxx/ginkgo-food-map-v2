@@ -80,7 +80,7 @@ describe('authenticated HTTP client', () => {
     }
     await expect(httpClient.get('/auth/me')).rejects.toThrow()
     expect(getAccessToken()).toBeNull()
-    expect(localStorage.getItem('ginkgo.access-token')).toBeNull()
+    expect(localStorage.getItem('foodmap.access-token')).toBeNull()
   })
 
   it('does not clear a new session when an old request returns 401', async () => {

@@ -22,7 +22,7 @@ from benchmark_mysql_search import summary
 from evaluate_restaurant_search import ROOT, connect
 from setup_restaurant_search_index import load_spec, LocalElasticsearch
 
-PREFIX = 'ginkgo-char-ab-'
+PREFIX = 'foodmap-char-ab-'
 TEXT_FIELDS = ('name', 'address', 'categoryName', 'tags')
 
 

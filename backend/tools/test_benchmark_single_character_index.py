@@ -23,9 +23,9 @@ class SingleCharacterBenchmarkTest(unittest.TestCase):
         self.assertEqual((tokenizer['min_gram'],tokenizer['max_gram']),(1,1))
 
     def test_mutation_guard_rejects_official_names_wildcards_and_unowned_uuid(self):
-        good='ginkgo-char-ab-'+'a'*32+'-b'
+        good='foodmap-char-ab-'+'a'*32+'-b'
         require_owned(good,{good})
-        for name in ('restaurant-search','restaurant-search-v002','ginkgo-char-ab-*',good):
+        for name in ('restaurant-search','restaurant-search-v002','foodmap-char-ab-*',good):
             with self.assertRaises(ValueError):require_owned(name,set())
 
     def test_single_character_search_is_four_field_or_with_exact_total_and_bounded_page(self):

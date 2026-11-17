@@ -19,15 +19,16 @@ def main():
     datasource = config['spring']['datasource']
     target = urlsplit(datasource['url'].removeprefix('jdbc:'))
     # 开发夹具不能成为生产种子；固定只允许本机常规开发库，且不跟随环境变量重定向。
-    if target.hostname not in ('localhost', '127.0.0.1', '::1') or target.path != '/ginkgo_food_map':
-        raise ValueError('工具仅允许本机 ginkgo_food_map 开发库')
+    # 项目改名不迁移既有数据库；旧库名只作为本机兼容目标，仍禁止任意库和远程地址。
+    if target.hostname not in ('localhost', '127.0.0.1', '::1') or target.path not in ('/foodmap', '/ginkgo_food_map'):
+        raise ValueError('工具仅允许本机 foodmap 开发库或改名前的本机开发库')
     fixtures = json.loads((backend / 'tools/restaurant-demo.json').read_text(encoding='utf-8'))['restaurants']
     connection = pymysql.connect(
         host=target.hostname, port=target.port or 3306, database=target.path[1:],
         user=datasource['username'], password=str(datasource.get('password', '')),
         charset='utf8mb4', autocommit=False, connect_timeout=5,
     )
-    lock_name = 'ginkgo_food_map:restaurant_demo_seed'
+    lock_name = f'{target.path[1:]}:restaurant_demo_seed'
     inserted = skipped = 0
     try:
         with connection.cursor() as cursor:

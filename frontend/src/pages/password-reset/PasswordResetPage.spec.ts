@@ -88,7 +88,7 @@ describe('找回密码页面返回入口', () => {
 
   it('已登录用户完成密码重置后仍清理旧会话并进入登录页', async () => {
     setAccessToken('old-session')
-    vi.mocked(resetPassword).mockResolvedValue({ username: 'ginkgo_user' })
+    vi.mocked(resetPassword).mockResolvedValue({ username: 'foodmap_user' })
     for (const [id, value] of Object.entries({
       'reset-email': 'student@std.uestc.edu.cn',
       'reset-code': '012345',
@@ -104,6 +104,6 @@ describe('找回密码页面返回入口', () => {
       .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/login'))
     expect(getAccessToken()).toBeNull()
-    expect(consumeResetLogin()).toBe('ginkgo_user')
+    expect(consumeResetLogin()).toBe('foodmap_user')
   })
 })

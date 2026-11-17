@@ -1,6 +1,6 @@
 import { readonly, shallowRef } from 'vue'
 
-const storageKey = 'ginkgo.access-token'
+const storageKey = 'foodmap.access-token'
 
 /** 清除旧版标签页凭证，避免退出后再次从 sessionStorage 恢复已经失效的登录。 */
 function clearLegacyToken(): void {

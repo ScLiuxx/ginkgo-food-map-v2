@@ -2,10 +2,12 @@
 
 2026-11-04已在本地Elasticsearch/IK 9.5.4启用第一版词表：冒菜、螺蛳粉、天街。仅影响本地ES分词，不开启语义搜索，也不切换网站的MySQL查询入口。
 
+2026-11-17项目改名后，本页文件名和挂载来源已同步为`foodmap`，本机Compose的两个IK挂载引用已更新并重启同一ES服务，原有三个持久卷保持不变。索引品牌元数据允许兼容旧标识，不为改名重建已有索引；网站实际查询开关以当前运行配置为准。
+
 ## 文件与实际挂载
 
-- `ik/ginkgo-food.dic`：UTF-8、无BOM、每行一个词；只收录已验证的业务词，不批量导入店名、拼音或同义词。
-- `ik/IKAnalyzer.cfg.xml`：通过ext_dict登记ginkgo-food.dic，保留内置基础词典，不新增停用词或远程词库。
+- `ik/foodmap-food.dic`：UTF-8、无BOM、每行一个词；只收录已验证的业务词，不批量导入店名、拼音或同义词。
+- `ik/IKAnalyzer.cfg.xml`：通过ext_dict登记foodmap-food.dic，保留内置基础词典，不新增停用词或远程词库。
 - 两个文件都由`D:/healthy-agent/compose.yml`只读挂载到`/usr/share/elasticsearch/config/analysis-ik/`下同名文件。该Compose属于本机已有基础设施，仓库根compose.yaml未增加ES服务。
 
 本机原先只持久化ES数据，IK插件和基础词典在容器可写层。此次先完整备份、复制到两个外部持久卷，再重建同一个ES服务。实际挂载为：
@@ -15,14 +17,14 @@
 | 原有ES数据 | healthy-agent_agent_elasticsearch_data | /usr/share/elasticsearch/data |
 | 现有IK 9.5.4插件 | healthy-agent_agent_elasticsearch_ik_plugin | /usr/share/elasticsearch/plugins/analysis-ik |
 | 现有IK基础词典 | healthy-agent_agent_elasticsearch_ik_config | /usr/share/elasticsearch/config/analysis-ik |
-| 本仓库IK配置 | D:/eat/ginkgo-food-map-v2/deploy/elasticsearch/ik/IKAnalyzer.cfg.xml | 上述配置目录/IKAnalyzer.cfg.xml，只读 |
-| 本仓库扩展词表 | D:/eat/ginkgo-food-map-v2/deploy/elasticsearch/ik/ginkgo-food.dic | 上述配置目录/ginkgo-food.dic，只读 |
+| 本仓库IK配置 | D:/eat/foodmap/deploy/elasticsearch/ik/IKAnalyzer.cfg.xml | 上述配置目录/IKAnalyzer.cfg.xml，只读 |
+| 本仓库扩展词表 | D:/eat/foodmap/deploy/elasticsearch/ik/foodmap-food.dic | 上述配置目录/foodmap-food.dic，只读 |
 
 两个IK卷在Compose中声明external=true并显式指定上述name，避免当成Compose管理的新卷。首次迁入时已装入原有插件/基础词典，不能在新机器上只创建空卷就认为IK可用；应先安装匹配版本并准备基础词典。没有把二进制插件或完整基础词库提交到本仓库。
 
 ## 后续维护
 
-1. 将新词加入ginkgo-food.dic，保持UTF-8和一行一词；词库变更也要记录评测证据。
+1. 将新词加入foodmap-food.dic，保持UTF-8和一行一词；词库变更也要记录评测证据。
 2. 本地词典在启动时加载，修改文件后重启本地ES：
 
    ```powershell

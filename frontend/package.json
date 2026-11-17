@@ -1,8 +1,8 @@
 {
-  "name": "ginkgo-food-map-frontend",
+  "name": "foodmap-frontend",
   "version": "2.0.0",
   "private": true,
-  "description": "Ginkgo 美食地图 V2 前端",
+  "description": "泥电美食地图 V2 前端",
   "type": "module",
   "scripts": {
     "dev": "vite --config config/vite.config.ts",

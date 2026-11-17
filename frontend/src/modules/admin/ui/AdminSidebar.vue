@@ -29,31 +29,24 @@ onMounted(async () => {
 onBeforeUnmount(() => controller.abort())
 const items = [
   { name: '商户审核', path: '/admin/reviews', icon: 'review' },
-  { name: '公告管理', path: '/admin/announcements', icon: 'announcement' },
   { name: '举报处理', path: '/admin/reports', icon: 'report' },
   { name: '商户管理', path: '/admin/restaurants', icon: 'shop' },
-  { name: '点评管理', icon: 'chat' },
-  { name: '操作记录', icon: 'history' },
+  { name: '公告管理', path: '/admin/announcements', icon: 'announcement' },
 ]
 </script>
 
 <template>
   <nav class="admin-sidebar" aria-label="管理导航">
-    <p class="sidebar-label">内容管理</p>
-    <component
-      :is="item.path ? RouterLink : 'button'"
+    <RouterLink
       v-for="item in items"
       :key="item.icon"
       :to="item.path"
-      :disabled="!item.path"
       class="sidebar-item"
       :class="{
-        selected: item.path && (route.path === item.path || route.path.startsWith(item.path + '/')),
+        selected: route.path === item.path || route.path.startsWith(item.path + '/'),
       }"
       :aria-current="
-        item.path && (route.path === item.path || route.path.startsWith(item.path + '/'))
-          ? 'page'
-          : undefined
+        route.path === item.path || route.path.startsWith(item.path + '/') ? 'page' : undefined
       "
     >
       <svg
@@ -73,27 +66,17 @@ const items = [
           v-else-if="item.icon === 'announcement'"
           d="m4 10 15-6v16L4 14ZM4 10H2v4h2M7 15l2 6h3l-2-5"
         />
-        <path
-          v-else-if="item.icon === 'report'"
-          d="M12 3 2 21h20L12 3Zm0 6v5M12 17h.01"
-        />
+        <path v-else-if="item.icon === 'report'" d="M12 3 2 21h20L12 3Zm0 6v5M12 17h.01" />
         <path
           v-else-if="item.icon === 'shop'"
           d="M4 10v10h16V10M3 10l2-6h14l2 6M3 10c0 4 5 4 5 0 0 4 8 4 8 0 0 4 5 4 5 0M9 20v-6h6v6"
         />
-        <path
-          v-else-if="item.icon === 'chat'"
-          d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 3v-3H3V6a2 2 0 0 1 2-2ZM7 9h10M7 13h7"
-        />
-        <path v-else d="M4 7a9 9 0 1 1-1 9M3 3v5h5M12 7v6l4 2" />
       </svg>
       <span>{{ item.name }}</span>
       <span v-if="item.icon === 'review' && badge !== undefined" class="sidebar-count">{{
         badge
       }}</span>
-      <span v-if="!item.path" class="sidebar-later">后续</span>
-    </component>
-    <div class="sidebar-bottom">一起维护校园美食地图<br />让每一份分享都有据可循。</div>
+    </RouterLink>
   </nav>
 </template>
 
@@ -101,34 +84,30 @@ const items = [
 .admin-sidebar {
   box-sizing: border-box;
   border-right: 1px solid #eceef0;
-  padding: 36px 18px;
+  padding: 28px 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   font-family: Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif;
   color: #25313d;
-}
-.sidebar-label {
-  font-size: 10px;
-  color: #929aa3;
-  letter-spacing: 2px;
-  margin: 0 16px 12px;
+  background: #fff;
+  min-height: 0;
 }
 .sidebar-item {
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 13px;
   width: 100%;
-  padding: 13px 15px;
+  padding: 15px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 9px;
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   text-align: left;
   text-decoration: none;
   background: transparent;
-  color: inherit;
+  color: #626d7b;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -138,32 +117,16 @@ const items = [
   flex-shrink: 0;
 }
 .sidebar-item.selected {
-  background: #fcf4e8;
-  color: #bd6816;
+  background: #fbefdf;
+  color: #a55d1f;
   font-weight: 600;
-}
-.sidebar-item:disabled {
-  color: #b3bac2;
-  cursor: default;
 }
 .sidebar-count {
   margin-left: auto;
   font-size: 11px;
 }
-.sidebar-later {
-  margin-left: auto;
-  font-size: 9px;
-  color: #b3bac2;
-}
-.sidebar-bottom {
-  margin-top: auto;
-  padding: 28px 15px 0;
-  font-size: 11px;
-  line-height: 1.9;
-  color: #959ca4;
-}
 .sidebar-item:focus-visible {
-  outline: 2px solid #ad6f26;
+  outline: 2px solid #929aa5;
   outline-offset: 3px;
 }
 @media (max-width: 800px) {
@@ -174,11 +137,6 @@ const items = [
     border-right: 0;
     border-bottom: 1px solid #eceef0;
     gap: 0;
-  }
-  .sidebar-label,
-  .sidebar-bottom,
-  .sidebar-later {
-    display: none;
   }
   .sidebar-item {
     width: auto;

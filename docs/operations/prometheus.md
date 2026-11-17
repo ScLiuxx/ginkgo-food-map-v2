@@ -1,12 +1,14 @@
 # Prometheus本地采集
 
+2026-11-17起本文命令与模板使用`foodmap`命名；已有监控实例需同步任务名与挂载路径，本文不代表已重新部署监控，不得为改名删除已有数据卷。
+
 本配置用于本地Docker Desktop，采集运行在宿主机8080端口的后端；未部署到线上。指标定义见[检索指标](elasticsearch-metrics.md)和[同步指标](elasticsearch-sync-metrics.md)，可视化见[Grafana看板](grafana.md)，八条本地告警及排查方法见[告警说明](search-alerts.md)。Logs、Trace、消息推送和ES集群Exporter暂不接入。
 
 ## 访问和存储
 
 - Compose入口：`deploy/monitoring/compose.yaml`，独立于业务及ES容器。
 - Prometheus固定镜像`quay.io/prometheus/prometheus:v3.5.1`（项目官方Quay仓库），本地入口`http://127.0.0.1:9090/`，不监听公网地址。
-- 每30秒采集，单次超时10秒，任务名`ginkgo-backend`，目标`host.docker.internal:8080/actuator/prometheus`。
+- 每30秒采集，单次超时10秒，任务名`foodmap-backend`，目标`host.docker.internal:8080/actuator/prometheus`。
 - 告警每15秒评估，规则目录只读挂载；`/alerts`查看等待、触发及恢复，不会自动发送消息。
 - TSDB使用命名卷持久化，保留7天或达到2GB阈值时按规则清理；2GB不包括WAL等全部占用，需预留额外磁盘。
 - 容器上限512MiB内存、0.5CPU。实际需求受时间序列数量和查询影响，按运行情况调整，不代表固定资源消耗。
@@ -44,16 +46,16 @@ $env:METRICS_SCRAPE_PASSWORD = Get-Content -LiteralPath $metricsSecretPath -Raw
 再启动Prometheus并检查配置（只启动Prometheus时指定服务名；启动全套需另备Grafana密码，见[看板说明](grafana.md)）：
 
 ```powershell
-docker compose -p ginkgo-monitoring -f deploy/monitoring/compose.yaml run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
-docker compose -p ginkgo-monitoring -f deploy/monitoring/compose.yaml up -d prometheus
+docker compose -p foodmap-monitoring -f deploy/monitoring/compose.yaml run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
+docker compose -p foodmap-monitoring -f deploy/monitoring/compose.yaml up -d prometheus
 ```
 
-访问`http://127.0.0.1:9090/targets`，等待最多约一个采集周期，`ginkgo-backend`应为UP。查询`up{job="ginkgo-backend"}`应返回1。执行几次列表浏览或关键词检索，等待采集后查询`restaurant_search_requests_total`；QPS和P95需至少多个采集点，低流量下分位数仅供参考。
+访问`http://127.0.0.1:9090/targets`，等待最多约一个采集周期，`foodmap-backend`应为UP。查询`up{job="foodmap-backend"}`应返回1。执行几次列表浏览或关键词检索，等待采集后查询`restaurant_search_requests_total`；QPS和P95需至少多个采集点，低流量下分位数仅供参考。
 
 停止容器但保留历史：
 
 ```powershell
-docker compose -p ginkgo-monitoring -f deploy/monitoring/compose.yaml down
+docker compose -p foodmap-monitoring -f deploy/monitoring/compose.yaml down
 ```
 
 不要加`-v`，否则会删除监控数据卷。轮换密码时同步更新后端环境变量和secret文件，并重启后端及Prometheus；普通业务账号退出登录不会影响采集。

@@ -48,7 +48,7 @@ Windows本地、Java 21.0.6、MySQL 8.0.34、Vue/Vite；本次没有在项目基
 
 ## 修改文件与职责
 
-以下路径相对仓库根目录；省略的Java包前缀为`backend/src/main/java/com/ginkgo/foodmap/`，前端模块前缀为`frontend/src/modules/restaurant/`。
+以下路径相对仓库根目录；省略的Java包前缀为`backend/src/main/java/com/foodmap/`，前端模块前缀为`frontend/src/modules/restaurant/`。
 
 | 文件 | 用途 |
 | --- | --- |
@@ -58,7 +58,7 @@ Windows本地、Java 21.0.6、MySQL 8.0.34、Vue/Vite；本次没有在项目基
 | `restaurant/service/RestaurantReadService.java` | 按抽样顺序批量补充公开资料、标签与封面 |
 | `restaurant/mapper/RestaurantCatalogMapper.java`、`backend/src/main/resources/mapper/restaurant/RestaurantCatalogMapper.xml` | 复用硬筛选，读取完整合格ID |
 | `security/config/SecurityConfiguration.java` | 仅公开指定方法和路径 |
-| `backend/src/test/java/com/ginkgo/foodmap/restaurant/RestaurantPickerPolicyTest.java`、`RestaurantReadApiIntegrationTest.java`（同目录） | 抽样规则与真实MySQL接口/事务验证 |
+| `backend/src/test/java/com/foodmap/restaurant/RestaurantPickerPolicyTest.java`、`RestaurantReadApiIntegrationTest.java`（同目录） | 抽样规则与真实MySQL接口/事务验证 |
 | `api/restaurantPickerApi.ts`、`model/picker.store.ts` | 请求契约、预取/历史、取消与重试、详情往返会话 |
 | `ui/RandomRestaurant.vue`、`ui/random-restaurant.css`、`ui/PickerIcon.vue` | 已确认弹窗、响应式样式与图标 |
 | `ui/RestaurantDetail.vue` | 从选店进入时的返回与失败页入口 |

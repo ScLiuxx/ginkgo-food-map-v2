@@ -33,7 +33,7 @@
 成功200，统一封装的`data`为：
 
 ```json
-{"application":"ginkgo-food-map-v2","architecture":"modular-monolith"}
+{"application":"foodmap","architecture":"modular-monolith"}
 ```
 
 **错误码**

@@ -15,7 +15,7 @@
 
 ## 导航、位置与配置
 
-- 外部导航由用户点击HTTPS `https://uri.amap.com/marker`触发，只传目的地、名称、`coordinate=gaode`、`src=ginkgo`及`callnative=1`；定位、起点和路线由高德处理。站内不新增路线规划、时间估计或导航起点选择。
+- 外部导航由用户点击HTTPS `https://uri.amap.com/marker`触发，只传目的地、名称、`coordinate=gaode`、`src=foodmap`及`callnative=1`；定位、起点和路线由高德处理。站内不新增路线规划、时间估计或导航起点选择。
 - 本人位置仅在主动点击时申请浏览器定位，再由高德从WGS84转换GCJ-02；不绑定账号或持久化。校区距离采用既有固定GCJ-02参照点，距离排序与范围上限沿用既有服务端规则。
 - `needsLocation=true`、缺失或非法坐标不进入地图候选，也不能生成坐标导航链接；详情仍可通过首页访问。未知位置不补校园坐标，无评分不补虚构分数。
 - SDK按地图页面懒加载，使用共享Promise、超时和可控重试。切换页面销毁地图及监听并取消请求；Key、安全密钥和生产配置不进入Git。生产安全代理、HTTPS及手机唤起要求见[配置说明](../operations/amap-setup.md)。

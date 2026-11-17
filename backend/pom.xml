@@ -11,11 +11,11 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.ginkgo</groupId>
-    <artifactId>ginkgo-food-map-backend</artifactId>
+    <groupId>com.foodmap</groupId>
+    <artifactId>foodmap-backend</artifactId>
     <version>0.1.0-SNAPSHOT</version>
-    <name>ginkgo-food-map-backend</name>
-    <description>Ginkgo 美食地图 V2 模块化单体后端</description>
+    <name>foodmap-backend</name>
+    <description>泥电美食地图 V2 模块化单体后端</description>
 
     <properties>
         <java.version>21</java.version>

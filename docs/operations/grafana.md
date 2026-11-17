@@ -1,6 +1,8 @@
 # Grafana检索看板
 
-本地入口`http://127.0.0.1:3000/`，看板路径`/d/ginkgo-es-search/`，账号`admin`。Grafana账号独立于业务网站账号，密码在被Git忽略的`deploy/monitoring/secrets/grafana_admin_password`文件中，不使用默认密码。Grafana未部署线上，未嵌入业务管理员界面。
+2026-11-17起本文链接及模板标识使用`foodmap`命名；已有实例需同步数据源UID、看板UID和挂载路径，本次项目改名未重新部署Grafana，也不删除已有监控数据卷。
+
+本地入口`http://127.0.0.1:3000/`，看板路径`/d/foodmap-es-search/`，账号`admin`。Grafana账号独立于业务网站账号，密码在被Git忽略的`deploy/monitoring/secrets/grafana_admin_password`文件中，不使用默认密码。Grafana未部署线上，未嵌入业务管理员界面。
 
 ## 自动配置
 
@@ -9,7 +11,7 @@
 - [看板提供器](../../deploy/monitoring/grafana/provisioning/dashboards/default.yml)自动加载[看板JSON](../../deploy/monitoring/grafana/dashboards/restaurant-search.json)，JSON为维护来源，UI不可覆盖仓库配置。
 - 禁用匿名访问、用户自助注册和iframe嵌入，默认首页为检索看板；不新增业务接口或Java埋点。
 
-看板共39个面板、49条查询，标题为“Ginkgo · ES 检索与同步监控”，UID及入口保持不变。顶部是已触发告警数、等待确认告警数及告警明细表，随后展示采集状态、QPS、本次启动累计查询、ES承担比例、降级比例、最终失败率、普通浏览/关键词流量、列表及ES阶段P50/P95/P99、实际返回来源、降级原因、关键词零结果比例、每阶段SDK调用数及共享熔断状态；下方“ES 数据同步（Outbox）”展示[同步积压、消费结果、耗时、任务合并及Bulk请求等指标](elasticsearch-sync-metrics.md)。可选择单个后端实例，默认最近1小时，每30秒刷新。
+看板共39个面板、49条查询，标题为“Foodmap · ES 检索与同步监控”，UID及入口保持不变。顶部是已触发告警数、等待确认告警数及告警明细表，随后展示采集状态、QPS、本次启动累计查询、ES承担比例、降级比例、最终失败率、普通浏览/关键词流量、列表及ES阶段P50/P95/P99、实际返回来源、降级原因、关键词零结果比例、每阶段SDK调用数及共享熔断状态；下方“ES 数据同步（Outbox）”展示[同步积压、消费结果、耗时、任务合并及Bulk请求等指标](elasticsearch-sync-metrics.md)。可选择单个后端实例，默认最近1小时，每30秒刷新。
 
 比例仅在分母有流量时展示；无流量显示暂无数据，无降级事件时对应序列可能尚未生成。累计次数是当前进程累计值，后端重启归零，不是所选时段的增量。熔断器由列表与地图共享，其他新增检索图表只覆盖首页列表。指标口径见[指标说明](elasticsearch-metrics.md)。
 
@@ -33,7 +35,7 @@ if (-not (Test-Path -LiteralPath $grafanaSecretPath)) {
     $grafanaRng.Dispose()
     [System.IO.File]::WriteAllText($grafanaSecretPath, [BitConverter]::ToString($grafanaBytes).Replace('-', '').ToLowerInvariant())
 }
-docker compose -p ginkgo-monitoring -f deploy/monitoring/compose.yaml up -d
+docker compose -p foodmap-monitoring -f deploy/monitoring/compose.yaml up -d
 ```
 
 密码文件只在首次初始化Grafana账号时生效；已有数据卷上的密码轮换需使用Grafana账号管理或官方CLI，不能只改secret文件。停止时不要使用`down -v`，避免删除Grafana设置和Prometheus历史。

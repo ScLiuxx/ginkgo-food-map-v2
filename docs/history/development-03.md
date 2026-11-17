@@ -448,20 +448,20 @@
 
 | 文件（相对仓库根目录） | 本轮用途 |
 | --- | --- |
-| backend/src/main/java/com/ginkgo/foodmap/review/controller/ReviewDeleteController.java | 本人DELETE入口及204/no-store |
-| backend/src/main/java/com/ginkgo/foodmap/review/service/ReviewDeleteService.java | 作者授权、父锁、事务删除及代表回退 |
-| backend/src/main/java/com/ginkgo/foodmap/review/mapper/ReviewDeleteMapper.java | 独立请求回执及review自有子资源删除 |
-| backend/src/main/java/com/ginkgo/foodmap/review/service/ReviewWriteService.java | 发布登记回执、拒绝删除后重放 |
-| backend/src/main/java/com/ginkgo/foodmap/review/exception/ReviewErrorCode.java | 删评404/403、旧发布409及通用重试提示 |
+| backend/src/main/java/com/foodmap/review/controller/ReviewDeleteController.java | 本人DELETE入口及204/no-store |
+| backend/src/main/java/com/foodmap/review/service/ReviewDeleteService.java | 作者授权、父锁、事务删除及代表回退 |
+| backend/src/main/java/com/foodmap/review/mapper/ReviewDeleteMapper.java | 独立请求回执及review自有子资源删除 |
+| backend/src/main/java/com/foodmap/review/service/ReviewWriteService.java | 发布登记回执、拒绝删除后重放 |
+| backend/src/main/java/com/foodmap/review/exception/ReviewErrorCode.java | 删评404/403、旧发布409及通用重试提示 |
 | backend/src/main/resources/db/migration/V8__retain_review_request_receipts.sql | 新增回执表并回填存量 |
-| backend/src/main/java/com/ginkgo/foodmap/restaurant/dto/RestaurantReviewDelta.java | 条数增量支持发布+1、删除-1 |
-| backend/src/main/java/com/ginkgo/foodmap/restaurant/mapper/RestaurantReviewStatisticsMapper.java | 同一SQL更新正负累计值 |
-| backend/src/main/java/com/ginkgo/foodmap/file/service/MediaFileService.java | 跨模块公开媒体释放入口 |
-| backend/src/main/java/com/ginkgo/foodmap/file/mapper/MediaFileMapper.java | BOUND转可重试PENDING_DELETE |
-| backend/src/test/java/com/ginkgo/foodmap/review/ReviewWriteApiIntegrationTest.java | 权限、代表回退、回滚、重放及并发删除 |
-| backend/src/test/java/com/ginkgo/foodmap/review/ReviewSchemaIntegrationTest.java | V8升级、回填及重复迁移 |
-| backend/src/test/java/com/ginkgo/foodmap/restaurant/RestaurantSchemaIntegrationTest.java | 更新完整迁移链断言 |
-| backend/src/test/java/com/ginkgo/foodmap/file/ImageUploadIntegrationTest.java | 带图删评与云失败回收重试 |
+| backend/src/main/java/com/foodmap/restaurant/dto/RestaurantReviewDelta.java | 条数增量支持发布+1、删除-1 |
+| backend/src/main/java/com/foodmap/restaurant/mapper/RestaurantReviewStatisticsMapper.java | 同一SQL更新正负累计值 |
+| backend/src/main/java/com/foodmap/file/service/MediaFileService.java | 跨模块公开媒体释放入口 |
+| backend/src/main/java/com/foodmap/file/mapper/MediaFileMapper.java | BOUND转可重试PENDING_DELETE |
+| backend/src/test/java/com/foodmap/review/ReviewWriteApiIntegrationTest.java | 权限、代表回退、回滚、重放及并发删除 |
+| backend/src/test/java/com/foodmap/review/ReviewSchemaIntegrationTest.java | V8升级、回填及重复迁移 |
+| backend/src/test/java/com/foodmap/restaurant/RestaurantSchemaIntegrationTest.java | 更新完整迁移链断言 |
+| backend/src/test/java/com/foodmap/file/ImageUploadIntegrationTest.java | 带图删评与云失败回收重试 |
 | frontend/src/modules/review/api/reviewApi.ts、reviewApi.spec.ts | 真实DELETE适配及固定凭证/失败验证 |
 | frontend/src/modules/review/model/review.ts、reviewHistory.spec.ts | 预览权限标记说明及历史作者删除回归 |
 | frontend/src/modules/review/review.spec.ts | 本人入口、同名他人拒绝、确认取消及失败重试 |
@@ -540,15 +540,15 @@
 
 | 文件 | 用途 |
 | --- | --- |
-| backend/src/main/java/com/ginkgo/foodmap/restaurant/dto/RestaurantListQuery.java | 移除所有餐厅均待评级的旧派生条件 |
-| backend/src/main/java/com/ginkgo/foodmap/restaurant/entity/RestaurantEntity.java | 增加本模块统计投影，不作为接口对象 |
-| backend/src/main/java/com/ginkgo/foodmap/restaurant/mapper/RestaurantCatalogMapper.java | 更新统计读取职责说明 |
-| backend/src/main/java/com/ginkgo/foodmap/restaurant/service/RestaurantReadService.java | 映射真实统计、人数与条数到公开白名单 |
-| backend/src/main/java/com/ginkgo/foodmap/restaurant/vo/RestaurantVo.java | 增加公开participantCount并说明空值语义 |
+| backend/src/main/java/com/foodmap/restaurant/dto/RestaurantListQuery.java | 移除所有餐厅均待评级的旧派生条件 |
+| backend/src/main/java/com/foodmap/restaurant/entity/RestaurantEntity.java | 增加本模块统计投影，不作为接口对象 |
+| backend/src/main/java/com/foodmap/restaurant/mapper/RestaurantCatalogMapper.java | 更新统计读取职责说明 |
+| backend/src/main/java/com/foodmap/restaurant/service/RestaurantReadService.java | 映射真实统计、人数与条数到公开白名单 |
+| backend/src/main/java/com/foodmap/restaurant/vo/RestaurantVo.java | 增加公开participantCount并说明空值语义 |
 | backend/src/main/resources/mapper/restaurant/RestaurantCatalogMapper.xml | 共享统计连接、精确杯型、真实筛选和全局排序 |
 | backend/src/main/resources/mapper/restaurant/RestaurantWriteMapper.xml | 管理回执复用相同统计投影，防止保存资料后分数空态 |
-| backend/src/test/java/com/ginkgo/foodmap/restaurant/RestaurantReadApiIntegrationTest.java | 新增真实MySQL统计读取、边界、分页及并发快照验证 |
-| backend/src/test/java/com/ginkgo/foodmap/review/ReviewWriteApiIntegrationTest.java | 验证真实发布后公开统计及授权管理读取一致 |
+| backend/src/test/java/com/foodmap/restaurant/RestaurantReadApiIntegrationTest.java | 新增真实MySQL统计读取、边界、分页及并发快照验证 |
+| backend/src/test/java/com/foodmap/review/ReviewWriteApiIntegrationTest.java | 验证真实发布后公开统计及授权管理读取一致 |
 | docs/requirements.md、docs/api.md、docs/features.md | 固定产品规则、更新接口字段与当前可用范围 |
 | docs/architecture/review-schema.md、docs/plans/review-backend.md、docs/plans/review-roadmap.md | 同步读模型选择与后端完成/前端待办边界 |
 | docs/development.md | 记录本轮实现、取舍、验证及未完成内容 |
@@ -593,7 +593,7 @@
 - 单层回复绑定具体reviewId，保留旧点评归属。升序(createdAt,id)排他游标带版本和点评归属，核对真实锚点；单段REPEATABLE_READ，公开作者批量补齐，缺失账号保留ID及回退名。新回复时间不早于上一条，避免时钟回拨漏过游标；跨段非固定快照，无推送。未来删除仍需明确幂等键生命周期，当前回复不承诺删除后永久防重。
 - 新增ReplyPolicyTest和ReplyApiIntegrationTest，真实MySQL8.4.0在独立回环3319实例及随机库测试，不读取local配置、不写业务库、不请求OSS或邮件；详细验证结果见本节后续记录。
 - 本步文件清单（相对backend/src/main/java/com/ginkgo/foodmap）：review/controller/ReplyController.java提供两个HTTP入口；review/dto/ReplyPublishRequest.java与ReplyListQuery.java定义受限输入；review/vo/ReplyPublishVo.java与ReplyPageVo.java定义回执/公开分页；review/entity/ReplyEntity.java隔离持久化投影；review/mapper/ReplyMapper.java负责本模块SQL；review/policy/ReplyPolicy.java负责规范化、摘要和游标；review/exception/ReplyErrorCode.java定义回复错误；review/service/ReplyWriteService.java与ReplyReadService.java负责事务流程。另修改restaurant/service/RestaurantReviewApplicationService.java分离父锁与统计初始化，security/config/SecurityConfiguration.java显式公开GET。
-- 测试文件为backend/src/test/java/com/ginkgo/foodmap/review/ReplyPolicyTest.java和ReplyApiIntegrationTest.java。文档更新docs/api.md、docs/features.md、docs/plans/review-roadmap.md、docs/plans/review-backend.md及本文件；前端、现有迁移均未修改。
+- 测试文件为backend/src/test/java/com/foodmap/review/ReplyPolicyTest.java和ReplyApiIntegrationTest.java。文档更新docs/api.md、docs/features.md、docs/plans/review-roadmap.md、docs/plans/review-backend.md及本文件；前端、现有迁移均未修改。
 - 最终验证：Java21 + 独立MySQL8.4.0，`mvn --batch-mode --no-transfer-progress verify '-Dreview.integration=true'`成功并打包可执行JAR。共299项、226通过、0失败/错误、73跳过（未开启其他领域的显式集成开关），不能记为299项全部实际执行。新增回复12项真实数据库/认证接口测试及3项规则测试全部通过；原点评发布、分组/历史读取及评价结构测试亦执行通过。覆盖并发同UUID/跨店冲突、插入后故障回滚与有界重试、删店互斥、历史归属/不计分、Unicode、游标同时间分页/失效、时钟回拨及缺失作者。`git diff --check`通过；没有前端改动，未运行前端构建或浏览器验收。
 - Maven原始日志位于仓库外`D:/eat/.codex-backups/reply-verify.log`；测试随机库已清理，本轮3319专用实例在验证结束后关闭。未提交、推送、合并或部署；正式前端回复接入及删除功能仍待完成。
 

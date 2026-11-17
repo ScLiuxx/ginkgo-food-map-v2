@@ -81,12 +81,12 @@ python -X utf8 backend/tools/benchmark_restaurant_rankings.py --local-config --r
 | 文件 | 用途 |
 | --- | --- |
 | [pom.xml](../../backend/pom.xml) | 引入Boot管理版本的Caffeine |
-| [RestaurantRankingLocalCache.java](../../backend/src/main/java/com/ginkgo/foodmap/restaurant/cache/RestaurantRankingLocalCache.java) | 四条容量、写后过期、不可变展示对象、防御性返回及逐次年龄检查 |
-| [RestaurantRankingCache.java](../../backend/src/main/java/com/ginkgo/foodmap/restaurant/cache/RestaurantRankingCache.java) | 本机快路径、锁内复查与回填、两级失效及Redis故障后的最新快照缓存 |
-| [RestaurantRankingSnapshotCodec.java](../../backend/src/main/java/com/ginkgo/foodmap/restaurant/support/RestaurantRankingSnapshotCodec.java) | 携带原PREPARING到期时间，避免跨层短缓存续期 |
-| [RestaurantRankingProperties.java](../../backend/src/main/java/com/ginkgo/foodmap/restaurant/config/RestaurantRankingProperties.java) | 本机开关、30分钟TTL及有效配置校验 |
+| [RestaurantRankingLocalCache.java](../../backend/src/main/java/com/foodmap/restaurant/cache/RestaurantRankingLocalCache.java) | 四条容量、写后过期、不可变展示对象、防御性返回及逐次年龄检查 |
+| [RestaurantRankingCache.java](../../backend/src/main/java/com/foodmap/restaurant/cache/RestaurantRankingCache.java) | 本机快路径、锁内复查与回填、两级失效及Redis故障后的最新快照缓存 |
+| [RestaurantRankingSnapshotCodec.java](../../backend/src/main/java/com/foodmap/restaurant/support/RestaurantRankingSnapshotCodec.java) | 携带原PREPARING到期时间，避免跨层短缓存续期 |
+| [RestaurantRankingProperties.java](../../backend/src/main/java/com/foodmap/restaurant/config/RestaurantRankingProperties.java) | 本机开关、30分钟TTL及有效配置校验 |
 | [application.yml](../../backend/src/main/resources/application.yml) / [application-test.yml](../../backend/src/test/resources/application-test.yml) | 默认启用两级缓存，普通测试保持关闭以维持原基线 |
-| [缓存测试](../../backend/src/test/java/com/ginkgo/foodmap/restaurant/RestaurantRankingCacheTest.java) / [读取测试](../../backend/src/test/java/com/ginkgo/foodmap/restaurant/RestaurantRankingReadServiceTest.java) | 新增本机、并发、TTL与不可变性验证，适配原读取校验 |
-| [真实集成测试](../../backend/src/test/java/com/ginkgo/foodmap/restaurant/RestaurantRankingReadMySqlIntegrationTest.java) | 两种缓存配置复测事务/故障，增加真实HTTP及三模式对照 |
+| [缓存测试](../../backend/src/test/java/com/foodmap/restaurant/RestaurantRankingCacheTest.java) / [读取测试](../../backend/src/test/java/com/foodmap/restaurant/RestaurantRankingReadServiceTest.java) | 新增本机、并发、TTL与不可变性验证，适配原读取校验 |
+| [真实集成测试](../../backend/src/test/java/com/foodmap/restaurant/RestaurantRankingReadMySqlIntegrationTest.java) | 两种缓存配置复测事务/故障，增加真实HTTP及三模式对照 |
 | [基准入口](../../backend/tools/benchmark_restaurant_rankings.py) | 增加--caffeine、三模式元数据与完整样本归档 |
 | [计划](../plans/hot-restaurants.md)、[近期餐厅榜单读取](../api/discovery.md#rankings)、[功能说明](../features.md)、[开发记录](../development.md)、[导航](../README.md)及本报告 | 同步当前状态、契约、验证结论与证据入口 |

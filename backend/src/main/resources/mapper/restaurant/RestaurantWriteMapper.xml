@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.ginkgo.foodmap.restaurant.mapper.RestaurantWriteMapper">
-    <select id="selectManagementById" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantManagementEntity">
-        SELECT <include refid="com.ginkgo.foodmap.restaurant.mapper.RestaurantCatalogMapper.publicColumns"/>,
+<mapper namespace="com.foodmap.restaurant.mapper.RestaurantWriteMapper">
+    <select id="selectManagementById" resultType="com.foodmap.restaurant.entity.RestaurantManagementEntity">
+        SELECT <include refid="com.foodmap.restaurant.mapper.RestaurantCatalogMapper.publicColumns"/>,
             r.created_by, r.updated_by, r.deleted_at
         <!-- 管理回执复用公开统计字段，保存餐厅资料后不会把已有分数覆盖为空态。 -->
-        <include refid="com.ginkgo.foodmap.restaurant.mapper.RestaurantCatalogMapper.catalogFrom"/>
+        <include refid="com.foodmap.restaurant.mapper.RestaurantCatalogMapper.catalogFrom"/>
         WHERE r.id = #{id}
     </select>
 
-    <select id="lockById" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantManagementEntity">
+    <select id="lockById" resultType="com.foodmap.restaurant.entity.RestaurantManagementEntity">
         SELECT id, category_code, restaurant_type, created_by, deleted_at FROM restaurants WHERE id = #{id} FOR UPDATE
     </select>
 
-    <select id="lockCategory" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantCategoryEntity">
+    <select id="lockCategory" resultType="com.foodmap.restaurant.entity.RestaurantCategoryEntity">
         SELECT code, name, sort_order, enabled FROM restaurant_categories WHERE code = #{code} FOR SHARE
     </select>
 

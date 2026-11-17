@@ -132,7 +132,8 @@ function cancel() {
 <style scoped>
 .editable-value {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
   width: 100%;
   text-align: left;
@@ -148,8 +149,9 @@ function cancel() {
   cursor: default;
 }
 .edit-pencil {
-  opacity: 0;
-  color: #c3a784;
+  flex: none;
+  opacity: 0.7;
+  color: #929ba8;
   transition: opacity 0.16s ease;
 }
 .editable-value:hover .edit-pencil,
@@ -159,12 +161,24 @@ function cancel() {
 .inline-input {
   width: 100%;
   min-width: 0;
-  border: 1px solid #dfa04d;
+  border: 1px solid #dfe3e8;
   border-radius: 4px;
-  padding: 6px;
+  padding: 6px 8px;
   font: inherit;
   color: inherit;
-  background: #fffdf8;
+  background: #f6f7f9;
+  outline: none;
+  box-shadow: none;
+}
+/* 鼠标编辑只保留光标；键盘仍能识别尚未打开的编辑入口。 */
+.editable-value:focus-visible {
+  outline: 2px solid #929aa5;
+  outline-offset: 3px;
+}
+.inline-input:focus {
+  border-color: #dfe3e8;
+  outline: none;
+  box-shadow: none;
 }
 @media (hover: none) {
   .edit-pencil {

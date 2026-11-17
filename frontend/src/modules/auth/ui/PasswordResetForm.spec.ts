@@ -62,7 +62,7 @@ describe('password reset form', () => {
   }
 
   it('submits the dedicated payload and removes old credentials after success', async () => {
-    vi.mocked(resetPassword).mockResolvedValue({ username: 'ginkgo_user' })
+    vi.mocked(resetPassword).mockResolvedValue({ username: 'foodmap_user' })
     setAccessToken('old-session')
     fill()
     await submit()
@@ -73,12 +73,12 @@ describe('password reset form', () => {
       newPassword: 'NewPassword2026',
     })
     expect(getAccessToken()).toBeNull()
-    expect(localStorage.getItem('ginkgo.access-token')).toBeNull()
+    expect(localStorage.getItem('foodmap.access-token')).toBeNull()
     for (const id of ['reset-password', 'reset-confirm-password', 'reset-code']) {
       expect(host.querySelector<HTMLInputElement>(`#${id}`)?.value).toBe('')
     }
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/login'))
-    expect(consumeResetLogin()).toBe('ginkgo_user')
+    expect(consumeResetLogin()).toBe('foodmap_user')
     expect(consumeResetLogin()).toBeNull()
   })
 
@@ -121,7 +121,7 @@ describe('password reset form', () => {
     fill()
     await submit()
     setAccessToken('new-session')
-    finish({ username: 'ginkgo_user' })
+    finish({ username: 'foodmap_user' })
     await vi.waitFor(() => expect(host.textContent).toContain('密码重置成功'))
     expect(getAccessToken()).toBe('new-session')
   })
@@ -168,7 +168,7 @@ describe('password reset form', () => {
     await submit()
     expect(resetPassword).toHaveBeenCalledTimes(1)
     expect(host.querySelector('fieldset')?.disabled).toBe(true)
-    finish({ username: 'ginkgo_user' })
+    finish({ username: 'foodmap_user' })
     await vi.waitFor(() => expect(host.textContent).toContain('密码重置成功'))
   })
 })

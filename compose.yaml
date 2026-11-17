@@ -3,7 +3,7 @@ services:
     build:
       context: ./frontend
       dockerfile: deploy/Dockerfile
-    container_name: ginkgo-frontend
+    container_name: foodmap-frontend
     restart: unless-stopped
     environment:
       BACKEND_HOST: host.docker.internal
@@ -15,7 +15,7 @@ services:
 
   mysql:
     image: mysql:8.4
-    container_name: ginkgo-mysql
+    container_name: foodmap-mysql
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -25,7 +25,7 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - ginkgo_mysql_data:/var/lib/mysql
+      - foodmap_mysql_data:/var/lib/mysql
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
@@ -34,13 +34,13 @@ services:
 
   redis:
     image: redis:8-alpine
-    container_name: ginkgo-redis
+    container_name: foodmap-redis
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory 192mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
     volumes:
-      - ginkgo_redis_data:/data
+      - foodmap_redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -48,5 +48,5 @@ services:
       retries: 5
 
 volumes:
-  ginkgo_mysql_data:
-  ginkgo_redis_data:
+  foodmap_mysql_data:
+  foodmap_redis_data:

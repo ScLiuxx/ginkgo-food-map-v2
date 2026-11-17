@@ -12,6 +12,7 @@
 | --- | --- | --- |
 | 物理索引 | `restaurant-search-v004` | 固定当前字段与分词配置版本 |
 | 业务别名 | `restaurant-search` | 业务访问名称 |
+| schema标识 | `foodmap.restaurant-search` | mapping的`_meta.schema`；仅改名前的`ginkgo.restaurant-search`作为兼容标识接受，其余结构与版本仍严格核对 |
 | 写索引标记 | `is_write_index=true` | 别名当前唯一指向v004 |
 | 主分片 | 1 | 主分片数 |
 | 副本 | 0 | 副本数 |

@@ -255,10 +255,10 @@ def run(args, *, supplemental_accuracy=(), scenario_factory=performance_cases):
     report['environment']['source_sha256'] = {
         str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in (
             Path(__file__), CASES, NEW_CASES,
-            ROOT / 'backend/target/ginkgo-food-map-backend-0.1.0-SNAPSHOT.jar',
-            ROOT / 'backend/src/main/java/com/ginkgo/foodmap/restaurant/search/RestaurantSearchReader.java',
-            ROOT / 'backend/src/main/java/com/ginkgo/foodmap/restaurant/service/RestaurantQueryService.java',
-            ROOT / 'backend/src/main/java/com/ginkgo/foodmap/restaurant/config/RestaurantSearchCircuitBreakerConfiguration.java',
+            ROOT / 'backend/target/foodmap-backend-0.1.0-SNAPSHOT.jar',
+            ROOT / 'backend/src/main/java/com/foodmap/restaurant/search/RestaurantSearchReader.java',
+            ROOT / 'backend/src/main/java/com/foodmap/restaurant/service/RestaurantQueryService.java',
+            ROOT / 'backend/src/main/java/com/foodmap/restaurant/config/RestaurantSearchCircuitBreakerConfiguration.java',
             ROOT / 'backend/src/main/resources/application.yml',
             ROOT / 'backend/src/main/resources/elasticsearch/restaurant-search-v003.json',
             ROOT / 'backend/src/main/resources/mapper/restaurant/RestaurantCatalogMapper.xml')}

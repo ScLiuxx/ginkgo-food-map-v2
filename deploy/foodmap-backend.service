@@ -1,0 +1,28 @@
+[Unit]
+Description=泥电美食地图 backend
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=foodmap
+Group=foodmap
+WorkingDirectory=/opt/foodmap/current
+# 配置由管理员保存在服务器，发布包不携带数据库、SMTP或JWT密钥。
+EnvironmentFile=/etc/foodmap/backend.env
+ExecStart=/usr/bin/java -Xms128m -Xmx384m -XX:MaxMetaspaceSize=192m -jar /opt/foodmap/current/backend.jar
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+SuccessExitStatus=143
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/etc/foodmap
+SyslogIdentifier=foodmap-backend
+
+[Install]
+WantedBy=multi-user.target

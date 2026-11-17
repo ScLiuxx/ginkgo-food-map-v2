@@ -2,7 +2,7 @@
 # 首次使用时复制为 application-local.yml，并只修改复制后的本地文件。
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/ginkgo_food_map?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3306/foodmap?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
     password: replace-with-local-mysql-password
     hikari:
@@ -27,7 +27,7 @@ spring:
     properties:
       # 本地开发固定 EHLO/HELO 客户端名称，避免自动反向 DNS 查询拖慢握手。
       # 这是客户端身份，不是 SMTP 服务地址；生产环境应另配适合自身的客户端名称。
-      "[mail.smtp.localhost]": ginkgo-food-map.local
+      "[mail.smtp.localhost]": foodmap.local
       "[mail.smtp.auth]": true
       "[mail.smtp.starttls.enable]": true
       "[mail.smtp.starttls.required]": true

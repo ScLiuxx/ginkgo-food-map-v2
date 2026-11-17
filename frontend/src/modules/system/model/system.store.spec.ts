@@ -13,7 +13,7 @@ describe('system store', () => {
 
   it('records a successful backend status response', async () => {
     vi.mocked(fetchSystemStatus).mockResolvedValue({
-      application: 'ginkgo-food-map-v2',
+      application: 'foodmap',
       architecture: 'modular-monolith',
     })
 
@@ -21,7 +21,7 @@ describe('system store', () => {
     await store.loadStatus()
 
     expect(store.online).toBe(true)
-    expect(store.status?.application).toBe('ginkgo-food-map-v2')
+    expect(store.status?.application).toBe('foodmap')
     expect(store.error).toBeNull()
   })
 })

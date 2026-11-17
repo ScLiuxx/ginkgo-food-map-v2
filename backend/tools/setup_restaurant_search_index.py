@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 import json
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -73,13 +74,22 @@ def load_spec(version: str = "004") -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def mappings_match(actual: dict, expected: dict) -> bool:
+    """仅兼容项目改名前的schema品牌标识；版本、字段、分词和其余元数据仍必须严格一致。"""
+    normalized = deepcopy(actual)
+    metadata = normalized.get('_meta', {})
+    if metadata.get('schema') == 'ginkgo.restaurant-search':
+        metadata['schema'] = 'foodmap.restaurant-search'
+    return normalized == expected
+
+
 def verify_definition(client: LocalElasticsearch, spec: dict, index: str = INDEX) -> None:
     """重复执行只核对结构，发现漂移直接失败，不覆盖已有文档或偷偷修改mapping。"""
     actual = client.request("GET", "/" + index)
     if set(actual) != {index}:
         raise RuntimeError("物理索引名称已被其他资源占用")
     current = actual[index]
-    if current["mappings"] != spec["mappings"]:
+    if not mappings_match(current["mappings"], spec["mappings"]):
         raise RuntimeError("已有mapping与版本定义不一致；请设计新版本索引，不要覆盖")
     settings = current["settings"]["index"]
     for key in ("number_of_shards", "number_of_replicas", "refresh_interval"):

@@ -15,7 +15,7 @@ from urllib.request import Request, ProxyHandler, build_opener
 
 from evaluate_restaurant_search import connect
 from rebuild_restaurant_search_index import snapshot
-from setup_restaurant_search_index import ALIAS, LocalElasticsearch
+from setup_restaurant_search_index import ALIAS, LocalElasticsearch, mappings_match
 
 PREVIOUS = "restaurant-search-v003"
 CURRENT = "restaurant-search-v004"
@@ -44,7 +44,7 @@ def verify_definition(client, allow_alias=False):
     """新索引必须符合完整版本定义，不覆盖漂移结构或绑定其他别名的索引。"""
     actual = client.request("GET", "/" + CURRENT)[CURRENT]
     definition = load_definition()
-    if actual["mappings"] != definition["mappings"]:
+    if not mappings_match(actual["mappings"], definition["mappings"]):
         raise RuntimeError("Candidate mapping differs")
     settings = actual["settings"]["index"]
     for key in ("number_of_shards", "number_of_replicas", "refresh_interval", "analysis"):

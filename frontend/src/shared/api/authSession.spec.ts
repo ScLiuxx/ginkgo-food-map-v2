@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MockInstance } from 'vitest'
 
-const storageKey = 'ginkgo.access-token'
+const storageKey = 'foodmap.access-token'
 
 /** 每次重新加载模块模拟页面关闭后重新打开；只使用虚构凭证，不访问后端。 */
 describe('persistent authentication session', () => {

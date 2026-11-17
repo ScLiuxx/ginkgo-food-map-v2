@@ -4,13 +4,21 @@
 
 ## 当前状态
 
-项目迁入独立仓库 [kanno111/ginkgo-food-map-v2](https://github.com/kanno111/ginkgo-food-map-v2)，默认分支为 `develop`。新历史从原 develop 的 V2 重构基线开始，随后保存登录、注册及 CI/CD 修改，不包含基线之前的旧系统提交。
+项目迁入独立仓库 [kanno111/foodmap](https://github.com/kanno111/foodmap)，默认分支为 `develop`。新历史从原 develop 的 V2 重构基线开始，随后保存登录、注册及 CI/CD 修改，不包含基线之前的旧系统提交。
 
-服务器 `8.137.98.235` 使用自托管 GitHub Actions Runner 执行发布，前后端构建和测试仍在 GitHub 托管机器运行。流水线位于 [ci-cd.yml](../../.github/workflows/ci-cd.yml)，实际执行结果见[新仓库 Actions](https://github.com/kanno111/ginkgo-food-map-v2/actions)。
+服务器 `8.137.98.235` 使用自托管 GitHub Actions Runner 执行发布，前后端构建和测试仍在 GitHub 托管机器运行。流水线位于 [ci-cd.yml](../../.github/workflows/ci-cd.yml)，实际执行结果见[新仓库 Actions](https://github.com/kanno111/foodmap/actions)。
 
 此前首轮检查全部通过，但 GitHub 托管 Runner 无法连接仅允许本机来源的 SSH，发布步骤以255退出。现改为服务器主动连接 GitHub、下载同一次检查的产物并在本地发布，自动发布不再依赖入站 SSH；原有 SSH 来源限制继续保留。
 
-访问地址为 `http://8.137.98.235`。首次服务器主动发布已于2026-10-27成功，运行记录为 [Actions 40528088040](https://github.com/kanno111/ginkgo-food-map-v2/actions/runs/40528088040)，发布提交为 `a8df8ff62f578220d626682147fd7cf1b4f80069`。首页、登录页、注册页和公开 API 均返回200，匿名 `/auth/me` 返回预期401，后端健康状态为 UP。当前仅配置 HTTP，尚未配置域名和 HTTPS。
+访问地址为 `http://8.137.98.235`。首次服务器主动发布已于2026-10-27成功，运行记录为 [Actions 40528088040](https://github.com/kanno111/foodmap/actions/runs/40528088040)，发布提交为 `a8df8ff62f578220d626682147fd7cf1b4f80069`。首页、登录页、注册页和公开 API 均返回200，匿名 `/auth/me` 返回预期401，后端健康状态为 UP。当前仅配置 HTTP，尚未配置域名和 HTTPS。
+
+## 改名后的部署前置条件
+
+2026-11-17项目内名称统一为`foodmap`，本次仅修改本地源码和部署模板，没有连接或修改服务器。下方“当前状态”和“服务器部署结构”保留此前实测名称；后续命令使用新命名，不代表服务器已完成迁移。
+
+再次向`develop`推送前，应同步服务器上的`foodmap`应用账号、`foodmap-deploy` Runner账号及标签、`/opt/foodmap`发布目录、`/etc/foodmap/backend.env`、`foodmap-backend.service`、Nginx配置和sudo授权。运行配置仍可连接原数据库、Redis和OSS，不能因为改名新建空卷替换原数据。JWT默认签发者和受众已改为`foodmap`／`foodmap-api`，浏览器存储键和缓存前缀也已更新，升级后需重新登录；现有缓存等待过期后重新生成。
+
+用户已将GitHub仓库更名为`kanno111/foodmap`，本地`origin`和文档链接已同步。按用户要求暂不处理CI/CD，工作流仓库身份条件仍保留旧值，后续恢复发布时单独核对。监控的任务名、数据源UID和告警名称已更新模板，部署时须同步Prometheus／Grafana配置；不重建已有指标数据卷。IK词典新文件为`foodmap-food.dic`，启用新配置前需同步该文件。部署模板迁移尚未在服务器验收。
 
 ## 触发条件与执行流程
 
@@ -21,12 +29,12 @@
 3. 检查部署脚本语法，运行发布、失败回滚及 HTTP 健康检查测试。
 4. 三项检查全部通过后，取本次运行生成的 JAR 和前端产物，打包并生成 SHA-256 校验文件，不在服务器重新构建源码。产物保留7天。
 5. 发布开始前核对远程 `develop` 最新提交；若当前提交已经被新推送取代，跳过本次发布。发布任务串行执行，不中断正在切换版本的任务。
-6. 服务器上的 `ginkgo-deploy` Runner 下载本次运行的产物，将发布包和脚本复制到本地待发布目录。发布脚本再次验证校验和、压缩包路径和提交号，然后原子切换当前版本链接并重启后端。
+6. 服务器上的 `foodmap-deploy` Runner 下载本次运行的产物，将发布包和脚本复制到本地待发布目录。发布脚本再次验证校验和、压缩包路径和提交号，然后原子切换当前版本链接并重启后端。
 7. 同时验证后端健康、前端提交号、登录页面、公开 API 及匿名认证响应。失败时尝试恢复上一版程序，并将本次 Actions 标记为失败。
 
 在 GitHub 仓库的 **Actions → CI and automatic deployment** 查看每个步骤及失败日志。检查失败时不会进入发布，线上已有版本继续运行。流水线核对的是发布开始时的最新提交；发布期间若又有推送，后续通过检查的版本会继续更新。
 
-## 服务器部署结构
+## 服务器部署结构（改名前实测记录）
 
 | 组件 | 配置与位置 |
 | --- | --- |
@@ -84,12 +92,12 @@ RAM凭证需允许`review-images/*`、`restaurant-images/*`、`windows-images/*`
 
 ## 发布 Runner 与权限
 
-Runner 以独立的 `ginkgo-deploy` 用户运行，并通过 systemd 开机启动。服务器主动通过 HTTPS 连接 GitHub 和产物下载服务，不需要为 GitHub 开放22端口，也不需要固定 GitHub Runner 的出口 IP。
+Runner 以独立的 `foodmap-deploy` 用户运行，并通过 systemd 开机启动。服务器主动通过 HTTPS 连接 GitHub 和产物下载服务，不需要为 GitHub 开放22端口，也不需要固定 GitHub Runner 的出口 IP。
 
-在仓库 **Settings → Actions → Runners** 确认 `ginkgo-production` 为 Online/Idle。服务器检查方式：
+在仓库 **Settings → Actions → Runners** 确认 `foodmap-production` 为 Online/Idle。服务器检查方式：
 
 ```bash
-cd /opt/ginkgo-runner
+cd /opt/foodmap-runner
 sudo ./svc.sh status
 # 需要维护时，由管理员停止或重新启动；不要在发布过程中重启 Runner。
 sudo ./svc.sh stop
@@ -100,7 +108,7 @@ Runner 只用于本仓库可信 `develop` 推送的发布任务，不用于外�
 
 首次注册使用仓库管理 API 签发的短期注册令牌，只用于本次配置，不提交到代码或保存到工作流 Secrets。Runner 注册后由自身凭据连接 GitHub；每次发布读取 GitHub API 使用只读、限本任务有效的 `GITHUB_TOKEN`，不保存个人访问令牌。
 
-重装服务器时，在上述 Runners 页面移除失效记录并按 **New self-hosted runner** 的说明下载安装包，核对 SHA-256；以 `ginkgo-deploy` 用户注册，名称使用 `ginkgo-production`、自定义标签使用 `ginkgo-deploy`，工作目录使用 `_work`。随后由管理员在安装目录执行 `./svc.sh install ginkgo-deploy` 和 `./svc.sh start`。
+重装服务器时，在上述 Runners 页面移除失效记录并按 **New self-hosted runner** 的说明下载安装包，核对 SHA-256；以 `foodmap-deploy` 用户注册，名称使用 `foodmap-production`、自定义标签使用 `foodmap-deploy`，工作目录使用 `_work`。随后由管理员在安装目录执行 `./svc.sh install foodmap-deploy` 和 `./svc.sh start`。
 
 旧 SSH 发布使用的 `DEPLOY_HOST`、`DEPLOY_PORT`、`DEPLOY_USER`、`DEPLOY_SSH_KEY` 和 `DEPLOY_KNOWN_HOSTS` Secrets 已不被工作流读取。本次保留这些历史配置及本机 SSH 密钥；管理员 SSH 继续只从原有允许来源访问。
 
@@ -119,11 +127,11 @@ Invoke-RestMethod http://8.137.98.235/version.txt
 在服务器以管理员身份检查：
 
 ```bash
-systemctl status ginkgo-backend.service --no-pager
-journalctl -u ginkgo-backend.service -n 100 --no-pager
+systemctl status foodmap-backend.service --no-pager
+journalctl -u foodmap-backend.service -n 100 --no-pager
 nginx -t
 docker ps --format '{{.Names}} {{.Status}} {{.Ports}}'
-readlink -f /opt/ginkgo/current
+readlink -f /opt/foodmap/current
 curl --fail http://127.0.0.1:8080/actuator/health
 curl --fail http://127.0.0.1/version.txt
 ```
@@ -156,7 +164,7 @@ MySQL、Redis 容器及持久化数据保留，没有重建实例。原数据库
 - 11个部署及健康检查测试在 Ubuntu 服务器临时目录通过；测试模拟 systemctl，不切换正式服务。
 - Nginx 配置和 systemd 单元静态校验通过，独立部署账号 SSH 登录及限定 sudo 权限已验证。
 - 真实 Actions 的前端、后端、部署检查及服务器 Runner 发布四项任务全部通过；后端检查启用了真实 MySQL、Redis 集成测试。
-- 服务器 Runner 在线空闲，服务以 `ginkgo-deploy` 运行并启用开机启动，不能读取应用环境配置及 JWT 私钥。
+- 服务器 Runner 在线空闲，服务以 `foodmap-deploy` 运行并启用开机启动，不能读取应用环境配置及 JWT 私钥。
 - 正式后端服务运行，健康状态 UP；站点首页、登录页、注册页、公开 API 和版本接口均通过检查，前端及服务器版本均匹配本次发布提交。
 
 本次验收未实际发送邮件、创建账号或进行浏览器完整交互测试。发布结果以新仓库 Actions 与站点版本标识为准。仅记录本次验收的文档提交使用 `[skip ci]`，线上继续运行已检查的上述提交；后续正常 develop 推送仍会自动检查和发布。

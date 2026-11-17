@@ -20,7 +20,7 @@ import {
 export const requestStatusNames: Record<RequestStatus, string> = {
   PENDING: '待审核',
   APPROVED: '已通过',
-  REJECTED: '已拒绝',
+  REJECTED: '已驳回',
 }
 /** 服务端UTC时间按浏览器本地时间展示，缺失或非法值不显示成有效日期。 */
 export function formatRequestTime(value: string) {
