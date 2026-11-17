@@ -7,7 +7,16 @@ import { reviewGatewayKey, unavailableReviewGateway, type ReplyPage } from '../m
 import ReplyThread from './ReplyThread.vue'
 
 /** 本人卡片的两条回复预览与独立详情；关闭不卸载编辑器，草稿和失败UUID保留在原组件。 */
-const props = defineProps<{ reviewId: string; username: string }>()
+const props = defineProps<{
+  reviewId: string
+  username: string
+  /** 消息入口直接打开同一面板，不再渲染列表中的回复预览。 */
+  standalone?: boolean
+  /** 目标读取成功后才挂载回复编辑器，错误时仅允许重试和关闭。 */
+  pending?: boolean
+  focusedReply?: ReplyPage['records'][number]
+}>()
+const emit = defineEmits<{ close: [] }>()
 const gateway = inject(reviewGatewayKey, unavailableReviewGateway)
 const parentVisible = inject(replyScopeVisibleKey, ref(true))
 const opened = ref(false),
@@ -39,7 +48,7 @@ function cancelPreview() {
   loading.value = false
 }
 async function loadPreview() {
-  if (!gateway.listReplies || loading.value || !parentVisible.value) return
+  if (props.standalone || !gateway.listReplies || loading.value || !parentVisible.value) return
   const ticket = ++generation
   controller = new globalThis.AbortController()
   loading.value = true
@@ -89,6 +98,7 @@ function close() {
   dialog.value?.close()
   unlock()
   if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true })
+  emit('close')
 }
 function closed() {
   if (opened.value) close()
@@ -155,7 +165,10 @@ watch(parentVisible, (value) => {
     cancelPreview()
   } else if (!page.value) void loadPreview()
 })
-onMounted(() => void loadPreview())
+onMounted(() => {
+  if (props.standalone) void show()
+  else void loadPreview()
+})
 onUnmounted(() => {
   cancelPreview()
   stopViewport()
@@ -163,11 +176,13 @@ onUnmounted(() => {
   dialog.value?.close()
   unlock()
 })
+// 正文和回复入口共用一个详情实例，保留草稿、失败请求号及当前详情阅读位置。
+defineExpose({ show })
 </script>
 
 <template>
   <div class="reply-thread discussion-thread">
-    <div class="thread-actions">
+    <div v-if="!standalone" class="thread-actions">
       <button
         ref="trigger"
         type="button"
@@ -182,7 +197,7 @@ onUnmounted(() => {
       </button>
     </div>
     <button
-      v-if="page?.records.length"
+      v-if="!standalone && page?.records.length"
       type="button"
       class="discussion-preview"
       :aria-label="previewLabel"
@@ -196,10 +211,17 @@ onUnmounted(() => {
         }}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg
       ></span>
     </button>
-    <button v-else-if="error" type="button" class="discussion-preview-error" @click="loadPreview">
+    <button
+      v-else-if="!standalone && error"
+      type="button"
+      class="discussion-preview-error"
+      @click="loadPreview"
+    >
       回复加载失败，点击重试
     </button>
-    <span v-else-if="loading" class="discussion-preview-loading" role="status">正在加载回复…</span>
+    <span v-else-if="!standalone && loading" class="discussion-preview-loading" role="status"
+      >正在加载回复…</span
+    >
     <Teleport to="body">
       <dialog
         ref="dialog"
@@ -212,7 +234,7 @@ onUnmounted(() => {
         <header class="discussion-header">
           <button
             type="button"
-            aria-label="返回点评列表"
+            :aria-label="standalone ? '返回消息列表' : '返回点评列表'"
             class="discussion-back"
             autofocus
             @click="close"
@@ -227,13 +249,14 @@ onUnmounted(() => {
         <div ref="scroll" class="discussion-scroll">
           <slot v-if="initialized" name="original" :focus-input="() => editor?.focusInput()" />
           <ReplyThread
-            v-if="initialized"
+            v-if="initialized && !pending"
             ref="editor"
             :key="reviewId"
             :review-id="reviewId"
             :username="username"
             detail-mode
             :initial-page="page"
+            :focused-reply="focusedReply"
             @page="updatePage"
             @invalidate="invalidate"
           />

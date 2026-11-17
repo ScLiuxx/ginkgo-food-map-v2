@@ -436,3 +436,8 @@ textarea:focus-visible {
   outline: 2px solid #a5adb7;
   outline-offset: 2px;
 }
+.detail-replies .reply-list > li.target-reply-highlight {
+  background: #fff6e9;
+  border-radius: 8px;
+  box-shadow: 0 0 0 8px #fff6e9;
+}

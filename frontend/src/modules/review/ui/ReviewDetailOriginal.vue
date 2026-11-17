@@ -42,6 +42,7 @@ defineEmits<{ photo: [url: string]; reply: [] }>()
       >
     </div>
     <p v-if="hasExampleMarker(item.body)" class="detail-original-example">示例点评 · 非真实体验</p>
+    <p v-if="item.scoringStatus === 'history'" class="detail-original-example">历史点评 · 不计分</p>
     <p class="detail-original-body">{{ item.body }}</p>
     <div v-if="item.photos.length" class="detail-original-photos">
       <button

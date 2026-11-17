@@ -6,6 +6,7 @@ import {
   type MessageSession,
 } from '../model/messageCategories'
 import MessageIcon from './MessageIcon.vue'
+import MessageNotification from './MessageNotification.vue'
 import type { NotificationItem, NotificationPage } from '../api/notificationsApi'
 
 const props = withDefaults(
@@ -44,7 +45,6 @@ defineEmits<{
   cancelRemove: []
   confirmRemove: []
 }>()
-const time = (value: string) => new Date(value).toLocaleString('zh-CN', { hour12: false })
 const canReadAll = computed(
   () => props.connected && !!props.inbox?.unreadCount && !props.loading && !props.busy,
 )
@@ -64,7 +64,11 @@ const loginTarget = computed(() => ({
 </script>
 
 <template>
-  <section class="message-center" aria-labelledby="message-heading">
+  <section
+    class="message-center"
+    :class="{ 'category-page': selected }"
+    aria-labelledby="message-heading"
+  >
     <template v-if="!selected">
       <header class="message-heading">
         <div class="message-title">
@@ -143,14 +147,18 @@ const loginTarget = computed(() => ({
       <header class="category-heading">
         <RouterLink class="back-link" to="/messages" aria-label="返回消息中心">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6" /></svg>
-          <span>消息</span>
         </RouterLink>
         <h1 id="message-heading">{{ selected.title }}</h1>
+        <span
+          v-if="connected && inbox?.unreadCount"
+          class="category-unread"
+          :aria-label="`${inbox.unreadCount} 条未读消息`"
+          >{{ inbox.unreadCount > 99 ? '99+' : inbox.unreadCount }}</span
+        >
         <button
+          v-if="connected && inbox?.unreadCount"
           class="mark-all-read"
-          :disabled="
-            !canReadAll || !['system', 'comments', 'likes', 'followers'].includes(selected.id)
-          "
+          :disabled="!canReadAll"
           title="仅将当前分类的已有消息标为已读"
           @click="$emit('readAll')"
         >
@@ -162,12 +170,8 @@ const loginTarget = computed(() => ({
         class="notification-inbox"
         :aria-busy="loading"
       >
-        <div class="notification-toolbar">
-          <span v-if="inbox">{{ inbox.unreadCount }} 条未读</span
-          ><button type="button" :disabled="loading || busy" @click="$emit('refresh')">刷新</button>
-        </div>
         <p v-if="loading" role="status">正在加载通知…</p>
-        <div v-else-if="error" role="alert">
+        <div v-else-if="error" class="notification-status" role="alert">
           <p>{{ error }}</p>
           <button type="button" @click="$emit('refresh')">重试加载</button>
         </div>
@@ -186,89 +190,17 @@ const loginTarget = computed(() => ({
             }}
           </p>
           <ul v-else class="notification-list">
-            <li v-for="item in inbox.records" :key="item.id">
-              <button
-                type="button"
-                class="notification-card"
-                :class="{ unread: !item.readAt }"
-                :disabled="busy"
-                @click="$emit('read', item)"
-              >
-                <span class="notification-meta"
-                  ><strong v-if="item.category === 'COMMENTS'"
-                    >{{ item.actorUsername }} 回复了你的点评</strong
-                  ><strong v-else-if="item.category === 'LIKES'"
-                    >{{ item.actorUsername }} 赞了你的{{
-                      item.notificationType === 'REPLY_LIKED' ? '回复' : '点评'
-                    }}</strong
-                  ><strong v-else-if="item.category === 'FOLLOWERS'"
-                    >{{ item.actorUsername }} 关注了你</strong
-                  ><strong v-else-if="item.notificationType === 'ANNOUNCEMENT'">系统公告</strong
-                  ><strong v-else-if="item.notificationType === 'REPORT_RESULT'"
-                    >举报处理结果</strong
-                  ><strong v-else-if="item.approvalMode === 'LINKED_EXISTING'"
-                    >投稿已处理 · 店铺已收录</strong
-                  ><strong v-else
-                    >{{ item.requestType === 'CREATE' ? '新店投稿' : '资料纠错'
-                    }}{{ item.decision === 'APPROVED' ? '审核通过' : '审核未通过' }}</strong
-                  ><span v-if="!item.readAt" class="notification-unread">未读</span></span
-                >
-                <span v-if="item.category === 'SYSTEM'" class="notification-name">{{
-                  item.notificationType === 'ANNOUNCEMENT'
-                    ? item.announcementTitle
-                    : item.notificationType === 'REPORT_RESULT'
-                      ? item.decision === 'REMOVED'
-                        ? '举报已处理：内容已删除'
-                        : '举报未认定违规'
-                      : item.restaurantName
-                }}</span>
-                <span v-if="item.rejectReason" class="notification-reason"
-                  >驳回原因：{{ item.rejectReason }}</span
-                >
-                <span class="notification-meta"
-                  ><time>{{ time(item.createdAt) }}</time
-                  ><span
-                    >{{
-                      item.category === 'COMMENTS'
-                        ? '查看点评与回复'
-                        : item.category === 'LIKES'
-                          ? '查看获赞内容'
-                          : item.category === 'FOLLOWERS'
-                            ? '查看个人主页'
-                            : item.notificationType === 'ANNOUNCEMENT'
-                              ? '查看公告'
-                              : item.notificationType === 'REPORT_RESULT'
-                                ? '查看处理结果'
-                                : '查看申请'
-                    }}
-                    ›</span
-                  ></span
-                >
-              </button>
-              <div
-                v-if="deletingId === item.id"
-                class="notification-delete-confirm"
-                role="group"
-                aria-label="确认删除消息"
-              >
-                <p>确定删除这条消息？原点评、回复或申请不受影响。</p>
-                <button type="button" :disabled="busy" @click="$emit('cancelRemove')">
-                  取消删除
-                </button>
-                <button type="button" :disabled="busy" @click="$emit('confirmRemove')">
-                  {{ busy ? '删除中…' : '确认删除消息' }}
-                </button>
-              </div>
-              <button
-                v-else
-                type="button"
-                class="notification-delete"
-                :disabled="busy"
-                @click="$emit('remove', item)"
-              >
-                删除消息
-              </button>
-            </li>
+            <MessageNotification
+              v-for="item in inbox.records"
+              :key="item.id"
+              :item="item"
+              :busy="busy"
+              :deleting="deletingId === item.id"
+              @read="$emit('read', $event)"
+              @remove="$emit('remove', $event)"
+              @cancel-remove="$emit('cancelRemove')"
+              @confirm-remove="$emit('confirmRemove')"
+            />
           </ul>
           <nav
             v-if="inbox.totalPages > 1 || inbox.page > 1"

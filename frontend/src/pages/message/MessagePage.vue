@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import { useLoginStore } from '@/modules/auth'
 import { MessageCenter } from '@/modules/message'
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotificationInbox } from '@/modules/message/model/useNotificationInbox'
 import type { NotificationItem } from '@/modules/message/api/notificationsApi'
 import { authToken } from '@/shared/api/authSession'
-import LikeNotificationTarget from '@/modules/community/ui/LikeNotificationTarget.vue'
 import { AnnouncementReader } from '@/modules/announcement'
-import ReplyNotificationTarget from '@/modules/review/ui/ReplyNotificationTarget.vue'
+import { ReviewNotificationDetail } from '@/modules/review'
 import { ReportResultDialog, reportDecisionLabel } from '@/modules/moderation'
 import { userProfilePath } from '@/shared/lib/userProfileNavigation'
 
@@ -56,7 +55,18 @@ const sessions = computed(() => [
   },
 ])
 async function open(item: NotificationItem) {
+  const sourceScroll = globalThis.scrollY
   const selected = await state.read(item)
+  if (!selected) return
+  // 已读重读会替换消息节点；先恢复来源阅读位置和入口，再打开共用详情。
+  await nextTick()
+  globalThis.scrollTo({ top: sourceScroll, behavior: 'instant' })
+  const source = Array.from(
+    globalThis.document.querySelectorAll<globalThis.HTMLElement>('[data-notification-id]'),
+  ).find((row) => row.dataset.notificationId === selected.id)
+  source
+    ?.querySelector<globalThis.HTMLButtonElement>('.notification-card')
+    ?.focus({ preventScroll: true })
   if (selected?.notificationType === 'ANNOUNCEMENT' && selected.announcementId)
     announcementTarget.value = selected.announcementId
   // 举报结果只展示处置说明，不跳转内容页：被删除的目标已无法访问。
@@ -109,16 +119,19 @@ async function remove() {
     :decision="reportDecision"
     @close="reportTarget = null"
   />
-  <ReplyNotificationTarget
-    v-if="replyTarget?.category === 'COMMENTS' && replyTarget.reviewId"
-    :reply-id="replyTarget.sourceId"
+  <ReviewNotificationDetail
+    v-if="replyTarget?.reviewId"
+    :key="replyTarget.id"
+    :notification-id="replyTarget.id"
+    :source-id="replyTarget.sourceId"
     :review-id="replyTarget.reviewId"
-    @close="replyTarget = null"
-  />
-  <LikeNotificationTarget
-    v-if="replyTarget?.category === 'LIKES'"
-    :id="replyTarget.sourceId"
-    :type="replyTarget.notificationType === 'REPLY_LIKED' ? 'REPLY' : 'REVIEW'"
+    :type="
+      replyTarget.category === 'COMMENTS'
+        ? 'COMMENT'
+        : replyTarget.notificationType === 'REPLY_LIKED'
+          ? 'REPLY_LIKED'
+          : 'REVIEW_LIKED'
+    "
     @close="replyTarget = null"
   />
 </template>

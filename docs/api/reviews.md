@@ -11,6 +11,7 @@
 | POST | `/api/restaurants/{restaurantId}/reviews` | Bearer | 201 / 200重放 | [发布](#publish) |
 | GET | `/api/restaurants/{restaurantId}/reviews` | 公开 | 200 | [按作者分组分页](#review-list) |
 | GET | `/api/restaurants/{restaurantId}/reviews/authors/{authorId}/history` | 公开 | 200 | [同作者历史](#review-history) |
+| GET | `/api/reviews/{reviewId}` | Bearer | 200 | [单条点评详情](#review-detail) |
 | DELETE | `/api/reviews/{reviewId}` | 原作者 | 204 | [本人删除](#delete-review) |
 | GET | `/api/me/reviews` | Bearer | 200 | [本人点评按店铺分组](#my-reviews) |
 | POST | `/api/reviews/{reviewId}/replies` | Bearer | 201 / 200重放 | [发布与读取](#reply-publish-list) |
@@ -109,6 +110,42 @@ UUID必填；四维完整，0–10且步进0.5；recommendation必填且仅接�
 **错误码**
 
 游标绑定餐厅、作者、时间和真实锚点，不是授权凭据；不能跨目标复用或自行修改。非法游标400 `REVIEW_INVALID_CURSOR`，无效ID400 `REVIEW_INVALID_QUERY`。每段是独立快照，currentReviewId变化时应刷新主列表；父店隐藏404。
+
+<a id="review-detail"></a>
+
+### 单条点评详情
+
+**接口与权限**
+
+`GET /api/reviews/{reviewId}`需Bearer，不限原作者；返回当前可见的正式点评，不提供待发布附带点评。匿名或会话失效返回401，不新增匿名访问白名单。
+
+**请求参数**
+
+路径参数reviewId为正的有符号BIGINT十进制字符串，保留超过JavaScript安全整数范围的ID；无请求体或分页参数。
+
+**响应**
+
+200，`Cache-Control: no-store`。data示例：
+
+```json
+{"restaurantId":"26","windowId":null,"author":{"id":"22","username":"同学甲","level":2},"review":{"id":"101","scores":{"taste":8,"value":7.5,"service":7,"ambience":8},"overallScore":7.63,"recommendation":"RECOMMENDED","body":"这次出餐很快，分量也比较足。","createdAt":"2026-11-03T06:00:00Z","scoringStatus":"history","photos":[{"id":"501","position":0,"url":"/api/reviews/101/photos/0"}]}}
+```
+
+restaurantId与windowId严格互斥：普通店及历史食堂整体点评返回restaurantId，独立窗口点评返回windowId。author只包含公开署名信息，缺失作者显示“用户不可用”，level可为空；不返回邮箱、请求摘要、存储键或管理字段。review沿用[列表点评结构](#review-list)，photos按position从0连续排列、最多5张，URL仅为本站正式点评图片入口。scoringStatus按同店／同窗口同作者最新有效记录确定，历史返回history，绝不以最新点评替换请求ID。点评、父级可见性、代表状态、作者及图片引用来自同一只读快照。
+
+**错误码**
+
+| 状态码 | 错误码 | 场景 |
+| --- | --- | --- |
+| 400 | `REVIEW_INVALID_QUERY` | ID非法、非正数或越界 |
+| 401 | `AUTH_UNAUTHENTICATED` | 缺少凭证、会话失效或账号不可用 |
+| 404 | `REVIEW_NOT_FOUND` | 点评不存在或已删除 |
+| 404 | `RESTAURANT_NOT_FOUND` | 普通店、窗口或父食堂不存在／已删除 |
+| 503 | `AUTH_SERVICE_UNAVAILABLE` | 认证依赖不可用 |
+
+**副作用与限制**
+
+只读，不改变消息已读、评分、经验或媒体绑定，不读取OSS图片字节。停业店／窗口可读，父级任一层删除后不可读。通知入口仍先调用[评论精确目标](notifications.md#reply-target)或[获赞精确目标](#like-target)核验本人源记录，再读取本接口的完整点评；两次读取为独立请求，不构成跨请求固定快照。回复列表使用[既有游标接口](#reply-publish-list)，前端将已鉴权的目标回复优先展示并按ID去重，不连续扫描所有分页。
 
 <a id="delete-review"></a>
 
@@ -351,6 +388,8 @@ count为该内容当前点赞数，liked为本人当前状态。重复PUT不增�
 按固定ID直接定位历史点评或任意分页位置回复，源内容和父店可见性每次重新检查。不存在、归属不符或内容失效404 LIKE_TARGET_NOT_FOUND，前端提示“内容已失效或不可访问”。原通知保留，不保存源正文或任意跳转URL。取消点赞保留通知及首次已读时间；重新点赞不重复通知。
 
 **副作用与限制**
+
+前端完成本人获赞源校验后，通过[单条点评详情](#review-detail)读取完整原点评；点评获赞直接展示原点评，回复获赞优先展示并短暂高亮目标回复，再按既有游标正常分页。原点评可属于其他用户，获赞回复必须属于当前用户；源内容失效时不以店铺或最新点评替代。
 
 首次点赞给被赞内容作者发送一条LIKES消息。notificationType为REVIEW_LIKED或REPLY_LIKED，sourceId为点赞关系ID，reviewId为所属点评ID，actorUserId/actorUsername为点赞者身份和当前公开用户名，其他审核字段为null。unreadCounts新增LIKES，系统摘要独立取最新SYSTEM消息，包含审核结果、有效公告和举报结果；消息按17节规则单条或分类已读。
 

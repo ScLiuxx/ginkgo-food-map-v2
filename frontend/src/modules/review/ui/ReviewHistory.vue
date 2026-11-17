@@ -168,6 +168,9 @@ function refresh() {
             v-for="record in records"
             :key="record.id"
             :item="record"
+            detail-entry
+            :store-to="`/${window ? 'canteen-windows' : 'restaurants'}/${restaurantId}`"
+            store-name="查看店铺"
             :star-scale="starScale"
             :authenticated="!!viewerId"
             :viewer-id="viewerId"

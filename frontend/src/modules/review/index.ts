@@ -2,6 +2,7 @@
 export { default as ReviewComposer } from './ui/ReviewComposer.vue'
 export { default as ReviewPanel } from './ui/ReviewPanel.vue'
 export { default as MyReviews } from './ui/MyReviews.vue'
+export { default as ReviewNotificationDetail } from './ui/ReviewNotificationDetail.vue'
 export { default as ReviewHistoryPreview } from './ui/ReviewHistoryPreview.vue'
 export { textReviewGateway } from './api/reviewApi'
 export { reviewGatewayKey } from './model/review'

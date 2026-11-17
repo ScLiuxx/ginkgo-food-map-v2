@@ -150,7 +150,7 @@ COMMENTS的sourceId是回复ID、reviewId是原点评ID、actorUserId是回复�
 
 **副作用与限制**
 
-review沿用[按作者分组分页](reviews.md#review-list)的currentReview结构，scoringStatus按读取时实际最新代表判断。直接按ID定位历史点评及任意位置回复，不逐页扫描；回复、点评、父店可见性和作者信息共用RR只读快照，停业店仍可读。接口不依赖通知是否已读，也不更改已读状态；弹窗仅展示当前所需原点评和高亮目标回复。
+review沿用[按作者分组分页](reviews.md#review-list)的currentReview结构，scoringStatus按读取时实际最新代表判断。直接按ID定位历史点评及任意位置回复，不逐页扫描；回复、点评、父店可见性和作者信息共用RR只读快照，停业店仍可读。接口不依赖通知是否已读，也不更改已读状态。前端重新鉴权后读取[完整点评详情](reviews.md#review-detail)，使用与点评列表相同的详情和回复编辑器；目标回复优先展示并短暂高亮，后续游标页去重，关闭保留消息列表位置。
 
 <a id="delete"></a>
 

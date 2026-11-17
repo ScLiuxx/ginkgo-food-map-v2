@@ -17,6 +17,8 @@ const props = defineProps<{
   /** 独立详情使用常驻阅读和底部编辑器，仍沿用同一套请求隔离与失败重试。 */
   detailMode?: boolean
   initialPage?: ReplyPage
+  /** 通知已重新鉴权的指定回复先展示，避免为定位连续扫描所有历史分页。 */
+  focusedReply?: ReplyPage['records'][number]
 }>()
 const emit = defineEmits<{ page: [value: ReplyPage]; invalidate: [] }>()
 const gateway = inject(reviewGatewayKey, unavailableReviewGateway)
@@ -31,6 +33,19 @@ const open = ref(!!props.detailMode),
   sending = ref(false)
 const records = ref<ReplyPage['records']>(props.initialPage?.records.slice() ?? []),
   hasMore = ref(props.initialPage?.hasMore ?? false)
+const removedTarget = ref(false),
+  highlighted = ref(false)
+let highlightTimer: ReturnType<typeof globalThis.setTimeout> | undefined
+const listRoot = ref<globalThis.HTMLOListElement>()
+const displayedRecords = computed(() => {
+  const target = !removedTarget.value && props.focusedReply
+  if (!target) return records.value
+  // 分页后来读到相同ID时采用新记录并去重，原游标顺序不变，不伪造总条数。
+  return [
+    records.value.find((row) => row.id === target.id) ?? target,
+    ...records.value.filter((row) => row.id !== target.id),
+  ]
+})
 const draft = ref(''),
   readError = ref(''),
   sendError = ref(''),
@@ -79,6 +94,9 @@ function reset() {
   request = undefined
   cursor = undefined
   records.value = []
+  removedTarget.value = false
+  highlighted.value = false
+  globalThis.clearTimeout(highlightTimer)
   loaded.value = hasMore.value = false
   if (open.value && scopeVisible.value) void load()
 }
@@ -99,12 +117,14 @@ watch(scopeVisible, (visible) => {
 })
 onMounted(() => {
   if (props.detailMode && scopeVisible.value && !loaded.value) void load()
+  if (props.detailMode && props.focusedReply) void focusTarget()
 })
 onUnmounted(() => {
   context++
   cancelRead()
   postController?.abort()
   deleteController?.abort()
+  globalThis.clearTimeout(highlightTimer)
   if (!props.detailMode && editing.value) activeEditor.value = null
 })
 
@@ -175,7 +195,7 @@ function cancelDeleteReply() {
 /** 成功后丢弃旧游标，从头读取，避免删除分页锚点后继续使用失效边界。 */
 async function removeReply() {
   const replyId = pendingDelete.value
-  const answer = records.value.find((row) => row.id === replyId)
+  const answer = displayedRecords.value.find((row) => row.id === replyId)
   if (!replyId || !answer || !ownsReply(answer.author.id) || !gateway.removeReply || deleting.value)
     return
   const owner = context
@@ -189,6 +209,7 @@ async function removeReply() {
     pendingDelete.value = null
     restoreDeleteFocus = undefined
     notice.value = '回复已删除。'
+    if (props.focusedReply?.id === replyId) removedTarget.value = true
     emit('invalidate')
     cancelRead()
     records.value = []
@@ -289,6 +310,22 @@ async function send() {
 }
 /** 详情顶部“回复”入口仅将焦点交给常驻输入框，不创建第二份草稿。 */
 defineExpose({ focusInput: startReply })
+
+/** 只滚动详情自身，不移动背后的消息列表；目标来自精确接口，无需逐页查找。 */
+async function focusTarget() {
+  await nextTick()
+  const target = listRoot.value?.querySelector<globalThis.HTMLElement>('[data-target-reply="true"]')
+  const panel = target?.closest<globalThis.HTMLElement>('.discussion-scroll')
+  if (!target || !panel || !scopeVisible.value) return
+  highlighted.value = true
+  const top =
+    target.getBoundingClientRect().top - panel.getBoundingClientRect().top + panel.scrollTop
+  panel.scrollTop = Math.max(0, top - 24)
+  globalThis.clearTimeout(highlightTimer)
+  highlightTimer = globalThis.setTimeout(() => {
+    highlighted.value = false
+  }, 2400)
+}
 </script>
 
 <template>
@@ -323,7 +360,7 @@ defineExpose({ focusInput: startReply })
 
     <div v-show="open" :id="listId" class="thread-content">
       <h3 v-if="detailMode" class="all-replies-title">
-        全部回复<span v-if="loaded && !hasMore && !readError">{{ records.length }}</span>
+        全部回复<span v-if="loaded && !hasMore && !readError">{{ displayedRecords.length }}</span>
       </h3>
       <button
         v-if="combined && !auth.authenticated"
@@ -333,8 +370,13 @@ defineExpose({ focusInput: startReply })
       >
         登录后回复
       </button>
-      <ol v-if="records.length" class="reply-list">
-        <li v-for="answer in records" :key="answer.id">
+      <ol v-if="displayedRecords.length" ref="listRoot" class="reply-list">
+        <li
+          v-for="answer in displayedRecords"
+          :key="answer.id"
+          :data-target-reply="answer.id === focusedReply?.id"
+          :class="{ 'target-reply-highlight': highlighted && answer.id === focusedReply?.id }"
+        >
           <span v-if="detailMode" class="detail-reply-avatar" aria-hidden="true">{{
             Array.from(answer.author.username.trim())[0]?.toUpperCase() || '同'
           }}</span>

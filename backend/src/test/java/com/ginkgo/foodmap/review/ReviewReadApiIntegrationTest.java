@@ -9,6 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.ginkgo.foodmap.review.mapper.ReviewPhotoMapper;
 import com.ginkgo.foodmap.review.mapper.ReviewReadMapper;
 import com.ginkgo.foodmap.security.TestJwtKeys;
+import com.ginkgo.foodmap.security.config.AuthenticationProperties;
+import com.ginkgo.foodmap.security.service.LoginSessionService;
 import com.ginkgo.foodmap.user.mapper.PublicAuthorMapper;
 
 import org.junit.jupiter.api.*;
@@ -21,6 +23,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -28,6 +36,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.nio.file.*;
 import java.sql.*;
+import java.time.Instant;
 import java.util.*;
 
 /** 真实MySQL/Flyway/安全过滤链读取验收；随机回环数据库，不读开发库或OSS配置。 */
@@ -48,6 +57,14 @@ class ReviewReadApiIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper json;
+    @Autowired
+    JwtEncoder encoder;
+
+    @Autowired
+    AuthenticationProperties authentication;
+
+    @MockitoBean
+    LoginSessionService sessions;
     @MockitoSpyBean ReviewReadMapper reads;
     @MockitoSpyBean ReviewPhotoMapper photos;
     @MockitoSpyBean PublicAuthorMapper authors;
@@ -82,6 +99,7 @@ class ReviewReadApiIntegrationTest {
         jdbc.update("DELETE FROM growth_accounts");
         jdbc.update("DELETE FROM review_photos");
         jdbc.update("DELETE FROM reviews");
+        jdbc.update("DELETE FROM canteen_windows");
         jdbc.update("DELETE FROM restaurant_review_statistics");
         jdbc.update("DELETE FROM restaurants");
         jdbc.update("DELETE FROM user_roles");
@@ -92,6 +110,7 @@ class ReviewReadApiIntegrationTest {
         jdbc.update(
                 "INSERT INTO restaurants(id,name,category_code,created_by)"
                     + " VALUES(1,'读取店','OTHER',11),(2,'空店','OTHER',11)");
+        when(sessions.isActive(anyString(), anyLong(), anyLong())).thenReturn(true);
     }
 
     @AfterAll
@@ -624,6 +643,112 @@ class ReviewReadApiIntegrationTest {
         }
         Files.writeString(Path.of("target/review-history-explain.txt"), report);
         assertThat(jdbc.queryForList(sql)).hasSize(6);
+    }
+
+    /** 精确详情使用真实JWT和隔离会话替身，不能靠匿名列表白名单绕过认证。 */
+    private String token() {
+        var now = Instant.now();
+        var config = authentication.getJwt();
+        var claims = JwtClaimsSet.builder()
+                .issuer(config.getIssuer())
+                .audience(List.of(config.getAudience()))
+                .subject("22")
+                .issuedAt(now.minusSeconds(120))
+                .expiresAt(now.plusSeconds(600))
+                .id(UUID.randomUUID().toString())
+                .claim("credential_version", 0)
+                .build();
+        return encoder.encode(
+                        JwtEncoderParameters.from(
+                                JwsHeader.with(SignatureAlgorithm.RS256).build(), claims))
+                .getTokenValue();
+    }
+
+    @Test
+    void exactDetailRequiresAuthenticationAndRejectsInvalidOrMissingIds() throws Exception {
+        review(101, 1, 11, 8, "2026-10-29 01:00:00");
+        mvc.perform(get("/api/reviews/101")).andExpect(status().isUnauthorized());
+        String viewer = token();
+        for (String value : List.of("0", "01", "-1", "abc", "9223372036854775808")) {
+            mvc.perform(get("/api/reviews/" + value).header("Authorization", "Bearer " + viewer))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("REVIEW_INVALID_QUERY"));
+        }
+        mvc.perform(get("/api/reviews/999").header("Authorization", "Bearer " + viewer))
+                .andExpect(status().isNotFound());
+        when(sessions.isActive(anyString(), anyLong(), anyLong())).thenReturn(false);
+        mvc.perform(get("/api/reviews/101").header("Authorization", "Bearer " + viewer))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void exactDetailKeepsHistoricalIdPhotosAndScoresWithoutScanningPages() throws Exception {
+        long old = 9007199254740993L;
+        review(old, 1, 11, 6.5, "2026-10-29 01:00:00");
+        review(102, 1, 11, 9, "2026-10-30 01:00:00");
+        jdbc.update("INSERT INTO review_photos(review_id,position,media_file_id) VALUES(?,0,501)", old);
+        String viewer = token();
+        var response = mvc.perform(get("/api/reviews/" + old).header("Authorization", "Bearer " + viewer))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.data.restaurantId").value("1"))
+                .andExpect(jsonPath("$.data.windowId").isEmpty())
+                .andExpect(jsonPath("$.data.author.id").value("11"))
+                .andExpect(jsonPath("$.data.review.id").value(Long.toString(old)))
+                .andExpect(jsonPath("$.data.review.scoringStatus").value("history"))
+                .andExpect(jsonPath("$.data.review.scores.taste").value(6.5))
+                .andExpect(
+                        jsonPath("$.data.review.photos[0].url")
+                                .value("/api/reviews/" + old + "/photos/0"))
+                .andReturn();
+        assertThat(response.getResponse().getContentAsString())
+                .doesNotContain(
+                        "password", "email", "requestHash", "clientRequestId", "canDelete", "storageKey");
+        mvc.perform(get("/api/reviews/102").header("Authorization", "Bearer " + viewer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.review.scoringStatus").value("current"));
+        verify(reads, never()).page(anyLong(), anyInt(), anyLong());
+        verify(reads, never()).rankedPage(anyLong(), anyInt(), anyLong(), any());
+    }
+
+    @Test
+    void exactDetailAllowsClosedStoreButNeverReplacesDeletedReviewOrParent() throws Exception {
+        review(101, 1, 11, 8, "2026-10-29 01:00:00");
+        review(102, 1, 11, 9, "2026-10-30 01:00:00");
+        String viewer = token();
+        jdbc.update("UPDATE restaurants SET business_status='CLOSED' WHERE id=1");
+        mvc.perform(get("/api/reviews/101").header("Authorization", "Bearer " + viewer))
+                .andExpect(status().isOk());
+        jdbc.update("DELETE FROM reviews WHERE id=101");
+        mvc.perform(get("/api/reviews/101").header("Authorization", "Bearer " + viewer))
+                .andExpect(status().isNotFound());
+        jdbc.update(
+                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM' WHERE id=1");
+        mvc.perform(get("/api/reviews/102").header("Authorization", "Bearer " + viewer))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void exactWindowDetailSeparatesTargetAndRejectsDeletedWindowOrCanteen() throws Exception {
+        jdbc.update("UPDATE restaurants SET restaurant_type='CANTEEN',category_code=NULL WHERE id=2");
+        jdbc.update(
+                "INSERT INTO canteen_windows(id,canteen_id,name,floor_number,created_by) VALUES(201,2,'窗口',1,11)");
+        review(101, 1, 11, 8, "2026-10-29 01:00:00");
+        jdbc.update("UPDATE reviews SET restaurant_id=NULL,window_id=201 WHERE id=101");
+        String viewer = token();
+        mvc.perform(get("/api/reviews/101").header("Authorization", "Bearer " + viewer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.restaurantId").isEmpty())
+                .andExpect(jsonPath("$.data.windowId").value("201"));
+        jdbc.update(
+                "UPDATE canteen_windows SET deleted_at=CURRENT_TIMESTAMP(6),deleted_by=11 WHERE id=201");
+        mvc.perform(get("/api/reviews/101").header("Authorization", "Bearer " + viewer))
+                .andExpect(status().isNotFound());
+        jdbc.update("UPDATE canteen_windows SET deleted_at=NULL,deleted_by=NULL WHERE id=201");
+        jdbc.update(
+                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM' WHERE id=2");
+        mvc.perform(get("/api/reviews/101").header("Authorization", "Bearer " + viewer))
+                .andExpect(status().isNotFound());
     }
 
     private static String password() {

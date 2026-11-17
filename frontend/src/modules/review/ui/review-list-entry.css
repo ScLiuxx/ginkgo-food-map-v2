@@ -557,3 +557,14 @@ button {
 .list-card-review .entry-interactions :deep(.thread-content) {
   margin-top: 8px;
 }
+.review-card .review-body-link {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}

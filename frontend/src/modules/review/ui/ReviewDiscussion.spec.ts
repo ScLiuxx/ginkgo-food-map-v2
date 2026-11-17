@@ -30,7 +30,13 @@ const replyPage = (ids = ['1', '2', '3'], more = false): ReplyPage => ({
 const settle = async () => {
   for (let i = 0; i < 18; i++) await nextTick()
 }
-const props = reactive({ reviewId: '10', username: '原作者' })
+const props = reactive({
+  reviewId: '10',
+  username: '原作者',
+  standalone: false,
+  pending: false,
+  focusedReply: undefined as ReplyPage['records'][number] | undefined,
+})
 const visible = ref(true)
 let app: App | undefined, host: HTMLDivElement, pinia: ReturnType<typeof createPinia>
 const list = vi.fn(),
@@ -100,6 +106,8 @@ beforeEach(() => {
   clearAccessToken()
   vi.resetAllMocks()
   props.reviewId = '10'
+  props.standalone = props.pending = false
+  props.focusedReply = undefined
   visible.value = true
   pinia = createPinia()
   host = document.createElement('div')
@@ -130,6 +138,7 @@ afterEach(() => {
   clearAccessToken()
   document.documentElement.style.overflow = ''
   vi.unstubAllGlobals()
+  vi.useRealTimers()
   for (const [name, descriptor] of [
     ['showModal', originalShow],
     ['close', originalClose],
@@ -140,6 +149,48 @@ afterEach(() => {
 })
 
 describe('点评回复预览与独立详情', () => {
+  it('通知直接打开同一详情；指定回复不在首批也能定位，后续分页去重且不扫描所有页', async () => {
+    vi.useFakeTimers()
+    props.standalone = true
+    props.pending = true
+    props.focusedReply = row('777')
+    list
+      .mockResolvedValueOnce(replyPage(['1', '2'], true))
+      .mockResolvedValueOnce(replyPage(['777', '3']))
+    await mount()
+    expect(modal().open).toBe(true)
+    expect(host.querySelector('.discussion-preview, .discussion-reply-action')).toBeNull()
+    expect(list).not.toHaveBeenCalled()
+    props.pending = false
+    await settle()
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(modal().querySelectorAll('[data-target-reply="true"]')).toHaveLength(1)
+    expect(modal().querySelector('.target-reply-highlight')?.textContent).toContain('回复正文777')
+    button('加载更多回复').click()
+    await settle()
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(modal().querySelectorAll('.reply-list > li')).toHaveLength(4)
+    expect(modal().querySelectorAll('[data-target-reply="true"]')).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(2400)
+    expect(modal().querySelector('.target-reply-highlight')).toBeNull()
+  })
+
+  it('通知定位的本人回复可正常删除，删除成功后不会被目标快照重新插回', async () => {
+    props.standalone = true
+    props.focusedReply = row('777', '42')
+    list.mockResolvedValue(replyPage(['1'], true))
+    await mount()
+    const target = modal().querySelector('[data-target-reply="true"]')!
+    target.querySelector<HTMLButtonElement>('.more-review-actions')!.click()
+    await settle()
+    button('删除回复', target).click()
+    await settle()
+    button('确认删除回复', target).click()
+    await settle()
+    expect(removeReply).toHaveBeenCalledWith('777', expect.any(AbortSignal))
+    expect(modal().querySelector('[data-target-reply="true"]')).toBeNull()
+    expect(modal().textContent).not.toContain('回复正文777')
+  })
   it('手机键盘缩小可视视口时面板跟随，关闭后释放监听', async () => {
     const viewport = Object.assign(new EventTarget(), { height: 700, offsetTop: 0, scale: 1 })
     vi.stubGlobal('visualViewport', viewport)

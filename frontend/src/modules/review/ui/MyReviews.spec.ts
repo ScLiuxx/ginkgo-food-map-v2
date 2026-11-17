@@ -164,6 +164,38 @@ describe('我的点评页面', () => {
     await settle()
   }
 
+  it('点击当前正文直接打开同一点评，关闭回到原入口；历史正文保持历史ID', async () => {
+    await mount()
+    const body = host.querySelector<HTMLButtonElement>('.review-body-link')!
+    body.click()
+    await settle()
+    const current = [...document.querySelectorAll<HTMLDialogElement>('.discussion-dialog')].find(
+      (dialog) => dialog.open,
+    )!
+    expect(current.querySelector('.detail-original-body')?.textContent).toBe('第102条真实点评')
+    current.querySelector<HTMLButtonElement>('[aria-label="关闭点评详情"]')!.click()
+    await settle()
+    expect(document.activeElement).toBe(body)
+    await more()
+    host.querySelector<HTMLButtonElement>('.history-trigger')!.click()
+    await settle()
+    const historyBody = document.querySelector<HTMLButtonElement>(
+      '.history-dialog .review-body-link',
+    )!
+    historyBody.click()
+    await settle()
+    const previous = [...document.querySelectorAll<HTMLDialogElement>('.discussion-dialog')].find(
+      (dialog) => dialog.open,
+    )!
+    expect(previous.querySelector('.detail-original-body')?.textContent).toBe('历史正文')
+    expect(previous.textContent).toContain('历史点评 · 不计分')
+    expect(previous.textContent).not.toContain('第102条真实点评')
+    previous.querySelector<HTMLButtonElement>('[aria-label="关闭点评详情"]')!.click()
+    await settle()
+    expect(document.activeElement).toBe(historyBody)
+    expect(document.querySelector<HTMLDialogElement>('.history-dialog')?.open).toBe(true)
+  })
+
   it('他人主页复用卡片和独立回复详情，公开读取不提供删除他人点评的入口', async () => {
     vi.mocked(fetchMyReviews).mockResolvedValue(result('102', '22'))
     history.mockResolvedValue({
