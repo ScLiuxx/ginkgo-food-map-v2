@@ -40,7 +40,8 @@ public class ImageUploadService {
     /** 用途仅接受服务端白名单，路径由配置生成；商户与点评共用私有OSS及临时回收流程。 */
     public ImageUploadVo upload(InputStream source, String purpose) {
         if (purpose == null
-                || !java.util.Set.of("REVIEW", "RESTAURANT", "WINDOW").contains(purpose)) {
+                || !java.util.Set.of("REVIEW", "RESTAURANT", "WINDOW", "AVATAR")
+                        .contains(purpose)) {
             throw new BusinessException(FileErrorCode.INVALID_IMAGE);
         }
         var actor = actors.requireActor();
@@ -51,6 +52,11 @@ public class ImageUploadService {
         long owner = actor.getUserId();
         storage.requireAvailable();
         var image = policy.process(source);
+        // 服务端同样限制方形及尺寸，防止绕过浏览器裁剪上传任意长图充当头像。
+        if ("AVATAR".equals(purpose)
+                && (image.getWidth() != image.getHeight() || image.getWidth() > 512)) {
+            throw new BusinessException(FileErrorCode.INVALID_AVATAR);
+        }
         var file = new MediaFile();
         file.setUploaderUserId(owner);
         file.setBucketName(properties.getBucket());
@@ -59,6 +65,7 @@ public class ImageUploadService {
                 switch (purpose) {
                     case "RESTAURANT" -> properties.getRestaurantPrefix();
                     case "WINDOW" -> properties.getWindowPrefix();
+                    case "AVATAR" -> properties.getAvatarPrefix();
                     default -> properties.getPrefix();
                 };
         file.setStorageKey(prefix + UUID.randomUUID() + ".jpg");

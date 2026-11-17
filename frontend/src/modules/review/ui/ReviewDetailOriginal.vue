@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { UserIdentity, ContentActions } from '@/modules/community'
 import StarScore from '@/shared/ui/StarScore.vue'
+import UserAvatar from '@/modules/account/ui/UserAvatar.vue'
 import { formatRating } from '@/shared/lib/formatRating'
 import { ratingDimensions } from '@/modules/restaurant/model/catalog.logic'
 import { overall, recommendationLabels, type ReviewItem } from '../model/review'
@@ -19,9 +20,11 @@ defineEmits<{ photo: [url: string]; reply: [] }>()
 <template>
   <article class="detail-original">
     <header class="detail-original-person">
-      <span class="detail-original-avatar" aria-hidden="true">{{
-        Array.from(item.username.trim())[0]?.toUpperCase() || '同'
-      }}</span>
+      <UserAvatar
+        class="detail-original-avatar"
+        :user-id="item.authorId"
+        :username="item.username"
+      />
       <div>
         <UserIdentity
           :user-id="item.authorId"

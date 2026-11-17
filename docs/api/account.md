@@ -19,7 +19,41 @@
 | GET | `/api/admin/me` | 管理员 | 200 | [工作台身份校验](#admin-session) |
 | GET | `/api/me/profile` | Bearer | 200 | [本人资料与简介](#profile) |
 | PATCH | `/api/me/profile` | Bearer | 200 | [本人资料与简介](#profile) |
+| PUT | `/api/me/avatar` | Bearer | 204 | [用户头像](#avatar) |
+| GET | `/api/users/{userId}/avatar` | 公开 | 200 JPEG / 204 | [用户头像](#avatar) |
 | GET | `/api/me/growth` | Bearer | 200 | [本人成长摘要](#growth) |
+
+<a id="avatar"></a>
+
+## 用户头像
+
+**接口与权限**
+
+`PUT /api/me/avatar`只修改认证账号本人；`GET /api/users/{userId}/avatar`允许游客读取当前头像，用于公开点评署名，不开放个人主页或其他资料。
+
+**请求参数**
+
+先以`purpose=AVATAR`调用[临时图片上传](files.md#temporary)，再保存：
+
+```json
+{"fileId":"501"}
+```
+
+fileId为正Long十进制字符串，只接受本人上传、未过期且可绑定的AVATAR图片，不接受其他用途。身份只从Bearer获取，不能指定其他用户。userId同样为正Long十进制字符串。
+
+**响应**
+
+保存成功204，无正文，禁止缓存。读取有图返回200 `image/jpeg`、`Cache-Control: no-store`和`X-Content-Type-Options: nosniff`；账号存在但没有头像返回204，由前端显示用户名首字。读取不返回文件ID、Bucket、对象键或外部链接。
+
+**错误码**
+
+未登录保存401；请求缺少fileId或ID非法400（格式错误沿用通用参数错误；超出Long范围为`USER_PUBLIC_PROFILE_INVALID`）；文件归属、用途、状态或期限不符409 `FILE_NOT_BINDABLE`；保存账号不可用401 `USER_PROFILE_UNAVAILABLE`。读取不存在、已删除或未验证账号404 `USER_PUBLIC_PROFILE_NOT_FOUND`；文件不可读404 `FILE_NOT_FOUND`，存储故障503 `FILE_STORAGE_UNAVAILABLE`。账号锁定、停用仍保留公开历史署名，不能凭此修改本人资料。
+
+**副作用与限制**
+
+新图绑定、用户关联更新及旧图登记回收在同一事务提交，失败全部回滚；旧图由文件后台任务删除，取消临时上传不能删除已绑定头像。同一当前fileId重试幂等，不重复写入或释放当前图；旧头像在替换完成后不能再次用原ID恢复。并发保存按实际提交顺序生效，最后提交的图片为当前头像。
+
+不改变凭证版本、不强制退出、不覆盖简介。头像作为内容署名可公开展示，已传到浏览器的图片字节不能撤回。当前不提供删除头像、自由拖动裁剪、头像历史或审批接口；前端居中裁剪为不超过512px的方形JPEG，预览与上传一致。
 
 <a id="registration"></a>
 

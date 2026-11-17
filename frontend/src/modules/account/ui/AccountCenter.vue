@@ -18,6 +18,8 @@ import { useOwnProfile } from '../model/useOwnProfile'
 import { bioValidationError, normalizeBio } from '../model/profileValidation'
 import { useReturnNavigation } from '@/shared/lib/useReturnNavigation'
 import WriteReviewLink from '@/shared/ui/WriteReviewLink.vue'
+import UserAvatar from './UserAvatar.vue'
+import AvatarSetting from './AvatarSetting.vue'
 
 /** 个人中心只接入已存在的身份与成长接口；未开放能力不保存本地假资料或虚构统计。 */
 const props = defineProps<{ section?: string; publicUserId?: string }>()
@@ -62,10 +64,6 @@ const ownProfile = computed(
   () => !publicProfile.value || props.publicUserId === String(auth.user?.id),
 )
 const home = computed(() => !props.section)
-// 首字头像只取公开用户名，不提供上传或额外保存用户资料。
-const avatarInitial = computed(() =>
-  Array.from(auth.user?.username.trim() || '?')[0]!.toUpperCase(),
-)
 const profileState = useOwnProfile(
   () => ownProfile.value && (home.value || props.section === 'settings'),
 )
@@ -195,7 +193,11 @@ const pending = computed(() => pendingSections[props.section ?? ''])
     <template v-if="auth.authenticated && home">
       <div v-if="ownProfile" class="account-profile">
         <div class="profile-identity">
-          <span class="profile-avatar" aria-hidden="true">{{ avatarInitial }}</span>
+          <UserAvatar
+            class="profile-avatar"
+            :user-id="String(auth.user?.id ?? '')"
+            :username="auth.user?.username"
+          />
           <div class="profile-info">
             <div class="profile-heading">
               <h2>{{ auth.user?.username }}</h2>
@@ -354,6 +356,7 @@ const pending = computed(() => pendingSections[props.section ?? ''])
       <template v-else-if="section === 'settings'">
         <section class="account-block">
           <h2>个人资料</h2>
+          <AvatarSetting />
           <div class="setting-row username-setting">
             <span>用户名</span><strong>{{ auth.user?.username }}</strong>
           </div>

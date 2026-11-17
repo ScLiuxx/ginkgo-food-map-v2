@@ -13,10 +13,10 @@ import {
   type NotificationPage,
 } from '@/modules/message/api/notificationsApi'
 import MessagePage from './MessagePage.vue'
-import { fetchReplyTarget, type ReplyTarget } from '@/modules/review/api/replyTargetApi'
+import { fetchNotificationReview, type ReviewDetail } from '@/modules/review/api/reviewDetailApi'
 import { AxiosError } from 'axios'
 import { httpClient } from '@/shared/api/httpClient'
-vi.mock('@/modules/review/api/replyTargetApi', () => ({ fetchReplyTarget: vi.fn() }))
+vi.mock('@/modules/review/api/reviewDetailApi', () => ({ fetchNotificationReview: vi.fn() }))
 
 const replyPage = (): NotificationPage => ({
   userId: '42',
@@ -46,22 +46,29 @@ const replyPage = (): NotificationPage => ({
     },
   ],
 })
-const target = (): ReplyTarget => ({
-  userId: '42',
+const target = (): ReviewDetail => ({
   restaurantId: '1',
-  reviewId: '301',
-  replyId: '9007199254740997',
-  reviewAuthor: { id: '42', username: '点评同学' },
-  replyAuthor: { id: '88', username: '回复同学' },
-  review: {
+  windowId: null,
+  item: {
     id: '301',
-    body: '历史点评原文',
-    createdAt: '2026-11-01T00:00:00Z',
+    authorId: '42',
+    username: '点评同学',
+    scores: { taste: 8, value: 8, service: 8, ambience: 8 },
     overallScore: 8,
     recommendation: 'RECOMMENDED',
+    body: '历史点评原文',
+    createdAt: '2026-11-01T00:00:00Z',
+    scoringStatus: 'history',
+    canDelete: false,
+    photos: [],
+    replies: [],
   },
-  replyBody: '这条回复在第十二页 <script>纯文本</script>',
-  replyCreatedAt: '2026-11-07T08:00:00Z',
+  focusedReply: {
+    id: '9007199254740997',
+    author: { id: '88', username: '回复同学' },
+    body: '这条回复在第十二页 <script>纯文本</script>',
+    createdAt: '2026-11-07T08:00:00Z',
+  },
 })
 
 vi.mock('@/modules/message/api/notificationsApi', () => ({
@@ -105,12 +112,13 @@ const page = (
 const settle = async () => {
   for (let i = 0; i < 20; i++) await nextTick()
 }
-/** 使用真实认证Store和路由，验证消息写入、失败保留及跨账号迟到结果隔离。 */
+/** 使用真实认证Store和路由验证消息编排；统一详情读取替换为边界夹具，其协议校验由reviewDetailApi测试负责。 */
 describe('审核通知页面', () => {
   let app: App | undefined, host: HTMLDivElement, pinia: ReturnType<typeof createPinia>
   beforeEach(() => {
     clearAccessToken()
     vi.resetAllMocks()
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined)
     pinia = createPinia()
     setActivePinia(pinia)
     host = document.createElement('div')
@@ -123,7 +131,7 @@ describe('审核通知页面', () => {
     vi.mocked(markNotificationRead).mockResolvedValue(undefined)
     vi.mocked(markAllNotificationsRead).mockResolvedValue(undefined)
     vi.mocked(deleteNotification).mockResolvedValue(undefined)
-    vi.mocked(fetchReplyTarget).mockResolvedValue(target())
+    vi.mocked(fetchNotificationReview).mockResolvedValue(target())
     Object.defineProperty(HTMLDialogElement.prototype, 'close', {
       configurable: true,
       value() {
@@ -167,6 +175,8 @@ describe('审核通知页面', () => {
         },
         { path: '/account/contributions', component: { template: '<p>本人申请</p>' } },
         { path: '/users/:id', component: { template: '<p>公开主页</p>' } },
+        { path: '/account', component: { template: '<p>个人中心</p>' } },
+        { path: '/restaurants/:id', component: { template: '<p>店铺详情</p>' } },
         { path: '/login', component: { template: '<p>登录</p>' } },
         { path: '/', component: { template: '<p>首页</p>' } },
       ],
@@ -182,6 +192,12 @@ describe('审核通知页面', () => {
   }
 
   async function click(label: string) {
+    if (label === '删除消息') {
+      host.querySelector<HTMLButtonElement>('.notification-more')!.click()
+      await settle()
+    }
+    label =
+      ({ 取消删除: '取消', 确认删除消息: '确认删除' } as Record<string, string>)[label] ?? label
     const button = [...host.querySelectorAll('button')].find(
       (value) => value.textContent?.trim() === label,
     )
@@ -223,7 +239,7 @@ describe('审核通知页面', () => {
     )
     expect(vi.mocked(fetchNotifications).mock.calls.at(-1)?.[1]).toBe(1)
     expect(host.textContent).toContain('消息已删除')
-    expect(host.textContent).toContain('0 条未读')
+    expect(host.querySelector('.category-unread')).toBeNull()
     expect(host.textContent).toContain('暂无系统通知')
     expect(host.querySelector('.notification-card')).toBeNull()
     expect(markNotificationRead).not.toHaveBeenCalled()
@@ -321,7 +337,8 @@ describe('审核通知页面', () => {
     }
     vi.mocked(fetchNotifications).mockResolvedValue(source)
     const router = await mount('/messages/followers')
-    expect(host.textContent).toContain('回复同学 关注了你')
+    expect(host.querySelector('.notification-title')?.textContent).toBe('回复同学')
+    expect(host.querySelector('.notification-detail')?.textContent).toBe('关注了你')
     host.querySelector<HTMLButtonElement>('.notification-card')!.click()
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/users/88'))
     expect(markNotificationRead).toHaveBeenCalledWith('501', 'session-42', expect.any(AbortSignal))
@@ -333,24 +350,16 @@ describe('审核通知页面', () => {
     source.records[0]!.category = 'LIKES'
     source.records[0]!.notificationType = 'REPLY_LIKED'
     vi.mocked(fetchNotifications).mockResolvedValue(source)
-    const read = vi.spyOn(httpClient, 'get').mockResolvedValue({
-      data: {
-        success: true,
-        data: {
-          userId: '42',
-          likeId: source.records[0]!.sourceId,
-          targetType: 'REPLY',
-          targetId: '901',
-          reviewId: '301',
-          restaurantId: '1',
-          author: { id: '42', username: '回复作者' },
-          body: '被赞的历史回复 <script>纯文本</script>',
-          createdAt: '2026-11-07T00:00:00Z',
-        },
-      },
-    })
+    const liked = target()
+    liked.focusedReply = {
+      id: '901',
+      author: { id: '42', username: '回复作者' },
+      body: '被赞的历史回复 <script>纯文本</script>',
+      createdAt: '2026-11-07T00:00:00Z',
+    }
+    const read = vi.mocked(fetchNotificationReview).mockResolvedValue(liked)
     await mount('/messages/likes')
-    expect(host.textContent).toContain('回复同学 赞了你的回复')
+    expect(host.querySelector('.notification-detail')?.textContent).toBe('赞了你的回复')
     expect(read).not.toHaveBeenCalled()
     host.querySelector<HTMLButtonElement>('.notification-card')!.click()
     await settle()
@@ -359,13 +368,15 @@ describe('审核通知页面', () => {
       'session-42',
       expect.any(AbortSignal),
     )
-    expect(document.querySelector('.like-target-dialog')?.textContent).toContain(
+    expect(document.querySelector('.discussion-dialog')?.textContent).toContain(
       '被赞的历史回复 <script>纯文本</script>',
     )
-    expect(document.querySelector('.like-target-dialog script')).toBeNull()
-    ;(document.querySelector('.like-target-dialog button') as HTMLButtonElement).click()
+    expect(document.querySelector('.discussion-dialog script')).toBeNull()
+    ;(
+      document.querySelector('.discussion-dialog [aria-label="关闭点评详情"]') as HTMLButtonElement
+    ).click()
     await settle()
-    expect(document.querySelector('.like-target-dialog')).toBeNull()
+    expect(document.querySelector('.discussion-dialog')).toBeNull()
     host.querySelector<HTMLButtonElement>('.mark-all-read')!.click()
     await settle()
     expect(markAllNotificationsRead).toHaveBeenCalledWith(
@@ -381,36 +392,36 @@ describe('审核通知页面', () => {
     source.records[0]!.notificationType = 'REVIEW_LIKED'
     vi.mocked(fetchNotifications).mockResolvedValue(source)
     const read = vi
-      .spyOn(httpClient, 'get')
+      .mocked(fetchNotificationReview)
       .mockRejectedValue(
         new AxiosError('gone', undefined, undefined, undefined, { status: 404 } as never),
       )
     await mount('/messages/likes')
     host.querySelector<HTMLButtonElement>('.notification-card')!.click()
     await settle()
-    expect(document.querySelector('.like-target-dialog')?.textContent).toContain(
-      '内容已失效或不可访问',
+    expect(document.querySelector('.discussion-dialog')?.textContent).toContain(
+      '对应点评或回复已删除，或暂时不可访问。',
     )
-    let resolve!: (value: unknown) => void
+    let resolve!: (value: ReviewDetail) => void
     read.mockReturnValue(
       new Promise((done) => {
         resolve = done
       }),
     )
     ;(
-      document.querySelector('.like-target-dialog [role="alert"] button') as HTMLButtonElement
+      document.querySelector('.discussion-dialog [role="alert"] button') as HTMLButtonElement
     ).click()
     await settle()
     signIn(88)
     await settle()
-    resolve({ data: { success: true, data: { userId: '42', body: '旧账号秘密' } } })
+    resolve({ ...target(), item: { ...target().item, body: '旧账号秘密' } })
     await settle()
     expect(document.body.textContent).not.toContain('旧账号秘密')
-    expect(document.querySelector('.like-target-dialog')).toBeNull()
+    expect(document.querySelector('.discussion-dialog')).toBeNull()
   })
   it('列表展示真实未读和纯文本原因，浏览不发送已读；点击成功后跳到精确申请', async () => {
     const router = await mount()
-    expect(host.textContent).toContain('1 条未读')
+    expect(host.querySelector('.category-unread')?.textContent).toBe('1')
     expect(host.textContent).toContain('<script>原因</script>')
     expect(host.querySelector('img,script')).toBeNull()
     expect(markNotificationRead).not.toHaveBeenCalled()
@@ -434,7 +445,7 @@ describe('审核通知页面', () => {
     host.querySelector<HTMLButtonElement>('.notification-card')!.click()
     await settle()
     expect(host.textContent).toContain('暂时无法保存已读')
-    expect(host.textContent).toContain('1 条未读')
+    expect(host.querySelector('.category-unread')?.textContent).toBe('1')
     expect(router.currentRoute.value.path).toBe('/messages/system')
     expect(markNotificationRead).toHaveBeenCalledTimes(1)
   })
@@ -467,7 +478,7 @@ describe('审核通知页面', () => {
     ;[...host.querySelectorAll('button')].find((b) => b.textContent === '重试加载')!.click()
     await settle()
     expect(host.textContent).toContain('暂无系统通知')
-    expect(host.querySelector<HTMLButtonElement>('.mark-all-read')!.disabled).toBe(true)
+    expect(host.querySelector('.mark-all-read')).toBeNull()
   })
   it('换号立即清除旧内容，旧读取与写入回执不能覆盖新身份或触发跳转', async () => {
     let finishWrite!: () => void
@@ -508,33 +519,32 @@ describe('审核通知页面', () => {
   it('评论分类展示回复者且不显示正文，点击先保存已读再精确读取原点评和目标回复', async () => {
     vi.mocked(fetchNotifications).mockResolvedValue(replyPage())
     const neutral = target()
-    neutral.review.recommendation = 'NEUTRAL'
-    vi.mocked(fetchReplyTarget).mockResolvedValueOnce(neutral)
+    neutral.item.recommendation = 'NEUTRAL'
+    vi.mocked(fetchNotificationReview).mockResolvedValueOnce(neutral)
     await mount('/messages/comments')
-    expect(host.textContent).toContain('回复同学 回复了你的点评')
+    expect(host.querySelector('.notification-detail')?.textContent).toBe('回复了你的点评')
     expect(host.textContent).not.toContain('第十二页')
-    expect(fetchReplyTarget).not.toHaveBeenCalled()
+    expect(fetchNotificationReview).not.toHaveBeenCalled()
     host.querySelector<HTMLButtonElement>('.notification-card')!.click()
     await settle()
     expect(markNotificationRead).toHaveBeenCalledWith('501', 'session-42', expect.any(AbortSignal))
-    expect(fetchReplyTarget).toHaveBeenCalledWith(
+    expect(fetchNotificationReview).toHaveBeenCalledWith(
+      'COMMENT',
       '9007199254740997',
       '301',
       '42',
       'session-42',
       expect.any(AbortSignal),
     )
-    expect(document.querySelector('.reply-target-review')?.textContent).toContain('历史点评原文')
-    expect(document.querySelector('.reply-target-review .review-score')?.textContent).toContain(
-      '一般',
-    )
-    expect(document.querySelector('.reply-target-highlight')?.textContent).toContain(
+    expect(document.querySelector('.detail-original')?.textContent).toContain('历史点评原文')
+    expect(document.querySelector('.detail-original-attitude')?.textContent).toContain('一般')
+    expect(document.querySelector('.target-reply-highlight')?.textContent).toContain(
       '第十二页 <script>纯文本</script>',
     )
-    expect(document.querySelector('.reply-notification-dialog script')).toBeNull()
-    document.querySelector<HTMLButtonElement>('[aria-label="关闭评论详情"]')!.click()
+    expect(document.querySelector('.discussion-dialog script')).toBeNull()
+    document.querySelector<HTMLButtonElement>('[aria-label="关闭点评详情"]')!.click()
     await settle()
-    expect(document.querySelector('.reply-notification-dialog')).toBeNull()
+    expect(document.querySelector('.discussion-dialog')).toBeNull()
   })
   it('评论分类全部已读只提交COMMENTS，首页分别显示系统与评论未读', async () => {
     const data = replyPage()
@@ -561,26 +571,24 @@ describe('审核通知页面', () => {
     vi.mocked(fetchNotifications).mockResolvedValue(replyPage())
     const missing = new AxiosError('missing')
     missing.response = { status: 404 } as NonNullable<AxiosError['response']>
-    vi.mocked(fetchReplyTarget).mockRejectedValueOnce(missing)
+    vi.mocked(fetchNotificationReview).mockRejectedValueOnce(missing)
     await mount('/messages/comments')
     host.querySelector<HTMLButtonElement>('.notification-card')!.click()
     await settle()
-    expect(document.querySelector('.reply-notification-dialog')?.textContent).toContain(
-      '内容已失效或不可访问',
+    expect(document.querySelector('.discussion-dialog')?.textContent).toContain(
+      '对应点评或回复已删除，或暂时不可访问。',
     )
-    expect(document.querySelector('.reply-target-review')).toBeNull()
+    expect(document.querySelector('.detail-original')).toBeNull()
     expect(markNotificationRead).toHaveBeenCalledTimes(1)
-    const buttons = [
-      ...document.querySelectorAll<HTMLButtonElement>('.reply-notification-dialog button'),
-    ]
-    buttons.find((button) => button.textContent === '重试加载')!.click()
+    const buttons = [...document.querySelectorAll<HTMLButtonElement>('.discussion-dialog button')]
+    buttons.find((button) => button.textContent === '重试加载点评')!.click()
     await settle()
-    expect(document.querySelector('.reply-target-highlight')?.textContent).toContain('第十二页')
+    expect(document.querySelector('.target-reply-highlight')?.textContent).toContain('第十二页')
   })
   it('关闭或换号后目标读取迟到，不重新打开弹窗或展示旧正文', async () => {
     vi.mocked(fetchNotifications).mockResolvedValue(replyPage())
-    let finish!: (value: ReplyTarget) => void
-    vi.mocked(fetchReplyTarget).mockImplementation(
+    let finish!: (value: ReviewDetail) => void
+    vi.mocked(fetchNotificationReview).mockImplementation(
       () =>
         new Promise((resolve) => {
           finish = resolve
@@ -589,13 +597,13 @@ describe('审核通知页面', () => {
     await mount('/messages/comments')
     host.querySelector<HTMLButtonElement>('.notification-card')!.click()
     await settle()
-    const signal = vi.mocked(fetchReplyTarget).mock.calls[0]![4]
+    const signal = vi.mocked(fetchNotificationReview).mock.calls[0]![5]
     clearAccessToken()
     await settle()
     expect(signal.aborted).toBe(true)
     finish(target())
     await settle()
-    expect(document.querySelector('.reply-notification-dialog')).toBeNull()
+    expect(document.querySelector('.discussion-dialog')).toBeNull()
     expect(document.body.textContent).not.toContain('历史点评原文')
   })
   it.each([

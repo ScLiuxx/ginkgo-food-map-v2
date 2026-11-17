@@ -31,5 +31,8 @@ public class OssProperties {
     /** 管理员窗口相册独立于窗口点评；与其他用途使用同级目录。 */
     private String windowPrefix = "windows-images/";
 
+    /** 本人头像与业务配图隔离，客户端不能指定目录或对象名。 */
+    private String avatarPrefix = "avatars/";
+
     private Duration temporaryTtl = Duration.ofHours(24);
 }

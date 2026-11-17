@@ -161,7 +161,9 @@ describe('个人中心', () => {
     expect(host.querySelectorAll('.account-tools > a')).toHaveLength(4)
     expect(host.querySelector('.level-badge')?.textContent).toBe('Lv.2')
     expect(host.querySelector('progress')?.value).toBeCloseTo((25 / 300) * 100)
-    expect(host.querySelector('.avatar, img')).toBeNull()
+    expect(host.querySelector('.profile-avatar img')?.getAttribute('src')).toContain(
+      '/api/users/42/avatar',
+    )
     expect(host.querySelector('.profile-avatar')?.textContent).toBe('测')
     expect(host.querySelector('.public-link, a[href="/users/42"]')).toBeNull()
     expect(host.querySelectorAll('.profile-statistics strong')[0]?.textContent).toBe('2')

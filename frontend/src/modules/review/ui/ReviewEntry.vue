@@ -6,6 +6,7 @@ import ReviewActionsMenu from './ReviewActionsMenu.vue'
 import ReviewDiscussion from './ReviewDiscussion.vue'
 import ReviewDetailOriginal from './ReviewDetailOriginal.vue'
 import StarScore from '@/shared/ui/StarScore.vue'
+import UserAvatar from '@/modules/account/ui/UserAvatar.vue'
 import { ratingDimensions } from '@/modules/restaurant/model/catalog.logic'
 import {
   overall,
@@ -67,9 +68,13 @@ defineEmits<{
   >
     <header>
       <div v-if="!profileEntry" class="entry-author">
-        <span v-if="starScale" class="entry-avatar" aria-hidden="true">{{
-          Array.from(item.username.trim())[0]?.toUpperCase() || '同'
-        }}</span>
+        <UserAvatar
+          v-if="starScale"
+          class="entry-avatar"
+          :user-id="item.authorId"
+          :username="item.username"
+          :preview="preview"
+        />
         <div class="author-identity">
           <UserIdentity
             :user-id="item.authorId"

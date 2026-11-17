@@ -7,6 +7,7 @@ import lombok.ToString;
 @Data
 public class UserProfileEntity {
     private long id;
+    private Long avatarFileId;
     private String username;
     @ToString.Exclude private String email;
     @ToString.Exclude private String bio;

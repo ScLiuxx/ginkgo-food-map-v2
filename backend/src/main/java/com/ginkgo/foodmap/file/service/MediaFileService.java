@@ -23,6 +23,47 @@ public class MediaFileService {
     private final OssStorageClient storage;
     private final com.ginkgo.foodmap.security.service.CurrentActorService actors;
 
+    /** 用户服务先锁本人用户行；文件按升序锁定，绑定新图和释放旧图随资料事务一起回滚。 */
+    @PreAuthorize("isAuthenticated()")
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void replaceAvatar(Long existing, long replacement) {
+        long owner = actors.requireActor().getUserId();
+        var ids =
+                Stream.of(existing, replacement)
+                        .filter(java.util.Objects::nonNull)
+                        .distinct()
+                        .sorted()
+                        .toList();
+        for (long id : ids) {
+            var row = files.lock(id);
+            if (row == null
+                    || row.getUploaderUserId() != owner
+                    || !"AVATAR".equals(row.getPurpose())) {
+                throw new BusinessException(FileErrorCode.NOT_BINDABLE);
+            }
+            if (java.util.Objects.equals(existing, id)) {
+                if (!"BOUND".equals(row.getStatus())
+                        || (id != replacement && files.releaseBound(id, owner) != 1)) {
+                    throw new BusinessException(FileErrorCode.NOT_BINDABLE);
+                }
+            } else if (files.bind(id, owner) != 1) {
+                throw new BusinessException(FileErrorCode.NOT_BINDABLE);
+            }
+        }
+    }
+
+    /** 用户服务已核对当前头像关联和账号可见性；没有任意文件ID读取入口，OSS请求不加入写事务。 */
+    public byte[] readAvatar(long id, long owner) {
+        var row = files.find(id);
+        if (row == null
+                || row.getUploaderUserId() != owner
+                || !"AVATAR".equals(row.getPurpose())
+                || !"BOUND".equals(row.getStatus())) {
+            throw new BusinessException(FileErrorCode.NOT_FOUND);
+        }
+        return storage.read(row.getBucketName(), row.getStorageKey());
+    }
+
     /** restaurant服务先核对本人申请/位置；文件侧再以真实身份校验上传者、用途及BOUND状态。 */
     @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public byte[] readOwnRestaurantBound(long id) {
@@ -112,16 +153,21 @@ public class MediaFileService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void replaceOwnReviewPhotos(List<Long> existing, List<Long> replacement) {
         long owner = actors.requireActor().getUserId();
-        if (existing == null || replacement == null || existing.size() > 5 || replacement.size() > 5
+        if (existing == null
+                || replacement == null
+                || existing.size() > 5
+                || replacement.size() > 5
                 || existing.stream().distinct().count() != existing.size()
                 || replacement.stream().distinct().count() != replacement.size()) {
             throw new BusinessException(FileErrorCode.NOT_BINDABLE);
         }
-        var ids = Stream.concat(existing.stream(), replacement.stream())
-                .distinct().sorted().toList();
+        var ids =
+                Stream.concat(existing.stream(), replacement.stream()).distinct().sorted().toList();
         for (long id : ids) {
             var row = files.lock(id);
-            if (row == null || row.getUploaderUserId() != owner || !"REVIEW".equals(row.getPurpose())) {
+            if (row == null
+                    || row.getUploaderUserId() != owner
+                    || !"REVIEW".equals(row.getPurpose())) {
                 throw new BusinessException(FileErrorCode.NOT_BINDABLE);
             }
             if (existing.contains(id)) {
@@ -146,8 +192,7 @@ public class MediaFileService {
     /**
      * 本人修改待审申请替换附图时释放旧图。
      *
-     * <p>只允许释放本人上传且仍为RESTAURANT用途的已绑定图片；登记删除意图后由既有回收任务清理，
-     * 与申请修改处于同一事务，替换失败时一并回滚。调用方必须先核对申请归属和待审状态。
+     * <p>只允许释放本人上传且仍为RESTAURANT用途的已绑定图片；登记删除意图后由既有回收任务清理， 与申请修改处于同一事务，替换失败时一并回滚。调用方必须先核对申请归属和待审状态。
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void releaseRestaurantPhotos(List<Long> ids, long owner) {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UserAvatar from '@/modules/account/ui/UserAvatar.vue'
 import { computed, inject, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authToken } from '@/shared/api/authSession'
@@ -377,9 +378,12 @@ async function focusTarget() {
           :data-target-reply="answer.id === focusedReply?.id"
           :class="{ 'target-reply-highlight': highlighted && answer.id === focusedReply?.id }"
         >
-          <span v-if="detailMode" class="detail-reply-avatar" aria-hidden="true">{{
-            Array.from(answer.author.username.trim())[0]?.toUpperCase() || '同'
-          }}</span>
+          <UserAvatar
+            v-if="detailMode"
+            class="detail-reply-avatar"
+            :user-id="answer.author.id"
+            :username="answer.author.username"
+          />
           <div class="reply-copy">
             <div class="reply-meta">
               <UserIdentity

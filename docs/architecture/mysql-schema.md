@@ -56,11 +56,12 @@ user模块拥有`users`、`roles`、`user_roles`和`security_audit_events`，分
 | `created_at` | `timestamp(6)` | 否 | 默认CURRENT_TIMESTAMP(6)；账号创建时间。 |
 | `updated_at` | `timestamp(6)` | 否 | 默认CURRENT_TIMESTAMP(6)，更新时自动刷新；最后修改时间。 |
 | `bio` | `varchar(100)` | 否 | 默认空字符串；个人简介。 |
+| `avatar_file_id` | `bigint` | 是 | 默认NULL；当前头像文件逻辑ID，跨模块引用，无物理外键。 |
 | `favorites_public` | `tinyint(1)` | 否 | 默认0；0收藏列表仅本人可见，1允许其他登录用户查看，游客不可查看。 |
 | `following_public` | `tinyint(1)` | 否 | 默认0；0关注名单仅本人可见，1允许其他登录用户查看，游客不可查看。 |
 | `followers_public` | `tinyint(1)` | 否 | 默认0；0粉丝名单仅本人可见，1允许其他登录用户查看，游客不可查看。 |
 
-主键`(id)`；唯一键`uk_users_username(username)`、`uk_users_email(email)`。CHECK限定账号状态和学生认证状态为表中枚举值；`chk_users_favorites_public`、`chk_users_following_public`、`chk_users_followers_public`分别限定三个隐私字段为0或1。
+主键`(id)`；唯一键`uk_users_username(username)`、`uk_users_email(email)`、`uk_users_avatar_file(avatar_file_id)`。CHECK限定账号状态和学生认证状态为表中枚举值；`chk_users_favorites_public`、`chk_users_following_public`、`chk_users_followers_public`分别限定三个隐私字段为0或1；`chk_users_avatar_file_id`限定头像文件ID为NULL或正数。
 
 ### `roles`：系统角色
 
@@ -592,7 +593,7 @@ CHECK约束：
 | `height` | `smallint unsigned` | 否 | 解码高度不超过1200 |
 | `sha256` | `binary(32)` | 否 | 最终文件内容摘要，不唯一 |
 | `status` | `varchar(16)` | 否 | UPLOADING / TEMPORARY / BOUND / PENDING_DELETE |
-| `purpose` | `varchar(16)` | 否 | REVIEW点评图 / RESTAURANT商家申请图 / WINDOW窗口相册；默认REVIEW，CHECK限定这三个值且不得包含空白 |
+| `purpose` | `varchar(16)` | 否 | REVIEW点评图 / RESTAURANT商家申请图 / WINDOW窗口相册 / AVATAR头像；默认REVIEW，CHECK限定这四个值且不得包含空白 |
 | `created_at` | `timestamp(6)` | 否 | 创建时间；默认CURRENT_TIMESTAMP(6) |
 | `updated_at` | `timestamp(6)` | 否 | 最后修改时间；默认CURRENT_TIMESTAMP(6) |
 | `expires_at` | `timestamp(6)` | 是 | 临时上传过期时间，由服务端设置 |

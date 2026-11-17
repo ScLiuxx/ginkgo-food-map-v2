@@ -144,9 +144,10 @@ app:
       # 普通餐厅和窗口的点评照片共用此目录，归属由数据库记录。
       prefix: review-images/
       # 商家投稿、纠错附图及正式相册共用此同级目录，审核后不移动对象。
-      # RAM需允许三个目录的Put/Get/Delete；窗口相册仅管理员可上传。
+      # RAM需允许四个目录的Put/Get/Delete；窗口相册仅管理员可上传。
       restaurant-prefix: restaurant-images/
       window-prefix: windows-images/
+      avatar-prefix: avatars/
       temporary-ttl: 24h
       cleanup-delay-ms: 60000
   user:

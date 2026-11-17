@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, onBeforeUnmount } from 'vue'
+import { ref, watch, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useLoginStore } from '@/modules/auth'
 import { authToken } from '@/shared/api/authSession'
@@ -11,6 +11,7 @@ import RestaurantFavorites from '@/modules/restaurant/ui/RestaurantFavorites.vue
 import { fetchPublicProfile, type PublicProfile } from '../api/publicProfileApi'
 import { useReturnNavigation } from '@/shared/lib/useReturnNavigation'
 import { useListRouteState } from '@/shared/lib/useListRouteState'
+import UserAvatar from './UserAvatar.vue'
 
 /** 登录可见主页，换主体或会话立即清理资料，取消旧请求并阻止迟到结果回填。 */
 const props = defineProps<{ publicUserId: string; section?: string }>()
@@ -27,9 +28,6 @@ const tab = ref<'reviews' | 'favorites'>('reviews')
 const reviewTotal = ref<number | null>(null)
 const favoriteTotal = ref<number | null>(null)
 const followTotal = ref<number | null>(null)
-const avatarInitial = computed(() =>
-  Array.from(profile.value?.username.trim() || '?')[0]!.toUpperCase(),
-)
 const error = ref(''),
   loading = ref(false)
 let controller: globalThis.AbortController | undefined,
@@ -123,7 +121,11 @@ async function selectTab(value: 'reviews' | 'favorites') {
         <FollowSummary :key="profile.userId" :user-id="profile.userId" profile-layout>
           <template #identity>
             <div class="profile-identity">
-              <span class="profile-avatar" aria-hidden="true">{{ avatarInitial }}</span>
+              <UserAvatar
+                class="profile-avatar"
+                :user-id="profile.userId"
+                :username="profile.username"
+              />
               <div class="profile-info">
                 <div class="profile-heading">
                   <h2 :title="profile.username">{{ profile.username }}</h2>

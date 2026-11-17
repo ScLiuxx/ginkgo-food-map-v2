@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue'
 import type { NotificationItem } from '../api/notificationsApi'
 import { notificationTime } from '../model/notificationTime'
+import UserAvatar from '@/modules/account/ui/UserAvatar.vue'
 
 /** 四类消息共用只读摘要与次要操作；读取和删除仍由页面固定身份后提交。 */
 const props = defineProps<{ item: NotificationItem; busy: boolean; deleting: boolean }>()
@@ -18,7 +19,7 @@ const cancelAction = ref<globalThis.HTMLButtonElement>()
 const opened = ref(false)
 const panelId = `notification-actions-${useId()}`
 
-// 列表只使用现有协议字段，不为预览额外读取点评正文、头像或关注关系。
+// 摘要只使用现有协议字段，用户头像通过统一组件读取，系统图标保持独立。
 const presentation = computed(() => {
   const item = props.item
   if (item.category !== 'SYSTEM')
@@ -49,7 +50,6 @@ const presentation = computed(() => {
     icon: item.decision === 'APPROVED' ? 'approved' : 'edit',
   }
 })
-const avatarLetter = computed(() => Array.from(props.item.actorUsername ?? '').at(0) ?? '')
 // 用户ID分配稳定的浅色头像；不按列表顺序变色，不表达在线、等级或关系状态。
 const avatarTone = computed(() => Number(BigInt(props.item.actorUserId ?? '0') % 3n))
 const fullTime = computed(() =>
@@ -112,7 +112,15 @@ onUnmounted(() => globalThis.document.removeEventListener('pointerdown', outside
     @keydown.esc.stop.prevent="escape"
   >
     <button type="button" class="notification-card" :disabled="busy" @click="emit('read', item)">
+      <UserAvatar
+        v-if="!presentation.icon"
+        class="notification-avatar"
+        :class="`avatar-tone-${avatarTone}`"
+        :user-id="item.actorUserId"
+        :username="item.actorUsername"
+      />
       <span
+        v-else
         class="notification-avatar"
         :class="
           presentation.icon ? ['system-avatar', presentation.icon] : `avatar-tone-${avatarTone}`
@@ -131,7 +139,6 @@ onUnmounted(() => globalThis.document.removeEventListener('pointerdown', outside
           />
           <path v-else d="m15 4 5 5M5 15 16 4a2 2 0 0 1 4 4L9 19l-5 1z" />
         </svg>
-        <template v-else>{{ avatarLetter }}</template>
       </span>
       <span class="notification-copy">
         <strong class="notification-title" :title="presentation.title">{{

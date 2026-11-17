@@ -49,8 +49,8 @@ public class SecurityConfiguration {
                             if (exception
                                             instanceof
                                             org.springframework.security.oauth2.core
-                                                                    .OAuth2AuthenticationException
-                                                            oauth
+                                                            .OAuth2AuthenticationException
+                                                    oauth
                                     && "temporarily_unavailable"
                                             .equals(oauth.getError().getErrorCode())) {
                                 writeError(
@@ -147,6 +147,10 @@ public class SecurityConfiguration {
                                         .permitAll()
                                         // 榜单只公开明确GET路径，不开放写入、触发生成或其他方法。
                                         .requestMatchers(HttpMethod.GET, "/api/restaurant-rankings")
+                                        .permitAll()
+                                        // 头像可随公开点评展示，仅开放当前用户头像的精确GET路径。
+                                        .requestMatchers(
+                                                HttpMethod.GET, "/api/users/{userId}/avatar")
                                         .permitAll()
                                         // 只允许餐厅阅读的GET入口；不放开后续写入、管理或嵌套资源。
                                         .requestMatchers(

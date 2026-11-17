@@ -44,6 +44,7 @@ import java.util.concurrent.*;
         properties = {
             "spring.flyway.enabled=true",
             "spring.sql.init.mode=never",
+            "app.file.oss.bucket=test-avatar-bucket",
             "spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver",
             "spring.datasource.hikari.minimum-idle=0"
         })
@@ -60,6 +61,7 @@ class UserProfileApiIntegrationTest {
     @Autowired AuthenticationProperties authentication;
     @MockitoBean LoginSessionService sessions;
     @MockitoSpyBean UserProfileMapper profiles;
+    @MockitoBean com.ginkgo.foodmap.file.storage.OssStorageClient storage;
     private String owner;
 
     @DynamicPropertySource
@@ -80,7 +82,7 @@ class UserProfileApiIntegrationTest {
 
     @BeforeEach
     void setup() {
-        reset(sessions, profiles);
+        reset(sessions, profiles, storage);
         jdbc.update("DELETE FROM content_likes");
         jdbc.update("DELETE FROM growth_rewards");
         jdbc.update("DELETE FROM growth_accounts");
@@ -90,11 +92,12 @@ class UserProfileApiIntegrationTest {
         jdbc.update("DELETE FROM restaurant_review_statistics");
         jdbc.update("DELETE FROM restaurants");
         jdbc.update("DELETE FROM user_roles");
+        jdbc.update("DELETE FROM media_files");
         jdbc.update("DELETE FROM users");
         for (long id : List.of(11L, 22L)) {
             jdbc.update(
                     "INSERT INTO users(id,username,email,password_hash,email_verified,bio)"
-                        + " VALUES(?,?,?,?,TRUE,?)",
+                            + " VALUES(?,?,?,?,TRUE,?)",
                     id,
                     "profile_" + id,
                     "private_local" + id + "@std.uestc.edu.cn",
@@ -102,7 +105,7 @@ class UserProfileApiIntegrationTest {
                     id == 11 ? "原有简介" : "其他账号的简介");
             jdbc.update(
                     "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE"
-                        + " code='ROLE_USER'",
+                            + " code='ROLE_USER'",
                     id);
         }
         when(sessions.isActive(anyString(), anyLong(), anyLong())).thenReturn(true);
@@ -157,7 +160,7 @@ class UserProfileApiIntegrationTest {
     void publicReviewsGroupByVisibleStoreAndRetainHistoryAndAuthorLevel() throws Exception {
         jdbc.update(
                 "INSERT INTO restaurants(id,name,category_code)"
-                    + " VALUES(71,'主页店','OTHER'),(72,'隐藏店','OTHER')");
+                        + " VALUES(71,'主页店','OTHER'),(72,'隐藏店','OTHER')");
         jdbc.update(
                 "UPDATE restaurants SET"
                     + " deleted_at=CURRENT_TIMESTAMP(6),deleted_by=11,delete_reason_code='ADMIN_REMOVAL'"
@@ -384,7 +387,7 @@ class UserProfileApiIntegrationTest {
                         invocation -> {
                             jdbc.update(
                                     "UPDATE users SET bio='故障注入',row_version=row_version+1 WHERE"
-                                        + " id=11");
+                                            + " id=11");
                             throw new IllegalStateException("test-only");
                         })
                 .when(profiles)
@@ -472,6 +475,300 @@ class UserProfileApiIntegrationTest {
                         .header("Authorization", "Bearer " + owner)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(Map.of("bio", bio))));
+    }
+
+    /** 从有账号和既有文件的V47升级，原业务列不变；重复运行不重复增加字段或约束。 */
+    @Test
+    void avatarMigrationPreservesV47DataAndIsRepeatable() throws Exception {
+        String name = "ginkgo_profile_upgrade_it_" + UUID.randomUUID().toString().replace("-", "");
+        boolean made = false;
+        try {
+            try (var connection = connect("");
+                    var statement = connection.createStatement()) {
+                statement.executeUpdate(
+                        "CREATE DATABASE `"
+                                + name
+                                + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci");
+                made = true;
+            }
+            Flyway.configure()
+                    .dataSource(url(name), username(), password())
+                    .locations("classpath:db/migration")
+                    .target("47")
+                    .load()
+                    .migrate();
+            var db =
+                    new JdbcTemplate(
+                            new org.springframework.jdbc.datasource.DriverManagerDataSource(
+                                    url(name), username(), password()));
+            db.update(
+                    "INSERT INTO users(id,username,email,password_hash,email_verified,bio)"
+                            + " VALUES(7,'legacy','legacy@example.test','test-only',TRUE,'保留简介')");
+            db.update(
+                    "INSERT INTO"
+                        + " media_files(id,uploader_user_id,bucket_name,storage_key,content_type,byte_size,width,height,sha256,status,expires_at,purpose)"
+                        + " VALUES(8,7,'test-bucket','review-images/test.jpg','image/jpeg',100,80,60,UNHEX(SHA2('test',256)),'TEMPORARY',TIMESTAMPADD(HOUR,1,CURRENT_TIMESTAMP(6)),'REVIEW')");
+            var userBefore = db.queryForMap("SELECT * FROM users WHERE id=7");
+            var fileBefore = db.queryForMap("SELECT * FROM media_files WHERE id=8");
+            var flyway =
+                    Flyway.configure()
+                            .dataSource(url(name), username(), password())
+                            .locations("classpath:db/migration")
+                            .load();
+            assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
+            var after = db.queryForMap("SELECT * FROM users WHERE id=7");
+            assertThat(after.remove("avatar_file_id")).isNull();
+            assertThat(after).isEqualTo(userBefore);
+            assertThat(db.queryForMap("SELECT * FROM media_files WHERE id=8"))
+                    .usingRecursiveComparison()
+                    .isEqualTo(fileBefore);
+            assertThat(flyway.migrate().migrationsExecuted).isZero();
+        } finally {
+            if (made) {
+                drop(name);
+            }
+        }
+    }
+
+    @Test
+    void avatarReplacementRejectsBadNewFileWithoutReleasingCurrentImage() throws Exception {
+        avatarFile(501, 11, "AVATAR", "TEMPORARY");
+        avatar("501").andExpect(status().isNoContent());
+        avatarFile(502, 22, "AVATAR", "TEMPORARY");
+        var before = account(11);
+        avatar("502").andExpect(status().isConflict());
+        assertThat(account(11)).isEqualTo(before);
+        assertThat(mediaStatus(501)).isEqualTo("BOUND");
+        for (String assignment :
+                List.of(
+                        "purpose='REVIEW'",
+                        "uploader_user_id=22",
+                        "status='PENDING_DELETE',expires_at=CURRENT_TIMESTAMP(6)")) {
+            jdbc.update("UPDATE media_files SET " + assignment + " WHERE id=501");
+            mvc.perform(get("/api/users/11/avatar")).andExpect(status().isNotFound());
+            jdbc.update(
+                    "UPDATE media_files SET"
+                            + " purpose='AVATAR',uploader_user_id=11,status='BOUND',expires_at=NULL"
+                            + " WHERE id=501");
+        }
+        verifyNoInteractions(storage);
+    }
+
+    /** 上传真实JPEG，经内容检查后绑定；公开只读当前关联，私有对象键和文件ID不出现在读取协议中。 */
+    @Test
+    void avatarUploadSaveReadReplaceAndReplay() throws Exception {
+        mvc.perform(get("/api/users/11/avatar")).andExpect(status().isNoContent());
+        var image =
+                new java.awt.image.BufferedImage(
+                        128, 128, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        var bytes = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(image, "jpg", bytes);
+        var upload =
+                mvc.perform(
+                                multipart("/api/files/images")
+                                        .file(
+                                                new org.springframework.mock.web.MockMultipartFile(
+                                                        "file",
+                                                        "avatar.jpg",
+                                                        "image/jpeg",
+                                                        bytes.toByteArray()))
+                                        .param("purpose", "AVATAR")
+                                        .header("Authorization", "Bearer " + owner))
+                        .andExpect(status().isCreated())
+                        .andReturn();
+        String first =
+                json.readTree(upload.getResponse().getContentAsString())
+                        .get("data")
+                        .get("fileId")
+                        .asText();
+        var uploaded = jdbc.queryForMap("SELECT * FROM media_files WHERE id=?", first);
+        assertThat(uploaded.get("storage_key").toString()).startsWith("avatars/");
+        assertThat(uploaded.get("purpose")).isEqualTo("AVATAR");
+        var before = account(11);
+        avatar(first).andExpect(status().isNoContent());
+        var saved = account(11);
+        avatar(first).andExpect(status().isNoContent());
+        assertThat(account(11)).isEqualTo(saved);
+        assertThat(saved.get("bio")).isEqualTo(before.get("bio"));
+        assertThat(saved.get("credential_version")).isEqualTo(before.get("credential_version"));
+        when(storage.read(anyString(), anyString()))
+                .thenAnswer(
+                        invocation -> {
+                            assertThat(
+                                            org.springframework.transaction.support
+                                                    .TransactionSynchronizationManager
+                                                    .isActualTransactionActive())
+                                    .isFalse();
+                            return bytes.toByteArray();
+                        });
+        mvc.perform(get("/api/users/11/avatar"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("image/jpeg"))
+                .andExpect(content().bytes(bytes.toByteArray()))
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"));
+        mvc.perform(delete("/api/files/images/" + first).header("Authorization", "Bearer " + owner))
+                .andExpect(status().isConflict());
+        avatarFile(501, 11, "AVATAR", "TEMPORARY");
+        avatar("501").andExpect(status().isNoContent());
+        assertThat(mediaStatus(Long.parseLong(first))).isEqualTo("PENDING_DELETE");
+        assertThat(mediaStatus(501)).isEqualTo("BOUND");
+        // 旧文件重放不覆盖新头像；只有当前绑定文件才允许幂等重试。
+        avatar(first).andExpect(status().isConflict());
+        assertThat(account(11).get("avatar_file_id")).isEqualTo(501L);
+    }
+
+    @Test
+    void avatarRejectsInvalidForeignWrongPurposeExpiredAndUnboundMedia() throws Exception {
+        mvc.perform(
+                        put("/api/me/avatar")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"fileId\":\"501\"}"))
+                .andExpect(status().isUnauthorized());
+        for (String invalid : List.of("0", "01", "-1", "abc", "9223372036854775808")) {
+            avatar(invalid).andExpect(status().isBadRequest());
+            mvc.perform(get("/api/users/" + invalid + "/avatar"))
+                    .andExpect(status().isBadRequest());
+        }
+        mvc.perform(
+                        put("/api/me/avatar")
+                                .header("Authorization", "Bearer " + owner)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{}"))
+                .andExpect(status().isBadRequest());
+        avatarFile(501, 22, "AVATAR", "TEMPORARY");
+        avatarFile(502, 11, "REVIEW", "TEMPORARY");
+        avatarFile(503, 11, "RESTAURANT", "TEMPORARY");
+        avatarFile(504, 11, "WINDOW", "TEMPORARY");
+        avatarFile(505, 11, "AVATAR", "TEMPORARY");
+        jdbc.update(
+                "UPDATE media_files SET expires_at=TIMESTAMPADD(HOUR,-1,CURRENT_TIMESTAMP(6)) WHERE"
+                        + " id=505");
+        avatarFile(506, 11, "AVATAR", "BOUND");
+        for (String invalid : List.of("501", "502", "503", "504", "505", "506", "999")) {
+            avatar(invalid).andExpect(status().isConflict());
+        }
+        assertThat(account(11).get("avatar_file_id")).isNull();
+        verifyNoInteractions(storage);
+    }
+
+    @Test
+    void avatarUpdateRollbackRestoresBothFileStatesAndUserAssociation() throws Exception {
+        avatarFile(501, 11, "AVATAR", "TEMPORARY");
+        avatarFile(502, 11, "AVATAR", "TEMPORARY");
+        avatar("501").andExpect(status().isNoContent());
+        var before = account(11);
+        doThrow(new DataAccessResourceFailureException("test-only failure"))
+                .when(profiles)
+                .updateAvatar(11, 502);
+        avatar("502").andExpect(status().is5xxServerError());
+        assertThat(account(11)).isEqualTo(before);
+        assertThat(mediaStatus(501)).isEqualTo("BOUND");
+        assertThat(mediaStatus(502)).isEqualTo("TEMPORARY");
+        verifyNoInteractions(storage);
+    }
+
+    @Test
+    void concurrentAvatarSavesLeaveOneCurrentBoundFile() throws Exception {
+        avatarFile(501, 11, "AVATAR", "TEMPORARY");
+        avatarFile(502, 11, "AVATAR", "TEMPORARY");
+        var executor = Executors.newFixedThreadPool(2);
+        var barrier = new CyclicBarrier(2);
+        try {
+            var requests = new ArrayList<Future<Integer>>();
+            for (String id : List.of("501", "502")) {
+                requests.add(
+                        executor.submit(
+                                () -> {
+                                    barrier.await(10, TimeUnit.SECONDS);
+                                    return avatar(id).andReturn().getResponse().getStatus();
+                                }));
+            }
+            for (var request : requests) {
+                assertThat(request.get(20, TimeUnit.SECONDS)).isEqualTo(204);
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+        long current = ((Number) account(11).get("avatar_file_id")).longValue();
+        assertThat(mediaStatus(current)).isEqualTo("BOUND");
+        assertThat(mediaStatus(current == 501 ? 502 : 501)).isEqualTo("PENDING_DELETE");
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT COUNT(*) FROM media_files WHERE status='BOUND'",
+                                Long.class))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void avatarVisibilityAndStorageFailureDoNotExposeOrLoseAssociation() throws Exception {
+        mvc.perform(get("/api/users/999/avatar")).andExpect(status().isNotFound());
+        avatarFile(501, 11, "AVATAR", "TEMPORARY");
+        avatar("501").andExpect(status().isNoContent());
+        when(storage.read(anyString(), anyString()))
+                .thenThrow(
+                        new com.ginkgo.foodmap.common.exception.BusinessException(
+                                com.ginkgo.foodmap.file.exception.FileErrorCode.UNAVAILABLE));
+        mvc.perform(get("/api/users/11/avatar")).andExpect(status().isServiceUnavailable());
+        assertThat(account(11).get("avatar_file_id")).isEqualTo(501L);
+        jdbc.update("UPDATE users SET status='DELETED' WHERE id=11");
+        clearInvocations(storage);
+        mvc.perform(get("/api/users/11/avatar")).andExpect(status().isNotFound());
+        verifyNoInteractions(storage);
+        jdbc.update("UPDATE users SET status='ACTIVE',email_verified=FALSE WHERE id=11");
+        mvc.perform(get("/api/users/11/avatar")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void avatarUploadRejectsNonSquareOrOversizedImagesBeforeCloudWrite() throws Exception {
+        for (int[] size : List.of(new int[] {256, 128}, new int[] {513, 513})) {
+            var image =
+                    new java.awt.image.BufferedImage(
+                            size[0], size[1], java.awt.image.BufferedImage.TYPE_INT_RGB);
+            var bytes = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(image, "jpg", bytes);
+            mvc.perform(
+                            multipart("/api/files/images")
+                                    .file(
+                                            new org.springframework.mock.web.MockMultipartFile(
+                                                    "file",
+                                                    "image.jpg",
+                                                    "image/jpeg",
+                                                    bytes.toByteArray()))
+                                    .param("purpose", "AVATAR")
+                                    .header("Authorization", "Bearer " + owner))
+                    .andExpect(status().isBadRequest());
+        }
+        verify(storage, never()).put(anyString(), anyString(), any());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM media_files", Long.class)).isZero();
+    }
+
+    /** 测试文件只登记在随机隔离库，OSS完全模拟；状态组合遵循真实数据库约束。 */
+    private void avatarFile(long id, long uploader, String purpose, String state) {
+        jdbc.update(
+                "INSERT INTO"
+                    + " media_files(id,uploader_user_id,bucket_name,storage_key,content_type,byte_size,width,height,sha256,status,expires_at,bound_at,purpose)"
+                    + " VALUES(?,?,'test-avatar-bucket',?,'image/jpeg',100,128,128,UNHEX(SHA2('test-avatar',256)),?,"
+                    + "IF(?='BOUND',NULL,TIMESTAMPADD(HOUR,1,CURRENT_TIMESTAMP(6))),IF(?='BOUND',CURRENT_TIMESTAMP(6),NULL),?)",
+                id,
+                uploader,
+                "avatars/test-" + id + ".jpg",
+                state,
+                state,
+                state,
+                purpose);
+    }
+
+    private String mediaStatus(long id) {
+        return jdbc.queryForObject("SELECT status FROM media_files WHERE id=?", String.class, id);
+    }
+
+    private ResultActions avatar(String fileId) throws Exception {
+        return mvc.perform(
+                put("/api/me/avatar")
+                        .header("Authorization", "Bearer " + owner)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("fileId", fileId))));
     }
 
     private Map<String, Object> account(long id) {

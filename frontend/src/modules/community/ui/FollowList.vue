@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UserAvatar from '@/modules/account/ui/UserAvatar.vue'
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { useLoginStore } from '@/modules/auth'
 import { authToken } from '@/shared/api/authSession'
@@ -133,9 +134,7 @@ onBeforeUnmount(() => {
       </p>
       <article v-for="member in records" :key="member.userId" class="follow-member">
         <RouterLink class="follow-identity" :to="userProfilePath(member.userId, auth.user?.id)">
-          <span class="follow-avatar" aria-hidden="true">{{
-            Array.from(member.username.trim() || '?')[0]!.toUpperCase()
-          }}</span>
+          <UserAvatar class="follow-avatar" :user-id="member.userId" :username="member.username" />
           <span class="follow-info">
             <span class="follow-name">{{ member.username }}</span>
             <small v-if="member.level" class="follow-level">Lv.{{ member.level }}</small>

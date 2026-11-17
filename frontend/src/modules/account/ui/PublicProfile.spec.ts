@@ -120,7 +120,8 @@ it('shows real public data and selected-user reviews without private fields or e
   expect(host.querySelector('[data-reviews]')?.textContent).toContain('22')
   expect(host.querySelector('[data-reviews]')?.getAttribute('data-card-layout')).toBe('true')
   expect(host.querySelector('.profile-reviews-content')).not.toBeNull()
-  expect(host.querySelector('script,img,textarea')).toBeNull()
+  expect(host.querySelector('script,textarea')).toBeNull()
+  expect(host.querySelector('img')?.getAttribute('src')).toBe('/api/users/22/avatar?v=0')
   expect(host.textContent).not.toContain('邮箱')
 })
 it('clears the previous profile and ignores its late response after switching subjects', async () => {
