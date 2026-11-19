@@ -4,7 +4,7 @@ import com.foodmap.common.exception.BusinessException;
 import com.foodmap.file.entity.MediaFile;
 import com.foodmap.file.exception.FileErrorCode;
 import com.foodmap.file.mapper.MediaFileMapper;
-import com.foodmap.file.storage.OssStorageClient;
+import com.foodmap.file.storage.ImageStorageClient;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +20,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 public class MediaCleanupService {
     private final MediaFileMapper files;
-    private final OssStorageClient storage;
+    private final ImageStorageClient storage;
     private final PlatformTransactionManager transactions;
 
     /** 本人取消立即尝试删除；false表示意图已提交但云端完成尚未确认。 */
@@ -67,7 +67,11 @@ public class MediaCleanupService {
 
     /** 批次内重新核验期限，只有不可逆的待删除状态才进行云端清理。 */
     public void cleanupExpired() {
-        for (long id : files.expired()) {
+        var buckets = storage.cleanupBuckets();
+        if (buckets.isEmpty()) {
+            return;
+        }
+        for (long id : files.expired(buckets)) {
             try {
                 var row =
                         tx().execute(
@@ -91,7 +95,7 @@ public class MediaCleanupService {
     private boolean deletePending(MediaFile row) {
         try {
             storage.delete(row.getBucketName(), row.getStorageKey());
-            // 上传超时可能存在晚到写入：保护期内即使本次OSS删除成功也保留凭据，到期再删一次。
+            // 上传超时可能存在晚到写入：保护期内即使本次云端删除成功也保留凭据，到期再删一次。
             return Boolean.TRUE.equals(
                     tx().execute(
                                     s ->

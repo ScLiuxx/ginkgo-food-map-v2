@@ -55,7 +55,7 @@ class OssLiveUploadIntegrationTest {
     @Autowired AuthenticationProperties authentication;
     @Autowired com.foodmap.file.config.OssProperties ossProperties;
     @MockitoBean LoginSessionService sessions;
-    @Autowired com.foodmap.file.storage.OssStorageClient storage;
+    @Autowired com.foodmap.file.storage.ImageStorageClient storage;
     @Autowired com.foodmap.file.mapper.MediaFileMapper files;
     @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
     private String owner, other;
@@ -120,19 +120,19 @@ class OssLiveUploadIntegrationTest {
         for (long id : List.of(11L, 22L)) {
             jdbc.update(
                     "INSERT INTO users(id,username,email,password_hash,email_verified)"
-                        + " VALUES(?,?,?,?,TRUE)",
+                            + " VALUES(?,?,?,?,TRUE)",
                     id,
                     "reviewer_" + id,
                     "reviewer" + id + "@example.test",
                     "test-only");
             jdbc.update(
                     "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE"
-                        + " code='ROLE_USER'",
+                            + " code='ROLE_USER'",
                     id);
         }
         jdbc.update(
                 "INSERT INTO restaurants(id,name,category_code,created_by)"
-                    + " VALUES(1,'发布店','OTHER',11),(2,'另一店','OTHER',11)");
+                        + " VALUES(1,'发布店','OTHER',11),(2,'另一店','OTHER',11)");
         when(sessions.isActive(anyString(), anyLong(), anyLong())).thenReturn(true);
         owner = token(11, false);
         other = token(22, false);
@@ -160,7 +160,7 @@ class OssLiveUploadIntegrationTest {
         if ("WINDOW".equals(purpose)) {
             jdbc.update(
                     "INSERT INTO user_roles(user_id,role_id) SELECT 11,id FROM roles WHERE"
-                        + " code='ROLE_ADMIN'");
+                            + " code='ROLE_ADMIN'");
         }
         var response =
                 mvc.perform(

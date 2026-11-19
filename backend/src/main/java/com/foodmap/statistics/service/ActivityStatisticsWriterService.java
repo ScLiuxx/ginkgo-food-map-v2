@@ -16,7 +16,7 @@ import java.time.LocalDate;
 @Service
 @RequiredArgsConstructor
 @Transactional(propagation = Propagation.REQUIRES_NEW, timeout = 2)
-public class ActivityStatisticsWriter {
+public class ActivityStatisticsWriterService {
     private final ActivityStatisticsMapper mapper;
 
     public Instant start(Instant now) {

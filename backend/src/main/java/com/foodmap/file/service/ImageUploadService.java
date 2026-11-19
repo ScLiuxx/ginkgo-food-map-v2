@@ -1,12 +1,13 @@
 package com.foodmap.file.service;
 
 import com.foodmap.common.exception.BusinessException;
+import com.foodmap.file.config.CosProperties;
 import com.foodmap.file.config.OssProperties;
 import com.foodmap.file.entity.MediaFile;
 import com.foodmap.file.exception.FileErrorCode;
 import com.foodmap.file.image.JpegImageProcessor;
 import com.foodmap.file.mapper.MediaFileMapper;
-import com.foodmap.file.storage.OssStorageClient;
+import com.foodmap.file.storage.ImageStorageClient;
 import com.foodmap.file.vo.ImageUploadVo;
 import com.foodmap.security.service.CurrentActorService;
 
@@ -20,14 +21,15 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.io.InputStream;
 import java.util.UUID;
 
-/** 上传独立于点评事务：短事务登记、事务外OSS上传、短事务激活。 */
+/** 上传独立于点评事务：短事务登记、事务外云端上传、短事务激活。 */
 @Service
 @RequiredArgsConstructor
 public class ImageUploadService {
     private final CurrentActorService actors;
     private final JpegImageProcessor policy;
-    private final OssStorageClient storage;
+    private final ImageStorageClient storage;
     private final OssProperties properties;
+    private final CosProperties cosProperties;
     private final MediaFileMapper files;
     private final PlatformTransactionManager transactions;
     private final MediaCleanupService cleanup;
@@ -37,7 +39,7 @@ public class ImageUploadService {
         return upload(source, "REVIEW");
     }
 
-    /** 用途仅接受服务端白名单，路径由配置生成；商户与点评共用私有OSS及临时回收流程。 */
+    /** 用途仅接受服务端白名单，路径由配置生成；商户与点评共用私有存储及临时回收流程。 */
     public ImageUploadVo upload(InputStream source, String purpose) {
         if (purpose == null
                 || !java.util.Set.of("REVIEW", "RESTAURANT", "WINDOW", "AVATAR")
@@ -45,7 +47,7 @@ public class ImageUploadService {
             throw new BusinessException(FileErrorCode.INVALID_IMAGE);
         }
         var actor = actors.requireActor();
-        // 窗口资料只由管理员维护，必须在处理图片和访问OSS之前拒绝普通账号。
+        // 窗口资料只由管理员维护，必须在处理图片和访问云存储之前拒绝普通账号。
         if ("WINDOW".equals(purpose) && !actor.isAdministrator()) {
             throw new org.springframework.security.access.AccessDeniedException("需要管理员权限");
         }
@@ -59,7 +61,8 @@ public class ImageUploadService {
         }
         var file = new MediaFile();
         file.setUploaderUserId(owner);
-        file.setBucketName(properties.getBucket());
+        file.setBucketName(
+                cosProperties.isEnabled() ? cosProperties.getBucket() : properties.getBucket());
         file.setPurpose(purpose);
         String prefix =
                 switch (purpose) {
@@ -116,7 +119,7 @@ public class ImageUploadService {
         return cleanup.cancel(fileId, owner);
     }
 
-    /** 使用独立提交，防止调用者外部事务回滚丢失OSS清理凭据。 */
+    /** 使用独立提交，防止调用者外部事务回滚丢失对象存储清理凭据。 */
     private TransactionTemplate tx() {
         var template = new TransactionTemplate(transactions);
         template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);

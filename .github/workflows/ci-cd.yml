@@ -1,12 +1,19 @@
 name: CI and automatic deployment
 
-# 只处理 develop 分支推送；检查全部通过后自动部署同一提交。
+# PR先检查；develop推送检查通过且新服务器就绪后自动发布同一提交。
 on:
+  pull_request:
+    branches: [develop]
   push:
     branches: [develop]
 
 permissions:
   contents: read
+
+# 更新PR时取消旧检查；develop发布不中断，部署作业另有串行锁。
+concurrency:
+  group: foodmap-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   backend:
@@ -22,10 +29,21 @@ jobs:
           MYSQL_ROOT_HOST: '%'
         ports:
           - 3306:3306
+          # 统计测试拒绝默认业务端口；仍连接本作业临时MySQL、创建随机库。
+          - 13306:3306
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
           --health-interval=10s
           --health-timeout=5s
+          --health-retries=12
+      activity-redis:
+        image: redis:8-alpine
+        ports:
+          - 16379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
           --health-retries=12
       redis:
         image: redis:8-alpine
@@ -56,7 +74,15 @@ jobs:
           REVIEW_TEST_DB_PASSWORD: ci-only-mysql-password
           # 回复集成测试要求显式指定隔离服务器；连接本作业的临时MySQL容器。
           REVIEW_TEST_DB_SERVER: jdbc:mysql://127.0.0.1:3306/
-        run: mvn --batch-mode --no-transfer-progress verify -Dredis.integration=true -Dauth.integration=true -Drestaurant.integration=true -Dreview.integration=true
+          ACTIVITY_TEST_DB_SERVER: jdbc:mysql://127.0.0.1:13306/
+          ACTIVITY_TEST_DB_USERNAME: root
+          ACTIVITY_TEST_DB_PASSWORD: ci-only-mysql-password
+          ACTIVITY_TEST_REDIS_PORT: '16379'
+        run: >-
+          mvn --batch-mode --no-transfer-progress verify
+          -Dredis.integration=true -Dauth.integration=true
+          -Drestaurant.integration=true -Dreview.integration=true
+          -Dactivity.structure.integration=true -Dactivity.backend.integration=true
       - name: Save test reports even on failure
         if: always()
         uses: actions/upload-artifact@v4
@@ -103,9 +129,11 @@ jobs:
   deploy:
     name: Deploy checked commit
     needs: [backend, frontend, deployment-checks]
-    # 服务器 Runner 只执行本仓库可信 develop 的发布，构建与测试仍在 GitHub 托管机器运行。
-    if: github.repository == 'kanno111/ginkgo-food-map-v2' && github.event_name == 'push' && github.ref == 'refs/heads/develop'
-    runs-on: [self-hosted, Linux, X64, foodmap-deploy]
+    # 仓库变量是首次配置的就绪开关，开启后无需逐次确认；PR不进入服务器Runner。
+    if: github.repository == 'kanno111/foodmap' && github.event_name == 'push' && github.ref == 'refs/heads/develop' && vars.AUTO_DEPLOY_ENABLED == 'true'
+    # 腾讯云专属标签，避免误用尚未移除的旧服务器Runner。
+    runs-on: [self-hosted, Linux, X64, foodmap-tencent-production]
+    environment: production
     timeout-minutes: 20
     # 不取消正在切换版本的部署，避免进程被中断后留下半完成状态。
     concurrency:

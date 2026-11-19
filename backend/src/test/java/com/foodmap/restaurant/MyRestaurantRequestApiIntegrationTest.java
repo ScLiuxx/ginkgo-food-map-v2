@@ -6,7 +6,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import com.foodmap.file.storage.OssStorageClient;
+import com.foodmap.file.storage.ImageStorageClient;
 import com.foodmap.restaurant.mapper.MyRestaurantRequestMapper;
 import com.foodmap.security.TestJwtKeys;
 import com.foodmap.security.config.AuthenticationProperties;
@@ -61,7 +61,7 @@ class MyRestaurantRequestApiIntegrationTest {
     @Autowired AuthenticationProperties authentication;
     @Autowired org.mybatis.spring.SqlSessionTemplate sql;
     @MockitoBean LoginSessionService sessions;
-    @MockitoBean OssStorageClient storage;
+    @MockitoBean ImageStorageClient storage;
     @MockitoSpyBean MyRestaurantRequestMapper requests;
     private String owner;
 

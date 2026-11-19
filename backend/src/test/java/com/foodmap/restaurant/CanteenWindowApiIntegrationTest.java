@@ -66,7 +66,7 @@ class CanteenWindowApiIntegrationTest {
 
     @Autowired SqlSessionTemplate sql;
     @MockitoBean LoginSessionService sessions;
-    @MockitoBean com.foodmap.file.storage.OssStorageClient photoStorage;
+    @MockitoBean com.foodmap.file.storage.ImageStorageClient photoStorage;
 
     private String owner;
     private String other;
@@ -517,9 +517,10 @@ class CanteenWindowApiIntegrationTest {
             var flyway =
                     org.flywaydb.core.Flyway.configure()
                             .dataSource(url(isolated), "root", password())
+                            .target("49")
                             .load();
-            // V36升级到当前V46共十次迁移；窗口原有点评和评分应保持不变。
-            org.junit.jupiter.api.Assertions.assertEquals(10, flyway.migrate().migrationsExecuted);
+            // V36升级到当前V49共十三次迁移；窗口原有点评和评分应保持不变。
+            org.junit.jupiter.api.Assertions.assertEquals(13, flyway.migrate().migrationsExecuted);
             org.junit.jupiter.api.Assertions.assertEquals(0, flyway.migrate().migrationsExecuted);
             org.junit.jupiter.api.Assertions.assertEquals(
                     2,

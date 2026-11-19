@@ -43,12 +43,17 @@ public interface MediaFileMapper {
     @Update("UPDATE media_files SET status='PENDING_DELETE',expires_at=CURRENT_TIMESTAMP(6) WHERE id=#{id} AND uploader_user_id=#{owner} AND status='BOUND'")
     int releaseBound(@Param("id") long id,@Param("owner") long owner);
 
-    /** 有界批次只扫描清理索引，BOUND文件永远不进入清理候选。 */
+    /** 只处理已启用桶，先排除旧桶再限制批次；BOUND文件永远不进入清理候选。 */
     @Select("""
+        <script>
         SELECT id FROM media_files WHERE status IN ('UPLOADING','TEMPORARY','PENDING_DELETE')
-        AND expires_at<=CURRENT_TIMESTAMP(6) ORDER BY expires_at,id LIMIT 50
+        AND expires_at&lt;=CURRENT_TIMESTAMP(6)
+        AND bucket_name IN
+        <foreach collection="buckets" item="bucket" open="(" separator="," close=")">#{bucket}</foreach>
+        ORDER BY expires_at,id LIMIT 50
+        </script>
         """)
-    List<Long> expired();
+    List<Long> expired(@Param("buckets") List<String> buckets);
 
     /** 在独立短事务内锁行并重新核验期限，提交删除意图后才进行云端请求。 */
     @Select("""

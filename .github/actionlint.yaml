@@ -1,4 +1,4 @@
 # 发布任务使用服务器专用标签；将其登记给静态检查，避免误判为未知 Runner 类型。
 self-hosted-runner:
   labels:
-    - foodmap-deploy
+    - foodmap-tencent-production

@@ -14,7 +14,7 @@ import com.foodmap.statistics.config.ActivityStatisticsProperties;
 import com.foodmap.statistics.mapper.ActivityStatisticsMapper;
 import com.foodmap.statistics.policy.ActivityTime;
 import com.foodmap.statistics.service.ActivityStatisticsService;
-import com.foodmap.statistics.service.ActivityStatisticsWriter;
+import com.foodmap.statistics.service.ActivityStatisticsWriterService;
 import com.foodmap.statistics.storage.ActivityRedisStore;
 import com.foodmap.user.service.VerificationCodeService;
 
@@ -70,7 +70,7 @@ class ActivityStatisticsBackendIntegrationTest {
     @Autowired ActivityStatisticsService statistics;
     @Autowired ActivityStatisticsProperties properties;
     @Autowired ActivityStatisticsMapper mapper;
-    @Autowired ActivityStatisticsWriter writer;
+    @Autowired ActivityStatisticsWriterService writer;
     @MockitoSpyBean ActivityRedisStore redis;
     @MockitoBean LoginSessionService sessions;
     @MockitoBean com.foodmap.security.service.LoginService login;

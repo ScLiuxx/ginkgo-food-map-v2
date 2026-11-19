@@ -34,6 +34,12 @@
             <artifactId>aliyun-sdk-oss</artifactId>
             <version>3.18.4</version>
         </dependency>
+        <!-- COS仅在后端使用；保留OSS适配供既有桶记录显式路由，不迁移历史文件。 -->
+        <dependency>
+            <groupId>com.qcloud</groupId>
+            <artifactId>cos_api</artifactId>
+            <version>5.6.283</version>
+        </dependency>
         <!-- Java21不再自带javax JAXB，OSS V1需要独立提供运行时。 -->
         <dependency>
             <groupId>javax.xml.bind</groupId>

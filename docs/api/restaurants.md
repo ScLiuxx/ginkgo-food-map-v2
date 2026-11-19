@@ -111,7 +111,7 @@
 
 食堂响应使用`"restaurantType":"CANTEEN","categoryCode":null,"categoryName":null`。不传category时目录及地图包含食堂；指定美食品类时不包含食堂。餐厅类型通过现有前端独立筛选选择，不把CANTEEN作为美食分类参数。
 
-目录、详情及管理回执的restaurant新增coverPhoto：无正式相册首图为null，否则为`{id,position:0,cover:true,url}`，例如`{"id":"801","position":0,"cover":true,"url":"/api/restaurants/101/photos/801"}`。首页/地图卡片直接使用此正式封面；ES列表直接按投影中的coverPhotoId组装同源图片地址，图片读取仍校验当前可见性；SQL降级在分页完成后按当前页商户ID集合一次批量补齐元数据，不逐卡片读取相册/点评，不在列表查询中访问OSS。查询要求商户未删除、来源申请已通过且目标一致；仅有待审照片或点评照片不会产生封面。
+目录、详情及管理回执的restaurant新增coverPhoto：无正式相册首图为null，否则为`{id,position:0,cover:true,url}`，例如`{"id":"801","position":0,"cover":true,"url":"/api/restaurants/101/photos/801"}`。首页/地图卡片直接使用此正式封面；ES列表直接按投影中的coverPhotoId组装同源图片地址，图片读取仍校验当前可见性；SQL降级在分页完成后按当前页商户ID集合一次批量补齐元数据，不逐卡片读取相册/点评，不在列表查询中访问云存储。查询要求商户未删除、来源申请已通过且目标一致；仅有待审照片或点评照片不会产生封面。
 
 **错误码**
 
@@ -180,11 +180,11 @@
 {"records":[{"id":"801","position":0,"cover":true,"url":"/api/restaurants/101/photos/801"}],"nextCursor":"801"}
 ```
 
-按position、id升序，在SQL中最多读取limit+1条判断后续；仅有后续记录时nextCursor为本页最后一张关联ID，否则null。上例表示仍有下一页，不表示相册只有一张。cover仅在position=0为true；后续页第一条不会被误作封面。无图或已读到末尾为records:[]、nextCursor:null，不改变数据或访问OSS。
+按position、id升序，在SQL中最多读取limit+1条判断后续；仅有后续记录时nextCursor为本页最后一张关联ID，否则null。上例表示仍有下一页，不表示相册只有一张。cover仅在position=0为true；后续页第一条不会被误作封面。无图或已读到末尾为records:[]、nextCursor:null，不改变数据或访问云存储。
 
 **错误码**
 
-仅返回已通过且来源目标与本商户一致的正式关联，不返回原文件ID、来源申请ID、上传者或OSS地址。商户不存在/已删除404 RESTAURANT_NOT_FOUND；非法资源ID或超出long范围400 RESTAURANT_INVALID_ID；cursor格式或limit无效400 COMMON_VALIDATION_FAILED；不存在或属于其他商户的游标404 RESTAURANT_PHOTO_NOT_FOUND。每页独立只读快照，后续新追加记录可在继续翻页时出现。
+仅返回已通过且来源目标与本商户一致的正式关联，不返回原文件ID、来源申请ID、上传者或云存储地址。商户不存在/已删除404 RESTAURANT_NOT_FOUND；非法资源ID或超出long范围400 RESTAURANT_INVALID_ID；cursor格式或limit无效400 COMMON_VALIDATION_FAILED；不存在或属于其他商户的游标404 RESTAURANT_PHOTO_NOT_FOUND。每页独立只读快照，后续新追加记录可在继续翻页时出现。
 
 **副作用与限制**
 
@@ -202,7 +202,7 @@
 
 **响应**
 
-`GET /api/restaurants/{id}/photos/{photoId}`允许匿名读取。photoId为[正式商户相册列表](#album)返回的稳定正式关联ID，禁止传任意文件ID读取。成功200、原始image/jpeg字节、Cache-Control:no-store及X-Content-Type-Options:nosniff，不使用JSON封装，不重定向或返回签名OSS链接。
+`GET /api/restaurants/{id}/photos/{photoId}`允许匿名读取。photoId为[正式商户相册列表](#album)返回的稳定正式关联ID，禁止传任意文件ID读取。成功200、原始image/jpeg字节、Cache-Control:no-store及X-Content-Type-Options:nosniff，不使用JSON封装，不重定向或返回签名云存储链接。
 
 **错误码**
 
@@ -210,7 +210,7 @@
 
 **副作用与限制**
 
-逐次检查商户未删除、图片属于商户正式相册、来源申请已通过且目标一致，然后通过file服务验证原上传人、RESTAURANT用途和BOUND状态，最后在数据库事务外读取私有OSS。商户软删除后列表/图片停止公开，关联与文件保留，不提供店铺恢复。停业商户仍可读取。普通餐厅和食堂共用此协议。
+逐次检查商户未删除、图片属于商户正式相册、来源申请已通过且目标一致，然后通过file服务验证原上传人、RESTAURANT用途和BOUND状态，最后在数据库事务外读取私有云存储。商户软删除后列表/图片停止公开，关联与文件保留，不提供店铺恢复。停业商户仍可读取。普通餐厅和食堂共用此协议。
 
 <a id="management"></a>
 

@@ -33,7 +33,7 @@
 
 `POST /api/files/images?purpose=REVIEW|RESTAURANT|WINDOW|AVATAR`，Bearer、multipart/form-data、单文件字段`file`；省略purpose默认REVIEW，WINDOW用途额外要求管理员，普通账号403。AVATAR用途供用户本人头像使用。成功201、禁止缓存，data：
 
-只接受真实JPEG，单文件不超过300KiB、最长边1200px，multipart总大小不超过320KiB。服务端独立解码重编码，不信任文件名或Content-Type；PNG/WebP需由浏览器转换。前端原图限制20MiB/4000万像素。对象私有，不接收客户端Bucket、对象键或上传者，不返回OSS地址。
+只接受真实JPEG，单文件不超过300KiB、最长边1200px，multipart总大小不超过320KiB。服务端独立解码重编码，不信任文件名或Content-Type；PNG/WebP需由浏览器转换。前端原图限制20MiB/4000万像素。对象私有，不接收客户端Bucket、对象键或上传者，不返回云存储地址。
 
 AVATAR额外要求正方形且边长不超过512px，否则400 `FILE_INVALID_AVATAR`；浏览器先居中裁剪、白底压缩后上传。保存与公开读取见[用户头像](account.md#avatar)。
 
@@ -43,11 +43,11 @@ AVATAR额外要求正方形且边长不超过512px，否则400 `FILE_INVALID_AVA
 {"fileId":"501","byteSize":85600,"width":1200,"height":800,"expiresAt":"2026-11-04T06:00:00Z"}
 ```
 
-`DELETE /api/files/images/{fileId}`只允许上传者取消未绑定文件。204无响应体表示完成；202表示删除意图已保存，云删除待后台重试。非法/他人文件404 `FILE_NOT_FOUND`；已绑定409 `FILE_ALREADY_BOUND`。文件清理先保存意图，再在事务外删除OSS，默认每60秒最多处理50条到期记录；BOUND不按临时期限清理。
+`DELETE /api/files/images/{fileId}`只允许上传者取消未绑定文件。204无响应体表示完成；202表示删除意图已保存，云删除待后台重试。非法/他人文件404 `FILE_NOT_FOUND`；已绑定409 `FILE_ALREADY_BOUND`。文件清理先保存意图，再在事务外删除云对象，默认每60秒最多处理50条已启用桶的到期记录；BOUND不按临时期限清理，停用桶不参加回收。
 
 **错误码**
 
-错误：400 `FILE_INVALID_IMAGE`；413 `FILE_TOO_LARGE`；409 `FILE_NOT_BINDABLE`；503 `FILE_STORAGE_UNAVAILABLE`。上传、取消和绑定失败不会暴露OSS内部异常。
+错误：400 `FILE_INVALID_IMAGE`；413 `FILE_TOO_LARGE`；409 `FILE_NOT_BINDABLE`；503 `FILE_STORAGE_UNAVAILABLE`。上传、取消和绑定失败不会暴露存储SDK内部异常。
 
 **副作用与限制**
 

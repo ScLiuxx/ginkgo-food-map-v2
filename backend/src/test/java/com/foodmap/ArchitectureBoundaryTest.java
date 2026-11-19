@@ -15,7 +15,7 @@ class ArchitectureBoundaryTest {
                 var source=Files.readString(path);
                 if(path.getParent().getFileName().toString().equals("service")) {
                     assertThat(path.getFileName().toString()).endsWith("Service.java");
-                    assertThat(source).doesNotContain("@Scheduled", "import com.aliyun.", "import javax.imageio.","import org.springframework.mail.");
+                    assertThat(source).doesNotContain("@Scheduled", "import com.aliyun.", "import com.qcloud.", "import javax.imageio.","import org.springframework.mail.");
                 }
                 var imports=Pattern.compile("import com\\.foodmap\\.(\\w+)\\.(mapper|entity)\\.").matcher(source);
                 while(imports.find())assertThat(imports.group(1)).as("模块%s的持久化引用：%s",module,path).isEqualTo(module);
