@@ -35,16 +35,14 @@
 - 自动化测试使用隔离数据库、索引和测试资源，不对开发业务数据执行测试写入或清理。涉及已有开发数据迁移时，先备份，再核对数据与迁移结果，记录实测版本及验证限制。
 - 后端 `mvn verify` 已包含测试阶段，无需先重复运行同范围的 `mvn test`；仅需测试时可使用 `mvn test`。前端 `npm run check` 已包含 Lint、测试及生产构建，生产构建同时执行类型检查。
 - 检查通过后，仅因新增改动、失败或未解决问题补充或重复验证。结果区分实际执行、跳过、失败及未验证范围，不重复累计测试数量；报告测试环境和关键限制。
+- Windows本地测试与构建统一使用`tools/Check-Project.ps1`，同一工作区串行执行；入口检查系统可提交内存余量并阻止重复启动，具体命令见[本地检查](docs/operations/local-checks.md)。不要通过增大worker、去掉堆限制、反复重跑或关闭开发进程绕过失败；先区分断言、测试基础设施、内存及产物占用问题。CI沿用Maven／npm命令及项目默认限制。
 - 交付说明列出修改文件及用途、验证结果、尚未完成内容。
 
 常用命令如下，按需要选择：
 
 ```powershell
-cd backend
-mvn verify
-
-cd ../frontend
-npm run check
+./tools/Check-Project.ps1 -Task BackendVerify
+./tools/Check-Project.ps1 -Task FrontendCheck
 ```
 
 ## 协作开发约定

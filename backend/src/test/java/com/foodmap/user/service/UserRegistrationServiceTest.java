@@ -67,7 +67,8 @@ class UserRegistrationServiceTest {
                 userRoleMapper,
                 verificationCodeService,
                 new UserRegistrationPolicy(properties),
-                passwordEncoder
+                passwordEncoder,
+                mock(com.foodmap.statistics.service.ActivityContributionService.class)
         );
     }
 

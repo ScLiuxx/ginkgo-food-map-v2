@@ -68,6 +68,9 @@ management:
       show-details: never
 
 app:
+  activity:
+    # 显式启用才开始采集并保存首次启用时刻；关闭不删除历史，不回补停采期间数据。
+    enabled: ${ACTIVITY_STATISTICS_ENABLED:false}
   ranking:
     # 服务就绪后异步生成四榜，每轮结束后等待1小时；关闭后仍可读取已有快照。
     generation-enabled: true

@@ -33,6 +33,11 @@ const router = createRouter({
       meta: { title: '商户审核 · 管理工作台', layout: 'admin' },
     },
     {
+      path: '/admin/activity',
+      component: () => import('@/pages/admin/AdminActivityPage.vue'),
+      meta: { title: '使用统计 · 管理工作台', layout: 'admin' },
+    },
+    {
       path: '/admin/announcements',
       component: () => import('@/pages/admin/AdminAnnouncementPage.vue'),
       meta: { title: '公告管理 · 管理工作台', layout: 'admin' },

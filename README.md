@@ -48,8 +48,7 @@ mvn spring-boot:run "-Dspring-boot.run.profiles=local"
 ```powershell
 cd frontend
 npm install
-npm run build
-npm test
+../tools/Check-Project.ps1 -Task FrontendBuild
 npm run dev
 ```
 
@@ -78,9 +77,12 @@ GET http://localhost:8080/api/public/status
 运行测试：
 
 ```powershell
-cd backend
-mvn test
+# 仓库根目录；按改动选择用例，前后端检查串行执行。
+./tools/Check-Project.ps1 -Task BackendTest -Tests UserRegistrationServiceTest
+./tools/Check-Project.ps1 -Task FrontendTest -Tests src/modules/auth/model/useActivityReporting.spec.ts
 ```
+
+统一入口会限制并发、检查系统可提交内存，后端输出与正在运行的JAR分开；前后端内存及测试配置已固化，无需逐次设置环境变量。构建及集成测试用法见[本地检查](docs/operations/local-checks.md)。
 
 ## 配置
 

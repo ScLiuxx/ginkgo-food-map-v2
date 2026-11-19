@@ -1,6 +1,7 @@
 package com.foodmap.user.service;
 
 import com.foodmap.user.policy.UserRegistrationPolicy;
+import com.foodmap.statistics.service.ActivityContributionService;
 
 import com.foodmap.common.exception.BusinessException;
 import com.foodmap.user.domain.VerificationCodePurpose;
@@ -38,6 +39,7 @@ public class UserRegistrationService {
     private final VerificationCodeService verificationCodeService;
     private final UserRegistrationPolicy registrationPolicy;
     private final PasswordEncoder passwordEncoder;
+    private final ActivityContributionService activity;
 
     /**
      * 创建已验证邮箱的普通用户，但不建立登录会话。
@@ -86,5 +88,6 @@ public class UserRegistrationService {
         if (userRoleMapper.insert(UserRoleEntity.assign(user.getId(), defaultRole.getId())) != 1) {
             throw new IllegalStateException("Default user role assignment failed");
         }
+        activity.registered();
     }
 }

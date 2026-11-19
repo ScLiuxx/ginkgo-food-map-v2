@@ -1,75 +1,82 @@
 # 模块化单体架构
 
-## 当前决策
+本文说明当前后端的模块边界、数据归属及事务协作。工程约束见[开发规则](../../AGENTS.md)，功能完成情况见[功能说明](../features.md)，字段及约束见[MySQL表结构](mysql-schema.md)。历史迁移和验证过程保留在[开发记录](../development.md)及其归档中。
 
-2026-11-01账号增量：V11只将users.username改为utf8mb4_0900_as_cs，保留32字符存储宽度兼容历史账号；新注册应用规则2–24位、密码4–32位英文可打印字符。security的AccountAccessService通过user公开注册服务完成事务后，再复用LoginService签发会话，不访问user Mapper、不在未提交事务中签发JWT。改密仍由user完成验证码消费及credential_version递增，只返回已验证用户名，不自动登录。新注册自动登录接口保留旧/register协议；业务库升级/重启状态见开发记录。
+## 部署与基础设施
 
-V2 第一阶段使用模块化单体，而不是立即部署多个微服务。
+后端使用Java 21、Spring Boot 4和MyBatis，按业务域组织源码，构建为一个可执行JAR。模块在同一进程内通过应用服务协作，可共享一个MySQL本地事务。当前的独立扩容和发布需求尚不要求拆分微服务；服务器容量以实际部署和测量为准，不由架构文档预设。
 
-原因：当前服务器只有 2 核 CPU 和 2 GB 内存。一个 Spring Boot 进程加 MySQL 与轻量 Redis 能承载求职展示和社团低并发访问，同时仍可通过清晰的业务边界为未来拆分微服务做准备。
+```text
+Browser -> Nginx -> Spring Boot
+                       |-- MySQL：业务真值、快照及持久任务
+                       |-- Redis：登录会话、验证码及缓存
+                       |-- Elasticsearch：餐厅搜索投影
+                       |-- OSS：私有图片对象
+                       `-- SMTP：验证码邮件
+```
 
-## 模块
+榜单另使用进程内Caffeine缓存。浏览器通过高德SDK和同源安全代理使用地图服务；高德地点搜索辅助选店，本站餐厅数据仍由后端维护。服务部署、配置和监控操作见[部署说明](../operations/deployment.md)。
 
-| 模块 | 职责 | 拥有的数据 |
+## 模块与数据归属
+
+源码位于`backend/src/main/java/com/foodmap`。管理接口可以装配其他模块的公开服务，接口URL所属区域不决定数据归属。
+
+| 模块 | 当前职责 | 拥有的数据或状态 |
 | --- | --- | --- |
-| user | 用户、身份、角色及本人资料/简介维护 | 用户（含简介）、角色、用户角色关系 |
-| growth | 首次点评与审核通过计奖、幂等撤销、等级计算与本人成长查询；获赞奖励待接入 | 经验账户、奖励资格及撤销记录 |
-| notification | 审核结果及点评回复通知、本人分类收件箱及已读状态 | 消息快照、接收人及首次阅读时间，见[通知表结构](mysql-schema.md#notification-inbox) |
-| restaurant | 餐厅/食堂/窗口档案、分类、位置与评分读模型 | 餐厅、分类、标签、窗口、餐厅及窗口统计 |
-| review | 评价、评分、回复与请求幂等 | 餐厅或窗口评价、照片关联、回复、发布及删除回执 |
-| admin | 审核、回收站、管理操作 | 管理操作记录 |
-| file | 图片元数据和对象存储适配 | 文件元数据 |
-| security | 认证、授权、安全上下文 | 登录令牌或会话 |
-| common | 通用错误和技术基础设施 | 不拥有业务数据 |
+| user | 注册、验证码、密码重置、本人资料、头像关联、隐私及角色查询 | 用户、角色及用户角色关系；验证码状态使用Redis |
+| security | 登录、令牌签发、会话校验及请求授权 | Redis登录会话；通过user公开服务读取账号和角色 |
+| restaurant | 餐厅／食堂／窗口维护、投稿审核、相册、收藏、评分读模型、搜索同步和榜单 | 店铺、分类、标签、窗口、投稿申请及附图关联、正式相册、收藏关系、评分统计、搜索Outbox及榜单快照 |
+| review | 正式点评、附带点评、回复、点赞与发布／删除幂等 | 点评、待发布点评、照片关联、回复、点赞关系及独立请求回执 |
+| community | 关注、粉丝及名单读取，与user协作检查隐私 | 关注关系；账号隐私字段由user管理 |
+| growth | 点评、投稿审核及获赞奖励，等级计算与幂等撤销 | 经验账户和奖励记录 |
+| notification | 业务消息、全体公告、收件箱、已读状态及变更提示 | 通知快照、公告及个人公告状态；SSE连接为进程内状态 |
+| moderation | 点评／回复举报与管理员处置 | 举报及处理记录；内容删除调用review公开服务 |
+| file | 图片校验、存储适配、归属和生命周期管理 | 媒体文件元数据及OSS对象生命周期 |
+| admin | 管理员身份及店铺投稿审核的协议入口 | 复用所属业务模块，不单独拥有回收站或管理操作日志表 |
+| system | 系统状态读取 | 无独立业务表 |
+| statistics | 普通用户主动访问、注册／点评提交后计数、同步及管理员汇总 | 每日汇总、采集运行元数据；Redis每日去重集合 |
+| common | 通用响应、异常、缓存及持久化基础设施 | 不承载具体业务流程或业务数据 |
 
-## 依赖规则
+跨模块账号、店铺、文件等引用使用逻辑ID；同模块内的外键和约束以结构文档为准。`admin`不是所有后台功能的持久化所有者：公告归notification、举报归moderation、店铺维护及审核归restaurant。
 
-2026-11-01 结构扩展：V9/V10 新增窗口实体和评价互斥归属。窗口到食堂、窗口统计到窗口是同模块物理外键；评价中的 restaurant_id/window_id、窗口中的账号/文件 ID 是跨模块逻辑引用，不加跨模块外键或触发器。review 后续通过 restaurant 公开服务校验目标、更新统计，禁止直接查询 restaurant Mapper。新食堂评价只允许选择窗口，旧整体评价保留历史；这些业务校验尚待服务接入。本轮只完成迁移结构与隔离验证，业务运行库未升级。详见[餐厅结构](mysql-schema.md#restaurant-schema)和[评价结构](mysql-schema.md#review-schema)。
+## 模块内部组织与依赖
 
-```text
-user       restaurant
-  \           /
-   \         /
-      review
-        |
-      admin
+模块内以`controller`、`service`、`mapper`分层，按实际职责设置`dto`、`vo`、`entity`及技术子目录：
 
-security -> user
-review -> growth / notification
-restaurant -> growth / notification
-file     <- restaurant / review
-```
+- `controller`转换HTTP参数与响应，调用应用服务。
+- `service`组织权限、业务流程和事务，只通过自己的Mapper访问持久化。
+- `policy`承载校验及规则；`image`、`storage`、`mail`分别处理图片、对象存储和邮件；`job`触发调度，`search`、`cache`和`metrics`处理所属模块的技术实现。
+- 跨模块仅调用公开应用服务或传递业务事件，不导入其他模块的Mapper／Entity，也不通过SQL跨模块查表。
 
-图中表示业务协作关系，不代表可以访问对方 Mapper。跨模块协作必须通过公开接口或事件完成。
+同一JAR内存在双向业务协作，例如review调用restaurant校验父资源并更新评分，restaurant审核调用review发布附带点评。通过明确的服务入口和事务传播控制调用边界，不把模块关系描述成并不存在的严格单向依赖树。
 
-## 模块内部职责（2026-10-29更新）
+`ArchitectureBoundaryTest`检查跨模块Mapper／Entity导入，并限制service目录中的调度、云SDK、图片和邮件适配实现。它是静态边界检查，不能代替SQL归属及事务设计审查。
 
-service保留业务流程，不能作为所有Spring Bean的容器。模块自己的规则、技术适配和调度分别放置，不转移到全局common。公开服务可以协作，禁止跨模块依赖Mapper/Entity；ArchitectureBoundaryTest自动检查持久化导入与service目录职责。
+## 事务与关键协作
 
-| 模块 | 本轮调整的文件与职责 |
-| --- | --- |
-| file | image/JpegImageProcessor、ProcessedImage负责解码重编码；storage/OssStorageClient负责SDK；job/MediaCleanupJob仅调度；service/ImageUploadService、MediaFileService、MediaCleanupService分别组织上传、绑定/读取、取消与回收 |
-| file协议/持久化 | ImageUploadController、MediaFileMapper、FileErrorCode调整204/202/409及状态转换；V6__separate_media_upload_state.sql新增UPLOADING约束 |
-| review | ReviewPublishPolicy移入policy；ReviewPublishRequest、ReviewWriteService支持有序photoIds和同事务绑定；ReviewPhotoMapper、ReviewPhotoService、ReviewPhotoController提供正式图片读取 |
-| restaurant | RestaurantIdentifiers移入support；RestaurantReadService、RestaurantWriteService更新引用；读取服务增加只读可见性公开方法 |
-| security | SecurityConfiguration移入config并精确放开照片GET；SessionJwtAuthenticationConverter移入authentication，业务会话/登录服务保留在service |
-| user | UserRegistrationPolicy移入policy；VerificationMailSender在mail封装模板/SMTP及安全错误；VerificationCodeService保留额度、激活和消费业务；EmailCodeService、PasswordResetService、UserRegistrationService更新规则引用 |
-| system | SystemStatusController移入controller |
-| 前端 | file/api/mediaApi封装上传/取消；review/model/useReviewPhotos管理本地预览、失败重试与晚到结果；reviewApi、review类型、ReviewComposer接有序文件ID |
-| 验证 | ArchitectureBoundaryTest、ImageUploadIntegrationTest、JpegImageProcessorTest、OssStorageClientTest及既有迁移/注册/点评测试同步；useReviewPhotos.spec、reviewApi.spec覆盖前端异步与传输 |
+### 账号与登录会话
 
-图片绑定采用餐厅父锁→媒体ID升序锁；图片展示顺序使用请求数组。点评、关联、媒体BOUND和统计加入同一数据库事务。上传与删除的OSS请求在事务外执行，删除意图先持久化，再立即尝试云端删除，失败保留重试。没有新增消息队列或跨系统事务。
+security的`AccountAccessService`先调用user注册服务提交账号及角色，再调用登录服务签发Redis会话和JWT。注册成功与随后自动登录失败是不同结果，不能在尚未提交的账号事务中返回有效令牌。密码重置由user消费验证码并更新凭证版本，原会话通过安全校验失效；不自动登录。
 
-## 部署运行
+### 点评、评分与图片
 
-```text
-Browser
-   |
- Nginx
-   |
-Spring Boot modular monolith
-   |           |
- MySQL       Redis
-```
+review通过restaurant的公开服务锁定及验证餐厅／窗口，正式点评、照片关联、媒体绑定、评分变动及相应奖励在业务事务中协作。锁顺序先父资源，再子资源；多文件按ID升序锁定。跨模块传递作者身份，管理员代为处理不能替换内容作者或文件归属。
 
-当前只生成一个 JAR。未来需要拆分时，优先考虑认证、文件和评价模块，但拆分必须由独立扩容、独立发布或团队边界等真实需求驱动。
+正式点评可被硬删除，独立请求回执继续保留，防止原发布请求重放后重新创建内容。餐厅逻辑删除保留历史关联，公开读取和后续写入分别校验可见性；具体删除／恢复能力见[功能说明](../features.md)。
+
+### 投稿审核与附带点评
+
+restaurant拥有投稿申请及审核流程，review拥有私有待发布点评。联合投稿、修改、撤回及审核发布通过公开服务共享外层事务；审核通过时发布正式点评，完成评分、奖励和通知。关键写入失败整体回滚，重复提交或审核读取既有回执，不重复发布。
+
+“店铺已收录”关联已有店铺并发布附带点评，保留原投稿快照，不覆盖目标资料或重建店铺；投稿奖励和点评奖励按各自规则处理。完整业务及接口边界见[联合投稿计划](../plans/restaurant-review-submission.md)与[投稿接口](../api/submissions.md)。
+
+### 外部副作用与提交后处理
+
+MySQL事务不能直接保证OSS、SMTP、Redis和ES与数据库原子提交，各调用点需要明确失败语义：
+
+- 媒体文件先登记状态，上传与云端删除在数据库事务外执行；清理意图持久化后尝试删除，失败由回收任务重试。图片绑定仍参加业务事务。
+- 审核等业务通知通过notification公开服务加入原事务；SSE只发送重新读取提示，数据库收件箱是消息真值。
+- 影响搜索投影的写入与Outbox任务同事务提交，提交后事件用于唤醒消费者，持久任务及定时扫描保证可重试。过程见[搜索实现](restaurant-search.md)。
+- 榜单先计算一致快照，再以短事务发布，提交后失效缓存；故障时沿用旧快照和原时间。过程见[榜单实现](restaurant-ranking.md)。
+
+这些机制按各业务定义，不能将一种模块的失败回滚或补偿策略直接视为所有新功能的默认要求。

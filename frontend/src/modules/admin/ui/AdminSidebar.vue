@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AppLink from '@/shared/ui/AppLink.vue'
 import './admin-theme.css'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getAccessToken } from '@/shared/api/authSession'
 import { fetchRequestPage } from '../api/restaurantRequestsApi'
@@ -34,11 +34,28 @@ const items = [
   { name: '举报处理', path: '/admin/reports', icon: 'report' },
   { name: '商户管理', path: '/admin/restaurants', icon: 'shop' },
   { name: '公告管理', path: '/admin/announcements', icon: 'announcement' },
+  { name: '使用统计', path: '/admin/activity', icon: 'activity' },
 ]
+const sidebar = useTemplateRef<globalThis.HTMLElement>('sidebar')
+// 手机横向导航只滚动自身，新增入口及当前页始终可见，不改变正文阅读位置。
+watch(
+  [() => route.path, badge],
+  async () => {
+    await nextTick()
+    const nav = sidebar.value,
+      current = nav?.querySelector<globalThis.HTMLElement>('.selected')
+    if (!nav || !current || nav.scrollWidth <= nav.clientWidth) return
+    const bounds = nav.getBoundingClientRect(),
+      selected = current.getBoundingClientRect()
+    if (selected.left < bounds.left) nav.scrollLeft -= bounds.left - selected.left
+    else if (selected.right > bounds.right) nav.scrollLeft += selected.right - bounds.right
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
-  <nav class="admin-sidebar" aria-label="管理导航">
+  <nav ref="sidebar" class="admin-sidebar" aria-label="管理导航">
     <AppLink
       v-for="item in items"
       :key="item.icon"
@@ -69,6 +86,7 @@ const items = [
           d="m4 10 15-6v16L4 14ZM4 10H2v4h2M7 15l2 6h3l-2-5"
         />
         <path v-else-if="item.icon === 'report'" d="M12 3 2 21h20L12 3Zm0 6v5M12 17h.01" />
+        <path v-else-if="item.icon === 'activity'" d="M4 3v17h17M8 15v-4M13 15V6M18 15V9" />
         <path
           v-else-if="item.icon === 'shop'"
           d="M4 10v10h16V10M3 10l2-6h14l2 6M3 10c0 4 5 4 5 0 0 4 8 4 8 0 0 4 5 4 5 0M9 20v-6h6v6"

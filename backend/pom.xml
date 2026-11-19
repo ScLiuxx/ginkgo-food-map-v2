@@ -177,9 +177,34 @@
                 </configuration>
             </plugin>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- 启动时加载Mockito，避免Java21在测试中动态附加失败；路径随依赖版本与本机仓库解析。 -->
+                    <argLine>-Xms64m -Xmx384m -XX:ActiveProcessorCount=2 -XX:+ExitOnOutOfMemoryError -XX:ErrorFile=${project.build.directory}/hs_err_pid%p.log -javaagent:"${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar"</argLine>
+                    <forkCount>1</forkCount>
+                    <reuseForks>true</reuseForks>
+                    <systemPropertyVariables>
+                        <junit.jupiter.execution.parallel.enabled>false</junit.jupiter.execution.parallel.enabled>
+                        <!-- 每个上下文可持有连接池与客户端，限制缓存数量避免全量检查不断积累。 -->
+                        <spring.test.context.cache.maxSize>2</spring.test.context.cache.maxSize>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- 本地检查独立输出，避免Windows正在运行target中的JAR时打包重命名失败。 -->
+        <profile>
+            <id>local-check</id>
+            <build>
+                <directory>${project.basedir}/target/local-check</directory>
+            </build>
+        </profile>
+    </profiles>
 </project>

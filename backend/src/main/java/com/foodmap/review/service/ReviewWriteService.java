@@ -17,6 +17,7 @@ import com.foodmap.review.mapper.ReviewWriteMapper;
 import com.foodmap.review.policy.ReviewPublishPolicy;
 import com.foodmap.review.vo.ReviewPublishVo;
 import com.foodmap.security.service.CurrentActorService;
+import com.foodmap.statistics.service.ActivityContributionService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -48,6 +49,7 @@ public class ReviewWriteService {
     private final MediaFileService media;
     private final ReviewPhotoMapper photos;
     private final GrowthRewardApplicationService growth;
+    private final ActivityContributionService activity;
 
     /** 事务最多重试三次，仅处理并发锁/唯一键竞争，不掩盖普通SQL或统计错误。 */
     @PreAuthorize("isAuthenticated()")
@@ -174,6 +176,7 @@ public class ReviewWriteService {
         contribution.setWindowId(row.getWindowId());
         contribution.setReviewId(row.getId());
         growth.grantFirstStoreReview(contribution);
+        activity.reviewPublished(row.getAuthorUserId());
         return result(row, false);
     }
 

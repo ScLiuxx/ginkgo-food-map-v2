@@ -1,10 +1,11 @@
 # MySQL 表结构
 
-本文集中维护 MySQL 业务表的当前字段、类型、默认值、枚举、主键、索引、外键与字段约束。覆盖当前迁移定义的 34 张应用表，按下列分组查阅；Flyway 自建的迁移历史表不属于应用表。
+本文集中维护 MySQL 业务表的当前字段、类型、默认值、枚举、主键、索引、外键与字段约束。覆盖当前迁移定义的35张应用表，本地开发库已执行至V49，按下列分组查阅；Flyway自建的迁移历史表不属于应用表。
 
 ## 目录
 
 - [应用元数据表结构](#app-metadata)
+- [使用统计日汇总表结构](#activity-statistics)
 - [用户账号、角色与安全审计表结构](#user-profile)
 - [餐厅、食堂与窗口表结构](#restaurant-schema)
 - [店铺收藏表结构](#restaurant-favorites)
@@ -32,6 +33,34 @@
 | `created_at` | `timestamp(6)` | 否 | 默认CURRENT_TIMESTAMP(6)；记录创建时间。 |
 
 主键`(metadata_key)`；无其他索引、CHECK约束或外键。预置元数据键`schema_version`的值为字符串`1`，不是Flyway迁移版本号。
+
+statistics使用`activity_stats_started_at`保存首次启用UTC ISO-8601时刻，不存在表示从未启用；`activity_stats_last_seen_at`为最近成功维护UTC时刻，`activity_stats_redis_fingerprint`为Redis运行ID及淘汰数。均存于`metadata_value`，不包含个人记录，V49不预置这些键。
+
+<a id="activity-statistics"></a>
+
+## 使用统计日汇总表结构
+
+statistics模块的日汇总结构；存储引擎InnoDB，字符集utf8mb4，排序规则utf8mb4_0900_ai_ci。Redis集合及存储协作见[使用统计存储结构](activity-statistics.md)。
+
+### `activity_daily_summaries`：普通用户每日使用统计
+
+| 字段 | 类型 | 可空 | 默认值及含义 |
+| --- | --- | --- | --- |
+| `stat_date` | `date` | 否 | 无默认值；北京时间自然日。 |
+| `active_user_count` | `bigint unsigned` | 是 | 默认NULL；当天活跃普通登录用户数，NULL为尚未取得或无法确认，0为已知无人活跃。 |
+| `new_user_count` | `bigint unsigned` | 是 | 默认NULL；当天新增普通用户数，NULL为尚未取得或无法确认。 |
+| `published_review_count` | `bigint unsigned` | 是 | 默认NULL；当天正式发布点评数，后续删除不回扣，NULL为尚未取得或无法确认。 |
+| `collection_status` | `varchar(16)`，ascii_bin | 否 | 默认UNKNOWN；NORMAL正常采集、PARTIAL部分采集、UNKNOWN无法确认。当前日NORMAL不表示已覆盖完整24小时。 |
+| `active_synced_at` | `timestamp(6)` | 是 | 默认NULL；活跃人数最近一次成功同步时间，不是页面读取时间。 |
+
+主键`(stat_date)`；没有自增ID、额外索引、外键、账号／点评明细或`updated_at`。
+
+CHECK约束：
+
+- `chk_activity_summary_counts`：三个计数为NULL或0至9223372036854775807，兼容Java Long；非负性由UNSIGNED限定。
+- `chk_activity_summary_status`：状态按二进制精确匹配NORMAL、PARTIAL或UNKNOWN，拒绝大小写变化及尾部空格。
+- `chk_activity_summary_active_sync`：活跃人数与同步时间同时为NULL或同时非NULL。
+- `chk_activity_summary_normal`：NORMAL要求三个计数均非NULL；PARTIAL和UNKNOWN允许保留已取得的数值。
 
 <a id="user-profile"></a>
 

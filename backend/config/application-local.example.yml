@@ -36,6 +36,9 @@ spring:
       "[mail.smtp.writetimeout]": 5000
 
 app:
+  activity:
+    # 统计默认关闭；备份并执行V49、核对Redis运行约定后再在本地配置中开启。
+    enabled: false
   file:
     oss:
       # Bucket为私有；在未跟踪的application-local.yml中填好位置和凭证后开启。

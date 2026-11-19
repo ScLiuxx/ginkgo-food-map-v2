@@ -31,7 +31,8 @@ ES 监控的实际故障验证见[故障演练报告](history/elasticsearch-metr
 
 ## 设计与计划
 
-- 新店附带点评：[实施范围与后续待办](plans/restaurant-review-submission.md)；后端联合提交、本人读取、修改／撤回、驳回／重提及审核发布已接通，管理员只审核店铺资料。[店铺已收录](api/submissions.md#link-existing)的管理入口、本人结果及通知已接入前端；联合表单及其余本人操作页面仍待接入。
+- 用户活跃度：[管理端统计计划](plans/admin-activity-statistics.md)集中维护业务口径、上线步骤及验收范围；[MySQL日汇总结构](architecture/mysql-schema.md#activity-statistics)、[Redis集合及存储协作](architecture/activity-statistics.md)和[接口契约](api/statistics.md)已实现；本地已备份升级V49并启用实际采集，前端读取正式接口。项目默认关闭，服务器尚未发布本功能。
+- 新店附带点评：[业务规则与实施计划](plans/restaurant-review-submission.md)，使用方式见[功能说明](features.md#补充店铺与纠错)，联合提交、本人操作及[店铺已收录](api/submissions.md#link-existing)协议见[投稿接口](api/submissions.md)。
 - 帮我选一家：[业务规则与实施计划](plans/restaurant-picker.md)。独立六项条件（含最低评分）、等概率抽取、本轮不重复、回看及详情返回已接通；[查询接口](api/discovery.md#picker)不写入抽取记录、不调整表结构。
 - 餐厅榜单：[近期榜单计划](plans/hot-restaurants.md)记录规则及分阶段实施；[快照表](architecture/mysql-schema.md#restaurant-ranking-snapshots)、[读取接口与两级缓存](api/discovery.md#rankings)、内部计算已完成；实测见[MySQL基线](history/restaurant-ranking-read-2026-11-11.md)、[Redis对照](history/restaurant-ranking-redis-2026-11-11.md)、[Caffeine三模式对照及故障验证](history/restaurant-ranking-caffeine-2026-11-11.md)。自动发布、小时调度及防重叠已完成；首页入口及独立榜单页已按确认示意图接入，本地真实接口的空榜及模拟点评生成的20项榜单联调通过，上线验收待进行。
 - 食堂窗口：[资料、独立点评与评分汇总](api/windows.md#windows)，管理员维护及用户浏览已接通，窗口资料由管理员统一录入，用户窗口投稿审核暂不规划。
@@ -47,13 +48,12 @@ ES 监控的实际故障验证见[故障演练报告](history/elasticsearch-metr
 - 公开主页：[登录可见个人主页](api/community.md#public-profile)，用户名、简介、数字等级、当前获赞及按店铺分组的公开点评。
 - 本人资料：[本人资料与简介](api/account.md#profile)、[用户账号与资料表结构](architecture/mysql-schema.md#user-profile)。
 - 本人投稿：[本人投稿与纠错记录](api/submissions.md#my-requests)、[申请表结构](architecture/mysql-schema.md#restaurant_change_requests商户资料待审核申请)。
-- 成长等级：[V24经验账户与奖励表结构](architecture/mysql-schema.md#growth-schema)、[事务与后续接入设计](plans/community-growth-v1.md)；首次点评计奖、内部撤销、本人等级查询及本人页面展示已实现，其他奖励与排序待接入，接口见[本人成长摘要](api/account.md#growth)，验证与运行状态见开发记录。
-- 架构：[模块化单体](architecture/modular-monolith.md)、[前端分层](architecture/frontend.md)。
+- 成长等级：[经验账户与奖励表结构](architecture/mysql-schema.md#growth-schema)、[奖励规则与事务设计](plans/community-growth-v1.md)；当前能力见[功能说明](features.md#账号与个人中心)，读取协议见[本人成长摘要](api/account.md#growth)。
+- 架构：[模块化单体](architecture/modular-monolith.md)说明后端模块、数据归属及事务协作；[前端架构](architecture/frontend.md)说明分层、会话、来源导航和关键组件复用。
 - 接口内部实现：[搜索引擎、保护及异步同步](architecture/restaurant-search.md)、[榜单快照、缓存及生成](architecture/restaurant-ranking.md)；请求响应契约分别见[餐厅接口](api/restaurants.md)和[选店／榜单接口](api/discovery.md)。
 - 数据结构：[MySQL 表结构](architecture/mysql-schema.md)，集中查看当前应用表，涵盖应用元数据、用户/角色/安全审计、商户及榜单快照、点评、媒体、点赞、成长与通知；[Elasticsearch 索引](architecture/elasticsearch-schema.md)。
 - 分类：[分类表及编码](architecture/mysql-schema.md#restaurant_categories餐厅分类)；数据整理记录见[开发记录](development.md)。
 - 审核存储：[商户申请表V17](architecture/mysql-schema.md#restaurant_change_requests商户资料待审核申请)，采用request_type和单个restaurant_id，记录审核结果与资料快照；通过/驳回及正式相册发布已实现，新增[正式相册V18](architecture/mysql-schema.md#restaurant_photos正式商户相册)，餐厅/食堂详情相册及管理端发布记录已接入，首页/地图卡片封面也已接入。
-- 页面：[找店界面与前端架构](architecture/frontend.md)。
 - 管理端：`/admin/reviews`已接入真实申请查询、就地编辑、通过/驳回及连续审核，见[功能说明](features.md)及[API文档](api/submissions.md#admin-review)。
 - 统一登录：`/login`按服务端角色分流前台/工作台，`/admin/login`仅兼容跳转；管理身份由后端`/api/admin/me`校验。身份与查询边界见[前端架构](architecture/frontend.md)。
 - 搜索：[实施进度与待办](plans/elasticsearch-search.md)、[索引结构](architecture/elasticsearch-schema.md)、[同步任务表](architecture/mysql-schema.md#restaurant-search-outbox)；现行查询契约见[搜索契约](api/restaurants.md#search)。
@@ -62,6 +62,7 @@ ES 监控的实际故障验证见[故障演练报告](history/elasticsearch-metr
 - 搜索投影：[内部组装服务](../backend/src/main/java/com/foodmap/restaurant/service/RestaurantSearchProjectionService.java)，字段定义见[ES结构](architecture/elasticsearch-schema.md)。
 - 地图：[高德地图基础闭环](plans/map-foundation.md)，包含导航、点位接口、页面联动及分步验收。
 - 运维：[自动部署与排障](operations/deployment.md)。
+- 本地验证：[测试与构建入口、资源限制及故障分类](operations/local-checks.md)。
 - 指标采集：[Prometheus本地运行与独立认证](operations/prometheus.md)、[Grafana检索看板与启动](operations/grafana.md)。
 - 高德：[环境配置与真实底图验收](operations/amap-setup.md)。
 

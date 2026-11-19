@@ -22,6 +22,8 @@
 
 ## 触发条件与执行流程
 
+使用统计默认关闭。发布本功能前先备份目标数据库、核对V49迁移，再显式配置`ACTIVITY_STATISTICS_ENABLED=true`；启用后会保存唯一采集起点，不回补历史。首次启用、暂停恢复、Redis权限与持久化检查以及当前单后端实例限制集中见[采集运行约定](../architecture/activity-statistics.md#采集运行约定)。2026-11-19已在本地备份并升级V49，通过被忽略的local配置显式启用；尚未修改服务器配置或发布本功能。
+
 仅远程 `develop` 分支的 `push` 触发本工作流，包括合并其他分支后产生的推送。其他分支推送、Pull Request 和仅在本地提交不会触发。
 
 1. 后端使用 Java 21 执行 Maven `verify`，启用真实 MySQL、Redis 集成测试。CI 使用临时 MySQL 8.4 和 Redis 8 服务，不访问生产数据库；测试报告即使失败也保留7天。

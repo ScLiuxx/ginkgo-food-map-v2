@@ -33,7 +33,10 @@ export default defineConfig(({ mode }) => {
       environment: 'jsdom',
       globals: true,
       // 本地同时运行后端、IDE及浏览器，限制并发以降低测试的CPU与内存峰值。
-      maxWorkers: 2,
+      maxWorkers: 1,
+      fileParallelism: false,
+      // worker单独设堆上限，不继承构建时较大的Node堆；测试仍逐文件隔离。
+      execArgv: ['--max-old-space-size=512'],
       // Vue外置scoped样式依赖本轮组件描述缓存，不能复用磁盘中的局部转换结果。
       fsModuleCache: false,
       // 保留外置scoped样式的转换链，避免多段style的测试加载丢失组件描述。
