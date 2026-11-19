@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { computed } from 'vue'
 import { PasswordResetForm } from '@/modules/auth'
 import { authToken } from '@/shared/api/authSession'
@@ -9,9 +10,9 @@ const returnTo = computed(() => (authToken.value ? '/account/settings' : '/login
 
 <template>
   <div class="password-reset-page">
-    <RouterLink class="back-link" :to="returnTo">
+    <AppLink class="back-link" :to="returnTo">
       ← {{ returnTo === '/account/settings' ? '返回个人设置' : '返回登录' }}
-    </RouterLink>
+    </AppLink>
     <PasswordResetForm :return-to="returnTo" />
   </div>
 </template>

@@ -652,7 +652,6 @@ describe('review interactions matching the original site', () => {
     await fill('这是一条成功的用餐体验')
     await submit()
     expect(host.querySelector('.publish-receipt')?.textContent).toContain('已确认此前发布成功')
-    expect(host.querySelector('.receipt-id')?.textContent).toBe('321')
     expect(host.querySelector('dialog')!.open).toBe(true)
     expect(host.querySelector('form')).toBeNull()
     host.querySelector<HTMLButtonElement>('.publish-receipt button')!.click()

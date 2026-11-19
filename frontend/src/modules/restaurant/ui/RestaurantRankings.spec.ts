@@ -1,3 +1,4 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
 import { createApp, h, nextTick } from 'vue'
 import type { App } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -70,7 +71,7 @@ describe('近期榜单页面', () => {
       '第二名',
     ])
     expect(host!.querySelector('.ranking-score strong')?.textContent).toBe('4.2')
-    expect(host!.querySelector('.ranking-row')?.getAttribute('href')).toBe(
+    expect(await captureLinkTarget(app, host!.querySelector('.ranking-row'))).toBe(
       '/restaurants/9007199254740993',
     )
     expect(host!.querySelector('.ranking-count')?.textContent).toContain('46人评价')

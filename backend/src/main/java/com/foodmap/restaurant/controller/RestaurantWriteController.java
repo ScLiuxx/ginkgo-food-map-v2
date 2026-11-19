@@ -46,12 +46,6 @@ public class RestaurantWriteController {
         return ok(service.delete(id));
     }
 
-    /** 恢复由Service方法级管理员授权保护，普通账号不能通过构造路径获得能力。 */
-    @PostMapping("/{id}/restore")
-    public ResponseEntity<ApiResponse<RestaurantManagementVo>> restore(@PathVariable String id) {
-        return ok(service.restore(id));
-    }
-
     private ResponseEntity<ApiResponse<RestaurantManagementVo>> ok(RestaurantManagementVo result) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(result));
     }

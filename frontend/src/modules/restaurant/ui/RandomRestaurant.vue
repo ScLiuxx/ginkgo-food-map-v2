@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ResourceLink from '@/shared/ui/ResourceLink.vue'
+import AppLink from '@/shared/ui/AppLink.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useUserLocation } from '@/modules/map/model/userLocation.store'
@@ -233,10 +235,7 @@ onUnmounted(() => {
     <div class="picker-shell">
       <header class="dialog-header">
         <div class="heading">
-          <div>
-            <h2 id="random-title">帮我选一家</h2>
-            <p v-if="picker.phase === 'conditions'" class="subtitle">今天吃什么，交给随机</p>
-          </div>
+          <h2 id="random-title">帮我选一家</h2>
         </div>
         <button type="button" class="close" aria-label="关闭选店" @click="close">
           <PickerIcon name="close" />
@@ -410,21 +409,21 @@ onUnmounted(() => {
             {{ nextLabel }}
           </button>
           <div class="actions">
-            <RouterLink
+            <AppLink
               v-if="canGo"
               class="detail-link"
               :to="`/restaurants/${encodeURIComponent(picker.current.id)}?from=picker`"
               @click.capture="toDetails"
-              >查看详情</RouterLink
+              >查看详情</AppLink
             >
             <button v-else type="button" class="detail-link" disabled>查看详情</button>
-            <a
+            <ResourceLink
               v-if="navigation && canGo"
               class="navigation-link"
               :href="navigation"
               target="_blank"
               rel="noopener noreferrer"
-              >导航</a
+              >导航</ResourceLink
             >
             <button v-else type="button" class="navigation-link" disabled>导航</button>
           </div>

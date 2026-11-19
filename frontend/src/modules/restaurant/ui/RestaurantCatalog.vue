@@ -1,11 +1,22 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, useTemplateRef, watch } from 'vue'
+import ResourceLink from '@/shared/ui/ResourceLink.vue'
+import { computed, nextTick, onMounted, onUnmounted, useTemplateRef, watch } from 'vue'
 import { useRestaurantCatalog } from '../model/catalog.store'
 import RestaurantFilters from './RestaurantFilters.vue'
 import RestaurantCard from './RestaurantCard.vue'
 import SubmitRestaurantButton from './SubmitRestaurantButton.vue'
 
 const catalog = useRestaurantCatalog()
+const hasFilters = computed(
+  () =>
+    !!catalog.filters.restaurantType ||
+    !!catalog.filters.diningMode ||
+    !!catalog.filters.category ||
+    catalog.filters.hideClosed ||
+    catalog.filters.maxPrice !== null ||
+    catalog.filters.maxDistanceMeters !== null ||
+    catalog.filters.sort !== 'auto',
+)
 const loadTrigger = useTemplateRef('loadTrigger')
 let media: ReturnType<typeof globalThis.matchMedia> | undefined
 let observer: InstanceType<typeof globalThis.IntersectionObserver> | undefined
@@ -118,37 +129,31 @@ async function changePage(page: number): Promise<void> {
       <p>请完成定位授权；若定位失败，可重试或切换其他排序。</p>
     </div>
     <div v-else-if="catalog.loading" class="directory-empty" role="status">正在加载餐厅…</div>
-    <div v-else class="directory-empty" role="status">
-      <h3>换个条件，也许就遇见了。</h3>
-      <p>
+    <div v-else class="directory-empty directory-no-results" role="status">
+      <h3>
         {{
-          catalog.filters.diningMode
-            ? '暂无已确认支持该用餐方式的商家，试试其他条件。'
-            : '没有找到符合条件的餐厅，试试店名、地址或不同分类。'
+          hasFilters
+            ? '暂无符合条件的店铺'
+            : catalog.filters.keyword.trim()
+              ? '没有找到相关店铺'
+              : '暂无店铺'
         }}
-      </p>
-      <SubmitRestaurantButton
-        v-if="catalog.resultsCurrent && catalog.total === 0"
-        :keyword="catalog.filters.keyword"
-        >＋ 添加店铺</SubmitRestaurantButton
-      >
-      <button
-        v-if="
-          catalog.filters.keyword ||
-          catalog.filters.restaurantType ||
-          catalog.filters.diningMode ||
-          catalog.filters.category ||
-          catalog.filters.hideClosed ||
-          catalog.filters.maxPrice !== null ||
-          catalog.filters.maxDistanceMeters !== null ||
-          catalog.filters.sort !== 'auto'
-        "
-        type="button"
-        class="primary-action"
-        @click="catalog.resetFilters"
-      >
-        清除筛选
-      </button>
+      </h3>
+      <div class="empty-actions">
+        <button
+          v-if="hasFilters || catalog.filters.keyword.trim()"
+          type="button"
+          class="primary-action"
+          @click="catalog.resetFilters"
+        >
+          {{ hasFilters ? '清除筛选' : '清空搜索' }}
+        </button>
+        <SubmitRestaurantButton
+          v-if="catalog.resultsCurrent && catalog.total === 0"
+          :keyword="catalog.filters.keyword"
+          >添加店铺</SubmitRestaurantButton
+        >
+      </div>
     </div>
     <!-- 按钮同时是无观察器环境和键盘操作的后备入口，常规浏览由接近底部自动触发。 -->
     <div v-if="catalog.hasMore && !catalog.error" ref="loadTrigger" class="catalog-load-more">
@@ -159,16 +164,16 @@ async function changePage(page: number): Promise<void> {
       <p v-else-if="catalog.loadingMore" role="status">正在加载…</p>
       <button v-else type="button" @click="catalog.loadMore">加载更多</button>
     </div>
-    <div class="preview-notice" role="note">
-      <p>营业、地址及消费请出发前核实。</p>
-    </div>
     <p
       v-if="catalog.visibleRestaurants.some((r) => r.tags.includes('OSM测试数据'))"
       class="osm-attribution"
     >
       © OpenStreetMap contributors ·
-      <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer"
-        >ODbL-1.0</a
+      <ResourceLink
+        href="https://www.openstreetmap.org/copyright"
+        target="_blank"
+        rel="noopener noreferrer"
+        >ODbL-1.0</ResourceLink
       >
     </p>
     <nav
@@ -213,10 +218,8 @@ async function changePage(page: number): Promise<void> {
       "
       class="directory-add"
     >
-      <p>没有找到想找的店铺？欢迎补充一家。</p>
-      <SubmitRestaurantButton :keyword="catalog.filters.keyword"
-        >＋ 添加店铺</SubmitRestaurantButton
-      >
+      <p>没有找到想找的店铺？欢迎补充</p>
+      <SubmitRestaurantButton :keyword="catalog.filters.keyword">添加店铺</SubmitRestaurantButton>
     </div>
   </section>
 </template>

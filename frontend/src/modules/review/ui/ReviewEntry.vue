@@ -7,6 +7,7 @@ import ReviewDiscussion from './ReviewDiscussion.vue'
 import ReviewDetailOriginal from './ReviewDetailOriginal.vue'
 import StarScore from '@/shared/ui/StarScore.vue'
 import UserAvatar from '@/modules/account/ui/UserAvatar.vue'
+import { useMediaQuery } from '@/shared/lib/useMediaQuery'
 import { ratingDimensions } from '@/modules/restaurant/model/catalog.logic'
 import {
   overall,
@@ -27,7 +28,8 @@ const props = defineProps<{
   profileEntry?: boolean
   /** 点评列表统一折叠细分评分与次要操作；店铺列表保留作者，个人列表省去重复署名。 */
   listCard?: boolean
-  /** 历史记录沿用原卡片外观，但正文同样能打开对应ID的详情。 */
+  desktopList?: boolean
+  /** 历史记录保留作者，折叠细分评分；正文可打开对应ID的详情。 */
   detailEntry?: boolean
   /** 本人详情中的店铺摘要沿用当前分组，不另行拼接或猜测窗口父级。 */
   storeName?: string
@@ -41,6 +43,9 @@ const props = defineProps<{
   repliesEnabled?: boolean
 }>()
 const discussion = ref<InstanceType<typeof ReviewDiscussion>>()
+const historyAccess = ref<globalThis.HTMLElement>()
+const desktop = useMediaQuery('(min-width: 800px)')
+const directHistory = computed(() => props.desktopList && desktop.value)
 const hasDetail = computed(
   () =>
     (props.listCard || props.detailEntry) &&
@@ -64,6 +69,8 @@ defineEmits<{
       'star-review': starScale,
       'profile-review': profileEntry,
       'list-card-review': listCard,
+      'desktop-personal-review': desktopList,
+      'history-detail-entry': detailEntry,
     }"
   >
     <header>
@@ -113,11 +120,11 @@ defineEmits<{
       示例点评 · 非真实体验
     </p>
     <p
-      v-if="item.scoringStatus && (!starScale || item.scoringStatus === 'history')"
+      v-if="item.scoringStatus === 'current' && !starScale"
       class="scoring-state"
       :class="item.scoringStatus"
     >
-      {{ item.scoringStatus === 'current' ? '最新点评' : '历史点评 · 不计分' }}
+      最新点评
     </p>
     <!-- 仅明确标识的联调记录折叠原文；真实同学正文始终直接展示，不改写存储内容。 -->
     <details v-if="hasExampleMarker(item.body) && !preview" class="example-body">
@@ -135,7 +142,7 @@ defineEmits<{
       {{ item.body }}
     </button>
     <p v-else class="body">{{ item.body }}</p>
-    <p v-if="!listCard" class="chips">
+    <p v-if="!listCard && !detailEntry" class="chips">
       <span v-for="d in ratingDimensions" :key="d.key"
         >{{ d.label }} {{ formatRating(item.scores[d.key]) }}</span
       >
@@ -147,7 +154,7 @@ defineEmits<{
       </button>
     </div>
     <!-- 细分评分仍直接来自原记录，只改变展开方式，不隐藏正文或照片。 -->
-    <details v-if="listCard" class="dimension-details">
+    <details v-if="listCard || detailEntry" class="dimension-details">
       <summary>
         四维评分<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" /></svg>
       </summary>
@@ -176,6 +183,8 @@ defineEmits<{
         :key="'discussion-' + item.id"
         :review-id="item.id"
         :username="item.username"
+        :store-name="storeName"
+        :store-to="storeTo"
       >
         <template #original="{ focusInput }">
           <ReviewDetailOriginal
@@ -254,7 +263,9 @@ defineEmits<{
         "
       >
         <template #default="{ restoreFocus }">
-          <slot name="history" :restore-focus="restoreFocus" />
+          <Teleport :to="historyAccess || 'body'" :disabled="!directHistory || !historyAccess">
+            <slot name="history" :restore-focus="directHistory ? undefined : restoreFocus" />
+          </Teleport>
           <button
             v-if="authenticated && !!viewerId && item.authorId === viewerId"
             type="button"
@@ -266,6 +277,19 @@ defineEmits<{
           </button>
         </template>
       </ReviewActionsMenu>
+      <span
+        v-if="desktopList && $slots.history"
+        ref="historyAccess"
+        class="desktop-history-access"
+      />
+      <button
+        v-if="detailEntry && hasDetail"
+        type="button"
+        class="history-detail-link"
+        @click="discussion?.show($event)"
+      >
+        查看点评 ›
+      </button>
     </div>
 
     <slot

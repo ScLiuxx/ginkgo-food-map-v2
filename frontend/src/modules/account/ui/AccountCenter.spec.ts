@@ -1,3 +1,4 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
 import { createApp, h, nextTick, type App } from 'vue'
 import { createPinia, disposePinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
@@ -220,8 +221,8 @@ describe('个人中心', () => {
     expect(fetchOwnGrowth).not.toHaveBeenCalled()
     expect(fetchOwnProfile).not.toHaveBeenCalled()
     expect(host.textContent).toContain('登录后查看个人主页')
-    const href = host.querySelector<HTMLAnchorElement>('.account-primary')!.href
-    expect(new URL(href).searchParams.get('redirect')).toBe('/users/42')
+    const target = await captureLinkTarget(app, host.querySelector('.account-primary'))
+    expect(new URL(target, 'http://localhost').searchParams.get('redirect')).toBe('/users/42')
     expect(host.querySelector('.account-profile, .account-tools, .growth-card')).toBeNull()
   })
 
@@ -244,9 +245,9 @@ describe('个人中心', () => {
     expect(host.textContent).not.toContain('暂无收藏')
     await router.push('/account/contributions')
     await nextTick()
-    expect(host.querySelector('.account-topline .contribution-submit')?.getAttribute('href')).toBe(
-      '/restaurants/submit',
-    )
+    expect(
+      await captureLinkTarget(app, host.querySelector('.account-topline .contribution-submit')),
+    ).toBe('/restaurants/submit')
     expect(fetchMyRequestPage).toHaveBeenCalledWith(
       'ALL',
       1,

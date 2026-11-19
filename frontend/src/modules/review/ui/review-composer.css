@@ -422,19 +422,9 @@ select:focus-visible {
   overflow: auto;
   padding: 28px;
 }
-.publish-receipt dl {
+.receipt-target {
   margin: 20px 0;
-}
-.publish-receipt dt {
-  font-size: 12px;
-  color: #8c939d;
-}
-.publish-receipt dd {
-  margin: 4px 0 14px;
   overflow-wrap: anywhere;
-}
-.receipt-id {
-  user-select: all;
 }
 /* 手机顶底固定在编辑器内，内容独立滚动；安全区为全面屏底部留出触控空间。 */
 @media (max-width: 700px) {

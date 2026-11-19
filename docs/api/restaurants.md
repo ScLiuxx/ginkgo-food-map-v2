@@ -18,7 +18,6 @@
 | POST | `/api/restaurants` | 管理员 | 201 | [直接维护餐厅](#management) |
 | PUT | `/api/restaurants/{id}` | 管理员 | 200 | [直接维护餐厅](#management) |
 | DELETE | `/api/restaurants/{id}` | 管理员 | 200 | [直接维护餐厅](#management) |
-| POST | `/api/restaurants/{id}/restore` | 管理员 | 200 | [直接维护餐厅](#management) |
 
 <a id="public-read"></a>
 
@@ -128,7 +127,7 @@
 - 单字ES匹配采用原字语义，不继承MySQL排序规则的字符等价扩展，例如〇不会命中ASCII数字0。真实库中〇的ES字面命中为1家，旧SQL为3748家；SQL降级仍可能受数据库排序规则影响，因此基础匹配提示保留。
 - score直接按v004预计算的reputationScore排序，再按participantCount及数字ID；reviews/recommend按reviewCount、数字ID排序。SQL使用同一生成列和同分规则，不再在ES查询中生成评分或推荐率runtime排序键。旧索引缺少新字段时需受控升级，不能以旧ratingScore冒充口碑分。
 - SQL路径保持原LIKE包含匹配；请求相关度但实际走SQL时，实际排序为score。首版不做无结果放宽、拼音、简称、错字或全局同义扩展。
-- 所有硬筛选在ES计数及分页之前执行。列表直接读取ES公开投影，不回查MySQL资料、标签、封面或Outbox，接受评分、资料、删除与恢复的短暂同步延迟；详情及写操作仍以MySQL为准。地图点位保留MySQL当前页资料和版本回查，不以LIKE再次过滤ES分词命中。不拿ES前100条交给SQL筛选后当作全量。
+- 所有硬筛选在ES计数及分页之前执行。列表直接读取ES公开投影，不回查MySQL资料、标签、封面或Outbox，接受评分、资料与删除的短暂同步延迟；详情及写操作仍以MySQL为准。地图点位保留MySQL当前页资料和版本回查，不以LIKE再次过滤ES分词命中。不拿ES前100条交给SQL筛选后当作全量。
 - ES不可达、客户端不存在、索引不存在、超时、部分分片失败、非精确总数或不完整结果，均整次执行原SQL；ES本身返回空集合不触发降级。仅地图点位在查询前或回查快照存在当前版本PENDING/FAILED任务时保守走SQL；地图回查有删除、缺失、版本或硬条件变化时丢弃整页ES结果和total，完整重查SQL。列表不因同步积压降级，但非法或不完整的投影正文仍作为ES错误整次降级。
 - `search`示例：`{"engine":"ES","degraded":false,"reason":"SEARCH","effectiveSort":"relevance","resultWindow":10000}`。降级示例：`{"engine":"MYSQL","degraded":true,"reason":"ES_UNAVAILABLE","effectiveSort":"score","resultWindow":10000}`。reason枚举：CATALOG、NO_LOCATION、DISABLED、SEARCH、ES_UNAVAILABLE、ES_CIRCUIT_OPEN、SYNC_PENDING、DATA_CHANGED；CATALOG对列表表示ES无关键词浏览，对地图点位表示预定SQL路径；NO_LOCATION及DISABLED为预定SQL路径，不标记degraded。ES_CIRCUIT_OPEN表示熔断打开或半开探测名额已用尽，响应仍200、engine=MYSQL、degraded=true；触发熔断的失败请求本身仍为ES_UNAVAILABLE。不再返回SINGLE_HAN。列表无关键词时resultWindow同样为10000；无关键词地图点位为null。
 - 页面基于accessiblePages导航，保留真实total，并在需要时提示基础关键词匹配。切换关键词不会覆盖用户已选业务排序，auto按空关键词、单汉字、多字选择默认意图。
@@ -211,7 +210,7 @@
 
 **副作用与限制**
 
-逐次检查商户未删除、图片属于商户正式相册、来源申请已通过且目标一致，然后通过file服务验证原上传人、RESTAURANT用途和BOUND状态，最后在数据库事务外读取私有OSS。商户软删除后列表/图片停止公开，关联与文件保留；恢复后重新可读。停业商户仍可读取。普通餐厅和食堂共用此协议。
+逐次检查商户未删除、图片属于商户正式相册、来源申请已通过且目标一致，然后通过file服务验证原上传人、RESTAURANT用途和BOUND状态，最后在数据库事务外读取私有OSS。商户软删除后列表/图片停止公开，关联与文件保留，不提供店铺恢复。停业商户仍可读取。普通餐厅和食堂共用此协议。
 
 <a id="management"></a>
 
@@ -225,7 +224,6 @@
 | POST | `/api/restaurants` | 管理员 | 201 |
 | PUT | `/api/restaurants/{id}` | 管理员 | 200 |
 | DELETE | `/api/restaurants/{id}` | 管理员 | 200 |
-| POST | `/api/restaurants/{id}/restore` | 管理员 | 200 |
 
 **请求参数**
 
@@ -247,13 +245,12 @@
 | `POST /api/restaurants` | 基础字段加restaurantType、supportsDineIn、supportsDelivery；不含申请UUID或照片字段；201及Location，data为管理资料 |
 | `PUT /api/restaurants/{id}` | 与直接新建相同字段，完整替换，成功200及管理资料；省略可选项按默认值处理，不能当PATCH |
 | `DELETE /api/restaurants/{id}` | 无请求体/版本；软删除，成功200、deleted=true，不删除标签与统计，公开入口隐藏 |
-| `POST /api/restaurants/{id}/restore` | 仅管理员，无请求体/版本；200及deleted=false，保持原创建者、经营状态和标签 |
 
-管理资料中的restaurant字段与公开餐厅结构相同，响应禁止缓存。编辑不要求版本号，最后成功保存的整份资料及标签生效；事务锁住同一商户主行，不能部分保存或混合两次标签。新分类必须启用，当前停用分类可保持原值。删除不会把停业改为营业，恢复不会创建新归属。
+管理资料中的restaurant字段与公开餐厅结构相同，响应禁止缓存。编辑不要求版本号，最后成功保存的整份资料及标签生效；事务锁住同一商户主行，不能部分保存或混合两次标签。新分类必须启用，当前停用分类可保持原值。删除保留原经营状态和历史关联，不提供恢复接口。
 
 **错误码**
 
-不存在404 `RESTAURANT_NOT_FOUND`；普通账号403 `AUTH_FORBIDDEN`；服务内部身份防线可返回403 `RESTAURANT_FORBIDDEN`。已删除编辑、重复删除、重复恢复409 `RESTAURANT_STATE_CONFLICT`。未知、内部或版本字段400 `COMMON_MALFORMED_REQUEST`。直接新建无请求幂等键，超时须先核对结果。
+不存在404 `RESTAURANT_NOT_FOUND`；普通账号403 `AUTH_FORBIDDEN`；服务内部身份防线可返回403 `RESTAURANT_FORBIDDEN`。已删除编辑、重复删除409 `RESTAURANT_STATE_CONFLICT`。未知、内部或版本字段400 `COMMON_MALFORMED_REQUEST`。直接新建无请求幂等键，超时须先核对结果。
 
 **副作用与限制**
 

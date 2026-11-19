@@ -7,7 +7,6 @@ import {
   fetchRestaurantCategories,
   fetchRestaurantManagement,
   deleteRestaurant,
-  restoreRestaurant,
 } from '@/modules/restaurant'
 import { useAdminRestaurants } from './useAdminRestaurants'
 
@@ -16,7 +15,6 @@ vi.mock('@/modules/restaurant', () => ({
   fetchRestaurantCategories: vi.fn(),
   fetchRestaurantManagement: vi.fn(),
   deleteRestaurant: vi.fn(),
-  restoreRestaurant: vi.fn(),
   useRestaurantCatalog: () => ({ invalidate: vi.fn() }),
 }))
 
@@ -57,7 +55,7 @@ describe('管理员商户维护', () => {
     host.remove()
     clearAccessToken()
   })
-  it('删除必须明确确认，失败保留快照且不自动重试', async () => {
+  it('删除必须明确确认，失败后必须重新读取状态且不自动重试', async () => {
     await model.inspect(snapshot.restaurant.id)
     await model.applyAction()
     expect(deleteRestaurant).not.toHaveBeenCalled()
@@ -65,26 +63,42 @@ describe('管理员商户维护', () => {
     vi.mocked(deleteRestaurant).mockRejectedValue(new Error('连接超时'))
     await model.applyAction()
     expect(deleteRestaurant).toHaveBeenCalledExactlyOnceWith(snapshot.restaurant.id, 'admin-a')
-    expect(model.selected.value?.deleted).toBe(false)
-    expect(model.actionError.value).toContain('重新按 ID 查询')
+    expect(model.selected.value).toBeNull()
+    expect(model.confirming.value).toBe(false)
+    expect(model.actionError.value).toContain('刷新列表并重新选择店铺')
     expect(model.notice.value).toBe('')
+    model.confirming.value = true
+    await model.applyAction()
+    expect(deleteRestaurant).toHaveBeenCalledTimes(1)
+    await model.inspect(snapshot.restaurant.id)
+    vi.mocked(deleteRestaurant).mockResolvedValue({ ...snapshot, deleted: true })
+    model.confirming.value = true
+    await model.applyAction()
+    expect(deleteRestaurant).toHaveBeenCalledTimes(2)
   })
-  it('删除成功保留完整字符串ID，恢复后刷新目录', async () => {
+  it('删除使用完整字符串ID，成功后关闭详情并刷新目录', async () => {
     vi.mocked(deleteRestaurant).mockResolvedValue({
       ...snapshot,
       deleted: true,
     })
-    vi.mocked(restoreRestaurant).mockResolvedValue(snapshot)
     await model.inspect(snapshot.restaurant.id)
     model.confirming.value = true
     await model.applyAction()
-    expect(model.selected.value?.deleted).toBe(true)
-    expect(model.notice.value).toContain(snapshot.restaurant.id)
+    expect(deleteRestaurant).toHaveBeenCalledExactlyOnceWith(snapshot.restaurant.id, 'admin-a')
+    expect(model.selected.value).toBeNull()
+    expect(model.notice.value).toBe('「测试店」已删除。')
     model.confirming.value = true
     await model.applyAction()
-    expect(restoreRestaurant).toHaveBeenCalledExactlyOnceWith(snapshot.restaurant.id, 'admin-a')
-    expect(model.selected.value?.deleted).toBe(false)
-    expect(fetchRestaurants).toHaveBeenCalledTimes(3)
+    expect(deleteRestaurant).toHaveBeenCalledTimes(1)
+    expect(fetchRestaurants).toHaveBeenCalledTimes(2)
+  })
+  it('列表过期时读取到已删除店铺，不能继续操作', async () => {
+    vi.mocked(fetchRestaurantManagement).mockResolvedValue({ ...snapshot, deleted: true })
+    await model.inspect(snapshot.restaurant.id)
+    model.confirming.value = true
+    await model.applyAction()
+    expect(deleteRestaurant).not.toHaveBeenCalled()
+    expect(model.selected.value?.deleted).toBe(true)
   })
   it('账号变化后丢弃待处理快照，禁止旧身份写入', async () => {
     await model.inspect(snapshot.restaurant.id)

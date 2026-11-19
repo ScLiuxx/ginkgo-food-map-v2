@@ -5,11 +5,15 @@ import { authToken } from '@/shared/api/authSession'
 import { replyScopeVisibleKey } from '../model/replyEditor'
 import { reviewGatewayKey, unavailableReviewGateway, type ReplyPage } from '../model/review'
 import ReplyThread from './ReplyThread.vue'
+import AppLink from '@/shared/ui/AppLink.vue'
+import { reviewHistoryHostKey } from '../model/reviewHistoryHost'
 
 /** 各入口共用两条回复预览与独立详情；关闭不卸载编辑器，草稿和失败UUID保留在原组件。 */
 const props = defineProps<{
   reviewId: string
   username: string
+  storeName?: string
+  storeTo?: string
   /** 消息入口直接打开同一面板，不再渲染列表中的回复预览。 */
   standalone?: boolean
   /** 目标读取成功后才挂载回复编辑器，错误时仅允许重试和关闭。 */
@@ -19,6 +23,11 @@ const props = defineProps<{
 const emit = defineEmits<{ close: [] }>()
 const gateway = inject(reviewGatewayKey, unavailableReviewGateway)
 const parentVisible = inject(replyScopeVisibleKey, ref(true))
+const historyHost = inject(reviewHistoryHostKey, undefined)
+const headingStoreName = computed(() =>
+  historyHost ? historyHost.storeName.value : props.storeName,
+)
+const embedded = computed(() => !!historyHost?.desktop.value && !!historyHost.target.value)
 const opened = ref(false),
   initialized = ref(false)
 const visible = computed(() => opened.value && parentVisible.value)
@@ -84,26 +93,59 @@ async function show(event?: globalThis.MouseEvent) {
   cancelPreview()
   initialized.value = true
   opened.value = true
-  previousOverflow = globalThis.document.documentElement.style.overflow
-  globalThis.document.documentElement.style.overflow = 'hidden'
-  dialog.value?.showModal()
+  if (embedded.value && historyHost) {
+    historyHost.activeId.value = props.reviewId
+    historyHost.back.value = close
+  } else {
+    previousOverflow = globalThis.document.documentElement.style.overflow
+    globalThis.document.documentElement.style.overflow = 'hidden'
+    dialog.value?.showModal()
+  }
   await nextTick()
   if (scroll.value) scroll.value.scrollTop = scrollTop
+  if (embedded.value)
+    scroll.value?.parentElement
+      ?.querySelector<globalThis.HTMLButtonElement>('.discussion-back')
+      ?.focus({ preventScroll: true })
 }
 /** 在途发布可正常完成但不能重开已关闭面板；关闭只取消读取，不抛弃失败请求号。 */
 function close() {
   if (!opened.value) return
   scrollTop = scroll.value?.scrollTop ?? 0
   opened.value = false
+  if (historyHost?.activeId.value === props.reviewId) {
+    historyHost.activeId.value = undefined
+    historyHost.back.value = undefined
+  }
   dialog.value?.close()
   unlock()
-  if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true })
+  void nextTick(() => {
+    if (parentVisible.value && returnFocus?.isConnected) returnFocus.focus({ preventScroll: true })
+  })
   emit('close')
 }
 function closed() {
+  if (embedded.value || dialog.value?.open) return
   if (opened.value) close()
   unlock()
 }
+// Teleport只移动同一份详情DOM；窗口跨越断点时不重建回复编辑器或丢弃失败UUID。
+watch(embedded, async (value) => {
+  if (!opened.value || !historyHost) return
+  if (value) {
+    dialog.value?.close()
+    unlock()
+    historyHost.activeId.value = props.reviewId
+    historyHost.back.value = close
+  } else {
+    historyHost.activeId.value = undefined
+    historyHost.back.value = undefined
+    previousOverflow = globalThis.document.documentElement.style.overflow
+    globalThis.document.documentElement.style.overflow = 'hidden'
+    await nextTick()
+    dialog.value?.showModal()
+  }
+})
 /** 手机键盘可能只缩小可视视口；让详情底栏跟随可见区域，避免发送按钮被键盘盖住。 */
 function fitViewport() {
   const viewport = globalThis.visualViewport
@@ -231,36 +273,55 @@ defineExpose({ show })
         @close="closed"
         @click="$event.target === dialog && close()"
       >
-        <header class="discussion-header">
-          <button
-            type="button"
-            :aria-label="standalone ? '返回消息列表' : '返回点评列表'"
-            class="discussion-back"
-            autofocus
-            @click="close"
+        <Teleport :to="historyHost?.target.value || 'body'" :disabled="!embedded">
+          <section
+            v-show="!embedded || opened"
+            class="discussion-sheet"
+            :class="{ 'embedded-discussion': embedded, 'has-store-title': !!headingStoreName }"
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg>
-          </button>
-          <h2 :id="titleId">点评详情</h2>
-          <button type="button" aria-label="关闭点评详情" @click="close">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6" /></svg>
-          </button>
-        </header>
-        <div ref="scroll" class="discussion-scroll">
-          <slot v-if="initialized" name="original" :focus-input="() => editor?.focusInput()" />
-          <ReplyThread
-            v-if="initialized && !pending"
-            ref="editor"
-            :key="reviewId"
-            :review-id="reviewId"
-            :username="username"
-            detail-mode
-            :initial-page="page"
-            :focused-reply="focusedReply"
-            @page="updatePage"
-            @invalidate="invalidate"
-          />
-        </div>
+            <header class="discussion-header" :class="{ 'history-discussion-header': embedded }">
+              <button
+                type="button"
+                :aria-label="embedded ? '返回历史' : standalone ? '返回消息列表' : '返回点评列表'"
+                class="discussion-back"
+                autofocus
+                @click="close"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg>
+                <span v-if="embedded">返回历史</span>
+              </button>
+              <h2 :id="titleId">
+                <span class="discussion-generic-title">点评详情</span
+                ><span v-if="headingStoreName" class="discussion-store-title"
+                  ><AppLink v-if="storeTo" :to="storeTo">{{ headingStoreName }}</AppLink
+                  ><template v-else>{{ headingStoreName }}</template></span
+                >
+              </h2>
+              <button
+                type="button"
+                aria-label="关闭点评详情"
+                @click="embedded && historyHost ? historyHost.close() : close()"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6" /></svg>
+              </button>
+            </header>
+            <div ref="scroll" class="discussion-scroll">
+              <slot v-if="initialized" name="original" :focus-input="() => editor?.focusInput()" />
+              <ReplyThread
+                v-if="initialized && !pending"
+                ref="editor"
+                :key="reviewId"
+                :review-id="reviewId"
+                :username="username"
+                detail-mode
+                :initial-page="page"
+                :focused-reply="focusedReply"
+                @page="updatePage"
+                @invalidate="invalidate"
+              />
+            </div>
+          </section>
+        </Teleport>
       </dialog>
     </Teleport>
   </div>

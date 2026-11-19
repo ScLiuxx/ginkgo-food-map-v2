@@ -62,14 +62,6 @@
             AND search_projection_version &lt; 9223372036854775807
     </update>
 
-    <update id="restoreCurrent">
-        UPDATE restaurants SET search_projection_version=search_projection_version+1,
-            deleted_at=NULL, deleted_by=NULL, delete_reason_code=NULL,
-            updated_by=#{actor}, updated_at=CURRENT_TIMESTAMP(6)
-        WHERE id=#{id} AND deleted_at IS NOT NULL
-            AND search_projection_version &lt; 9223372036854775807
-    </update>
-
     <delete id="deleteTags">DELETE FROM restaurant_tags WHERE restaurant_id=#{id}</delete>
     <insert id="insertTags">
         INSERT INTO restaurant_tags(restaurant_id, tag, position) VALUES

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { clearAccessToken, getAccessToken } from '@/shared/api/authSession'
@@ -234,9 +235,9 @@ onBeforeUnmount(() => {
       <p>请使用新密码重新登录。</p>
     </div>
     <p class="form-footnote">
-      <RouterLink :to="returnTo">
+      <AppLink :to="returnTo">
         {{ returnTo === '/account/settings' ? '返回个人设置' : '返回登录' }}
-      </RouterLink>
+      </AppLink>
     </p>
   </form>
 </template>

@@ -96,8 +96,7 @@ public class SecurityConfiguration {
                                         // 直接维护正式资料统一收紧到管理员；投稿、纠错等嵌套接口仍按原认证规则执行。
                                         .requestMatchers(
                                                 HttpMethod.POST,
-                                                "/api/restaurants",
-                                                "/api/restaurants/{id}/restore")
+                                                "/api/restaurants")
                                         .hasRole("ADMIN")
                                         .requestMatchers(HttpMethod.PUT, "/api/restaurants/{id}")
                                         .hasRole("ADMIN")

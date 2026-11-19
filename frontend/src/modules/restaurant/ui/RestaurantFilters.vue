@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { computed } from 'vue'
 import { useRestaurantCatalog } from '../model/catalog.store'
 import RestaurantAdvancedFilters from './RestaurantAdvancedFilters.vue'
@@ -32,14 +33,14 @@ const cuisineCategories = computed(() =>
         />
         <button type="submit" class="search-submit" aria-label="提交搜索">搜索</button>
       </form>
-      <RouterLink class="catalog-ranking-entry" to="/restaurant-rankings">
+      <AppLink class="catalog-ranking-entry" to="/restaurant-rankings">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path
             d="M8 3h8v5a4 4 0 0 1-8 0ZM8 5H4v2a4 4 0 0 0 4 4m8-6h4v2a4 4 0 0 1-4 4M12 12v6m-4 3h8M9 18h6"
           />
         </svg>
         推荐榜 <span aria-hidden="true">→</span>
-      </RouterLink>
+      </AppLink>
     </div>
     <nav class="quick-categories" aria-label="美食快捷分类">
       <button

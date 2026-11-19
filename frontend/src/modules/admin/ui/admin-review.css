@@ -38,71 +38,6 @@ button:disabled {
 .small {
   font-size: 12px;
 }
-.topbar {
-  width: 100%;
-  max-width: none;
-  margin: 0;
-  height: 72px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 30px;
-  border-bottom: 1px solid var(--admin-divider);
-  background: var(--admin-surface);
-  flex: none;
-}
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 19px;
-  font-weight: 650;
-  letter-spacing: 0.5px;
-}
-.brand em {
-  width: 33px;
-  height: 33px;
-  display: grid;
-  place-items: center;
-  border-radius: 10px;
-  font-size: 21px;
-  font-style: normal;
-  color: var(--admin-surface);
-  background: var(--admin-brand);
-}
-.account {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  font-size: 13px;
-}
-.identity {
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-  gap: 9px;
-}
-.avatar {
-  width: 30px;
-  height: 30px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--admin-surface-hover);
-  color: var(--admin-secondary);
-}
-.admin-username {
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.admin-logout {
-  padding: 8px 0;
-  color: var(--admin-muted);
-  font-size: 12px;
-  white-space: nowrap;
-}
 .session-error {
   margin: 0;
   padding: 10px 30px;
@@ -113,7 +48,7 @@ button:disabled {
 }
 .shell {
   display: grid;
-  grid-template-columns: 202px minmax(0, 1fr);
+  grid-template-columns: var(--admin-sidebar-width) minmax(0, 1fr);
   min-width: 0;
 }
 main {
@@ -794,9 +729,6 @@ dialog .buttons {
   }
 }
 @media (min-width: 801px) and (max-width: 1200px) {
-  .shell {
-    grid-template-columns: 180px minmax(0, 1fr);
-  }
   main {
     padding: 24px 22px;
   }
@@ -835,9 +767,6 @@ dialog .buttons {
   }
 }
 @media (min-width: 801px) and (max-width: 950px) {
-  .shell {
-    grid-template-columns: 160px minmax(0, 1fr);
-  }
   main {
     padding: 20px 16px;
   }
@@ -872,17 +801,6 @@ dialog .buttons {
 @media (max-width: 800px) {
   .shell {
     display: block;
-  }
-  .topbar {
-    height: 70px;
-    padding: 0 18px;
-  }
-  .brand {
-    font-size: 17px;
-    gap: 8px;
-  }
-  .account .identity {
-    display: none;
   }
   main {
     padding: 24px 18px;

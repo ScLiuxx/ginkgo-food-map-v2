@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
+import LeaveConfirmation from '@/shared/ui/LeaveConfirmation.vue'
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { authToken, getAccessToken } from '@/shared/api/authSession'
@@ -433,6 +435,8 @@ async function submit(includeReview = false) {
       photoDraft.clear(true)
       // 仅提交店铺时，点评临时图没有绑定，应取消；联合成功只释放预览，保护已绑定图。
       reviewPhotos.clear(includeReview)
+      await nextTick()
+      heading.value?.focus()
     }
   } catch (error) {
     if (!disposed && getAccessToken() === token)
@@ -465,12 +469,13 @@ async function addPhotos(files: globalThis.FileList | null) {
     processingPhotos.value = false
   }
 }
+const leaveConfirmation = ref<InstanceType<typeof LeaveConfirmation> | null>(null)
 function canLeave() {
   return (
     !!receipt.value ||
     (!saving.value &&
       ((!dirty.value && !processingPhotos.value && !reviewPhotos.processing.value) ||
-        globalThis.confirm('资料尚未提交，确定离开吗？')))
+        leaveConfirmation.value?.ask()))
   )
 }
 onBeforeRouteLeave(canLeave)
@@ -496,15 +501,23 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="correction-page" :class="{ 'submission-page': submission && !admin }">
-    <RouterLink
+  <section
+    class="correction-page"
+    :class="{
+      'submission-page': submission && !admin,
+      'receipt-page': receipt && !sessionChanged,
+    }"
+  >
+    <LeaveConfirmation ref="leaveConfirmation" message="资料尚未提交，确定离开？" />
+    <AppLink
+      v-if="!receipt || sessionChanged"
       :to="admin ? detailPath : returnTarget"
       aria-label="返回"
       @click.capture="!admin && returnToPrevious($event)"
-      ><span aria-hidden="true">←</span></RouterLink
+      ><span aria-hidden="true">←</span></AppLink
     >
-    <p v-if="submission && !admin" class="submission-eyebrow">一起补全这张美食地图</p>
-    <h1 ref="heading" tabindex="-1">
+    <p v-if="submission && !admin && !receipt" class="submission-eyebrow">一起补全这张美食地图</p>
+    <h1 v-if="!receipt || sessionChanged" ref="heading" tabindex="-1">
       {{ step === 'review' && !receipt ? '写一条点评' : pageTitle }}
     </h1>
     <section v-if="!token || sessionChanged" class="notice" role="alert">
@@ -517,27 +530,44 @@ onBeforeUnmount(() => {
               : '登录后可为这家商户补充资料或提出纠错。'
         }}
       </p>
-      <RouterLink :to="{ path: '/login', query: { redirect: path } }">前往登录</RouterLink>
+      <AppLink :to="{ path: '/login', query: { redirect: path } }">前往登录</AppLink>
     </section>
     <p v-else-if="loading" role="status">正在读取商户资料…</p>
     <section v-else-if="loadError" class="notice" role="alert">
       <p>{{ loadError }}</p>
       <button @click="load">重新加载</button>
     </section>
-    <section v-else-if="receipt" class="notice success" role="status">
-      <h2>{{ admin ? '店铺资料已保存' : '已提交，等待管理员审核' }}</h2>
-      <p>{{ admin ? `店铺 ID：${receipt}` : `申请编号：${receipt}。审核通过后更新公开资料。` }}</p>
-      <p v-if="submittedReview">附带点评已保存，店铺审核通过后会自动发布。</p>
-      <RouterLink
-        v-if="!admin"
-        :to="{ path: '/account/contributions', query: { requestId: receipt } }"
-        >查看申请 ›</RouterLink
-      >
-      <RouterLink
-        :to="admin ? detailPath : returnTarget"
-        @click.capture="!admin && returnToPrevious($event)"
-        >返回</RouterLink
-      >
+    <section v-else-if="receipt" class="submission-receipt" aria-labelledby="receipt-title">
+      <div class="receipt-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path
+            d="m6 12 4 4 8-8"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </div>
+      <h1 id="receipt-title" ref="heading" tabindex="-1">
+        {{ admin ? '店铺资料已保存' : '已提交，等待审核' }}
+      </h1>
+      <p class="receipt-name">{{ form.name }}</p>
+      <p v-if="submittedReview" class="receipt-review">附带点评已保存，审核通过后自动发布。</p>
+      <div class="receipt-actions">
+        <AppLink
+          :to="admin ? detailPath : returnTarget"
+          class="receipt-done"
+          @click.capture="!admin && returnToPrevious($event)"
+          >完成</AppLink
+        >
+        <AppLink
+          v-if="!admin"
+          class="receipt-detail"
+          :to="{ path: '/account/contributions', query: { requestId: receipt } }"
+          >查看申请</AppLink
+        >
+      </div>
     </section>
     <form v-else novalidate :aria-busy="saving" @submit.prevent="submitCurrentStep">
       <ol v-if="canAttachReview" class="submission-steps" aria-label="投稿步骤">
@@ -860,7 +890,7 @@ onBeforeUnmount(() => {
                     : '保存修改'
                   : '提交审核'
           }}</button
-        ><RouterLink :to="detailPath">取消</RouterLink>
+        ><AppLink :to="detailPath">取消</AppLink>
       </div>
     </form>
   </section>
@@ -926,10 +956,6 @@ onBeforeUnmount(() => {
 .submission-page .actions > button {
   background: #ed740a;
   border-color: #ed740a;
-}
-.submission-page .notice.success a {
-  display: inline-block;
-  margin-right: 20px;
 }
 .submission-page .actions > .secondary {
   background: #fff;
@@ -1186,6 +1212,85 @@ fieldset:disabled {
 :is(input, select, textarea, button, a):focus-visible {
   outline: 2px solid #ad6f26;
   outline-offset: 3px;
+}
+.correction-page.receipt-page {
+  width: min(520px, calc(100% - 40px));
+  margin-top: clamp(48px, 12vh, 112px);
+}
+.submission-receipt {
+  padding: 36px 24px;
+  border-radius: 20px;
+  background: #fff;
+  text-align: center;
+}
+.receipt-mark {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 22px;
+  border-radius: 50%;
+  background: #fff3e8;
+  color: #e77824;
+}
+.receipt-mark svg {
+  width: 30px;
+  height: 30px;
+}
+.submission-receipt h1 {
+  margin: 0;
+  color: #30363d;
+  font-size: clamp(21px, 4.5vw, 25px);
+  line-height: 1.4;
+  outline: none;
+}
+.receipt-name {
+  margin: 12px 0 0;
+  color: #737b84;
+  font-size: 15px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.receipt-review {
+  margin: 18px 0 0;
+  color: #858c94;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.receipt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 12px 24px;
+  margin-top: 28px;
+}
+.receipt-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  box-sizing: border-box;
+  font-size: 14px;
+}
+.receipt-done {
+  min-width: 112px;
+  padding: 10px 24px;
+  border-radius: 10px;
+  background: #ed740a;
+  color: #fff;
+}
+.receipt-done:hover {
+  background: #d96608;
+}
+.receipt-detail {
+  color: #737b84;
+}
+.receipt-detail:hover {
+  color: #d96608;
+}
+.receipt-actions a:focus-visible {
+  outline-color: #a5adb7;
 }
 @media (max-width: 560px) {
   .fields {

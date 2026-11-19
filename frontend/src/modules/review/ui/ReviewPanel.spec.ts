@@ -1,3 +1,4 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
 import { createApp, h, nextTick, reactive, type App } from 'vue'
 import { createPinia, disposePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -304,7 +305,7 @@ describe('店铺与窗口统一点评交互', () => {
     const historical = [...document.querySelectorAll<HTMLDialogElement>('.discussion-dialog')].find(
       (d) => d.open,
     )!
-    expect(historical.querySelector('a')?.getAttribute('href')).toBe('/canteen-windows/501')
+    expect(await captureLinkTarget(app, historical.querySelector('a'))).toBe('/canteen-windows/501')
     expect(windowReplies).toHaveBeenLastCalledWith('9', expect.any(AbortSignal))
     expect(list).not.toHaveBeenCalled()
     expect(history).not.toHaveBeenCalled()

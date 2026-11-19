@@ -33,9 +33,6 @@ public interface RestaurantWriteMapper {
     int softDeleteCurrent(@Param("id") long id,
                           @Param("actor") long actor, @Param("admin") boolean admin);
 
-    /** 只恢复已删除行并清空当前删除元数据；恢复权限由服务端独立角色校验。 */
-    int restoreCurrent(@Param("id") long id, @Param("actor") long actor);
-
     /** 必须位于主行锁和主表更新同一个事务内，失败时整组标签及主表一并回滚。 */
     int deleteTags(@Param("id") long id);
 

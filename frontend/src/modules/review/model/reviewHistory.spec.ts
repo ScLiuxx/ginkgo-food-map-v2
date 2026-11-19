@@ -1,4 +1,5 @@
 import { createApp, h, nextTick } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { App } from 'vue'
 import ReviewHistory from '../ui/ReviewHistory.vue'
@@ -58,7 +59,12 @@ async function mount(history: ReturnType<typeof vi.fn>, viewerId?: string, onDel
   app = createApp({
     render: () =>
       h(ReviewHistory, { restaurantId: '1', item, viewerId, onDelete, onRefresh: refresh }),
-  })
+  }).use(
+    createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/:pathMatch(.*)*', component: { template: '<p />' } }],
+    }),
+  )
   app.provide(reviewGatewayKey, {
     ...unavailableReviewGateway,
     history: history as NonNullable<ReviewGateway['history']>,

@@ -1,3 +1,4 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
 import { createApp, h, nextTick, ref, type App, type Component } from 'vue'
 import { createPinia, disposePinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
@@ -131,11 +132,71 @@ it('never offers a self-follow button', async () => {
   await mount(FollowSummary)
   expect(host.querySelector('button')).toBeNull()
 })
-it('keeps private list errors distinct from an empty list', async () => {
-  vi.mocked(fetchFollowPage).mockRejectedValueOnce(new Error('该用户名单仅本人可见'))
+const privateListError = {
+  isAxiosError: true,
+  response: { status: 403, data: { code: 'FOLLOW_LIST_PRIVATE', message: '该用户名单仅本人可见' } },
+}
+it.each(['FOLLOWING', 'FOLLOWERS'] as const)(
+  '%s私密时不提供重试或假零人数，换主体及退出清理状态',
+  async (kind) => {
+    vi.mocked(fetchFollowPage).mockRejectedValueOnce(privateListError)
+    const onTotal = vi.fn()
+    await mount(FollowList, kind, onTotal)
+    expect(host.querySelector('.private-content-state')?.textContent).toContain(
+      kind === 'FOLLOWING' ? '对方未公开关注' : '对方未公开粉丝',
+    )
+    expect(host.querySelector('[role="alert"], button, nav, .follow-member')).toBeNull()
+    expect(host.textContent).not.toContain('暂无可展示')
+    expect(onTotal).toHaveBeenLastCalledWith(null)
+    id.value = '33'
+    await settle()
+    expect(host.querySelector('.private-content-state')).toBeNull()
+    expect(host.textContent).toContain('暂无可展示的用户')
+    expect(onTotal).toHaveBeenLastCalledWith(0)
+    vi.mocked(fetchFollowPage).mockRejectedValueOnce(privateListError)
+    id.value = '44'
+    await settle()
+    expect(host.querySelector('.private-content-state')).not.toBeNull()
+    clearAccessToken()
+    await settle()
+    expect(host.querySelector('.private-content-state')).toBeNull()
+  },
+)
+it.each([
+  new Error('网络中断'),
+  {
+    isAxiosError: true,
+    response: { status: 403, data: { code: 'FORBIDDEN', message: '无权访问' } },
+  },
+  {
+    isAxiosError: true,
+    response: { status: 500, data: { code: 'FOLLOW_LIST_PRIVATE', message: '服务故障' } },
+  },
+])('名单读取故障保留重试，不误判为私密：%j', async (reason) => {
+  vi.mocked(fetchFollowPage).mockRejectedValueOnce(reason)
   await mount(FollowList)
-  expect(host.querySelector('[role="alert"]')?.textContent).toContain('仅本人可见')
-  expect(host.textContent).not.toContain('共 0 人')
+  expect(host.querySelector('.private-content-state')).toBeNull()
+  expect(host.querySelector('[role="alert"]')).not.toBeNull()
+  button('重新加载').click()
+  await settle()
+  expect(fetchFollowPage).toHaveBeenCalledTimes(2)
+  expect(host.querySelector('[role="alert"]')).toBeNull()
+  expect(host.textContent).toContain('暂无可展示的用户')
+})
+it('旧主体迟到的隐私拒绝不能覆盖新主体的公开名单', async () => {
+  let rejectOld!: (reason: unknown) => void
+  vi.mocked(fetchFollowPage).mockReturnValueOnce(
+    new Promise((_, reject) => {
+      rejectOld = reject
+    }),
+  )
+  await mount(FollowList)
+  id.value = '33'
+  await settle()
+  rejectOld(privateListError)
+  await settle()
+  expect(host.querySelector('.private-content-state')).toBeNull()
+  expect(host.textContent).toContain('暂无可展示的用户')
 })
 /** 名单行的关系属于当前访问者，不能将“对方关注我”误当成“我已关注对方”。 */
 it('follows and unfollows a fan using confirmed list data and publishes authorized totals', async () => {
@@ -158,7 +219,7 @@ it('follows and unfollows a fan using confirmed list data and publishes authoriz
   await mount(FollowList, 'FOLLOWERS', onTotal)
   expect(onTotal).toHaveBeenLastCalledWith(1)
   expect(host.querySelector('.follow-avatar')?.textContent).toBe('同')
-  expect(host.querySelector('.follow-identity')?.getAttribute('href')).toBe('/users/22')
+  expect(await captureLinkTarget(app, host.querySelector('.follow-identity'))).toBe('/users/22')
   vi.mocked(setFollow).mockImplementation(async (userId, active) => {
     row.following = active
     return summary(userId, active)
@@ -192,7 +253,7 @@ it('rereads an uncertain follow result and never offers a self-follow action in 
   })
   await mount(FollowList)
   expect(host.querySelectorAll('.follow-toggle')).toHaveLength(1)
-  expect(host.querySelector('.follow-identity')?.getAttribute('href')).toBe('/account')
+  expect(await captureLinkTarget(app, host.querySelector('.follow-identity'))).toBe('/account')
   vi.mocked(setFollow).mockRejectedValueOnce(new Error('保存超时'))
   button('关注').click()
   await settle()

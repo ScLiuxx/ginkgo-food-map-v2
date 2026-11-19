@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { onUnmounted, ref, watch } from 'vue'
 import { isAxiosError } from 'axios'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
@@ -154,14 +155,14 @@ void load()
 </script>
 <template>
   <section class="window-management">
-    <RouterLink to="/admin/restaurants">← 返回商户管理</RouterLink>
+    <AppLink to="/admin/restaurants">← 返回商户管理</AppLink>
     <h1>窗口管理</h1>
     <p>所属食堂：{{ rows[0]?.canteenName || id }}。窗口名称和楼层独立维护，点评始终归属原窗口。</p>
     <p v-if="changed" role="alert">登录身份已变化，请重新进入窗口管理。</p>
     <template v-else>
       <button :disabled="busy || loading || uncertainCreate" @click="edit()">＋ 新增窗口</button>
       <button :disabled="busy || loading" @click="load">刷新列表</button>
-      <RouterLink :to="`/restaurants/${id}`">查看食堂</RouterLink>
+      <AppLink :to="`/restaurants/${id}`">查看食堂</AppLink>
       <p v-if="error" role="alert">{{ error }}</p>
       <p v-if="notice" role="status">{{ notice }}</p>
       <p v-if="loading" role="status">正在加载窗口…</p>
@@ -185,7 +186,7 @@ void load()
                 {{ row.deleted ? '已删除' : row.businessStatus === 'CLOSED' ? '停业' : '营业' }}
               </td>
               <td data-label="操作">
-                <RouterLink v-if="!row.deleted" :to="`/canteen-windows/${row.id}`">查看</RouterLink>
+                <AppLink v-if="!row.deleted" :to="`/canteen-windows/${row.id}`">查看</AppLink>
                 <button v-if="!row.deleted" :disabled="busy || uncertainCreate" @click="edit(row)">
                   编辑 / 停业
                 </button>

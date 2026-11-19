@@ -1,3 +1,4 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
 import { AxiosError, AxiosHeaders } from 'axios'
 import { createPinia, disposePinia } from 'pinia'
 import { createApp, nextTick } from 'vue'
@@ -105,7 +106,7 @@ describe('restaurant management actions', () => {
   it('shows authorized edit/delete controls and cancellation never writes', async () => {
     await mount()
     await confirm()
-    expect(host.querySelector('a')?.getAttribute('href')).toBe(
+    expect(await captureLinkTarget(app, host.querySelector('a'))).toBe(
       `/restaurants/${responseFixture.id}/edit`,
     )
     expect(host.querySelector('dialog')?.textContent).toContain('0 条评价')

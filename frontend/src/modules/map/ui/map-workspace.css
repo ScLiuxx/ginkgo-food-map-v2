@@ -9,28 +9,24 @@
   color: var(--map-text);
 }
 .map-workspace {
+  --map-topline-height: 0px;
   background: #fff;
   margin: 0 auto;
   width: min(1440px, 100%);
   padding: 0 28px 80px;
 }
 .map-topline {
-  display: flex;
+  display: none;
   align-items: baseline;
   gap: 16px;
   min-height: 56px;
   padding: 17px 0 14px;
 }
-.map-topline h1 {
-  font-size: 22px;
-  letter-spacing: -0.5px;
-  font-weight: 650;
-  line-height: 1.2;
-  margin: 0;
+.map-workspace.is-preview {
+  --map-topline-height: 56px;
 }
-.map-topline > span {
-  color: var(--map-secondary);
-  font-size: 12px;
+.is-preview .map-topline {
+  display: flex;
 }
 .map-topline a {
   margin-left: auto;
@@ -47,7 +43,7 @@
   display: grid;
   grid-template-columns: 376px minmax(0, 1fr);
   grid-template-rows: 68px auto minmax(0, 1fr);
-  height: calc(100dvh - 212px);
+  height: calc(100dvh - 156px - var(--map-topline-height));
   min-height: 480px;
   background: white;
 }
@@ -577,6 +573,7 @@
     padding: 0;
   }
   .map-topline {
+    display: flex;
     flex-shrink: 0;
     min-height: 40px;
     padding: 8px 14px 4px;
@@ -590,13 +587,6 @@
     font-size: 20px;
     font-weight: 800;
     text-decoration: none;
-  }
-  .map-topline h1 {
-    font-size: 15px;
-    letter-spacing: 0;
-  }
-  .map-topline > span {
-    display: none;
   }
   .map-topline a {
     font-size: 10px;

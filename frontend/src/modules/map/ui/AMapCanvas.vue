@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { formatRating } from '@/shared/lib/formatRating'
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { loadAMap } from '../sdk/amap'
@@ -32,6 +33,7 @@ let map: SDKMap | undefined, sdk: AMapSDK | undefined
 let markers: SDKMarker[] = []
 let clusterKeys: string[] = []
 const clusterMembers = ref<MapPoint[]>([])
+let expandingCluster: string[] | undefined
 let destroyed = false,
   attempt = 0
 let resize: globalThis.ResizeObserver | undefined
@@ -62,10 +64,12 @@ function expandCluster(cluster: MarkerCluster) {
       Math.abs(point.latitude - first.latitude) < 0.0000001,
   )
   if (coincident || map.getZoom() >= 20) {
+    expandingCluster = undefined
     clusterMembers.value = cluster.points
     return
   }
   resumeViewport()
+  expandingCluster = cluster.points.map((point) => point.id)
   map.setZoomAndCenter(Math.min(20, map.getZoom() + 2), cluster.center)
 }
 function selectMember(id: string) {
@@ -74,8 +78,23 @@ function selectMember(id: string) {
 }
 /** 缩放即使由点选触发也须重算密度；候选范围是否重查仍由moved独立决定。 */
 function zoomed() {
-  draw()
+  const clusters = draw()
+  // 最后一级仍未分开的点击目标直接展示名单，不能要求用户在同一个数字上再点一次。
+  if (expandingCluster && map && map.getZoom() >= 20) {
+    clusterMembers.value = findCluster(clusters ?? [], expandingCluster)?.points ?? []
+  }
+  expandingCluster = undefined
   moved()
+}
+/** 只保留完全相同的成员集合；顺序和资料更新不能关掉名单，成员变化或拆组则关闭。 */
+function findCluster(clusters: MarkerCluster[], ids: string[]): MarkerCluster | undefined {
+  const members = new Set(ids)
+  return clusters.find(
+    (cluster) =>
+      cluster.points.length > 1 &&
+      cluster.points.length === members.size &&
+      cluster.points.every((point) => members.has(point.id)),
+  )
 }
 function userKeydown(event: globalThis.KeyboardEvent) {
   if (
@@ -155,9 +174,15 @@ function draw(selectionOnly = false) {
       element.classList.toggle('active', active)
       element.setAttribute('aria-pressed', String(active))
     })
-    return
+    return clusters
   }
-  clusterMembers.value = []
+  if (clusterMembers.value.length) {
+    clusterMembers.value =
+      findCluster(
+        clusters,
+        clusterMembers.value.map((point) => point.id),
+      )?.points ?? []
+  }
   clusterKeys = keys
   map.remove(markers)
   markers = clusters.map((cluster) => {
@@ -192,6 +217,7 @@ function draw(selectionOnly = false) {
     })
   })
   map.add(markers)
+  return clusters
 }
 async function start() {
   const ticket = ++attempt
@@ -290,8 +316,7 @@ onUnmounted(() => {
       <h2>{{ error ? '地图暂不可用' : '正在加载高德地图…' }}</h2>
       <p>{{ error }}</p>
       <p>地图恢复后会按实际范围加载店铺，也可返回首页浏览餐厅和点评。</p>
-      <button v-if="error" @click="start">重试加载</button
-      ><RouterLink to="/">返回首页找店 →</RouterLink>
+      <button v-if="error" @click="start">重试加载</button><AppLink to="/">返回首页找店 →</AppLink>
     </div>
     <div v-if="!error && map" class="amap-controls">
       <button aria-label="放大地图" @click="map?.zoomIn()">＋</button

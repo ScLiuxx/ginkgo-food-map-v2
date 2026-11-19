@@ -1,5 +1,6 @@
 /* 商户是连续列表的一行，图片是唯一有形状的内容；不添加卡片底色、外框或阴影。 */
 .restaurant-card {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 26px;
@@ -11,10 +12,20 @@
   color: #252c34;
   text-decoration: none;
 }
+.card-open {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
 .restaurant-card:hover h3 {
   color: #a75d12;
 }
-.restaurant-card:focus-visible {
+.card-open:focus-visible {
   outline: 2px solid #ad6f26;
   outline-offset: 4px;
   border-radius: 4px;

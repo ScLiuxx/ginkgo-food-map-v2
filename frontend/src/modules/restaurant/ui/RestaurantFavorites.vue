@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
+import PrivateContentState from '@/shared/ui/PrivateContentState.vue'
+import axios from 'axios'
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { useLoginStore } from '@/modules/auth'
 import { authToken } from '@/shared/api/authSession'
@@ -23,6 +26,7 @@ const records = ref<FavoriteItem[]>([]),
   busy = ref(false),
   loaded = ref(false),
   error = ref(''),
+  privateList = ref(false),
   notice = ref('')
 let context = 0,
   generation = 0,
@@ -34,6 +38,7 @@ async function load(target = page.value) {
   controller?.abort()
   records.value = []
   error.value = ''
+  privateList.value = false
   loaded.value = false
   emit('total', null)
   loading.value = false
@@ -62,7 +67,15 @@ async function load(target = page.value) {
       loaded.value = true
     }
   } catch (reason) {
-    if (ticket === generation) error.value = toErrorMessage(reason)
+    if (ticket === generation) {
+      // 仅服务端明确的隐私拒绝使用私密占位，其他权限或网络故障仍可重试。
+      privateList.value =
+        !own.value &&
+        axios.isAxiosError(reason) &&
+        reason.response?.status === 403 &&
+        reason.response.data?.code === 'RESTAURANT_FAVORITES_PRIVATE'
+      if (!privateList.value) error.value = toErrorMessage(reason)
+    }
   } finally {
     if (ticket === generation) loading.value = false
   }
@@ -126,6 +139,7 @@ onBeforeUnmount(() => {
     </header>
     <p v-if="notice" role="status">{{ notice }}</p>
     <p v-if="loading" role="status">正在加载收藏…</p>
+    <PrivateContentState v-else-if="privateList" kind="favorites" />
     <div v-else-if="error" role="alert">
       <p>{{ error }}</p>
       <button type="button" @click="load(requested)">重新加载</button>
@@ -144,11 +158,11 @@ onBeforeUnmount(() => {
             /></svg
         ></span>
         <div>
-          <RouterLink v-if="item.available" :to="`/restaurants/${item.restaurantId}`"
+          <AppLink v-if="item.available" :to="`/restaurants/${item.restaurantId}`"
             >{{ item.name
             }}<span v-if="profileLayout" class="favorite-store-chevron" aria-hidden="true">
               ›</span
-            ></RouterLink
+            ></AppLink
           ><strong v-else>店铺已失效</strong>
           <p v-if="item.available" class="favorite-type">
             {{ item.restaurantType === 'CANTEEN' ? '食堂' : '餐厅'

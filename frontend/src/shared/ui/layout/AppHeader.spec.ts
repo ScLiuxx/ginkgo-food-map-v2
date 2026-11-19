@@ -1,3 +1,4 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
 import { createApp, type App } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -46,7 +47,7 @@ describe('页头账号操作', () => {
     await mount(false)
     const nav = host.querySelector('nav')!
     expect(nav.querySelectorAll('a')).toHaveLength(1)
-    expect(nav.querySelector('a')?.getAttribute('href')).toBe('/login')
+    expect(await captureLinkTarget(app, nav.querySelector('a'))).toBe('/login')
     expect(nav.querySelector('button, .account-name')).toBeNull()
   })
   it('退出过程中禁用按钮，不能重复触发退出', async () => {

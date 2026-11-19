@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { RestaurantRankings, type RankingLoader } from '@/modules/restaurant'
 import noodles from './ranking-preview/noodles.jpg'
 import grill from './ranking-preview/grill.jpg'
@@ -37,7 +38,7 @@ const loadPreview: RankingLoader = async (campusCode, periodType) => {
 <template>
   <aside class="ranking-preview-note">
     界面预览 · 店名、配图及评分为示例
-    <RouterLink to="/restaurant-rankings">查看真实榜单 →</RouterLink>
+    <AppLink to="/restaurant-rankings">查看真实榜单 →</AppLink>
   </aside>
   <RestaurantRankings :loader="loadPreview" />
 </template>

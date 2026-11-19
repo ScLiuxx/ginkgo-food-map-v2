@@ -6,6 +6,7 @@ import lombok.Data;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpMethod;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -68,6 +70,19 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.message").value("请求内容格式错误"));
     }
 
+    /** 未映射路由与静态资源兜底均返回404，避免泄露路径或误报服务器故障。 */
+    @Test
+    void shouldHandleUnknownRoutesAndResources() throws Exception {
+        for (String path : new String[] {"/test/missing-route", "/test/missing-resource"}) {
+            mockMvc.perform(get(path))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.success").value(false))
+                    .andExpect(jsonPath("$.code").value("COMMON_NOT_FOUND"))
+                    .andExpect(jsonPath("$.message").value("请求地址不存在"))
+                    .andExpect(jsonPath("$.data").isEmpty());
+        }
+    }
+
     /** 验证未知异常只返回固定提示，不泄露异常原文。 */
     @Test
     void shouldHideUnexpectedExceptionDetails() throws Exception {
@@ -94,6 +109,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/unexpected")
         void unexpectedFailure() {
             throw new IllegalStateException("sensitive internal detail");
+        }
+
+        @GetMapping("/missing-resource")
+        void missingResource() throws NoResourceFoundException {
+            throw new NoResourceFoundException(HttpMethod.GET, "private/path", "private/path");
         }
     }
 

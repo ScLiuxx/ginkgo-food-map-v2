@@ -34,87 +34,101 @@ const distanceLabel = computed(() =>
 </script>
 
 <template>
-  <RouterLink class="restaurant-card" :to="`/restaurants/${encodeURIComponent(restaurant.id)}`">
-    <div class="card-media">
-      <img
-        v-if="photo && !imageFailed"
-        :src="photo.url"
-        :alt="`${restaurant.name}的商户相册封面`"
-        loading="lazy"
-        decoding="async"
-        @error="imageFailed = true"
+  <RouterLink
+    v-slot="{ navigate }"
+    :to="`/restaurants/${encodeURIComponent(restaurant.id)}`"
+    custom
+  >
+    <article class="restaurant-card">
+      <button
+        type="button"
+        class="card-open"
+        :aria-label="`查看${restaurant.name}`"
+        @click="navigate"
       />
-      <span v-if="photo && !imageFailed" class="photo-credit">商户相册</span>
-      <div
-        v-else
-        class="catalog-photo-placeholder"
-        :aria-label="imageFailed ? '图片暂时无法加载' : '暂无商户相册照片'"
-      >
-        <svg viewBox="0 0 64 64" fill="none" aria-hidden="true">
-          <path
-            d="M12 28h40c-2 17-9 22-20 22S14 45 12 28Zm7 27h26M25 10v10m9-12v12m9-10v10"
-            stroke="currentColor"
-            stroke-width="1.6"
-            stroke-linecap="round"
-          /></svg
-        ><small>{{ imageFailed ? '图片暂时无法加载' : '暂无配图' }}</small>
+      <div class="card-media">
+        <img
+          v-if="photo && !imageFailed"
+          :src="photo.url"
+          :alt="`${restaurant.name}的商户相册封面`"
+          loading="lazy"
+          decoding="async"
+          @error="imageFailed = true"
+        />
+        <span v-if="photo && !imageFailed" class="photo-credit">商户相册</span>
+        <div
+          v-else
+          class="catalog-photo-placeholder"
+          :aria-label="imageFailed ? '图片暂时无法加载' : '暂无商户相册照片'"
+        >
+          <svg viewBox="0 0 64 64" fill="none" aria-hidden="true">
+            <path
+              d="M12 28h40c-2 17-9 22-20 22S14 45 12 28Zm7 27h26M25 10v10m9-12v12m9-10v10"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            /></svg
+          ><small>{{ imageFailed ? '图片暂时无法加载' : '暂无配图' }}</small>
+        </div>
       </div>
-    </div>
-    <div class="card-copy">
-      <h3>{{ restaurant.name }}</h3>
-      <template v-if="!cafeteria">
-        <p
-          class="card-rating"
-          :class="{ unrated: restaurant.score === null }"
-          title="综合口碑分：口味70%、性价比15%、服务10%、环境5%，结合评价人数平滑计算"
-        >
-          <span v-if="restaurant.score !== null" class="score-value"
-            ><span aria-hidden="true">★</span> {{ formatRating(restaurant.score) }}</span
+      <div class="card-copy">
+        <h3>{{ restaurant.name }}</h3>
+        <template v-if="!cafeteria">
+          <p
+            class="card-rating"
+            :class="{ unrated: restaurant.score === null }"
+            title="综合口碑分：口味70%、性价比15%、服务10%、环境5%，结合评价人数平滑计算"
           >
-          <span v-else>暂无评分</span>
-          <small class="review-count" :title="`${restaurant.participantCount}人参与评分`"
-            >{{ restaurant.reviewCount }}条点评</small
-          >
-          <span
-            class="card-price"
-            :class="{
-              unknown: restaurant.price === null || restaurant.price <= 0,
-            }"
-          >
-            <template v-if="restaurant.price !== null && restaurant.price > 0"
-              ><small>人均</small><b>{{ priceLabel(restaurant) }}</b
-              ><small v-if="restaurant.priceKind === 'estimate'">估值</small></template
+            <span v-if="restaurant.score !== null" class="score-value"
+              ><span aria-hidden="true">★</span> {{ formatRating(restaurant.score) }}</span
             >
-            <template v-else>人均待补</template>
-          </span>
-        </p>
-        <p class="card-service">
-          <span class="category-name" title="用餐方式待补充">{{
-            restaurant.category || '类型待补充'
-          }}</span>
-          <span v-for="tag in businessTags" :key="tag" class="business-tag">{{ tag }}</span>
-          <span class="card-accessible-note">用餐方式待补充</span>
-          <span v-if="restaurant.closed" class="closed-label">已停业</span>
-        </p>
-        <p
-          v-if="distance !== null || restaurant.address"
-          class="card-distance"
-          :title="restaurant.address || '距用户当前位置的直线距离'"
-        >
-          <span v-if="distance !== null">{{ distanceLabel }}</span
-          ><span v-if="restaurant.address" class="merchant-address">{{ restaurant.address }}</span>
-        </p>
-        <span v-else class="card-accessible-note">位置待补充</span>
-      </template>
-      <template v-else>
-        <p class="card-address">{{ restaurant.address || '位置资料待补充' }}</p>
-        <p class="card-service">
-          食堂 · 窗口资料待补充
-          <span v-if="restaurant.closed" class="closed-label">· 已停业</span>
-        </p>
-        <span class="cafeteria-entry">查看食堂 <span aria-hidden="true">→</span></span>
-      </template>
-    </div>
+            <span v-else>暂无评分</span>
+            <small class="review-count" :title="`${restaurant.participantCount}人参与评分`"
+              >{{ restaurant.reviewCount }}条点评</small
+            >
+            <span
+              class="card-price"
+              :class="{
+                unknown: restaurant.price === null || restaurant.price <= 0,
+              }"
+            >
+              <template v-if="restaurant.price !== null && restaurant.price > 0"
+                ><small>人均</small><b>{{ priceLabel(restaurant) }}</b
+                ><small v-if="restaurant.priceKind === 'estimate'">估值</small></template
+              >
+              <template v-else>人均待补</template>
+            </span>
+          </p>
+          <p class="card-service">
+            <span class="category-name" title="用餐方式待补充">{{
+              restaurant.category || '类型待补充'
+            }}</span>
+            <span v-for="tag in businessTags" :key="tag" class="business-tag">{{ tag }}</span>
+            <span class="card-accessible-note">用餐方式待补充</span>
+            <span v-if="restaurant.closed" class="closed-label">已停业</span>
+          </p>
+          <p
+            v-if="distance !== null || restaurant.address"
+            class="card-distance"
+            :title="restaurant.address || '距用户当前位置的直线距离'"
+          >
+            <span v-if="distance !== null">{{ distanceLabel }}</span
+            ><span v-if="restaurant.address" class="merchant-address">{{
+              restaurant.address
+            }}</span>
+          </p>
+          <span v-else class="card-accessible-note">位置待补充</span>
+        </template>
+        <template v-else>
+          <p class="card-address">{{ restaurant.address || '位置资料待补充' }}</p>
+          <p class="card-service">
+            食堂 · 窗口资料待补充
+            <span v-if="restaurant.closed" class="closed-label">· 已停业</span>
+          </p>
+          <span class="cafeteria-entry">查看食堂 <span aria-hidden="true">→</span></span>
+        </template>
+      </div>
+    </article>
   </RouterLink>
 </template>
 

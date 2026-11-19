@@ -37,7 +37,7 @@ public interface RestaurantCatalogMapper {
     List<RestaurantEntity> selectSearchPage(
             @Param("query") RestaurantListQuery query, @Param("ids") List<Long> ids);
 
-    /** 当前版本仍有未完成任务时保守走SQL，防止新增/恢复商户因尚未入索引而漏召回。 */
+    /** 当前版本仍有未完成任务时保守走SQL，防止新增或修改商户因索引延迟而漏召回。 */
     boolean hasUnsyncedSearchChanges();
 
     /** 独立于目录分页读取视口点位；最多100条，避免点位过密且不接受客户端扩大限额。 */

@@ -1,7 +1,7 @@
 import { createPinia } from 'pinia'
 import { createApp, nextTick, type App } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import RestaurantCard from './RestaurantCard.vue'
 import { restaurantFixture } from '../api/restaurant.test-data'
 import type { RestaurantReadModel } from '../model/restaurant.types'
@@ -24,6 +24,7 @@ describe('商户行的真实资料边界', () => {
     app = createApp(RestaurantCard, { restaurant }).use(router).use(createPinia())
     app.mount(host)
     await nextTick()
+    return router
   }
   it('未知评分、消费、方式和配图保持未知，不默认推断为非食堂或两种方式都支持', async () => {
     await mount(restaurantFixture)
@@ -34,11 +35,21 @@ describe('商户行的真实资料边界', () => {
     expect(host.querySelector('img, .score-value')).toBeNull()
   })
   it('食堂只保留真实详情入口，窗口未接通时不生成窗口链接或聚合评分', async () => {
-    await mount({ ...restaurantFixture, id: '42', category: '食堂', name: '接口食堂', score: 8.7 })
-    expect(host.querySelector('a')?.getAttribute('href')).toBe('/restaurants/42')
+    const router = await mount({
+      ...restaurantFixture,
+      id: '42',
+      category: '食堂',
+      name: '接口食堂',
+      score: 8.7,
+    })
+    expect(host.querySelector('a, [href]')).toBeNull()
+    host.querySelector<HTMLButtonElement>('.card-open')!.click()
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/restaurants/42'))
     expect(host.textContent).toContain('窗口资料待补充')
     expect(host.textContent).not.toContain('8.7')
     expect(host.querySelector('.card-rating')).toBeNull()
+    router.back()
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/'))
   })
   it('评分、人均、真实业务标签与来源分层显示，保留估值和未知方式说明', async () => {
     await mount({

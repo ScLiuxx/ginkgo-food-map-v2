@@ -9,6 +9,7 @@ import {
   type ContentReportStatus,
 } from '@/modules/moderation'
 import AdminSidebar from './AdminSidebar.vue'
+import AdminHeader from './AdminHeader.vue'
 
 /** 管理页只负责协议展示与确认交互；权限校验和处置事务全部由服务端完成。 */
 defineProps<{ username: string; loggingOut: boolean; sessionError: string | null }>()
@@ -90,25 +91,17 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="report-workspace admin-theme">
-    <header class="report-topbar">
-      <RouterLink class="brand" to="/admin/reviews"
-        ><em>泥电</em><span>美食地图</span><small>管理工作台</small></RouterLink
-      >
-      <div class="admin-identity">
-        <span class="admin-avatar" aria-hidden="true">管</span
-        ><span :title="username">{{ username }}</span
-        ><button :disabled="loggingOut || busy" @click="$emit('logout')">
-          {{ loggingOut ? '正在退出…' : '退出登录' }}
-        </button>
-      </div>
-    </header>
+    <AdminHeader
+      :username="username"
+      :logging-out="loggingOut"
+      :disabled="busy"
+      @logout="$emit('logout')"
+    />
     <p v-if="sessionError" role="alert" class="report-error">{{ sessionError }}</p>
     <div class="report-shell">
       <AdminSidebar />
       <main>
-        <div class="report-breadcrumb">管理工作台 / 举报处理</div>
         <h1>举报处理</h1>
-        <p class="report-intro">核查同学提交的举报，驳回误报或永久删除违规内容。</p>
 
         <div class="report-tabs" aria-label="举报状态筛选">
           <button

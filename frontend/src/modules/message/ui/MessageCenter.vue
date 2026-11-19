@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { computed } from 'vue'
 import {
   initialMessageSessions,
@@ -87,7 +88,7 @@ const loginTarget = computed(() => ({
       </header>
 
       <nav class="message-shortcuts" aria-label="互动消息分类">
-        <RouterLink
+        <AppLink
           v-for="item in shortcuts"
           :key="item.id"
           :to="`/messages/${item.id}`"
@@ -99,12 +100,12 @@ const loginTarget = computed(() => ({
           <span v-if="shortcutUnread(item.id)" class="shortcut-unread">{{
             Math.min(99, shortcutUnread(item.id))
           }}</span>
-        </RouterLink>
+        </AppLink>
       </nav>
 
       <!-- 系统通知统一采用会话行；时间及未读数仅在调用方提供真实值时展示。 -->
       <nav v-if="sessions.length" class="session-list" aria-label="消息会话列表">
-        <RouterLink
+        <AppLink
           v-for="item in sessions"
           :key="item.id"
           to="/messages/system"
@@ -129,7 +130,7 @@ const loginTarget = computed(() => ({
               >
             </span>
           </span>
-        </RouterLink>
+        </AppLink>
       </nav>
 
       <!-- 仅整个会话列表为空时展示一份空态，避免系统会话下方出现无关的私信占位。 -->
@@ -137,17 +138,15 @@ const loginTarget = computed(() => ({
         <span class="empty-illustration"><MessageIcon name="inbox" /></span>
         <h2>消息功能即将开放</h2>
         <p>与你有关的通知，将在这里与你见面。</p>
-        <RouterLink class="empty-action" to="/"
-          >去发现美食 <span aria-hidden="true">→</span></RouterLink
-        >
+        <AppLink class="empty-action" to="/">去发现美食 <span aria-hidden="true">→</span></AppLink>
       </div>
     </template>
 
     <template v-else>
       <header class="category-heading">
-        <RouterLink class="back-link" to="/messages" aria-label="返回消息中心">
+        <AppLink class="back-link" to="/messages" aria-label="返回消息中心">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6" /></svg>
-        </RouterLink>
+        </AppLink>
         <h1 id="message-heading">{{ selected.title }}</h1>
         <span
           v-if="connected && inbox?.unreadCount"
@@ -225,11 +224,9 @@ const loginTarget = computed(() => ({
         <span class="category-illustration"><MessageIcon :name="selected.icon" /></span>
         <h2>{{ selected.title }}，即将开放</h2>
         <p>{{ selected.detail }}</p>
-        <RouterLink v-if="!authenticated" class="empty-action" :to="loginTarget"
-          >登录账号</RouterLink
-        >
-        <RouterLink v-else class="empty-action" to="/"
-          >去发现美食 <span aria-hidden="true">→</span></RouterLink
+        <AppLink v-if="!authenticated" class="empty-action" :to="loginTarget">登录账号</AppLink>
+        <AppLink v-else class="empty-action" to="/"
+          >去发现美食 <span aria-hidden="true">→</span></AppLink
         >
       </div>
     </template>

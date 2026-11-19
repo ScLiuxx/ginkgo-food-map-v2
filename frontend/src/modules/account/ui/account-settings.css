@@ -88,6 +88,18 @@
   border-color: #e99432;
   color: #fff;
 }
+@media (min-width: 800px) {
+  /* 简介输入聚焦只显示光标，覆盖个人中心通用的黄色焦点外框。 */
+  .account-settings .bio-dialog textarea:focus {
+    border-color: #dfe4ea;
+    outline: none;
+    box-shadow: none;
+  }
+  .account-settings .bio-dialog button:focus-visible {
+    outline: 2px solid #a5adb7;
+    outline-offset: 3px;
+  }
+}
 @media (max-width: 600px) {
   .account-settings .account-block {
     padding: 22px 18px 10px;

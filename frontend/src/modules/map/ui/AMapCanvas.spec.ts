@@ -1,6 +1,7 @@
 /* eslint-disable vue/one-component-per-file -- 测试包含不同初始视角的应用挂载入口。 */
 import { createApp, h, nextTick, reactive, ref, type App } from 'vue'
 import { createPinia } from 'pinia'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AMapCanvas from './AMapCanvas.vue'
 import { loadAMap } from '../sdk/amap'
@@ -105,7 +106,12 @@ describe('地图程序定位与候选范围隔离', () => {
           onHover: (id: string) => hovered.push(id),
         }),
     }).use(createPinia())
-    app.component('RouterLink', () => h('a'))
+    app.use(
+      createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: '/:pathMatch(.*)*', component: { template: '<p />' } }],
+      }),
+    )
     app.mount(host)
     for (let i = 0; i < 8; i++) await nextTick()
     events.get('complete')!()
@@ -175,7 +181,12 @@ describe('地图程序定位与候选范围隔离', () => {
       initialCamera: camera,
       onMove: (value: MapBounds) => moves.push(value),
     }).use(createPinia())
-    app.component('RouterLink', () => h('a'))
+    app.use(
+      createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: '/:pathMatch(.*)*', component: { template: '<p />' } }],
+      }),
+    )
     app.mount(host)
     for (let i = 0; i < 8; i++) await nextTick()
     expect(options).toEqual(expect.objectContaining(camera))
@@ -272,5 +283,31 @@ describe('地图程序定位与候选范围隔离', () => {
     await nextTick()
     expect(host.querySelectorAll('.amap-score-pin')).toHaveLength(0)
     expect(remove).toHaveBeenCalled()
+  })
+
+  it('放大到最高级仍未分开的聚合立即显示名单，无需再点一次', async () => {
+    zoom = 19
+    props.points = [point('1'), point('2', 104.000001)]
+    await nextTick()
+    host.querySelector<HTMLButtonElement>('.amap-cluster-pin')!.click()
+    await nextTick()
+    expect(zoomAndCenter).toHaveBeenLastCalledWith(20, [104.0000005, 30.7])
+    expect(host.querySelectorAll('.cluster-members li')).toHaveLength(2)
+  })
+
+  it('迟到的同组刷新保留名单并更新资料，主动关闭后不会因刷新重开', async () => {
+    props.points = [point('1'), point('2')]
+    await nextTick()
+    host.querySelector<HTMLButtonElement>('.amap-cluster-pin')!.click()
+    await nextTick()
+    props.points = [point('2'), { ...point('1'), name: '更新后的店铺1' }]
+    await nextTick()
+    expect(host.querySelectorAll('.cluster-members li')).toHaveLength(2)
+    expect(host.querySelector('.cluster-members')?.textContent).toContain('更新后的店铺1')
+    host.querySelector<HTMLButtonElement>('[aria-label="关闭聚合店铺"]')!.click()
+    await nextTick()
+    props.points = [point('1'), point('2')]
+    await nextTick()
+    expect(host.querySelector('.cluster-members')).toBeNull()
   })
 })

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StarScore from '@/shared/ui/StarScore.vue'
@@ -113,7 +114,7 @@ function menuLine(window: DiningWindow) {
       <section v-for="group in groups" :key="`${floor}:${group.name}`" class="floor-section">
         <h3 v-if="multipleFloors && !floor" class="floor-heading">{{ group.name }}</h3>
         <div class="window-grid">
-          <RouterLink
+          <AppLink
             v-for="window in group.windows"
             :key="window.id"
             class="window-row"
@@ -150,7 +151,7 @@ function menuLine(window: DiningWindow) {
               </p>
               <p v-if="window.closed" class="excluded-note">不计入当前汇总</p>
             </div>
-          </RouterLink>
+          </AppLink>
         </div>
       </section>
       <div v-if="!visible.length" class="dining-empty" role="status">

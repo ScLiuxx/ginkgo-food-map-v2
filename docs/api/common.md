@@ -42,6 +42,7 @@
 | 400 | COMMON_MALFORMED_REQUEST | JSON语法/读取/严格DTO未知字段错误 |
 | 401 | AUTH_UNAUTHENTICATED | 身份缺失、失效或不可使用 |
 | 403 | AUTH_FORBIDDEN | 当前角色无权限 |
+| 404 | COMMON_NOT_FOUND | 已通过认证边界但请求地址不存在 |
 | 405 | COMMON_METHOD_NOT_ALLOWED | 已通过认证边界但HTTP方法不匹配 |
 | 409 | COMMON_DATA_CONFLICT | 数据库完整性约束冲突 |
 | 500 | COMMON_INTERNAL_SERVER_ERROR | 未预期故障，不能当成成功或空数据 |

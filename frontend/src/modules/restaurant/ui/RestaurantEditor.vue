@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import ResourceLink from '@/shared/ui/ResourceLink.vue'
+import AppLink from '@/shared/ui/AppLink.vue'
+import LeaveConfirmation from '@/shared/ui/LeaveConfirmation.vue'
 import axios from 'axios'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRouter } from 'vue-router'
@@ -242,11 +245,9 @@ function beforeUnload(event: globalThis.BeforeUnloadEvent): void {
 }
 onMounted(() => globalThis.addEventListener('beforeunload', beforeUnload))
 /** 同一路由切换餐厅ID也会销毁草稿，需与离开编辑页使用相同保护。 */
-function canLeave(): boolean {
-  return (
-    saved.value ||
-    (!saving.value && (!dirty.value || globalThis.confirm('尚有未保存的餐厅资料，确定离开吗？')))
-  )
+const leaveConfirmation = ref<InstanceType<typeof LeaveConfirmation> | null>(null)
+function canLeave() {
+  return saved.value || (!saving.value && (!dirty.value || leaveConfirmation.value?.ask()))
 }
 onBeforeRouteLeave(canLeave)
 onBeforeRouteUpdate((to, from) => to.params.id === from.params.id || canLeave())
@@ -260,8 +261,9 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="restaurant-editor" aria-labelledby="editor-title">
-    <RouterLink :to="returnPath"
-      >← {{ admin ? '返回商户管理' : id ? '返回餐厅详情' : '返回餐厅目录' }}</RouterLink
+    <LeaveConfirmation ref="leaveConfirmation" message="餐厅资料尚未保存，确定离开？" />
+    <AppLink :to="returnPath"
+      >← {{ admin ? '返回商户管理' : id ? '返回餐厅详情' : '返回餐厅目录' }}</AppLink
     >
     <p class="eyebrow">{{ admin ? '商户管理 · 直接维护' : 'SHARE A PLACE' }}</p>
     <h1 id="editor-title">{{ id ? '编辑餐厅' : '新增餐厅' }}</h1>
@@ -273,8 +275,8 @@ onBeforeUnmount(() => {
             : '登录后才能新增或维护餐厅。'
         }}
       </p>
-      <RouterLink v-if="!authToken" :to="loginTarget">前往登录</RouterLink>
-      <a v-else :href="path">重新打开此页</a>
+      <AppLink v-if="!authToken" :to="loginTarget">前往登录</AppLink>
+      <ResourceLink v-else :href="path">重新打开此页</ResourceLink>
     </section>
     <p v-else-if="loading" role="status">正在读取餐厅资料与分类…</p>
     <section v-else-if="loadError" class="editor-notice" role="alert">
@@ -466,15 +468,15 @@ onBeforeUnmount(() => {
       </fieldset>
       <div v-if="saveError || Object.keys(errors).length" class="editor-notice" role="alert">
         <p>{{ saveError || '请修改上方标记的内容后再保存。' }}</p>
-        <RouterLink v-if="saveError" :to="admin ? '/admin/restaurants' : '/'"
-          >到目录核对保存结果</RouterLink
+        <AppLink v-if="saveError" :to="admin ? '/admin/restaurants' : '/'"
+          >到目录核对保存结果</AppLink
         >
       </div>
       <div class="editor-actions">
         <button type="submit" class="primary-action" :disabled="saving">
           {{ saving ? '正在保存…' : id ? '保存修改' : '创建餐厅' }}
         </button>
-        <RouterLink :to="returnPath" :aria-disabled="saving">取消</RouterLink>
+        <AppLink :to="returnPath" :aria-disabled="saving">取消</AppLink>
       </div>
     </form>
   </section>

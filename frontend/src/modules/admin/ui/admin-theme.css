@@ -1,5 +1,11 @@
 /* 四个管理入口共用配色；仅在管理工作区内生效，避免影响用户端主题。 */
 .admin-theme {
+  /* 顶栏、侧栏和菜单尺寸共同响应窗口宽度，切换管理入口时保持位置一致。 */
+  --admin-header-height: 72px;
+  --admin-header-padding: 30px;
+  --admin-sidebar-width: 202px;
+  --admin-sidebar-padding: 16px;
+  --admin-nav-height: 48px;
   --admin-canvas: #f4f5f7;
   --admin-surface: #fff;
   --admin-surface-muted: #f7f8fa;
@@ -26,6 +32,25 @@
   --admin-shadow: #28334118;
   --admin-loading: #ffffffa8;
   color-scheme: light;
+}
+
+@media (min-width: 801px) and (max-width: 1200px) {
+  .admin-theme {
+    --admin-sidebar-width: 180px;
+  }
+}
+@media (min-width: 801px) and (max-width: 950px) {
+  .admin-theme {
+    --admin-sidebar-width: 160px;
+    --admin-sidebar-padding: 12px;
+  }
+}
+@media (max-width: 800px) {
+  .admin-theme {
+    --admin-header-height: 64px;
+    --admin-header-padding: 18px;
+    --admin-nav-height: 42px;
+  }
 }
 
 /* 文字输入只显示光标；按钮、链接及选项控件仍保留中性灰键盘焦点。 */

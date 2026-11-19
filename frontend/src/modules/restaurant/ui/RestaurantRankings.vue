@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { computed, onScopeDispose, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -79,12 +80,12 @@ onScopeDispose(() => {
 
 <template>
   <section class="ranking-page" aria-labelledby="ranking-title">
-    <RouterLink class="ranking-back" to="/">
+    <AppLink class="ranking-back" to="/">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="m14 6-6 6 6 6" />
       </svg>
       返回首页
-    </RouterLink>
+    </AppLink>
     <div class="ranking-heading">
       <h1 id="ranking-title">近期推荐榜</h1>
       <div class="ranking-campuses" role="group" aria-label="选择校区">
@@ -133,12 +134,12 @@ onScopeDispose(() => {
       </div>
       <div v-else-if="!ranking?.items.length" class="ranking-state" role="status">
         <h2>还没有餐厅上榜</h2>
-        <RouterLink to="/">去看看附近的餐厅 →</RouterLink>
+        <AppLink to="/">去看看附近的餐厅 →</AppLink>
       </div>
       <template v-else>
         <ol class="ranking-list" aria-label="餐厅排名">
           <li v-for="item in ranking.items" :key="item.restaurantId">
-            <RouterLink
+            <AppLink
               class="ranking-row"
               :to="`/restaurants/${encodeURIComponent(item.restaurantId)}`"
               :aria-label="`第${item.rank}名，${item.name}，${item.recommendationScore.toFixed(1)}分，${item.participantCount}人评价`"
@@ -182,7 +183,7 @@ onScopeDispose(() => {
               <svg class="ranking-chevron" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="m9 6 6 6-6 6" />
               </svg>
-            </RouterLink>
+            </AppLink>
           </li>
         </ol>
         <p class="ranking-end">已展示全部上榜餐厅</p>

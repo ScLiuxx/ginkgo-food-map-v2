@@ -66,12 +66,13 @@ describe('restaurant catalog API integration', () => {
     }
   })
 
-  it('shows server records and total without internal labels and preserves numeric links', () => {
-    expect(host.querySelector('[role="note"]')?.textContent).toContain('请出发前核实')
+  it('shows server records and total without internal labels and preserves numeric detail destinations', async () => {
     expect(host.textContent).not.toContain('联调模拟')
     expect(host.querySelectorAll('.restaurant-card')).toHaveLength(8)
     expect(host.querySelector('.results-toolbar')?.textContent).toContain('25')
-    expect(host.querySelector('.restaurant-card')?.getAttribute('href')).toBe('/restaurants/1')
+    expect(host.querySelector('.restaurant-card a, .restaurant-card [href]')).toBeNull()
+    host.querySelector<HTMLButtonElement>('.restaurant-card .card-open')!.click()
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/restaurants/1'))
     expect(host.textContent).not.toContain('银桦餐厅')
   })
 
@@ -243,13 +244,31 @@ describe('restaurant catalog API integration', () => {
     expect(host.textContent).not.toContain('只看营业中')
   })
 
-  it('does not show an empty reset action when the unfiltered catalog is empty', async () => {
+  it('only offers reset when conditions exist and clears an isolated search keyword', async () => {
     vi.mocked(fetchRestaurants).mockResolvedValue(
       pageFixture({ total: 0, totalPages: 0, records: [] }),
     )
     await useRestaurantCatalog(pinia).load()
     await settle()
     expect(host.querySelector('.directory-empty .primary-action')).toBeNull()
+    const store = useRestaurantCatalog(pinia)
+    store.filters.keyword = '未收录的店'
+    await settle()
+    await store.load()
+    await settle()
+    const clear = host.querySelector<HTMLButtonElement>('.directory-empty .primary-action')!
+    expect(clear.textContent?.trim()).toBe('清空搜索')
+    clear.click()
+    await settle()
+    expect(store.filters.keyword).toBe('')
+    await vi.waitFor(() =>
+      expect(fetchRestaurants).toHaveBeenLastCalledWith(
+        expect.objectContaining({ keyword: '' }),
+        1,
+        8,
+        expect.any(AbortSignal),
+      ),
+    )
   })
 
   it('stages type and dining choices, cancels drafts, applies together and removes one condition independently', async () => {
@@ -437,7 +456,7 @@ describe('restaurant catalog API integration', () => {
     )
     useRestaurantCatalog(pinia).filters.category = 'HOT_POT'
     await settle()
-    expect(host.querySelector('.directory-empty')?.textContent).toContain('没有找到符合条件')
+    expect(host.querySelector('.directory-empty')?.textContent).toContain('暂无符合条件的店铺')
     expect(host.querySelectorAll('.restaurant-card')).toHaveLength(0)
   })
 

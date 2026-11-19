@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { useLoginStore } from '@/modules/auth'
 import { authToken } from '@/shared/api/authSession'
@@ -104,10 +105,10 @@ onBeforeUnmount(() => {
       aria-label="互动统计"
     >
       <div class="follow-counts">
-        <RouterLink :to="path('following')"
-          ><strong>{{ data?.followingCount ?? '—' }}</strong> 关注</RouterLink
-        ><RouterLink :to="path('followers')"
-          ><strong>{{ data?.followersCount ?? '—' }}</strong> 粉丝</RouterLink
+        <AppLink :to="path('following')"
+          ><strong>{{ data?.followingCount ?? '—' }}</strong> 关注</AppLink
+        ><AppLink :to="path('followers')"
+          ><strong>{{ data?.followersCount ?? '—' }}</strong> 粉丝</AppLink
         >
       </div>
       <slot name="likes" />

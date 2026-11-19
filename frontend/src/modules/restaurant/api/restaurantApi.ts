@@ -243,16 +243,6 @@ export async function deleteRestaurant(id: string, token: string) {
   return response.data.data
 }
 
-/** 管理员恢复软删除商户；由服务端再次验证权限，不在客户端伪造成功状态。 */
-export async function restoreRestaurant(id: string, token: string) {
-  const response = await httpClient.post<ApiResponse<RestaurantManagement>>(
-    `/api/restaurants/${encodeURIComponent(id)}/restore`,
-    null,
-    authenticated(token),
-  )
-  return response.data.data
-}
-
 /** 纠错读取公开资料，允许登录用户为任意公开商户提出申请，不获取归属管理权限。 */
 export async function fetchCorrectionSource(id: string, signal?: AbortSignal) {
   const response = await httpClient.get<ApiResponse<RestaurantResponse>>(

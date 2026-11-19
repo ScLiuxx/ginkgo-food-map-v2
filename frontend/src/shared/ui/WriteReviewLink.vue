@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { reviewDestination } from '@/shared/lib/reviewNavigation'
@@ -9,5 +10,5 @@ const destination = computed(() => reviewDestination(route))
 
 <template>
   <!-- 临时打开意图替换当前条目，消费后地址恢复原样；关闭时无需猜测返回目标。 -->
-  <RouterLink :to="destination" replace><slot /></RouterLink>
+  <AppLink :to="destination" replace><slot /></AppLink>
 </template>

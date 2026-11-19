@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { onBeforeUnmount, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import PasswordInput from './PasswordInput.vue'
@@ -101,13 +102,11 @@ onBeforeUnmount(() => {
         {{ errors.password || auth.error }}
       </p>
     </div>
-    <p class="recovery-link"><RouterLink to="/password-reset">忘记密码？</RouterLink></p>
+    <p class="recovery-link"><AppLink to="/password-reset">忘记密码？</AppLink></p>
     <button class="primary-action" type="submit" :disabled="auth.loggingIn || auth.restoring">
       {{ auth.loggingIn ? '正在登录…' : '登录' }}
     </button>
-    <p class="form-footnote">
-      还没有账号？<RouterLink to="/register">使用校园邮箱注册</RouterLink>
-    </p>
+    <p class="form-footnote">还没有账号？<AppLink to="/register">使用校园邮箱注册</AppLink></p>
   </form>
 </template>
 

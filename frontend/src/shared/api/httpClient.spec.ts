@@ -58,7 +58,7 @@ describe('authenticated HTTP client', () => {
     await httpClient.post('/api/restaurants', {})
     await httpClient.put('/api/restaurants/1', {})
     await httpClient.delete('/api/restaurants/1')
-    await httpClient.post('/api/restaurants/1/restore')
+    await httpClient.post('/api/admin/announcements', {})
     await httpClient.post('/api/reviews/10/replies', {})
     for (const config of sent) expect(config.headers.Authorization).toBe('Bearer current-session')
   })

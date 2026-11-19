@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ResourceLink from '@/shared/ui/ResourceLink.vue'
+import AppLink from '@/shared/ui/AppLink.vue'
 import {
   computed,
   nextTick,
@@ -257,9 +259,8 @@ onUnmounted(() => {
     aria-label="地图找店"
   >
     <div class="map-topline">
-      <RouterLink class="map-mobile-brand" to="/" aria-label="泥电美食地图首页">泥电</RouterLink>
-      <h1>地图找店</h1>
-      <RouterLink v-if="preview" to="/map">返回真实餐厅 →</RouterLink>
+      <AppLink class="map-mobile-brand" to="/" aria-label="泥电美食地图首页">泥电</AppLink>
+      <AppLink v-if="preview" to="/map">返回真实餐厅 →</AppLink>
     </div>
     <div class="map-layout">
       <div class="map-search">
@@ -381,11 +382,11 @@ onUnmounted(() => {
             class="map-data-note"
           >
             © OpenStreetMap contributors ·
-            <a
+            <ResourceLink
               href="https://www.openstreetmap.org/copyright"
               target="_blank"
               rel="noopener noreferrer"
-              >ODbL-1.0</a
+              >ODbL-1.0</ResourceLink
             >
           </p>
         </aside>
@@ -444,19 +445,19 @@ onUnmounted(() => {
                 @select="mobile && (sheetSnap = 'half')"
               />
               <div class="map-selection-actions">
-                <RouterLink
+                <AppLink
                   v-if="!preview"
                   :to="{ path: `/restaurants/${selected.id}`, query: { from: 'map' } }"
-                  >查看详情</RouterLink
+                  >查看详情</AppLink
                 ><button v-else disabled>查看详情</button
-                ><a
+                ><ResourceLink
                   v-if="navigationUrl(selected)"
                   :href="navigationUrl(selected)!"
                   target="_blank"
                   rel="noopener noreferrer"
                   class="map-navigate"
                   title="在高德打开此餐厅，由高德处理定位与路线"
-                  >在高德中打开 ↗</a
+                  >在高德中打开 ↗</ResourceLink
                 ><button v-else class="map-navigate" disabled>
                   {{ preview ? '在高德中打开 ↗' : '位置待确认' }}
                 </button>

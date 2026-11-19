@@ -96,19 +96,6 @@ public class RestaurantWriteService {
         return managementVo(mapper.selectManagementById(current.getId()));
     }
 
-    /** 管理员角色单独校验；清空当前删除标记而不改归属、不重建或清空历史标签。 */
-    @PreAuthorize("hasRole('ADMIN')")
-    public RestaurantManagementVo restore(String id) {
-        var actor = actors.requireActor();
-        // 方法级角色检查之外保留显式防线，模块内部调用也不能把普通操作者当作管理员。
-        if (!actor.isAdministrator()) throw new BusinessException(RestaurantErrorCode.FORBIDDEN);
-        var current = lockAccessible(RestaurantIdentifiers.id(id), actor);
-        if (current.getDeletedAt() == null) throw new BusinessException(RestaurantErrorCode.STATE_CONFLICT);
-        if (mapper.restoreCurrent(current.getId(), actor.getUserId()) != 1) conflict();
-        searchOutbox.record(current.getId());
-        return managementVo(mapper.selectManagementById(current.getId()));
-    }
-
     /** 纠错共用现有字段、分类及标签校验，只规范化申请数据，不修改正式商户。 */
     public void validateChange(RestaurantSaveRequest request, String currentCategory) {
         normalizeChange(request);

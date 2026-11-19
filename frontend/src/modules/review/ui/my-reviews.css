@@ -2,6 +2,44 @@
 .my-reviews {
   min-width: 0;
 }
+@media (min-width: 800px) {
+  .desktop-review-list.card-review-list {
+    padding: 0 30px;
+    border: 1px solid #e9ecee;
+    border-radius: 12px;
+    background: #fff;
+  }
+  .desktop-review-list.card-review-list.profile-review-list .my-review-group {
+    position: relative;
+    margin: 0;
+    padding: 24px 0 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .desktop-review-list.card-review-list.profile-review-list .my-review-group + .my-review-group {
+    border-top: 1px solid #eef0f2;
+  }
+  .desktop-review-list.card-review-list .my-review-store {
+    padding-right: 44px;
+    margin: 0;
+  }
+  .desktop-review-list.card-review-list.profile-review-list .my-review-group :deep(.review-card) {
+    padding: 8px 0 16px;
+  }
+  .desktop-review-list.card-review-list.profile-review-list .my-review-group:last-of-type {
+    border-bottom: 0;
+  }
+  .desktop-review-list.card-review-list .my-review-store h2 {
+    font-family: inherit;
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .my-reviews.desktop-review-list :is(a, button):focus-visible {
+    outline: 2px solid #a5adb7;
+    outline-offset: 3px;
+  }
+}
 .my-reviews-toolbar {
   display: flex;
   align-items: center;

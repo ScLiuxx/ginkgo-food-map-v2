@@ -1,3 +1,4 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
 import { createApp, h, nextTick, type App } from 'vue'
 import { createPinia, disposePinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -386,15 +387,12 @@ describe('我的投稿与纠错', () => {
       'session-42',
       expect.any(AbortSignal),
     )
-    expect(
-      host
-        .querySelector('.contribution-detail-footer a[href="/restaurants/501"]')
-        ?.getAttribute('href'),
-    ).toBe('/restaurants/501')
     host.querySelector<HTMLButtonElement>('[aria-label="查看附图 1"]')!.click()
     await settle()
     expect(host.querySelector<HTMLDialogElement>('.contribution-lightbox')!.open).toBe(true)
-    host.querySelector<HTMLButtonElement>('[aria-label="关闭申请详情"]')!.click()
+    expect(await captureLinkTarget(app, host.querySelector('.contribution-visit'))).toBe(
+      '/restaurants/501',
+    )
     await settle()
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:private-photo')
     expect(host.querySelector('.contribution-rejection')).toBeNull()
@@ -480,7 +478,11 @@ describe('我的投稿与纠错', () => {
         expect(dialog.querySelector('.contribution-outcome p')).toBeNull()
         expect(dialog.textContent).toContain('点评已发布，可前往店铺查看')
         expect(dialog.querySelector('.contribution-changes')).toBeNull()
-        expect(dialog.querySelectorAll('a[href="/restaurants/501"]')).toHaveLength(1)
+        const publishedLink = [...dialog.querySelectorAll('a')].filter((link) =>
+          link.textContent?.includes('查看店铺及点评'),
+        )
+        expect(publishedLink).toHaveLength(1)
+        expect(await captureLinkTarget(app, publishedLink[0])).toBe('/restaurants/501')
         expect(dialog.querySelector('.attached-body')).toBeNull()
       }
       host.querySelector<HTMLButtonElement>('[aria-label="关闭申请详情"]')!.click()

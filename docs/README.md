@@ -77,7 +77,8 @@ ES 监控的实际故障验证见[故障演练报告](history/elasticsearch-metr
 
 - [开发记录01](history/development-01.md)：初始工程、账号与基础认证阶段。
 - [开发记录02](history/development-02.md)：部署、餐厅、评价结构和前端阶段。
-- [开发记录03](history/development-03.md)：地图、商户投稿与图片、统一管理员登录及V17审核存储结构；后续开发记录见当前入口development.md。
+- [开发记录03](history/development-03.md)：地图、商户投稿与图片、统一管理员登录及V17审核存储结构。
+- [开发记录04](history/development-04.md)：2026-11-03至2026-11-18的审核发布、搜索与榜单、社区功能及前后台体验打磨；后续记录见[当前开发记录](development.md)。
 
 ## 维护约定
 

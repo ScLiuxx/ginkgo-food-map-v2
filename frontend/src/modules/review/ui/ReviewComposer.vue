@@ -396,14 +396,7 @@ onUnmounted(close)
   >
     <section v-if="receipt" class="publish-receipt" role="status">
       <h2 :id="titleId">{{ receipt.replayed ? '已确认此前发布成功' : '点评发布成功' }}</h2>
-      <p>你的点评已发布成功，所选照片已按顺序绑定。</p>
-      <dl>
-        <dt>餐厅</dt>
-        <dd>{{ targetName }}</dd>
-        <dt>点评编号</dt>
-        <dd class="receipt-id">{{ receipt.reviewId }}</dd>
-      </dl>
-      <p class="hint">关闭后可在对应店铺查看点评。</p>
+      <p class="receipt-target">{{ targetName }}</p>
       <button type="button" class="publish" @click="finish">完成</button>
     </section>
     <form v-else @submit.prevent="submit">

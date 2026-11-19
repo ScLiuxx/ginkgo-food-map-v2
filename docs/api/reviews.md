@@ -191,7 +191,7 @@ restaurantId与windowId严格互斥：普通店及历史食堂整体点评返回
 {"author":{"id":"22","username":"同学甲"},"records":[{"restaurant":{"id":"26","name":"校园面馆","businessStatus":"OPERATING"},"currentReview":{"id":"101","scores":{"taste":8,"value":7.5,"service":7,"ambience":8},"overallScore":7.63,"recommendation":"RECOMMENDED","body":"这次出餐很快，分量也比较足。","createdAt":"2026-11-03T06:00:00Z","scoringStatus":"current","photos":[]},"historyCount":0,"nextHistoryCursor":null}],"totalGroups":1,"totalReviews":1,"page":1,"pageSize":8,"totalPages":1}
 ```
 
-每家店只返回该作者的最新有效点评，按createdAt、id倒序确定代表并排序，归组在LIMIT之前完成。totalGroups为当前可见店铺数，totalReviews包括这些店铺中的本人历史点评；空/越界页保留真实计数。restaurant只返回ID、名称和营业状态，不包含管理或删除元数据。普通餐厅、历史食堂整体点评及独立窗口点评均已接入；窗口按WINDOW类型和window_id独立归组，不与同号餐厅合并，目标投影见[窗口点评](windows.md#reviews)；停业可见，不存在/已删除店铺整组排除且不计总数，恢复后原点评重新进入查询。
+每家店只返回该作者的最新有效点评，按createdAt、id倒序确定代表并排序，归组在LIMIT之前完成。totalGroups为当前可见店铺数，totalReviews包括这些店铺中的本人历史点评；空/越界页保留真实计数。restaurant只返回ID、名称和营业状态，不包含管理或删除元数据。普通餐厅、历史食堂整体点评及独立窗口点评均已接入；窗口按WINDOW类型和window_id独立归组，不与同号餐厅合并，目标投影见[窗口点评](windows.md#reviews)；停业可见，不存在/已删除店铺整组排除且不计总数，历史点评关联仍保留。
 
 **错误码**
 

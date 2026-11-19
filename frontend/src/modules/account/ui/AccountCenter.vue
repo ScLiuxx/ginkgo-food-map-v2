@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useLoginStore } from '@/modules/auth'
@@ -143,13 +144,13 @@ const pending = computed(() => pendingSections[props.section ?? ''])
   >
     <!-- 首页省去重复标题；子页只显示返回箭头，保留读屏可识别的操作名称。 -->
     <header v-if="section || publicProfile" class="account-topline">
-      <RouterLink
+      <AppLink
         class="account-back"
         :to="returnTarget"
         aria-label="返回"
         @click.capture="returnToPrevious"
         ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7" /></svg
-      ></RouterLink>
+      ></AppLink>
       <h1 id="account-title">{{ title }}</h1>
       <span
         v-if="
@@ -168,11 +169,11 @@ const pending = computed(() => pendingSections[props.section ?? ''])
           >写点评</WriteReviewLink
         >
       </template>
-      <RouterLink
+      <AppLink
         v-if="section === 'contributions' && !publicProfile && auth.authenticated"
         class="contribution-submit"
         to="/restaurants/submit"
-        >提交新店 ›</RouterLink
+        >提交新店 ›</AppLink
       >
     </header>
 
@@ -185,8 +186,8 @@ const pending = computed(() => pendingSections[props.section ?? ''])
             : '把用餐体验、喜欢的店铺和每一次贡献留在这里。'
         }}
       </p>
-      <RouterLink class="account-primary" :to="loginTarget"
-        >登录账号 <span aria-hidden="true">→</span></RouterLink
+      <AppLink class="account-primary" :to="loginTarget"
+        >登录账号 <span aria-hidden="true">→</span></AppLink
       >
     </div>
 
@@ -223,7 +224,7 @@ const pending = computed(() => pendingSections[props.section ?? ''])
             <strong class="growth-compact-title"
               >成长等级 <span v-if="summary">Lv.{{ summary.level }}</span></strong
             >
-            <RouterLink to="/account/growth" class="growth-entry" aria-label="查看成长规则">
+            <AppLink to="/account/growth" class="growth-entry" aria-label="查看成长规则">
               <span v-if="summary"
                 >{{ summary.experience
                 }}<template v-if="summary.nextLevelThreshold !== null">
@@ -233,7 +234,7 @@ const pending = computed(() => pendingSections[props.section ?? ''])
               >
               <span v-else>成长规则</span>
               <span aria-hidden="true">›</span>
-            </RouterLink>
+            </AppLink>
           </div>
           <progress v-if="summary" :value="progress" max="100" aria-label="当前等级升级进度" />
           <p v-if="summary && nextExperience === null">已达到当前最高等级</p>
@@ -252,7 +253,7 @@ const pending = computed(() => pendingSections[props.section ?? ''])
     </template>
 
     <nav v-if="home && !publicProfile" class="account-tools" aria-label="我的功能">
-      <RouterLink
+      <AppLink
         v-for="item in accountSections"
         :key="item.id"
         :to="
@@ -265,7 +266,7 @@ const pending = computed(() => pendingSections[props.section ?? ''])
         ><strong>{{ item.title }}</strong
         ><span class="tool-detail">{{ item.detail }}</span
         ><span class="tool-arrow" aria-hidden="true">›</span>
-      </RouterLink>
+      </AppLink>
     </nav>
     <template v-if="auth.authenticated && publicProfile">
       <nav class="profile-tabs" aria-label="个人主页内容">
@@ -390,8 +391,8 @@ const pending = computed(() => pendingSections[props.section ?? ''])
               ownDetails?.maskedEmail || (profileLoading ? '正在加载…' : '暂时无法读取')
             }}</span>
           </div>
-          <RouterLink class="setting-row setting-link" to="/password-reset"
-            ><span>找回 / 重置密码</span><span aria-hidden="true">›</span></RouterLink
+          <AppLink class="setting-row setting-link" to="/password-reset"
+            ><span>找回 / 重置密码</span><span aria-hidden="true">›</span></AppLink
           >
         </section>
         <button class="sign-out" :disabled="auth.loggingOut" @click="auth.signOut">
@@ -468,11 +469,11 @@ const pending = computed(() => pendingSections[props.section ?? ''])
           <AccountIcon :name="pending[0] ?? 'review'" />
           <h2>{{ pending[1] }}</h2>
           <p>{{ pending[2] }}</p>
-          <RouterLink
+          <AppLink
             v-if="section === 'reviews' || section === 'favorites'"
             class="account-secondary"
             to="/"
-            >去发现美食 →</RouterLink
+            >去发现美食 →</AppLink
           >
         </div>
         <p v-if="section === 'favorites'" class="fine-print section-note">

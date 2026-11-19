@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, inject, onUnmounted, provide, ref, useId } from 'vue'
+import { computed, inject, onUnmounted, provide, ref, shallowRef, useId } from 'vue'
+import { useMediaQuery } from '@/shared/lib/useMediaQuery'
+import { reviewHistoryHostKey } from '../model/reviewHistoryHost'
 import { reviewGatewayKey, unavailableReviewGateway } from '../model/review'
 import { replyScopeVisibleKey } from '../model/replyEditor'
 import type { ReviewItem } from '../model/review'
@@ -13,6 +15,7 @@ const props = defineProps<{
   item: ReviewItem
   viewerId?: string
   starScale?: boolean
+  storeName?: string
   /** 折叠菜单选中后原按钮已隐藏，关闭历史时回到仍可见的更多入口。 */
   restoreFocus?: () => void
 }>()
@@ -34,6 +37,18 @@ const records = ref<ReviewItem[]>([]),
 const dialog = ref<globalThis.HTMLDialogElement>(),
   trigger = ref<globalThis.HTMLButtonElement>()
 const titleId = 'history-title-' + useId()
+const desktop = useMediaQuery('(min-width: 800px)')
+const detailHost = ref<globalThis.HTMLElement>()
+const activeId = ref<string>()
+const back = shallowRef<() => void>()
+provide(reviewHistoryHostKey, {
+  desktop,
+  storeName: computed(() => props.storeName),
+  target: detailHost,
+  activeId,
+  back,
+  close,
+})
 provide(
   replyScopeVisibleKey,
   computed(() => open.value),
@@ -65,6 +80,7 @@ function show() {
 }
 function close() {
   open.value = false
+  back.value?.()
   cancel()
   dialog.value?.close()
   unlockScroll()
@@ -73,6 +89,7 @@ function close() {
 }
 /** close也处理浏览器或外部代码关闭对话框的情况，清理必须可重复执行。 */
 function closed() {
+  if (dialog.value?.open) return
   open.value = false
   cancel()
   unlockScroll()
@@ -130,26 +147,36 @@ function refresh() {
     :aria-expanded="open"
     @click="show"
   >
+    <svg class="history-trigger-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
     历史点评 <span>{{ item.historyCount }}</span>
+    <span class="history-trigger-chevron" aria-hidden="true">›</span>
   </button>
   <Teleport to="body">
     <dialog
       ref="dialog"
       class="history-dialog"
-      :aria-labelledby="titleId"
-      @cancel.prevent="close"
+      :aria-labelledby="activeId ? undefined : titleId"
+      :aria-label="activeId ? storeName || '历史点评' : undefined"
+      @cancel.prevent="activeId && back ? back() : close()"
       @close="closed"
       @click.self="close"
     >
       <div class="history-sheet">
-        <header class="history-header">
+        <header v-show="!activeId" class="history-header">
           <span class="sheet-grip" aria-hidden="true" />
           <div class="history-heading">
             <div>
               <p class="history-author">{{ item.username }}</p>
               <h2 :id="titleId">
-                历史点评 <span>{{ item.historyCount }}</span>
+                {{ desktop && storeName ? storeName : '历史点评' }}
+                <span v-if="!desktop || !storeName">{{ item.historyCount }}</span>
               </h2>
+              <p v-if="desktop && storeName" class="history-count">
+                历史点评 · {{ item.historyCount }} 条
+              </p>
             </div>
             <button
               type="button"
@@ -161,16 +188,15 @@ function refresh() {
               ×
             </button>
           </div>
-          <p class="history-description">同一家店的过往记录，保留原有照片与回复。</p>
         </header>
-        <div class="history-scroll">
+        <div v-show="!activeId" class="history-scroll">
           <ReviewEntry
             v-for="record in records"
             :key="record.id"
             :item="record"
             detail-entry
             :store-to="`/${window ? 'canteen-windows' : 'restaurants'}/${restaurantId}`"
-            store-name="查看店铺"
+            :store-name="storeName || '查看店铺'"
             :star-scale="starScale"
             :authenticated="!!viewerId"
             :viewer-id="viewerId"
@@ -197,6 +223,7 @@ function refresh() {
           </button>
           <p v-else-if="loaded" class="history-status">已显示全部历史点评</p>
         </div>
+        <div v-show="activeId" ref="detailHost" class="history-detail-host" />
       </div>
     </dialog>
   </Teleport>
@@ -209,7 +236,7 @@ function refresh() {
   gap: 6px;
   border: 0;
   background: transparent;
-  color: #938371;
+  color: #85919f;
   font: inherit;
   font-size: 13px;
   min-height: 44px;
@@ -217,11 +244,15 @@ function refresh() {
   cursor: pointer;
 }
 .history-trigger span {
-  color: #b0a28e;
+  color: #929dab;
   font-size: 12px;
 }
+.history-trigger-icon,
+.history-trigger-chevron {
+  display: none;
+}
 .history-trigger:hover {
-  color: #674714;
+  color: #344252;
 }
 .history-dialog {
   position: fixed;
@@ -234,14 +265,15 @@ function refresh() {
   padding: 0;
   border: 0;
   border-radius: 20px 0 0 20px;
-  background: #fffefa;
-  color: #423d35;
-  box-shadow: -12px 0 60px #30271820;
+  background: #fff;
+  color: #344252;
+  box-shadow: -12px 0 60px #24314214;
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
   overflow: hidden;
   box-sizing: border-box;
 }
 .history-dialog::backdrop {
-  background: #29241c66;
+  background: #24314245;
 }
 .history-sheet {
   height: 100%;
@@ -251,7 +283,7 @@ function refresh() {
 }
 .history-header {
   padding: 28px 24px 16px;
-  border-bottom: 1px solid #eee7dc;
+  border-bottom: 1px solid #edf0f3;
 }
 .history-heading {
   display: flex;
@@ -264,7 +296,7 @@ function refresh() {
 }
 .history-author {
   margin: 0 0 6px;
-  color: #9b8a71;
+  color: #85919f;
   font-size: 12px;
   overflow-wrap: anywhere;
 }
@@ -274,7 +306,7 @@ h2 {
   margin: 0;
 }
 h2 span {
-  color: #aa977d;
+  color: #929dab;
   font-size: 14px;
   margin-left: 6px;
   font-weight: 400;
@@ -283,18 +315,12 @@ h2 span {
   flex-shrink: 0;
   border: 0;
   border-radius: 50%;
-  background: #f4f0e8;
-  color: #8b7b63;
+  background: #f5f6f8;
+  color: #85919f;
   font-size: 25px;
   width: 40px;
   height: 40px;
   cursor: pointer;
-}
-.history-description {
-  font-size: 12px;
-  color: #9a8d7a;
-  line-height: 1.7;
-  margin: 12px 0 0;
 }
 .history-scroll {
   overflow-y: auto;
@@ -311,14 +337,14 @@ h2 span {
 }
 .history-status {
   text-align: center;
-  color: #aa9d88;
+  color: #929dab;
   font-size: 12px;
   padding: 16px 0;
 }
 .history-more {
   border: 0;
   background: transparent;
-  color: #8c734c;
+  color: #344252;
   font-size: 13px;
   min-height: 44px;
   padding: 8px 12px;
@@ -326,14 +352,99 @@ h2 span {
 }
 .history-error {
   font-size: 13px;
-  color: #a53c2e;
+  color: #bf4e48;
   overflow-wrap: anywhere;
 }
 .sheet-grip {
   display: none;
 }
+.history-detail-host {
+  height: 100%;
+  min-height: 0;
+  grid-row: 1 / -1;
+}
+.history-count {
+  margin: 6px 0 0;
+  color: #9aa1a8;
+  font-size: 12px;
+}
+@media (min-width: 800px) {
+  .history-trigger-icon {
+    display: block;
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .history-trigger-chevron {
+    display: inline;
+  }
+  .history-dialog {
+    inset: 0;
+    width: min(720px, calc(100vw - 64px));
+    height: min(688px, calc(100dvh - 64px));
+    margin: auto;
+    border-radius: 14px;
+    box-shadow: 0 22px 100px #18263826;
+  }
+  .history-header {
+    padding: 23px 30px 19px;
+  }
+  .history-author {
+    display: none;
+  }
+  h2 {
+    font-size: 21px;
+  }
+  .close-history {
+    background: transparent;
+  }
+  .history-scroll {
+    padding: 0 30px 24px;
+  }
+  .history-scroll :deep(.review-card) {
+    --entry-indent: 0px;
+    padding: 22px 0;
+  }
+  .history-scroll :deep(.entry-author),
+  .history-scroll :deep(.dimension-details),
+  .history-scroll :deep(.discussion-preview),
+  .history-scroll :deep(.discussion-preview-loading),
+  .history-scroll :deep(.discussion-preview-error),
+  .history-scroll :deep(.delete-review) {
+    display: none;
+  }
+  .history-scroll :deep(.entry-rating),
+  .history-scroll :deep(.entry-date) {
+    grid-row: 1;
+    margin: 0;
+  }
+  .history-scroll :deep(.body) {
+    font-size: 14px;
+    margin-top: 12px;
+    margin-bottom: 8px;
+  }
+  .history-scroll :deep(.entry-interactions) {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0 20px;
+    margin-top: 8px;
+  }
+  .history-scroll :deep(.history-detail-link) {
+    display: block;
+    grid-column: 3;
+    grid-row: 1;
+    font-size: 12px;
+  }
+  .history-scroll :deep(.content-actions) {
+    margin: 0;
+    align-self: center;
+  }
+}
 button:focus-visible {
-  outline: 2px solid #ad7618;
+  outline: 2px solid #a5adb7;
   outline-offset: 3px;
 }
 @media (max-width: 640px) {
@@ -355,7 +466,7 @@ button:focus-visible {
     width: 32px;
     height: 4px;
     border-radius: 4px;
-    background: #ddd3c3;
+    background: #dce1e7;
     margin: 0 auto 16px;
   }
 }

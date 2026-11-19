@@ -1,3 +1,4 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
 import { createApp, h, nextTick } from 'vue'
 import type { App } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -73,7 +74,7 @@ describe('canteen window browsing', () => {
     expect(floor.getAttribute('aria-pressed')).toBe('true')
     expect(host.querySelectorAll('.window-row')).toHaveLength(2)
     expect(host.querySelector('[aria-label="按美食类别筛选窗口"]')).toBeNull()
-    expect(host.querySelector('.window-row')?.getAttribute('href')).toContain(
+    expect(await captureLinkTarget(app, host.querySelector('.window-row'))).toContain(
       '/canteen-windows/202?fromFloor=',
     )
     await choose('一楼', '按楼层筛选窗口')
@@ -94,7 +95,9 @@ describe('canteen window browsing', () => {
       windowFixture('100', '一楼'),
     ])
     expect(host.querySelectorAll('.window-row')).toHaveLength(2)
-    const text = host.querySelector('[href*="canteen-windows/201"]')!.textContent!
+    const text = [...host.querySelectorAll('.window-row')].find((row) =>
+      row.textContent?.includes('测试窗口201'),
+    )!.textContent!
     expect(text).toContain('0.0')
     expect(text).toContain('¥0')
     expect(text).toContain('暂停营业')
@@ -145,7 +148,7 @@ describe('canteen window browsing', () => {
     )
     expect(host.querySelectorAll('.window-row')).toHaveLength(2)
     const link = host.querySelector<HTMLAnchorElement>('.window-row')!
-    const target = router.resolve(link.getAttribute('href')!)
+    const target = router.resolve((await captureLinkTarget(app, link))!)
     expect(target.path).toBe('/canteen-windows/202')
     expect(target.query).toEqual({ fromFloor: '二楼' })
     expect(host.querySelectorAll('.floor-heading')).toHaveLength(0)

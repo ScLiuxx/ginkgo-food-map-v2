@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ResourceLink from '@/shared/ui/ResourceLink.vue'
+import AppLink from '@/shared/ui/AppLink.vue'
 import axios from 'axios'
 import { ReviewComposer, ReviewPanel } from '@/modules/review'
 import RestaurantAlbum from './RestaurantAlbum.vue'
@@ -11,7 +13,7 @@ import { fetchRestaurant } from '../api/restaurantApi'
 import { fetchWindow } from '../api/canteenWindowApi'
 import type { RestaurantReadModel } from '../model/restaurant.types'
 import { priceLabel, ratingDimensions } from '../model/catalog.logic'
-import StarScore from '@/shared/ui/StarScore.vue'
+import { formatRating } from '@/shared/lib/formatRating'
 import { useRoute, useRouter } from 'vue-router'
 import { useRestaurantPicker } from '../model/picker.store'
 import { diningDetails } from '../model/campusDining'
@@ -67,7 +69,9 @@ function returnToSource(event: globalThis.MouseEvent) {
   } else if (previous === '/map') router.back()
   else void router.replace('/map')
 }
-const displayScore = computed(() => restaurant.value?.score ?? null)
+const displayScore = computed(() => formatRating(restaurant.value?.score))
+const dimensionsExpanded = ref(false)
+const dimensionsId = computed(() => `detail-dimensions-${props.window ? 'window-' : ''}${props.id}`)
 /** 返回链接只使用真实父食堂ID；筛选来自窗口入口快照，直达窗口时回到其所属楼层。 */
 const parentLink = computed(() => ({
   path: `/restaurants/${encodeURIComponent(dining.value?.parent?.id ?? '')}`,
@@ -137,6 +141,7 @@ async function loadDetail(): Promise<void> {
   loading.value = true
   error.value = null
   failedDishes.value = []
+  dimensionsExpanded.value = false
   try {
     const result = await (props.window
       ? fetchWindow(props.id, signal)
@@ -174,7 +179,7 @@ onUnmounted(() => {
       <h1>餐厅资料暂时无法加载。</h1>
       <p>{{ error }}</p>
       <button type="button" class="primary-action" @click="loadDetail">重新加载</button>
-      <RouterLink :to="backTarget" @click.capture="returnToSource">返回</RouterLink>
+      <AppLink :to="backTarget" @click.capture="returnToSource">返回</AppLink>
     </section>
     <article
       v-else-if="restaurant && dining"
@@ -183,9 +188,9 @@ onUnmounted(() => {
       aria-labelledby="restaurant-title"
     >
       <nav class="detail-breadcrumb" aria-label="详情导航">
-        <RouterLink :to="backTarget" aria-label="返回" @click.capture="returnToSource"
+        <AppLink :to="backTarget" aria-label="返回" @click.capture="returnToSource"
           ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg
-        ></RouterLink>
+        ></AppLink>
       </nav>
 
       <header class="detail-hero" :class="{ 'canteen-hero': isCanteen, 'has-album': albumVisible }">
@@ -211,29 +216,51 @@ onUnmounted(() => {
             <FavoriteButton v-if="!isWindow" :restaurant-id="restaurant.id" icon-only />
           </div>
           <p v-if="isWindow" class="detail-affiliation">
-            <RouterLink v-if="dining.parent" :to="parentLink">{{ dining.parent.name }}</RouterLink
+            <AppLink v-if="dining.parent" :to="parentLink">{{ dining.parent.name }}</AppLink
             ><span v-else>所属食堂待补充</span> ·
             {{ dining.floor || '楼层待补充' }}
           </p>
           <p v-if="isWindow && dining.description" class="detail-affiliation">
             {{ dining.description }}
           </p>
-          <div v-if="!isWindow && !isCanteen" class="detail-service-tags">
-            <span class="category-tag">{{ restaurant.category }}</span>
-            <span v-if="diningMethods" class="service-tag">{{ diningMethods }}</span>
+          <div
+            v-if="!isCanteen && (!isWindow || (restaurant.price !== null && restaurant.price > 0))"
+            class="detail-service-tags"
+          >
+            <span v-if="!isWindow" class="category-tag">{{ restaurant.category }}</span>
+            <span v-if="!isWindow && diningMethods" class="service-tag">{{ diningMethods }}</span>
+            <span v-if="restaurant.price !== null && restaurant.price > 0" class="hero-price"
+              >{{ priceLabel(restaurant) }} / 人</span
+            >
           </div>
           <div class="detail-subtitle">
-            <StarScore class="hero-score" :score="displayScore" />
-            <span v-if="!isCanteen">{{ restaurant.reviewCount }} 条点评</span>
-            <span v-if="!isCanteen" class="hero-price"
-              >{{ priceLabel(restaurant)
-              }}<small v-if="restaurant.price !== null && restaurant.price > 0"> / 人</small></span
+            <span class="hero-score" :class="{ unrated: displayScore === '—' }">
+              <strong v-if="displayScore !== '—'">{{ displayScore }}</strong>
+              <span v-else>待评级</span>
+            </span>
+            <span v-if="!isCanteen" class="hero-review-count"
+              >{{ restaurant.reviewCount }} 条点评</span
             >
             <span v-if="isCanteen" class="detail-affiliation">{{
               dining.campus || '校园食堂'
             }}</span>
+            <button
+              v-if="!isCanteen"
+              type="button"
+              class="score-toggle"
+              :aria-expanded="dimensionsExpanded"
+              :aria-controls="dimensionsId"
+              @click="dimensionsExpanded = !dimensionsExpanded"
+            >
+              四维评分<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+            </button>
           </div>
-          <div v-if="!isCanteen" class="score-summary">
+          <div
+            v-if="!isCanteen"
+            v-show="dimensionsExpanded"
+            :id="dimensionsId"
+            class="score-summary"
+          >
             <div class="score-dimensions">
               <span v-for="d in ratingDimensions" :key="d.key"
                 >{{ d.label }}
@@ -251,7 +278,7 @@ onUnmounted(() => {
               <circle cx="12" cy="10" r="2.3" />
             </svg>
             <span class="detail-location">{{ restaurant.address || '地址待补充' }}</span>
-            <a
+            <ResourceLink
               v-if="navigation"
               class="detail-navigation"
               :href="navigation"
@@ -262,7 +289,7 @@ onUnmounted(() => {
               导航<svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="m3 10 18-7-7 18-3-8Z" />
               </svg>
-            </a>
+            </ResourceLink>
           </div>
           <!-- 主操作与次要入口统一排列，收藏回执仍保留在原控件内。 -->
           <div class="detail-primary-actions">
@@ -273,11 +300,11 @@ onUnmounted(() => {
               :trigger-label="isCanteen ? '＋ 评窗口' : isWindow ? '＋ 评此窗口' : '＋ 写点评'"
               @published="published"
             />
-            <RouterLink
-              v-if="!isWindow"
+            <AppLink
+              v-if="!isCanteen && !isWindow"
               class="correction-entry"
               :to="`/restaurants/${encodeURIComponent(restaurant.id)}/correction`"
-              >补充 / 纠错</RouterLink
+              >补充 / 纠错</AppLink
             >
           </div>
           <div v-if="!isCanteen && publicTags.length" class="detail-tags">
@@ -351,8 +378,8 @@ onUnmounted(() => {
     <section v-else class="missing-restaurant" aria-labelledby="missing-title">
       <h1 id="missing-title">没有找到这家店。</h1>
       <p>餐厅可能已删除或链接有误，回去看看其他好味道吧。</p>
-      <RouterLink class="primary-action" :to="backTarget" @click.capture="returnToSource"
-        >返回</RouterLink
+      <AppLink class="primary-action" :to="backTarget" @click.capture="returnToSource"
+        >返回</AppLink
       >
     </section>
   </div>

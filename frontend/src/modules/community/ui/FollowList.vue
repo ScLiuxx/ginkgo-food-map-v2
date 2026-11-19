@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
+import PrivateContentState from '@/shared/ui/PrivateContentState.vue'
+import axios from 'axios'
 import UserAvatar from '@/modules/account/ui/UserAvatar.vue'
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { useLoginStore } from '@/modules/auth'
@@ -29,6 +32,7 @@ const records = ref<FollowMember[]>([]),
   busy = ref(false),
   loaded = ref(false),
   error = ref(''),
+  privateList = ref(false),
   notice = ref('')
 let context = 0,
   generation = 0,
@@ -42,6 +46,7 @@ async function load(target = page.value) {
   loaded.value = false
   emit('total', null)
   error.value = ''
+  privateList.value = false
   loading.value = false
   const token = authToken.value
   if (!auth.authenticated || !token) return
@@ -66,7 +71,15 @@ async function load(target = page.value) {
       emit('total', result.total)
     }
   } catch (reason) {
-    if (ticket === generation) error.value = toErrorMessage(reason)
+    if (ticket === generation) {
+      // 仅服务端明确的隐私拒绝使用私密占位，其他权限或网络故障仍可重试。
+      privateList.value =
+        !own.value &&
+        axios.isAxiosError(reason) &&
+        reason.response?.status === 403 &&
+        reason.response.data?.code === 'FOLLOW_LIST_PRIVATE'
+      if (!privateList.value) error.value = toErrorMessage(reason)
+    }
   } finally {
     if (ticket === generation) loading.value = false
   }
@@ -124,6 +137,10 @@ onBeforeUnmount(() => {
   >
     <p v-if="notice" class="follow-feedback" role="status">{{ notice }}</p>
     <p v-if="loading" class="follow-message" role="status">正在加载名单…</p>
+    <PrivateContentState
+      v-else-if="privateList"
+      :kind="kind === 'FOLLOWING' ? 'following' : 'followers'"
+    />
     <div v-else-if="error" class="follow-message" role="alert">
       <p>{{ error }}</p>
       <button @click="load(requested)">重新加载</button>
@@ -133,13 +150,13 @@ onBeforeUnmount(() => {
         {{ total ? '当前页已变化，请返回第一页。' : '暂无可展示的用户。' }}
       </p>
       <article v-for="member in records" :key="member.userId" class="follow-member">
-        <RouterLink class="follow-identity" :to="userProfilePath(member.userId, auth.user?.id)">
+        <AppLink class="follow-identity" :to="userProfilePath(member.userId, auth.user?.id)">
           <UserAvatar class="follow-avatar" :user-id="member.userId" :username="member.username" />
           <span class="follow-info">
             <span class="follow-name">{{ member.username }}</span>
             <small v-if="member.level" class="follow-level">Lv.{{ member.level }}</small>
           </span>
-        </RouterLink>
+        </AppLink>
         <button
           v-if="member.userId !== String(auth.user?.id)"
           class="follow-toggle"

@@ -1,3 +1,4 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
 import { createApp, nextTick } from 'vue'
 import type { App } from 'vue'
 import { createPinia, disposePinia, setActivePinia } from 'pinia'
@@ -83,8 +84,10 @@ describe('login form', () => {
     expect(login).not.toHaveBeenCalled()
   })
 
-  it('provides a password reset entry without a remember-me checkbox', () => {
-    expect(host.querySelector('.recovery-link a')?.getAttribute('href')).toBe('/password-reset')
+  it('provides a password reset entry without a remember-me checkbox', async () => {
+    expect(await captureLinkTarget(app, host.querySelector('.recovery-link a'))).toBe(
+      '/password-reset',
+    )
     expect(host.querySelector('input[type="checkbox"]')).toBeNull()
   })
 

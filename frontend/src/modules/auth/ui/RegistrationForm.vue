@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -252,7 +253,7 @@ onBeforeUnmount(() => {
       {{ registrationStore.registering ? '正在创建账号…' : '创建账号' }}
     </button>
 
-    <p class="form-footnote">已有账号？<RouterLink to="/login">前往登录</RouterLink></p>
+    <p class="form-footnote">已有账号？<AppLink to="/login">前往登录</AppLink></p>
   </form>
 </template>
 

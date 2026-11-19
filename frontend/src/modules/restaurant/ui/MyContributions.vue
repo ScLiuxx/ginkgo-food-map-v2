@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useLoginStore } from '@/modules/auth'
@@ -146,7 +147,7 @@ watch(
         </h2>
         <p>可以提交尚未收录的新店，也可以从店铺详情补充或纠正资料。</p>
         <button v-if="result.total" type="button" @click="state.load(1)">返回第一页</button>
-        <RouterLink v-else to="/">去发现美食 →</RouterLink>
+        <AppLink v-else to="/">去发现美食 →</AppLink>
       </div>
       <ul v-else-if="result" class="contribution-list">
         <li v-for="item in result.records" :key="item.id">
@@ -418,7 +419,7 @@ watch(
               查看后续申请 ›
             </button>
           </p>
-          <RouterLink
+          <AppLink
             v-if="
               detail.application.status === 'PENDING' ||
               (detail.application.status === 'REJECTED' && !detail.resubmittedRequestId)
@@ -426,9 +427,7 @@ watch(
             class="contribution-edit"
             :to="`/account/contributions/${detail.application.id}/edit`"
             @click="close"
-            >{{
-              detail.application.status === 'REJECTED' ? '修改并重新提交' : '修改申请'
-            }}</RouterLink
+            >{{ detail.application.status === 'REJECTED' ? '修改并重新提交' : '修改申请' }}</AppLink
           >
           <button
             v-if="detail.application.status === 'PENDING'"
@@ -438,14 +437,14 @@ watch(
           >
             撤回申请
           </button>
-          <RouterLink
+          <AppLink
             v-if="detail.targetAvailable && detail.application.restaurantId"
             class="contribution-visit"
             :to="`/restaurants/${detail.application.restaurantId}`"
             @click="close"
             >{{
               detail.reviewSubmission?.status === 'PUBLISHED' ? '查看店铺及点评 ›' : '查看店铺 ›'
-            }}</RouterLink
+            }}</AppLink
           >
           <p v-else-if="detail.application.restaurantId">关联店铺已失效，申请记录仍然保留。</p>
         </footer>

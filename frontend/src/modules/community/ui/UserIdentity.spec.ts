@@ -1,3 +1,4 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
 import { createApp, h, nextTick, ref, type App } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, expect, it } from 'vitest'
@@ -32,14 +33,14 @@ it('routes self to account, other users to public profiles and guests through lo
       }),
   }).use(router)
   app.mount(host)
-  expect(host.querySelector('a')?.getAttribute('href')).toBe('/account')
+  expect(await captureLinkTarget(app, host.querySelector('a'))).toBe('/account')
   viewer.value = '88'
   await nextTick()
-  expect(host.querySelector('a')?.getAttribute('href')).toBe('/users/42')
+  expect(await captureLinkTarget(app, host.querySelector('a'))).toBe('/users/42')
   authenticated.value = false
   viewer.value = '42'
   await nextTick()
-  expect(host.querySelector('a')?.getAttribute('href')).toBe('/login?redirect=/users/42')
+  expect(await captureLinkTarget(app, host.querySelector('a'))).toBe('/login?redirect=/users/42')
 })
 
 it('uses a stable authenticated ID instead of inferring self from a username', () => {

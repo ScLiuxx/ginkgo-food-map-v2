@@ -67,6 +67,52 @@
 .account-review-content {
   min-width: 0;
 }
+@media (min-width: 800px) {
+  .account-center.account-reviews {
+    width: min(960px, calc(100% - 64px));
+  }
+  .account-reviews .account-topline {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 16px;
+    margin-bottom: 24px;
+  }
+  .account-reviews .account-back {
+    grid-column: 1 / -1;
+    justify-self: start;
+    margin-bottom: 2px;
+  }
+  .account-reviews .account-topline h1 {
+    grid-column: 1;
+    grid-row: 2;
+    font-size: 25px;
+  }
+  .account-reviews .account-review-total {
+    grid-column: 1;
+    grid-row: 3;
+    font-size: 12px;
+  }
+  .account-reviews .account-write-review {
+    grid-column: 2;
+    grid-row: 2 / 4;
+    padding: 0 20px;
+    border: 0;
+    border-radius: 7px;
+    background: #e98527;
+    color: white;
+    font-size: 13px;
+  }
+  .account-reviews .account-write-review:hover {
+    background: #db791e;
+  }
+  .account-reviews :is(.account-back, .account-write-review):focus-visible {
+    outline: 2px solid #a5adb7;
+    outline-offset: 3px;
+  }
+  .account-reviews .account-write-review svg {
+    display: none;
+  }
+}
 .account-write-review:focus-visible {
   outline: 2px solid #cf9f53;
   outline-offset: 3px;

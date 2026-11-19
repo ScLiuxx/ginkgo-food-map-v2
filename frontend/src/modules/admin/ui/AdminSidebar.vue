@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import './admin-theme.css'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { getAccessToken } from '@/shared/api/authSession'
 import { fetchRequestPage } from '../api/restaurantRequestsApi'
 
@@ -38,7 +39,7 @@ const items = [
 
 <template>
   <nav class="admin-sidebar" aria-label="管理导航">
-    <RouterLink
+    <AppLink
       v-for="item in items"
       :key="item.icon"
       :to="item.path"
@@ -77,7 +78,7 @@ const items = [
       <span v-if="item.icon === 'review' && badge !== undefined" class="sidebar-count">{{
         badge
       }}</span>
-    </RouterLink>
+    </AppLink>
   </nav>
 </template>
 
@@ -85,26 +86,30 @@ const items = [
 .admin-sidebar {
   box-sizing: border-box;
   border-right: 1px solid var(--admin-divider);
-  padding: 28px 16px;
+  padding: 28px var(--admin-sidebar-padding);
   display: flex;
   flex-direction: column;
   gap: 8px;
   font-family: Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif;
   color: var(--admin-text);
   background: var(--admin-surface);
+  min-width: 0;
   min-height: 0;
 }
 .sidebar-item {
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 13px;
+  flex: none;
+  gap: 10px;
   width: 100%;
-  padding: 15px;
+  height: var(--admin-nav-height);
+  padding: 0 12px;
   border: 0;
   border-radius: 9px;
   font: inherit;
   font-size: 14px;
+  line-height: 20px;
   text-align: left;
   text-decoration: none;
   background: transparent;
@@ -125,6 +130,7 @@ const items = [
 .sidebar-count {
   margin-left: auto;
   font-size: 11px;
+  font-weight: 400;
 }
 .sidebar-item:focus-visible {
   outline: 2px solid var(--admin-focus);
@@ -141,7 +147,7 @@ const items = [
   }
   .sidebar-item {
     width: auto;
-    padding: 10px;
+    padding: 0 10px;
     font-size: 11px;
     gap: 6px;
   }

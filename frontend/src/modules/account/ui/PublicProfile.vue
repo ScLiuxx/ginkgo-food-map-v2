@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { ref, watch, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useLoginStore } from '@/modules/auth'
@@ -89,13 +90,13 @@ async function selectTab(value: 'reviews' | 'favorites') {
     :aria-busy="loading"
   >
     <header class="account-topline">
-      <RouterLink
+      <AppLink
         class="account-back"
         :to="returnTarget"
         aria-label="返回"
         @click.capture="returnToPrevious"
         ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7" /></svg
-      ></RouterLink>
+      ></AppLink>
       <h1>{{ section ? (section === 'following' ? '关注' : '粉丝') : '个人主页' }}</h1>
       <span
         v-if="section && followTotal !== null"
@@ -107,8 +108,8 @@ async function selectTab(value: 'reviews' | 'favorites') {
     <div v-if="!auth.authenticated" class="account-guest">
       <h2>登录后查看个人主页</h2>
       <p>个人主页仅向登录用户开放。</p>
-      <RouterLink class="account-primary" :to="{ path: '/login', query: { redirect: route.path } }"
-        >登录账号</RouterLink
+      <AppLink class="account-primary" :to="{ path: '/login', query: { redirect: route.path } }"
+        >登录账号</AppLink
       >
     </div>
     <p v-else-if="loading" role="status">正在加载个人主页…</p>

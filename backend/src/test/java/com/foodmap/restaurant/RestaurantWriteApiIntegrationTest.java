@@ -165,9 +165,9 @@ class RestaurantWriteApiIntegrationTest {
         }
     }
 
-    /** 创建、查询、完整修改、软删除和管理员恢复形成真实持久化闭环，标签历史没有被抹除。 */
+    /** 创建、查询、完整修改和软删除形成真实持久化闭环，删除后保留资料且不能恢复。 */
     @Test
-    void shouldCompleteCrudAndRestoreWithoutLosingHistory() throws Exception {
+    void shouldCompleteCrudWithoutLosingHistory() throws Exception {
         var input = valid();
         input.put("name", "　测试餐厅 \t");
         input.put("address", "  测试地址　");
@@ -240,20 +240,20 @@ class RestaurantWriteApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.rowVersion").doesNotExist());
         perform(post("/api/restaurants/" + id + "/restore"), admin, null)
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/restaurants/" + id)).andExpect(status().isNotFound());
+        perform(get("/api/restaurants/" + id + "/management"), admin, null)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.rowVersion").doesNotExist())
-                .andExpect(jsonPath("$.data.deleted").value(false));
-        mvc.perform(get("/api/restaurants/" + id))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.tags[1]").value("第二项"))
-                .andExpect(jsonPath("$.data.businessStatus").value("CLOSED"));
-        assertThat(projectionVersion(id)).isEqualTo(4);
+                .andExpect(jsonPath("$.data.deleted").value(true))
+                .andExpect(jsonPath("$.data.restaurant.tags[1]").value("第二项"))
+                .andExpect(jsonPath("$.data.restaurant.businessStatus").value("CLOSED"));
+        assertThat(projectionVersion(id)).isEqualTo(3);
         assertThat(
                         jdbc.queryForMap(
                                         "SELECT deleted_at,deleted_by,delete_reason_code FROM restaurants WHERE id=?",
                                         id)
                                 .values())
-                .allMatch(Objects::isNull);
+                .allMatch(Objects::nonNull);
         assertThat(
                         jdbc.queryForObject(
                                 "SELECT created_by FROM restaurants WHERE id=?", Long.class, id))
@@ -264,7 +264,7 @@ class RestaurantWriteApiIntegrationTest {
                 .isEqualTo(33);
     }
 
-    /** 普通账号即使JWT伪报角色也不能读取私有资料、改删他人餐厅或恢复删除记录。 */
+    /** 普通账号即使JWT伪报角色也不能读取私有资料或改删餐厅。 */
     @Test
     void shouldEnforceOwnerAndDatabaseAdministratorRole() throws Exception {
         String id = create(valid()).get("restaurant").get("id").asString();
@@ -275,9 +275,6 @@ class RestaurantWriteApiIntegrationTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("AUTH_FORBIDDEN"));
         perform(delete("/api/restaurants/" + id), other, null).andExpect(status().isForbidden());
-        perform(post("/api/restaurants/" + id + "/restore"), owner, null)
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("AUTH_FORBIDDEN"));
         perform(put("/api/restaurants/" + id), admin, update).andExpect(status().isOk());
         perform(delete("/api/restaurants/" + id), admin, null).andExpect(status().isOk());
         assertThat(
@@ -288,7 +285,7 @@ class RestaurantWriteApiIntegrationTest {
                 .isEqualTo("ADMIN_REMOVAL");
         jdbc.update(
                 "DELETE FROM user_roles WHERE user_id=33 AND role_id=(SELECT id FROM roles WHERE code='ROLE_ADMIN')");
-        perform(post("/api/restaurants/" + id + "/restore"), admin, null)
+        perform(get("/api/restaurants/" + id + "/management"), admin, null)
                 .andExpect(status().isForbidden());
     }
 
@@ -310,7 +307,7 @@ class RestaurantWriteApiIntegrationTest {
                 .isFalse();
     }
 
-    /** 旧页面仍可覆盖之前保存的资料；重复删除/恢复只按当前删除状态明确失败。 */
+    /** 旧页面仍可覆盖之前保存的资料；重复删除按当前删除状态明确失败。 */
     @Test
     void shouldAllowLaterSaveAndKeepRepeatedStateTransitionsStable() throws Exception {
         var stalePage = valid();
@@ -332,11 +329,6 @@ class RestaurantWriteApiIntegrationTest {
         perform(delete("/api/restaurants/" + id), admin, null)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("RESTAURANT_STATE_CONFLICT"));
-        perform(post("/api/restaurants/" + id + "/restore"), admin, null)
-                .andExpect(status().isOk());
-        perform(post("/api/restaurants/" + id + "/restore"), admin, null)
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("RESTAURANT_STATE_CONFLICT"));
     }
 
     /** 未登录、过期、撤销、停用、凭证版本变化和认证依赖故障均不能写入。 */
@@ -350,7 +342,6 @@ class RestaurantWriteApiIntegrationTest {
         mvc.perform(get("/api/restaurants/1/management")).andExpect(status().isUnauthorized());
         mvc.perform(put("/api/restaurants/1")).andExpect(status().isUnauthorized());
         mvc.perform(delete("/api/restaurants/1")).andExpect(status().isUnauthorized());
-        mvc.perform(post("/api/restaurants/1/restore")).andExpect(status().isUnauthorized());
         perform(post("/api/restaurants"), "invalid", valid()).andExpect(status().isUnauthorized());
         perform(post("/api/restaurants"), token(11, 0, false, true), valid())
                 .andExpect(status().isUnauthorized());
@@ -633,7 +624,7 @@ class RestaurantWriteApiIntegrationTest {
                 .isEqualTo(1);
     }
 
-    /** 编辑/删除/恢复均无需版本，资源ID仍校验，已删除记录不能通过普通编辑复活。 */
+    /** 编辑和删除无需版本，资源ID仍校验，已删除记录不能通过普通编辑复活。 */
     @Test
     void shouldAcceptVersionlessRequestsAndValidateResourceIdentity() throws Exception {
         String id = create(valid()).get("restaurant").get("id").asString();
@@ -647,8 +638,6 @@ class RestaurantWriteApiIntegrationTest {
         perform(put("/api/restaurants/" + id), admin, valid())
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("RESTAURANT_STATE_CONFLICT"));
-        perform(post("/api/restaurants/" + id + "/restore"), admin, null)
-                .andExpect(status().isOk());
     }
 
     /** PUT整体替换可清空标签/金额，来源不可注入；无效标签更新不能改变旧内容。 */
@@ -2035,9 +2024,9 @@ class RestaurantWriteApiIntegrationTest {
         verifyNoInteractions(storage);
     }
 
-    /** 公开读取逐次检查商户/关联/文件；软删除撤销访问，恢复可读，云故障503且不破坏相册。 */
+    /** 删除撤销公开图片访问，但审核历史与图片关联仍保留。 */
     @Test
-    void shouldEnforcePublicPhotoVisibilityAndIndependentStorageFailures() throws Exception {
+    void shouldKeepPhotoHistoryAfterRestaurantDeletion() throws Exception {
         String target = create(valid()).get("restaurant").get("id").asString();
         long file = albumFile();
         String id = albumRequest(target, file);
@@ -2056,9 +2045,18 @@ class RestaurantWriteApiIntegrationTest {
                 .andExpect(jsonPath("$.data.publishedPhotos.length()").value(1));
         perform(get("/api/admin/restaurant-requests/" + id + "/photos/0"), admin, null)
                 .andExpect(status().isOk());
-        perform(post("/api/restaurants/" + target + "/restore"), admin, null)
-                .andExpect(status().isOk());
-        mvc.perform(get(url)).andExpect(status().isOk());
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM restaurant_photos WHERE restaurant_id=?", Long.class, target))
+                .isEqualTo(1);
+    }
+
+    /** 公开读取逐次检查关联和文件；云故障503且不破坏相册。 */
+    @Test
+    void shouldEnforcePublicPhotoVisibilityAndIndependentStorageFailures() throws Exception {
+        String target = create(valid()).get("restaurant").get("id").asString();
+        long file = albumFile();
+        String id = albumRequest(target, file);
+        String url = approveAlbum(id, valid()).at("/publishedPhotos/0/url").asString();
         when(storage.read(anyString(), anyString()))
                 .thenThrow(
                         new com.foodmap.common.exception.BusinessException(
@@ -2656,17 +2654,6 @@ class RestaurantWriteApiIntegrationTest {
                                 java.sql.Timestamp.class,
                                 id))
                 .isNull();
-        jdbc.update(
-                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM' WHERE id=?",
-                id);
-        perform(post("/api/restaurants/" + id + "/restore"), admin, null)
-                .andExpect(status().isConflict());
-        assertThat(
-                        jdbc.queryForObject(
-                                "SELECT deleted_at FROM restaurants WHERE id=?",
-                                java.sql.Timestamp.class,
-                                id))
-                .isNotNull();
     }
 
     /** 管理员直接创建/编辑三态，类型切换、公开读取及版本推进属于同一持久化链路。 */
@@ -2792,7 +2779,7 @@ class RestaurantWriteApiIntegrationTest {
 
     /** 一次成功资料变动对应一个版本任务，重复删除及读取不产生多余任务。 */
     @Test
-    void shouldRecordOutboxForCrudAndRestore() throws Exception {
+    void shouldRecordOutboxForCrud() throws Exception {
         String id = create(valid()).at("/restaurant/id").asString();
         perform(get("/api/restaurants/" + id + "/management"), admin, null)
                 .andExpect(status().isOk());
@@ -2801,8 +2788,8 @@ class RestaurantWriteApiIntegrationTest {
         perform(delete("/api/restaurants/" + id), admin, null).andExpect(status().isOk());
         perform(delete("/api/restaurants/" + id), admin, null).andExpect(status().isConflict());
         perform(post("/api/restaurants/" + id + "/restore"), admin, null)
-                .andExpect(status().isOk());
-        assertThat(outboxVersions(id)).containsExactly(1L, 2L, 3L, 4L);
+                .andExpect(status().isNotFound());
+        assertThat(outboxVersions(id)).containsExactly(1L, 2L, 3L);
         assertThat(
                         jdbc.queryForList(
                                 "SELECT DISTINCT status FROM restaurant_search_outbox",
@@ -2834,7 +2821,7 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(outboxVersions(id)).containsExactly(1L, 2L);
     }
 
-    /** Outbox不可写时业务不能假成功，涵盖创建、资料替换、删除及恢复。 */
+    /** Outbox不可写时业务不能假成功，涵盖创建、资料替换和删除。 */
     @Test
     void shouldRollbackBusinessWhenOutboxInsertFails() throws Exception {
         doThrow(new IllegalStateException("injected outbox failure"))
@@ -2859,11 +2846,6 @@ class RestaurantWriteApiIntegrationTest {
                 .isEqualTo(valid().get("name"));
         reset(outboxMapper);
         perform(delete("/api/restaurants/" + id), admin, null).andExpect(status().isOk());
-        doThrow(new IllegalStateException("injected outbox failure"))
-                .when(outboxMapper)
-                .insertCurrentVersion(anyLong());
-        perform(post("/api/restaurants/" + id + "/restore"), admin, null)
-                .andExpect(status().is5xxServerError());
         assertThat(projectionVersion(id)).isEqualTo(2);
         assertThat(outboxVersions(id)).containsExactly(1L, 2L);
         mvc.perform(get("/api/restaurants/" + id)).andExpect(status().isNotFound());

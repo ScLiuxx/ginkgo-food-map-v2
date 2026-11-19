@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { computed, inject, onBeforeUnmount, provide, ref, watch } from 'vue'
 import { useLoginStore } from '@/modules/auth'
 import { authToken } from '@/shared/api/authSession'
@@ -173,7 +174,11 @@ onBeforeUnmount(() => {
 <template>
   <section
     class="my-reviews"
-    :class="{ 'profile-review-list': profileLayout, 'card-review-list': cardLayout }"
+    :class="{
+      'profile-review-list': profileLayout,
+      'card-review-list': cardLayout,
+      'desktop-review-list': cardLayout && !publicUserId,
+    }"
     :aria-label="publicUserId ? '用户公开点评' : '本人点评列表'"
     :aria-busy="loading"
   >
@@ -209,10 +214,10 @@ onBeforeUnmount(() => {
     </div>
     <article v-for="group in records" :key="group.item.id" class="my-review-group">
       <header class="my-review-store">
-        <RouterLink
+        <AppLink
           :to="`/${group.restaurant.targetType === 'WINDOW' ? 'canteen-windows' : 'restaurants'}/${group.restaurant.id}`"
           ><h2>{{ group.restaurant.name }}</h2>
-          <span aria-hidden="true">›</span></RouterLink
+          <span aria-hidden="true">›</span></AppLink
         ><span v-if="group.restaurant.businessStatus === 'CLOSED'" class="closed-store"
           >暂停营业</span
         >
@@ -222,6 +227,7 @@ onBeforeUnmount(() => {
         star-scale
         :profile-entry="profileLayout || cardLayout"
         :list-card="cardLayout"
+        :desktop-list="cardLayout && !publicUserId"
         :store-name="group.restaurant.name"
         :store-to="`/${group.restaurant.targetType === 'WINDOW' ? 'canteen-windows' : 'restaurants'}/${group.restaurant.id}`"
         :authenticated="auth.authenticated"
@@ -238,6 +244,7 @@ onBeforeUnmount(() => {
             :restaurant-id="group.restaurant.id"
             :window="group.restaurant.targetType === 'WINDOW'"
             :item="group.item"
+            :store-name="group.restaurant.name"
             :viewer-id="viewerId"
             star-scale
             :restore-focus="restoreFocus"

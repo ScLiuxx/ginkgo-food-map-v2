@@ -113,7 +113,7 @@
 
 **响应**
 
-上述data为`{"restaurantId":"1","favorited":true}`，取消返回false。停业店铺仍可收藏；GET/PUT目标不存在或已软删除返回404 `RESTAURANT_NOT_FOUND`，非法或超正Long范围ID返回400 `RESTAURANT_INVALID_ID`。写入前锁定商户主行，与商户删除/恢复保持顺序；唯一键防止重复关系。取消后重新收藏生成新关系及时间；取消结果不确定时可重发相同DELETE，详情页翻转前需重读状态。
+上述data为`{"restaurantId":"1","favorited":true}`，取消返回false。停业店铺仍可收藏；GET/PUT目标不存在或已软删除返回404 `RESTAURANT_NOT_FOUND`，非法或超正Long范围ID返回400 `RESTAURANT_INVALID_ID`。写入前锁定商户主行，与商户删除保持顺序；唯一键防止重复关系。取消后重新收藏生成新关系及时间；取消结果不确定时可重发相同DELETE，详情页翻转前需重读状态。
 
 **错误码**
 
@@ -143,7 +143,7 @@ page为正整数，pageSize为1～50，只绑定这两个字段；非法分页40
 {"userId":"11","records":[{"restaurantId":"1","name":"校园小馆","restaurantType":"REGULAR","businessStatus":"OPERATING","available":true,"createdAt":"2026-11-07T00:00:00Z"}],"total":1,"page":1,"pageSize":8,"totalPages":1}
 ```
 
-本人列表失效项仍保留restaurantId、createdAt及available=false，name/restaurantType/businessStatus为null，不继续展示商户历史资料。失效项可取消；未主动取消时店铺恢复后重新可用，已取消的不自动恢复。停业不是失效。空页及越界页保留真实total/totalPages；公开列表total只计入当前可见店铺，不泄露失效项数量。
+本人列表失效项仍保留restaurantId、createdAt及available=false，name/restaurantType/businessStatus为null，不继续展示商户历史资料。失效项可取消；店铺不提供恢复，原收藏关联保留至用户主动取消。停业不是失效。空页及越界页保留真实total/totalPages；公开列表total只计入当前可见店铺，不泄露失效项数量。
 
 **错误码**
 

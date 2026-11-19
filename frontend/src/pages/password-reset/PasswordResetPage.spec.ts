@@ -1,3 +1,4 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
 import { createApp, h, nextTick, type App } from 'vue'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -55,7 +56,7 @@ describe('找回密码页面返回入口', () => {
       await router.push('/password-reset')
       await nextTick()
       const link = host.querySelector<HTMLAnchorElement>(selector)!
-      expect(link.getAttribute('href')).toBe('/account/settings')
+      expect(await captureLinkTarget(app, link)).toBe('/account/settings')
       expect(link.textContent).toContain('返回个人设置')
       link.click()
       await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/account/settings'))
@@ -67,7 +68,7 @@ describe('找回密码页面返回入口', () => {
 
   it.each(['.back-link', '.form-footnote a'])('未登录时点击%s返回登录页', async (selector) => {
     const link = host.querySelector<HTMLAnchorElement>(selector)!
-    expect(link.getAttribute('href')).toBe('/login')
+    expect(await captureLinkTarget(app, link)).toBe('/login')
     expect(link.textContent).toContain('返回登录')
     link.click()
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/login'))
@@ -77,12 +78,12 @@ describe('找回密码页面返回入口', () => {
     setAccessToken('old-session')
     await nextTick()
     for (const selector of ['.back-link', '.form-footnote a']) {
-      expect(host.querySelector(selector)?.getAttribute('href')).toBe('/account/settings')
+      expect(await captureLinkTarget(app, host.querySelector(selector))).toBe('/account/settings')
     }
     clearAccessToken()
     await nextTick()
     for (const selector of ['.back-link', '.form-footnote a']) {
-      expect(host.querySelector(selector)?.getAttribute('href')).toBe('/login')
+      expect(await captureLinkTarget(app, host.querySelector(selector))).toBe('/login')
     }
   })
 

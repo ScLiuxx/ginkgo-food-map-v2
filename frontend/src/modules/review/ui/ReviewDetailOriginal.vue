@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { UserIdentity, ContentActions } from '@/modules/community'
 import StarScore from '@/shared/ui/StarScore.vue'
 import UserAvatar from '@/modules/account/ui/UserAvatar.vue'
@@ -33,10 +34,19 @@ defineEmits<{ photo: [url: string]; reply: [] }>()
           :authenticated="authenticated"
           :viewer-id="viewerId"
         />
-        <RouterLink v-if="storeName && storeTo" class="detail-original-store" :to="storeTo"
-          >{{ storeName }} ›</RouterLink
+        <AppLink v-if="storeName && storeTo" class="detail-original-store" :to="storeTo"
+          >{{ storeName }} ›</AppLink
         >
       </div>
+      <time class="detail-original-date" :datetime="item.createdAt">{{
+        new Date(item.createdAt).toLocaleString('zh-CN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      }}</time>
     </header>
     <div class="detail-original-rating">
       <StarScore :score="item.overallScore ?? overall(item.scores)" /><span
@@ -45,7 +55,6 @@ defineEmits<{ photo: [url: string]; reply: [] }>()
       >
     </div>
     <p v-if="hasExampleMarker(item.body)" class="detail-original-example">示例点评 · 非真实体验</p>
-    <p v-if="item.scoringStatus === 'history'" class="detail-original-example">历史点评 · 不计分</p>
     <p class="detail-original-body">{{ item.body }}</p>
     <div v-if="item.photos.length" class="detail-original-photos">
       <button
@@ -84,6 +93,9 @@ defineEmits<{ photo: [url: string]; reply: [] }>()
 .detail-original {
   padding: 22px 20px 9px;
   color: #344252;
+}
+.detail-original-date {
+  display: none;
 }
 .detail-original-person {
   display: flex;
@@ -215,5 +227,48 @@ defineEmits<{ photo: [url: string]; reply: [] }>()
 .detail-original :is(button, a, summary):focus-visible {
   outline: 2px solid #a5adb7;
   outline-offset: 2px;
+}
+@media (min-width: 800px) {
+  .detail-original {
+    padding: 24px 30px 0;
+  }
+  .detail-original-person {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 0 10px;
+  }
+  .detail-original-avatar {
+    grid-row: 1 / 3;
+    width: 36px;
+    height: 36px;
+  }
+  .detail-original-date {
+    display: block;
+    grid-column: 2;
+    margin-top: 2px;
+    color: #9da6af;
+    font-size: 11px;
+  }
+  .detail-original-person :deep(.user-identity) {
+    font-size: 13px;
+  }
+  .detail-original-rating {
+    margin-top: 18px;
+  }
+  .detail-original-body {
+    line-height: 1.95;
+    margin: 14px 0;
+  }
+  .detail-original-actions time {
+    display: none;
+  }
+  .detail-original-actions :deep(.review-actions-menu) {
+    margin-left: auto;
+  }
+  .detail-original-actions {
+    gap: 20px;
+    margin-bottom: 10px;
+    min-height: 44px;
+  }
 }
 </style>

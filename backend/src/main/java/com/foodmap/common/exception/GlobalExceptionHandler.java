@@ -11,6 +11,8 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.Comparator;
 import java.util.List;
@@ -61,6 +63,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleUnreadableMessage() {
         return error(CommonErrorCode.MALFORMED_REQUEST);
+    }
+
+    /** 未映射接口与静态资源兜底均保持404，不回显请求路径。 */
+    @ExceptionHandler({NoHandlerFoundException.class, NoResourceFoundException.class})
+    public ResponseEntity<ApiResponse<Void>> handleNotFound() {
+        return error(CommonErrorCode.NOT_FOUND);
     }
 
     /** 请求方法不匹配时保持明确的 405 语义。 */

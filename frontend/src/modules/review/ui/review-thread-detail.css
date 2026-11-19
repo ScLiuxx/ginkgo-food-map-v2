@@ -441,3 +441,38 @@ textarea:focus-visible {
   border-radius: 8px;
   box-shadow: 0 0 0 8px #fff6e9;
 }
+@media (min-width: 800px) {
+  .detail-replies .thread-content {
+    padding: 0 30px;
+  }
+  .detail-replies .all-replies-title {
+    margin: 0;
+    padding: 20px 0 6px;
+    border-top: 1px solid #eef0f2;
+    font-weight: 500;
+  }
+  .detail-composer-dock {
+    padding: 17px 30px 20px;
+  }
+  .detail-replies .reply-composer textarea {
+    border-radius: 7px;
+    height: 43px;
+    min-height: 43px;
+    padding: 10px 13px;
+  }
+  .detail-replies .send-action {
+    padding: 0 21px;
+    min-height: 43px;
+    border-radius: 7px;
+    background: #e98527;
+    color: #fff;
+  }
+  .detail-replies .send-action:hover:not(:disabled) {
+    background: #db791e;
+    color: white;
+  }
+  .detail-replies .send-action:disabled {
+    color: white;
+    opacity: 0.5;
+  }
+}

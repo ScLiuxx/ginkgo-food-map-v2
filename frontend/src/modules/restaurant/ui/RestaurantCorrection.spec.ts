@@ -1,3 +1,5 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
+import { mockDialog } from '@/shared/test/mockDialog'
 import { createApp, nextTick, type App } from 'vue'
 import { createPinia, disposePinia, setActivePinia } from 'pinia'
 import { useLoginStore } from '@/modules/auth'
@@ -60,10 +62,12 @@ vi.mock('../api/restaurantApi', () => ({
 describe('商户资料补充与纠错', () => {
   let app: App, host: HTMLDivElement
   let pinia: ReturnType<typeof createPinia>
+  let restoreDialog: () => void
   const settle = async () => {
     for (let i = 0; i < 10; i++) await nextTick()
   }
   beforeEach(() => {
+    restoreDialog = mockDialog()
     vi.resetAllMocks()
     pinia = createPinia()
     setActivePinia(pinia)
@@ -122,8 +126,9 @@ describe('商户资料补充与纠错', () => {
     host.remove()
     clearAccessToken()
     vi.unstubAllGlobals()
+    restoreDialog()
   })
-  async function mount(path = '/restaurants/19/correction') {
+  async function mount(path = '/restaurants/19/correction', previous?: string) {
     const router = createRouter({
       history: createMemoryHistory(),
       routes: [
@@ -158,12 +163,34 @@ describe('商户资料补充与纠错', () => {
         { path: '/restaurants/:id', component: { template: '<div />' } },
       ],
     })
+    if (previous) await router.push(previous)
     await router.push(path)
+    // 内存历史不会自动生成浏览器的back字段，显式补齐来源现场。
+    if (previous) router.options.history.replace(path, { back: previous })
     app = createApp(RouterView).use(router).use(pinia)
     app.mount(host)
     await settle()
     return router
   }
+  it('投稿未提交时用站内弹窗确认，取消保留资料，确认才离开', async () => {
+    const router = await mount('/restaurants/submit')
+    await field('商户名称', '未提交的门店')
+    const cancel = router.push('/account/contributions')
+    await settle()
+    const dialog = document.querySelector<HTMLDialogElement>('.leave-confirmation')!
+    expect(dialog.open).toBe(true)
+    dialog.querySelector<HTMLButtonElement>('button')!.click()
+    await cancel
+    expect(router.currentRoute.value.path).toBe('/restaurants/submit')
+    expect(host.querySelector<HTMLInputElement>('input[type="search"]')!.value).toBe('未提交的门店')
+    const leave = router.push('/account/contributions')
+    await settle()
+    dialog.querySelector<HTMLButtonElement>('.leave')!.click()
+    await leave
+    expect(router.currentRoute.value.path).toBe('/account/contributions')
+    expect(submitNewRestaurant).not.toHaveBeenCalled()
+  })
+
   async function field(name: string, value: string | boolean) {
     const label = [...host.querySelectorAll('label')].find((l) =>
       l.textContent?.trim().startsWith(name),
@@ -477,7 +504,9 @@ describe('商户资料补充与纠错', () => {
     expect(vi.mocked(resubmitMyRequest).mock.calls[0]).toEqual(
       vi.mocked(resubmitMyRequest).mock.calls[1],
     )
-    expect(host.textContent).toContain('申请编号：72')
+    expect(await captureLinkTarget(app, host.querySelector('.receipt-detail'))).toBe(
+      '/account/contributions?requestId=72',
+    )
     expect(editMyRequest).not.toHaveBeenCalled()
   })
   it('已重提的祖先申请不展示可编辑表单，不读取旧点评图', async () => {
@@ -655,7 +684,7 @@ describe('商户资料补充与纠错', () => {
     clearAccessToken()
     await mount('/restaurants/submit?keyword=新店关键词')
     expect(host.querySelector('h1')?.textContent).toBe('提交店铺')
-    expect(host.querySelector('a[href^="/login"]')?.getAttribute('href')).toContain(
+    expect(await captureLinkTarget(app, host.querySelector('.notice a'))).toContain(
       'restaurants/submit?keyword=',
     )
     expect(fetchCorrectionSource).not.toHaveBeenCalled()
@@ -667,7 +696,10 @@ describe('商户资料补充与纠错', () => {
       latitude: 30.675789,
       longitude: 104.099671,
     })!
-    await mount(`/restaurants/submit?keyword=搜索词&draft=${draft}`)
+    const router = await mount(
+      `/restaurants/submit?keyword=搜索词&draft=${draft}`,
+      '/account/contributions',
+    )
     expect(fetchCorrectionSource).not.toHaveBeenCalled()
     expect(host.querySelector('input')?.value).toBe('新门店')
     expect(host.textContent).toContain('已选择：新门店')
@@ -690,7 +722,16 @@ describe('商户资料补充与纠错', () => {
       input.clientRequestId,
     )
     expect(submitRestaurantCorrection).not.toHaveBeenCalled()
-    expect(host.textContent).toContain('已提交，等待管理员审核')
+    expect(host.querySelectorAll('h1')).toHaveLength(1)
+    expect(host.querySelector('h1')?.textContent).toBe('已提交，等待审核')
+    expect(document.activeElement).toBe(host.querySelector('h1'))
+    expect(host.querySelector('.receipt-name')?.textContent).toBe('新门店')
+    expect(await captureLinkTarget(app, host.querySelector('.receipt-detail'))).toBe(
+      '/account/contributions?requestId=61',
+    )
+    host.querySelector<HTMLAnchorElement>('.receipt-done')!.click()
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/account/contributions'))
+    expect(document.querySelector('.leave-confirmation[open]')).toBeNull()
   })
   it('草稿刷新丢失时只带搜索词，未选位置不能提交', async () => {
     await mount('/restaurants/submit?keyword=新店关键词&draft=expired')
@@ -705,7 +746,7 @@ describe('商户资料补充与纠错', () => {
     clearAccessToken()
     await mount()
     expect(host.querySelector('form')).toBeNull()
-    expect(host.querySelector('a[href^="/login"]')?.getAttribute('href')).toContain(
+    expect(await captureLinkTarget(app, host.querySelector('.notice a'))).toContain(
       'redirect=/restaurants/19/correction',
     )
     expect(fetchCorrectionSource).not.toHaveBeenCalled()
@@ -754,7 +795,7 @@ describe('商户资料补充与纠错', () => {
       }),
       'correction-user',
     )
-    expect(host.textContent).toContain('已提交，等待管理员审核')
+    expect(host.textContent).toContain('已提交，等待审核')
     expect(host.querySelector('form')).toBeNull()
   })
   it('未确认位置不可提交，失败保留资料及同次请求编号，换账号后阻止提交', async () => {

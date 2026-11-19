@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { computed } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import { useAdminRestaurants } from '../model/useAdminRestaurants'
 import AdminSidebar from './AdminSidebar.vue'
+import AdminHeader from './AdminHeader.vue'
 
 const props = defineProps<{
   editing?: boolean
@@ -29,7 +31,6 @@ const {
   error,
   categoryError,
   notice,
-  lookupId,
   selected,
   inspecting,
   busy,
@@ -51,30 +52,18 @@ onBeforeRouteUpdate(() => !busy.value)
 
 <template>
   <div class="management admin-theme">
-    <header>
-      <RouterLink class="brand" to="/admin/reviews"
-        ><em>泥电</em>美食地图 <small>管理工作台</small></RouterLink
-      >
-      <div class="account">
-        <span>{{ username }}</span
-        ><button :disabled="loggingOut" @click="$emit('logout')">
-          {{ loggingOut ? '正在退出…' : '退出登录' }}
-        </button>
-      </div>
-    </header>
+    <AdminHeader :username="username" :logging-out="loggingOut" @logout="$emit('logout')" />
     <p v-if="sessionError" class="alert" role="alert">{{ sessionError }}</p>
     <div class="shell">
       <AdminSidebar />
       <main>
-        <div class="breadcrumb">管理工作台 / 商户管理{{ editing ? ' / 维护资料' : '' }}</div>
         <slot v-if="editing" />
         <template v-else-if="!sessionChanged">
           <div class="heading">
             <div>
               <h1>商户管理</h1>
-              <p class="muted">维护公开店铺资料，让每一次发现都有准确的信息。</p>
             </div>
-            <RouterLink class="primary" to="/admin/restaurants/new">＋ 新增店铺</RouterLink>
+            <AppLink class="primary" to="/admin/restaurants/new">＋ 新增店铺</AppLink>
           </div>
           <p v-if="notice || route.query.saved" class="notice" role="status">
             {{ notice || `店铺资料已保存，ID：${route.query.saved}` }}
@@ -143,13 +132,13 @@ onBeforeRouteUpdate(() => !busy.value)
                     }}</span>
                   </td>
                   <td class="actions">
-                    <RouterLink
+                    <AppLink
                       v-if="item.restaurantType === 'CANTEEN'"
                       :to="`/admin/restaurants/${item.id}/windows`"
-                      >窗口管理</RouterLink
+                      >窗口管理</AppLink
                     >
-                    <RouterLink :to="`/admin/restaurants/${item.id}/edit`">编辑</RouterLink
-                    ><button :disabled="busy" @click="inspect(item.id)">管理 / 删除</button>
+                    <AppLink :to="`/admin/restaurants/${item.id}/edit`">编辑</AppLink
+                    ><button :disabled="busy || inspecting" @click="inspect(item.id)">删除</button>
                   </td>
                 </tr>
               </tbody>
@@ -199,23 +188,7 @@ onBeforeRouteUpdate(() => !busy.value)
               ><button :disabled="loading || busy || !totalPages">跳转</button>
             </form>
           </nav>
-          <section class="lookup">
-            <h2>按 ID 管理 / 恢复店铺</h2>
-            <p class="muted">
-              已删除店铺不在公开列表中。输入删除时保留的店铺 ID，可查询状态并恢复。
-            </p>
-            <form class="toolbar" @submit.prevent="inspect()">
-              <input
-                v-model="lookupId"
-                aria-label="店铺 ID"
-                placeholder="输入完整店铺 ID"
-                inputmode="numeric"
-                :disabled="busy"
-              /><button :disabled="busy || inspecting">
-                {{ inspecting ? '正在查询…' : '查询店铺' }}
-              </button>
-            </form>
-          </section>
+          <p v-if="inspecting" role="status">正在读取店铺资料…</p>
           <section v-if="selected" class="detail" aria-labelledby="management-title">
             <div class="heading">
               <h2 id="management-title">{{ selected.restaurant.name }}</h2>
@@ -228,26 +201,29 @@ onBeforeRouteUpdate(() => !busy.value)
             <p class="muted">
               {{ selected.restaurant.address || '地址待补充' }}
             </p>
-            <p v-if="selected.deleted">恢复后将重新出现在公开目录，原经营状态及历史资料保留。</p>
-            <p v-else>删除后从公开目录和地图隐藏，历史点评及资料保留，可按 ID 恢复。</p>
+            <p v-if="selected.deleted">该店铺已删除，请刷新列表。</p>
+            <p v-else>删除后从列表、地图和搜索中下架，历史点评及资料保留。</p>
             <div class="actions">
-              <RouterLink
+              <AppLink
                 v-if="!selected.deleted && !busy"
                 :to="`/admin/restaurants/${selected.restaurant.id}/edit`"
-                >编辑资料</RouterLink
+                >编辑资料</AppLink
               ><button
-                v-if="!confirming"
+                v-if="!selected.deleted && !confirming"
                 class="danger"
                 :disabled="busy"
                 @click="confirming = true"
               >
-                {{ selected.deleted ? '恢复店铺' : '删除店铺' }}
+                删除店铺
               </button>
             </div>
-            <div v-if="confirming" class="confirm" role="group" aria-label="确认店铺操作">
-              <p>
-                确认{{ selected.deleted ? '恢复' : '删除' }}「{{ selected.restaurant.name }}」？
-              </p>
+            <div
+              v-if="confirming && !selected.deleted"
+              class="confirm"
+              role="group"
+              aria-label="确认店铺操作"
+            >
+              <p>确认删除「{{ selected.restaurant.name }}」？</p>
               <button class="primary" :disabled="busy" @click="applyAction">
                 {{ busy ? '正在处理…' : '确认操作' }}</button
               ><button :disabled="busy" @click="confirming = false">取消</button>
@@ -269,59 +245,14 @@ onBeforeRouteUpdate(() => !busy.value)
   color: var(--admin-text);
   font-family: Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
-header {
-  background: var(--admin-surface);
-  height: 84px;
-  padding: 0 40px;
-  border-bottom: 1px solid var(--admin-divider);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-}
-.brand {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  font-size: 23px;
-  font-weight: 650;
-}
-.brand em {
-  font-style: normal;
-  color: var(--admin-brand);
-  font-size: 35px;
-}
-.brand small {
-  font-size: 13px;
-  color: var(--admin-muted);
-  font-weight: 400;
-  border-left: 1px solid var(--admin-border);
-  padding-left: 20px;
-}
-.account {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  font-size: 13px;
-}
-.account span {
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .shell {
   display: grid;
-  grid-template-columns: 204px minmax(0, 1fr);
-  min-height: calc(100vh - 84px);
+  grid-template-columns: var(--admin-sidebar-width) minmax(0, 1fr);
+  min-height: calc(100dvh - var(--admin-header-height));
 }
 main {
   min-width: 0;
   padding: 30px 40px 60px;
-}
-.breadcrumb {
-  font-size: 12px;
-  color: var(--admin-muted);
-  margin-bottom: 28px;
 }
 .heading {
   display: flex;
@@ -332,7 +263,7 @@ main {
 }
 h1 {
   font-size: 28px;
-  margin: 0 0 10px;
+  margin: 0;
 }
 h2 {
   font-size: 18px;
@@ -488,14 +419,6 @@ strong {
 .pagination label {
   white-space: nowrap;
 }
-.lookup {
-  border-top: 1px solid var(--admin-divider);
-  padding-top: 30px;
-  margin-top: 20px;
-}
-.lookup .toolbar {
-  max-width: 560px;
-}
 .detail {
   background: var(--admin-surface);
   margin-top: 22px;
@@ -553,16 +476,6 @@ select:focus-visible {
   outline-offset: 3px;
 }
 @media (max-width: 800px) {
-  header {
-    padding: 0 18px;
-  }
-  .brand {
-    font-size: 18px;
-    gap: 8px;
-  }
-  .brand small {
-    display: none;
-  }
   .shell {
     grid-template-columns: 1fr;
   }
@@ -578,12 +491,6 @@ select:focus-visible {
   }
   .list-summary {
     gap: 12px;
-  }
-  .account {
-    gap: 10px;
-  }
-  .account span {
-    max-width: 90px;
   }
   .toolbar select {
     max-width: 150px;

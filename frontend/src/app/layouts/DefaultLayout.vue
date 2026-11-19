@@ -106,13 +106,17 @@ const mapPage = computed(() => route.path === '/map' || route.path === '/preview
     display: flex;
   }
   .map-shell :deep(.bottom-navigation) {
-    position: static;
+    position: relative;
+    bottom: auto;
+    left: auto;
+    transform: none;
+    margin: 0 auto max(12px, env(safe-area-inset-bottom));
     flex-shrink: 0;
   }
 }
-/* 榜单品牌及底栏按已确认图稿局部调整，不改变其他页面的共享布局。 */
+/* 榜单品牌保留局部排版；底栏统一采用全站悬浮胶囊。 */
 .ranking-shell {
-  padding-bottom: 0;
+  padding-bottom: 96px;
 }
 .ranking-shell :deep(.topbar.is-discovery) {
   max-width: 1056px;
@@ -126,17 +130,6 @@ const mapPage = computed(() => route.path === '/map' || route.path === '/preview
   color: #ee970f;
   font-weight: 850;
 }
-.ranking-shell :deep(.navigation-items) {
-  max-width: 900px;
-}
-.ranking-shell :deep(.navigation-items svg) {
-  width: 22px;
-  height: 22px;
-}
-.ranking-shell :deep(.compose-icon) {
-  background: #f7f0e4;
-  color: #a96c1e;
-}
 @media (max-width: 600px) {
   .ranking-shell :deep(.topbar.is-discovery) {
     width: calc(100% - 36px);
@@ -148,13 +141,6 @@ const mapPage = computed(() => route.path === '/map' || route.path === '/preview
   }
   .ranking-shell :deep(.is-discovery .brand em) {
     font-size: 25px;
-  }
-  .ranking-shell :deep(.navigation-items) {
-    height: 60px;
-  }
-  .ranking-shell :deep(.navigation-items svg) {
-    width: 21px;
-    height: 21px;
   }
 }
 .identity-check {

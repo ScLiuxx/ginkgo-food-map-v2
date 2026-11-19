@@ -1,3 +1,5 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
+import { captureResourceTarget } from '@/shared/test/captureResourceTarget'
 import { createApp, nextTick } from 'vue'
 import type { App } from 'vue'
 import { createPinia, disposePinia } from 'pinia'
@@ -126,9 +128,9 @@ describe('选店弹窗', () => {
     )
     expect(host.querySelector('.restaurant-title')?.textContent).toContain('符合条件的店')
     expect(host.textContent).toContain('只有这一家')
-    expect(host.querySelector<HTMLAnchorElement>('.actions a')?.getAttribute('href')).toContain(
-      'from=picker',
-    )
+    expect(
+      await captureLinkTarget(app, host.querySelector<HTMLAnchorElement>('.actions a')),
+    ).toContain('from=picker')
     expect(catalog.filters.keyword).toBe('火锅')
   })
   it('评分不预选，简短结果摘要不丢失完整条件，修改与取消保留原门槛', async () => {
@@ -362,7 +364,7 @@ describe('选店弹窗', () => {
     await draw()
     expect(host.querySelector('.restaurant-photo')).toBeNull()
     expect(host.querySelector('.rating')?.textContent).toContain('0.0分')
-    expect(host.querySelector<HTMLAnchorElement>('.navigation-link')?.href).toContain(
+    expect(captureResourceTarget(host.querySelector('.navigation-link'))).toContain(
       'position=104.1%2C30.6',
     )
     const picker = useRestaurantPicker(pinia)

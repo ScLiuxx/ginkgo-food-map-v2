@@ -75,13 +75,15 @@
   margin-top: 20px;
   padding: 0 28px 8px;
 }
-/* 点评复用逐店白色卡片，外层只承载标签，避免出现卡片里面再套卡片；收藏保留原容器。 */
-.public-profile-content.profile-reviews-content {
+/* 点评和私密占位的外层只承载标签，公开收藏保留列表容器。 */
+.public-profile-content.profile-reviews-content,
+.public-profile-content:has(.private-content-state) {
   border: 0;
   padding: 0;
   background: transparent;
 }
-.public-profile-content.profile-reviews-content .profile-tabs {
+.public-profile-content.profile-reviews-content .profile-tabs,
+.public-profile-content:has(.private-content-state) .profile-tabs {
   min-height: 52px;
   margin-bottom: 16px;
   padding: 0 4px;

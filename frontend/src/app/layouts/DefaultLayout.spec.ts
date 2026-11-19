@@ -163,14 +163,34 @@ it('首次路由尚未就绪时不暴露默认首页的写评入口', async () =
   release()
   await router.isReady()
   await settle()
-  expect(host.querySelector('.compose-nav')?.getAttribute('href')).toBe('/account?writeReview=1')
+  expect(host.querySelector('.compose-nav')?.tagName).toBe('BUTTON')
+  expect(host.querySelector('.compose-nav')?.hasAttribute('href')).toBe(false)
 })
 
 async function launch() {
-  host.querySelector<HTMLAnchorElement>('.compose-nav')!.click()
+  host.querySelector<HTMLButtonElement>('.compose-nav')!.click()
   await vi.waitFor(() => expect(dialog().open).toBe(true))
   await vi.waitFor(() => expect(router.currentRoute.value.query.writeReview).toBeUndefined())
 }
+
+it.each([
+  ['首页', '/'],
+  ['地图', '/map'],
+  ['消息', '/messages'],
+  ['我的', '/account'],
+])('底部%s按钮保留路由切换、选中状态和历史返回，不提供网址链接', async (name, destination) => {
+  await mount('/account/reviews?page=2')
+  const nav = host.querySelector('.bottom-navigation')!
+  expect(nav.querySelectorAll('button')).toHaveLength(5)
+  expect(nav.querySelector('a, [href], [title]')).toBeNull()
+  nav.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`)!.click()
+  await vi.waitFor(() => expect(router.currentRoute.value.fullPath).toBe(destination))
+  const active = nav.querySelector('button[aria-current="page"]')!
+  expect(active.getAttribute('aria-label')).toBe(name)
+  expect(active.classList.contains('selected')).toBe(true)
+  router.back()
+  await vi.waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/account/reviews?page=2'))
+})
 
 it('完成发布后关闭仍保留原页面，只发布一次；提交期间不能通过叉号或Esc关闭', async () => {
   let finishPublish!: (receipt: ReviewPublishReceipt) => void
@@ -251,7 +271,7 @@ it.each(['关闭', 'Escape'])('%s 关闭与叉号使用相同机制，连续打�
 it('未登录写评在认证后回原页，保留安全展示参数并仅打开一次', async () => {
   const source = '/account/contributions?status=APPROVED&pageSize=20&page=2'
   await mount(source, false)
-  host.querySelector<HTMLAnchorElement>('.compose-nav')!.click()
+  host.querySelector<HTMLButtonElement>('.compose-nav')!.click()
   await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/login'))
   const destination = loginRedirect(router.currentRoute.value.query.redirect)
   expect(destination).toBe(source + '&writeReview=1')

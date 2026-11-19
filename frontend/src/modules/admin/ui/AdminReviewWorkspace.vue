@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ResourceLink from '@/shared/ui/ResourceLink.vue'
+import AppLink from '@/shared/ui/AppLink.vue'
 import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 import {
   useRestaurantRequests,
@@ -8,6 +10,7 @@ import {
 import type { RequestStatus } from '../api/restaurantRequestsApi'
 import ReviewInlineField from './ReviewInlineField.vue'
 import AdminSidebar from './AdminSidebar.vue'
+import AdminHeader from './AdminHeader.vue'
 import LinkExistingRestaurantDialog from './LinkExistingRestaurantDialog.vue'
 
 // 身份由页面编排传入；真实查询只在管理会话校验通过后挂载，不跨模块读取认证Store。
@@ -96,17 +99,7 @@ onBeforeUnmount(() => photoDialog.value?.close())
 
 <template>
   <div class="admin-review-preview admin-theme">
-    <header class="topbar">
-      <RouterLink class="brand" to="/admin/reviews"><em>泥</em><span>泥电管理端</span></RouterLink>
-      <div class="account">
-        <span class="identity"
-          ><span class="avatar">管</span
-          ><span class="admin-username" :title="username">{{ username }}</span></span
-        ><button class="admin-logout" :disabled="loggingOut" @click="$emit('logout')">
-          {{ loggingOut ? '正在退出…' : '退出登录' }}
-        </button>
-      </div>
-    </header>
+    <AdminHeader :username="username" :logging-out="loggingOut" @logout="$emit('logout')" />
     <p v-if="sessionError" class="session-error" role="alert">
       {{ sessionError }}，可重新点击退出登录重试。
     </p>
@@ -257,10 +250,10 @@ onBeforeUnmount(() => photoDialog.value?.close())
                 <div v-if="detail.reviewedAt" class="meta review-meta">
                   审核人 #{{ detail.reviewedBy }} ·
                   {{ formatRequestTime(detail.reviewedAt) }}
-                  <RouterLink
+                  <AppLink
                     v-if="selected.restaurantId && !detail.targetDeleted"
                     :to="`/admin/restaurants/${selected.restaurantId}/edit`"
-                    >查看店铺资料 ↗</RouterLink
+                    >查看店铺资料 ↗</AppLink
                   >
                 </div>
                 <div class="section-head">
@@ -419,9 +412,9 @@ onBeforeUnmount(() => photoDialog.value?.close())
                     <span v-if="detail.targetDeleted"
                       >照片 {{ photo.position + 1 }}（商户已删除）
                     </span>
-                    <a v-else :href="photo.url" target="_blank" rel="noopener noreferrer"
+                    <ResourceLink v-else :href="photo.url" target="_blank" rel="noopener noreferrer"
                       >照片 {{ photo.position + 1 }}{{ photo.cover ? '（封面）' : '' }} ↗
-                    </a>
+                    </ResourceLink>
                   </template>
                 </p>
               </template>

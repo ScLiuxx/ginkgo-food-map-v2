@@ -1,3 +1,4 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
 import { createApp, h, nextTick, reactive, type App, type VNode } from 'vue'
 import { createMemoryHistory, createRouter, RouterView, type Router } from 'vue-router'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -91,7 +92,10 @@ describe('消息中心前端', () => {
   it('游客系统消息页提供保留站内目标的登录入口', async () => {
     await mount('/messages/system')
     expect(host.querySelector('h1')?.textContent).toBe('系统通知')
-    const href = host.querySelector<HTMLAnchorElement>('.empty-action')!.getAttribute('href')!
+    const href = (await captureLinkTarget(
+      app,
+      host.querySelector<HTMLAnchorElement>('.empty-action'),
+    ))!
     const target = new URL(href, 'http://localhost')
     expect(target.pathname).toBe('/login')
     expect(target.searchParams.get('redirect')).toBe('/messages/system')

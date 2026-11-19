@@ -176,15 +176,71 @@ it('retains unavailable own records and cancels them using the exact target', as
   expect(setFavorite).toHaveBeenCalledWith('1', false, 'viewer-session')
   expect(host.textContent).toContain('暂无可展示')
 })
-it('shows private-list rejection without inventing zero records and never offers cancel to others', async () => {
+const privateListError = {
+  isAxiosError: true,
+  response: {
+    status: 403,
+    data: { code: 'RESTAURANT_FAVORITES_PRIVATE', message: '该用户的收藏列表仅本人可见' },
+  },
+}
+it('收藏私密时不提供重试、分页或假零数量，换主体及退出清理状态', async () => {
   subject.value = '22'
-  vi.mocked(favoritePage).mockRejectedValueOnce(new Error('该用户的收藏列表仅本人可见'))
+  vi.mocked(favoritePage).mockRejectedValueOnce(privateListError)
   await mount(RestaurantFavorites)
-  expect(host.textContent).toContain('仅本人可见')
+  expect(host.querySelector('.private-content-state')?.textContent).toContain('对方未公开收藏')
+  expect(host.querySelector('[role="alert"], button, nav, article')).toBeNull()
   expect(host.textContent).not.toContain('共 0')
-  expect(
-    [...host.querySelectorAll('button')].some((b) => b.getAttribute('aria-label') === '取消收藏'),
-  ).toBe(false)
+  expect(host.textContent).not.toContain('暂无可展示')
+  subject.value = '33'
+  await settle()
+  expect(host.querySelector('.private-content-state')).toBeNull()
+  expect(host.querySelector('article')).not.toBeNull()
+  expect(host.querySelector('.favorite-remove')).toBeNull()
+  vi.mocked(favoritePage).mockRejectedValueOnce(privateListError)
+  subject.value = '44'
+  await settle()
+  expect(host.querySelector('.private-content-state')).not.toBeNull()
+  clearAccessToken()
+  await settle()
+  expect(host.querySelector('.private-content-state')).toBeNull()
+})
+it.each([
+  new Error('网络中断'),
+  {
+    isAxiosError: true,
+    response: { status: 403, data: { code: 'FORBIDDEN', message: '无权访问' } },
+  },
+  {
+    isAxiosError: true,
+    response: { status: 500, data: { code: 'RESTAURANT_FAVORITES_PRIVATE', message: '服务故障' } },
+  },
+])('收藏读取故障保留重试，不误判为私密：%j', async (reason) => {
+  subject.value = '22'
+  vi.mocked(favoritePage).mockRejectedValueOnce(reason)
+  await mount(RestaurantFavorites)
+  expect(host.querySelector('.private-content-state')).toBeNull()
+  expect(host.querySelector('[role="alert"]')).not.toBeNull()
+  button('重新加载').click()
+  await settle()
+  expect(favoritePage).toHaveBeenCalledTimes(2)
+  expect(host.querySelector('[role="alert"]')).toBeNull()
+  expect(host.querySelector('article')).not.toBeNull()
+})
+it('旧主体迟到的隐私拒绝不能覆盖新主体的公开收藏', async () => {
+  subject.value = '22'
+  let rejectOld!: (reason: unknown) => void
+  vi.mocked(favoritePage).mockReturnValueOnce(
+    new Promise((_, reject) => {
+      rejectOld = reject
+    }),
+  )
+  await mount(RestaurantFavorites)
+  subject.value = '33'
+  await settle()
+  rejectOld(privateListError)
+  await settle()
+  expect(host.querySelector('.private-content-state')).toBeNull()
+  expect(host.querySelector('article')).not.toBeNull()
 })
 it('clears private list data immediately on logout', async () => {
   await mount(RestaurantFavorites)

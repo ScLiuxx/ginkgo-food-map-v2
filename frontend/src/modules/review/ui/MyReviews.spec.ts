@@ -1,3 +1,4 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
 import { createApp, h, nextTick, type App } from 'vue'
 import { createPinia, disposePinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -57,7 +58,9 @@ describe('我的点评页面', () => {
   let app: App | undefined, host: HTMLDivElement
   let pinia: ReturnType<typeof createPinia>
   const remove = vi.fn(),
-    history = vi.fn()
+    history = vi.fn(),
+    listReplies = vi.fn(),
+    reply = vi.fn()
   const originalShow = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal')
   const originalClose = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close')
   beforeEach(() => {
@@ -75,6 +78,8 @@ describe('我的点评页面', () => {
       available: true,
     }))
     remove.mockResolvedValue(undefined)
+    listReplies.mockResolvedValue({ records: [], hasMore: false, nextCursor: null })
+    reply.mockResolvedValue(undefined)
     history.mockResolvedValue({
       currentReviewId: '102',
       records: [
@@ -105,6 +110,7 @@ describe('我的点评页面', () => {
     host.remove()
     disposePinia(pinia)
     clearAccessToken()
+    vi.unstubAllGlobals()
     for (const [name, descriptor] of [
       ['showModal', originalShow],
       ['close', originalClose],
@@ -125,12 +131,18 @@ describe('我的点评页面', () => {
     if (signedIn) signIn()
     const router = createRouter({
       history: createMemoryHistory(),
-      routes: ['/', '/account/reviews', '/restaurants/1', '/users/42', '/users/22', '/login'].map(
-        (path) => ({
-          path,
-          component: { template: '<p>目标</p>' },
-        }),
-      ),
+      routes: [
+        '/',
+        '/account',
+        '/account/reviews',
+        '/restaurants/1',
+        '/users/42',
+        '/users/22',
+        '/login',
+      ].map((path) => ({
+        path,
+        component: { template: '<p>目标</p>' },
+      })),
     })
     await router.push(publicUserId ? `/users/${publicUserId}` : '/account/reviews')
     await router.isReady()
@@ -142,7 +154,8 @@ describe('我的点评页面', () => {
     app.provide(reviewGatewayKey, {
       ...unavailableReviewGateway,
       supportsReplies: true,
-      listReplies: vi.fn().mockResolvedValue({ records: [], hasMore: false, nextCursor: null }),
+      listReplies,
+      reply,
       remove,
       history,
     })
@@ -163,6 +176,128 @@ describe('我的点评页面', () => {
     buttons('删除点评')[0]!.click()
     await settle()
   }
+  function desktopMedia() {
+    const media = Object.assign(new EventTarget(), { matches: true })
+    vi.stubGlobal('matchMedia', () => media)
+    return (matches: boolean) => {
+      media.matches = matches
+      media.dispatchEvent(new Event('change'))
+    }
+  }
+  async function openHistoryDetail() {
+    host.querySelector<HTMLButtonElement>('.desktop-history-access .history-trigger')!.click()
+    await settle()
+    const panel = document.querySelector<HTMLDialogElement>('.history-dialog')!
+    panel.querySelector<HTMLButtonElement>('.review-body-link')!.click()
+    await settle()
+    return panel
+  }
+
+  it('电脑历史与详情共用一个模态窗口，返回保留列表位置、焦点和失败回复UUID', async () => {
+    desktopMedia()
+    await mount()
+    const panel = await openHistoryDetail()
+    expect(document.querySelectorAll('dialog[open]')).toHaveLength(1)
+    expect(panel.querySelector('.embedded-discussion .detail-original-body')?.textContent).toBe(
+      '历史正文',
+    )
+    expect(panel.querySelector('.history-scroll')?.getAttribute('style')).toContain('display: none')
+    const scroll = panel.querySelector<HTMLElement>('.history-scroll')!
+    scroll.scrollTop = 80
+    const input = panel.querySelector('textarea')!
+    input.value = '保留历史点评回复草稿'
+    input.dispatchEvent(new Event('input'))
+    await settle()
+    reply.mockRejectedValueOnce(new Error('模拟回复失败'))
+    panel.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }))
+    await settle()
+    expect(reply.mock.calls[0]?.slice(0, 2)).toEqual(['101', '保留历史点评回复草稿'])
+    const requestId = reply.mock.calls[0]![2]
+    panel.querySelector<HTMLButtonElement>('[aria-label="返回历史"]')!.click()
+    await settle()
+    expect(panel.open).toBe(true)
+    expect(scroll.style.display).not.toBe('none')
+    expect(scroll.scrollTop).toBe(80)
+    expect(document.activeElement).toBe(panel.querySelector('.review-body-link'))
+    panel.querySelector<HTMLButtonElement>('.review-body-link')!.click()
+    await settle()
+    expect(panel.querySelector('textarea')).toBe(input)
+    expect(input.value).toBe('保留历史点评回复草稿')
+    expect(panel.textContent).toContain('模拟回复失败')
+    panel.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }))
+    await settle()
+    expect(reply.mock.calls[1]![2]).toBe(requestId)
+    const focusHistory = vi.spyOn(
+      host.querySelector<HTMLButtonElement>('.desktop-history-access .history-trigger')!,
+      'focus',
+    )
+    panel.querySelector<HTMLButtonElement>('[aria-label="关闭点评详情"]')!.click()
+    await settle()
+    expect(document.querySelector('dialog[open]')).toBeNull()
+    // jsdom不应用媒体查询，电脑专用入口在其CSS引擎中仍隐藏；实际焦点另由Edge验证。
+    expect(focusHistory).toHaveBeenCalledWith({ preventScroll: true })
+    expect(document.documentElement.style.overflow).toBe('')
+  })
+
+  it('历史详情跨电脑与手机断点移动同一编辑器，Esc先返回历史再关闭', async () => {
+    const resize = desktopMedia()
+    await mount()
+    const panel = await openHistoryDetail()
+    const input = panel.querySelector('textarea')!
+    input.value = '切换窗口大小保留文字'
+    input.dispatchEvent(new Event('input'))
+    await settle()
+    resize(false)
+    await settle()
+    const detail = [...document.querySelectorAll<HTMLDialogElement>('.discussion-dialog')].find(
+      (d) => d.open,
+    )!
+    expect(detail.querySelector('textarea')).toBe(input)
+    expect(input.value).toBe('切换窗口大小保留文字')
+    resize(true)
+    await settle()
+    expect(document.querySelectorAll('dialog[open]')).toHaveLength(1)
+    expect(panel.querySelector('textarea')).toBe(input)
+    panel.dispatchEvent(new Event('cancel', { cancelable: true }))
+    await settle()
+    expect(panel.open).toBe(true)
+    expect(panel.querySelector<HTMLElement>('.history-scroll')!.style.display).not.toBe('none')
+    panel.dispatchEvent(new Event('cancel', { cancelable: true }))
+    await settle()
+    expect(panel.open).toBe(false)
+    expect(document.documentElement.style.overflow).toBe('')
+  })
+
+  it('电脑历史关闭取消详情在途读取，迟到回复不进入重新打开的窗口', async () => {
+    desktopMedia()
+    await mount()
+    listReplies.mockRejectedValueOnce(new Error('预览暂时不可用'))
+    host.querySelector<HTMLButtonElement>('.desktop-history-access .history-trigger')!.click()
+    await settle()
+    let finish!: (value: { records: []; hasMore: false; nextCursor: null }) => void
+    listReplies.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const panel = document.querySelector<HTMLDialogElement>('.history-dialog')!
+    panel.querySelector<HTMLButtonElement>('.history-detail-link')!.click()
+    await settle()
+    const signal = listReplies.mock.calls.at(-1)![1] as AbortSignal
+    panel.querySelector<HTMLButtonElement>('[aria-label="关闭点评详情"]')!.click()
+    await settle()
+    expect(signal.aborted).toBe(true)
+    finish({ records: [], hasMore: false, nextCursor: null })
+    await settle()
+    expect(document.querySelector('dialog[open]')).toBeNull()
+    expect(document.documentElement.style.overflow).toBe('')
+    await openHistoryDetail()
+    expect(panel.querySelector('.embedded-discussion .detail-original-body')?.textContent).toBe(
+      '历史正文',
+    )
+    expect(document.querySelectorAll('dialog[open]')).toHaveLength(1)
+  })
 
   it('点击当前正文直接打开同一点评，关闭回到原入口；历史正文保持历史ID', async () => {
     await mount()
@@ -173,6 +308,9 @@ describe('我的点评页面', () => {
       (dialog) => dialog.open,
     )!
     expect(current.querySelector('.detail-original-body')?.textContent).toBe('第102条真实点评')
+    expect(await captureLinkTarget(app, current.querySelector('.discussion-store-title a'))).toBe(
+      '/restaurants/1',
+    )
     current.querySelector<HTMLButtonElement>('[aria-label="关闭点评详情"]')!.click()
     await settle()
     expect(document.activeElement).toBe(body)
@@ -188,7 +326,6 @@ describe('我的点评页面', () => {
       (dialog) => dialog.open,
     )!
     expect(previous.querySelector('.detail-original-body')?.textContent).toBe('历史正文')
-    expect(previous.textContent).toContain('历史点评 · 不计分')
     expect(previous.textContent).not.toContain('第102条真实点评')
     previous.querySelector<HTMLButtonElement>('[aria-label="关闭点评详情"]')!.click()
     await settle()
@@ -230,9 +367,9 @@ describe('我的点评页面', () => {
     expect(detail.querySelector('.detail-original-body')?.textContent).toBe('第102条真实点评')
     expect(detail.querySelector('.delete-review')).toBeNull()
     expect(detail.querySelector('.report-entry')).not.toBeNull()
-    expect(detail.querySelector('.detail-original .user-identity')?.getAttribute('href')).toBe(
-      '/users/22',
-    )
+    expect(
+      await captureLinkTarget(app, detail.querySelector('.detail-original .user-identity')),
+    ).toBe('/users/22')
     expect(remove).not.toHaveBeenCalled()
   })
 
@@ -249,7 +386,9 @@ describe('我的点评页面', () => {
     await mount()
     expect(host.textContent).toContain('当前可查看 1 家店')
     expect(host.textContent).toContain('暂停营业')
-    expect(host.querySelector('.my-review-store a')?.getAttribute('href')).toBe('/restaurants/1')
+    expect(await captureLinkTarget(app, host.querySelector('.my-review-store a'))).toBe(
+      '/restaurants/1',
+    )
     expect(host.querySelector('.my-review-store img, .avatar')).toBeNull()
     expect(host.querySelector('.history-trigger')).not.toBeNull()
     expect(buttons('回复')).toHaveLength(1)
@@ -287,7 +426,7 @@ describe('我的点评页面', () => {
     buttons('重试加载')[0]!.click()
     await settle()
     expect(host.textContent).toContain('还没有可展示的点评')
-    expect(host.querySelector('.my-review-empty a')?.getAttribute('href')).toBe(
+    expect(await captureLinkTarget(app, host.querySelector('.my-review-empty a'))).toBe(
       '/account/reviews?writeReview=1',
     )
   })

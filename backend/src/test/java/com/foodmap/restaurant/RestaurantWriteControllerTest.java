@@ -74,14 +74,19 @@ class RestaurantWriteControllerTest {
         verifyNoInteractions(service);
     }
 
-    /** 删除和恢复不要求版本或请求体，管理响应继续禁止缓存。 */
+    /** 删除不要求版本或请求体，管理响应继续禁止缓存。 */
     @Test
-    void shouldDeleteAndRestoreWithoutVersion() throws Exception {
+    void shouldDeleteWithoutVersion() throws Exception {
         mvc.perform(delete("/api/restaurants/101"))
                 .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"));
-        mvc.perform(post("/api/restaurants/101/restore"))
-                .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"));
         verify(service).delete("101");
-        verify(service).restore("101");
+    }
+
+    /** 下线的恢复地址不再进入写服务。 */
+    @Test
+    void shouldNotExposeRestoreEndpoint() throws Exception {
+        mvc.perform(post("/api/restaurants/101/restore"))
+                .andExpect(status().isNotFound());
+        verifyNoInteractions(service);
     }
 }

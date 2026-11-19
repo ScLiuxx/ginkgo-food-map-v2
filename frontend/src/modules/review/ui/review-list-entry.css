@@ -106,12 +106,6 @@
   color: #8a95a2;
   gap: 8px 17px;
 }
-.star-review .scoring-state.history {
-  padding: 0;
-  background: none;
-  color: #a5adb5;
-  margin: 8px 12px 0 var(--entry-indent);
-}
 .star-review .example-review {
   font-size: 11px;
   margin: 8px 0 0 var(--entry-indent);
@@ -320,10 +314,6 @@ time {
   color: #8c610e;
   background: #fff1cf;
 }
-.scoring-state.history {
-  color: #737985;
-  background: #f0f2f5;
-}
 .body {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -476,6 +466,9 @@ button {
 .dimension-details {
   margin: 0 0 11px;
 }
+.star-review:not(.list-card-review) .dimension-details {
+  margin-left: var(--entry-indent);
+}
 .dimension-details summary {
   display: flex;
   align-items: center;
@@ -521,7 +514,7 @@ button {
   font-weight: 500;
 }
 .dimension-details summary:focus-visible {
-  outline: 2px solid #cf9f53;
+  outline: 2px solid #a5adb7;
   outline-offset: 2px;
   border-radius: 3px;
 }
@@ -565,6 +558,75 @@ button {
   text-align: left;
   color: inherit;
   cursor: pointer;
+}
+.desktop-history-access,
+.history-detail-link {
+  display: none;
+}
+.history-detail-link {
+  min-height: 44px;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: #8a95a2;
+  font: inherit;
+  cursor: pointer;
+}
+@media (min-width: 800px) {
+  .desktop-personal-review.list-card-review.profile-review.star-review header {
+    display: flex;
+    justify-content: flex-start;
+    gap: 12px;
+  }
+  .desktop-personal-review .dimension-details {
+    display: none;
+  }
+  .desktop-personal-review.list-card-review.profile-review.star-review .body {
+    font-size: 14px;
+    margin: 10px 0 0;
+    line-height: 1.9;
+  }
+  .desktop-personal-review.list-card-review.star-review .entry-interactions {
+    border-top: 0;
+    min-height: 44px;
+    margin-top: 5px;
+  }
+  .desktop-personal-review .entry-interactions > :deep(.review-actions-menu) {
+    position: absolute;
+    top: 12px;
+    right: -10px;
+  }
+  .desktop-personal-review .entry-interactions :deep(.review-actions-panel) {
+    top: calc(100% - 2px);
+    bottom: auto;
+  }
+  .desktop-personal-review .desktop-history-access {
+    display: block;
+    grid-row: 1;
+    grid-column: 3;
+  }
+  .desktop-personal-review .entry-interactions :deep(.discussion-preview) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0 16px;
+    margin-bottom: 8px;
+  }
+  .desktop-personal-review .entry-interactions :deep(.preview-line) {
+    grid-column: 1;
+    margin-bottom: 0;
+  }
+  .desktop-personal-review .entry-interactions :deep(.preview-link) {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    align-self: center;
+    margin-top: 0;
+    white-space: nowrap;
+  }
+  .desktop-personal-review .entry-rating :deep(.star-score strong) {
+    color: #8b7355;
+    font-size: 13px;
+    font-weight: 500;
+  }
 }
 /* 店铺有多位作者，署名单独一行，评分与日期同排；正文及回复沿作者文字列对齐。 */
 .list-card-review.star-review:not(.profile-review) .entry-author {

@@ -1,3 +1,5 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
+import { captureResourceTarget } from '@/shared/test/captureResourceTarget'
 /* eslint-disable vue/one-component-per-file -- 独立桩组件用于验证详情刷新时的挂载稳定性。 */
 import { createPinia } from 'pinia'
 import { AxiosError, AxiosHeaders } from 'axios'
@@ -102,8 +104,46 @@ describe('restaurant detail API integration', () => {
     expect(host.querySelector('.detail-cup')).toBeNull()
     expect(host.querySelector('.hero-score')?.textContent).toContain('待评级')
     expect(host.querySelector('.score-summary')?.textContent).toContain('待评级')
-    expect(host.querySelector('.detail-subtitle')?.textContent).toContain('人均待补')
+    expect(host.querySelector('.hero-price')).toBeNull()
     expect(host.querySelector('.distance-note')).toBeNull()
+  })
+
+  it('四维评分默认折叠，展开和收起保留真实数值，切店后重新折叠', async () => {
+    vi.mocked(fetchRestaurant).mockResolvedValueOnce({
+      ...restaurantFixture,
+      score: 7,
+      price: 20,
+      priceKind: 'estimate',
+      dimensions: { taste: 8, value: 7, service: null, ambience: 6 },
+    })
+    await mount()
+    expect(host.querySelector('.hero-score')?.textContent).toBe('3.5')
+    expect(host.querySelector('.detail-subtitle .star-symbols')).toBeNull()
+    expect(host.querySelector('.detail-service-tags .hero-price')?.textContent).toContain('约 ¥20')
+    const toggle = host.querySelector<HTMLButtonElement>('.score-toggle')!
+    const dimensions = host.querySelector<HTMLElement>('.score-summary')!
+    expect(toggle.getAttribute('aria-controls')).toBe(dimensions.id)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(dimensions.style.display).toBe('none')
+    toggle.click()
+    await settle()
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(dimensions.style.display).not.toBe('none')
+    expect([...dimensions.querySelectorAll('strong')].map((node) => node.textContent)).toEqual([
+      '4.0',
+      '3.5',
+      '待评级',
+      '3.0',
+    ])
+    toggle.click()
+    await settle()
+    expect(dimensions.style.display).toBe('none')
+    toggle.click()
+    await settle()
+    currentId.value = '2'
+    await settle()
+    expect(host.querySelector('.score-toggle')?.getAttribute('aria-expanded')).toBe('false')
+    expect(host.querySelector<HTMLElement>('.score-summary')?.style.display).toBe('none')
   })
 
   it('distinguishes a missing record from a temporary server failure', async () => {
@@ -141,7 +181,7 @@ describe('restaurant detail API integration', () => {
     expect(host.querySelector('.manual-copy')).toBeNull()
     const navigation = host.querySelector<HTMLAnchorElement>('.detail-navigation')!
     expect(navigation.getAttribute('aria-label')).toBe('在高德中打开导航')
-    expect(navigation.href).toContain('uri.amap.com')
+    expect(captureResourceTarget(navigation)).toContain('uri.amap.com')
     expect(host.querySelector('.detail-extra .location-links')).toBeNull()
   })
   it('地图入口返回地图，普通入口使用统一返回文案', async () => {
@@ -149,7 +189,7 @@ describe('restaurant detail API integration', () => {
     await mount()
     const link = host.querySelector<HTMLAnchorElement>('.detail-breadcrumb a')!
     expect(link.getAttribute('aria-label')).toBe('返回')
-    expect(link.getAttribute('href')).toBe('/map')
+    expect(await captureLinkTarget(app, link)).toBe('/map')
     await new Promise<void>((resolve) => {
       const stop = router.afterEach(() => {
         stop()
@@ -168,7 +208,7 @@ describe('restaurant detail API integration', () => {
     await mount()
     const link = host.querySelector<HTMLAnchorElement>('.detail-breadcrumb a')!
     expect(link.getAttribute('aria-label')).toBe('返回')
-    expect(link.getAttribute('href')).toBe('/?picker=return')
+    expect(await captureLinkTarget(app, link)).toBe('/?picker=return')
     await new Promise<void>((resolve) => {
       const stop = router.afterEach(() => {
         stop()
@@ -184,7 +224,7 @@ describe('restaurant detail API integration', () => {
     await mount()
     const link = host.querySelector<HTMLAnchorElement>('.missing-restaurant a')!
     expect(link.textContent).toBe('返回')
-    expect(link.getAttribute('href')).toBe('/map')
+    expect(await captureLinkTarget(app, link)).toBe('/map')
   })
 
   it('ignores the previous restaurant response after switching routes', async () => {
@@ -299,7 +339,7 @@ describe('restaurant detail API integration', () => {
     currentId.value = '201'
     vi.mocked(fetchRestaurant).mockResolvedValue(window)
     await mount()
-    expect(host.querySelector('.detail-breadcrumb a')?.getAttribute('href')).toContain(
+    expect(await captureLinkTarget(app, host.querySelector('.detail-breadcrumb a'))).toContain(
       '/restaurants/100?floor=',
     )
     expect(host.querySelector('.detail-affiliation')?.textContent).toContain('二楼')
