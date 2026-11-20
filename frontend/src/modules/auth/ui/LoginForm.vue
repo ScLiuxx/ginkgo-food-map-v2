@@ -1,27 +1,68 @@
 <script setup lang="ts">
 import AppLink from '@/shared/ui/AppLink.vue'
-import { onBeforeUnmount, reactive } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import PasswordInput from './PasswordInput.vue'
 import './auth-inputs.css'
 import { useLoginStore } from '../model/login.store'
 import { consumeResetLogin } from '../model/loginPrefill'
 import { loginRedirect } from '../model/loginRedirect'
+import { campusEmail, CAMPUS_EMAIL_SUFFIX } from '../model/campusEmail'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useLoginStore()
 const resetUsername = consumeResetLogin()
-const form = reactive({ username: resetUsername ?? '', password: '' })
+const modes = [
+  { key: 'username', label: '用户名登录' },
+  { key: 'student', label: '学号登录' },
+] as const
+const mode = ref<'username' | 'student'>('username')
+const form = reactive({ username: resetUsername ?? '', student: '', password: '' })
 const errors = reactive({ username: '', password: '' })
+const disabled = computed(() => auth.loggingIn || auth.restoring)
+const accountLabel = computed(() => (mode.value === 'student' ? '学号' : '用户名'))
+const tabs = ref<globalThis.HTMLDivElement>()
 let active = true
 
 function checkField(field: 'username' | 'password') {
-  errors[field] = (field === 'username' ? form.username.trim() : form.password)
-    ? ''
-    : field === 'username'
-      ? '请输入用户名或邮箱'
-      : '请输入密码'
+  if (field === 'password') {
+    errors.password = form.password ? '' : '请输入密码'
+    return
+  }
+  const value = form[mode.value].trim()
+  errors.username = !value
+    ? `请输入${accountLabel.value}`
+    : mode.value === 'student' && !/^[0-9]+$/.test(value)
+      ? '学号仅支持数字，请勿输入邮箱后缀'
+      : mode.value === 'username' && value.includes('@')
+        ? '请输入用户名，使用学号请切换至学号登录'
+        : ''
+}
+
+function changeMode(next: 'username' | 'student') {
+  if (disabled.value || mode.value === next) return
+  mode.value = next
+  form.password = ''
+  errors.username = ''
+  errors.password = ''
+  auth.clearError()
+}
+
+async function navigateTabs(event: globalThis.KeyboardEvent) {
+  if (disabled.value || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+  event.preventDefault()
+  const next =
+    event.key === 'Home'
+      ? 'username'
+      : event.key === 'End'
+        ? 'student'
+        : mode.value === 'username'
+          ? 'student'
+          : 'username'
+  changeMode(next)
+  await nextTick()
+  tabs.value?.querySelector<globalThis.HTMLButtonElement>('[aria-selected="true"]')?.focus()
 }
 
 function clearField(field: 'username' | 'password') {
@@ -37,7 +78,8 @@ async function handleSubmit() {
   checkField('username')
   checkField('password')
   if (errors.username || errors.password) return
-  const success = await auth.submit({ username: form.username.trim(), password: form.password })
+  const username = mode.value === 'student' ? campusEmail(form.student) : form.username.trim()
+  const success = await auth.submit({ username, password: form.password })
   form.password = ''
   if (success && active) {
     // 管理账号专用工作台，管理员优先于普通回跳；客户端不能自报角色或跳转到外部地址。
@@ -62,24 +104,58 @@ onBeforeUnmount(() => {
     <h1 id="login-title">欢迎回来</h1>
     <p v-if="resetUsername" class="form-intro" role="status">密码已重置，请输入新密码登录。</p>
     <div class="form-field">
-      <label for="login-username">用户名或邮箱</label>
-      <input
-        id="login-username"
-        v-model="form.username"
-        autocomplete="username"
-        maxlength="254"
-        placeholder="请输入用户名或邮箱"
-        autocapitalize="none"
-        :spellcheck="false"
-        :aria-invalid="!!errors.username"
-        :aria-describedby="errors.username ? 'login-username-error' : undefined"
-        :disabled="auth.loggingIn"
-        @blur="checkField('username')"
-        @input="clearField('username')"
-      />
-      <p v-if="errors.username" id="login-username-error" class="field-error" role="alert">
-        {{ errors.username }}
-      </p>
+      <div
+        ref="tabs"
+        class="login-modes"
+        role="tablist"
+        aria-label="登录方式"
+        @keydown="navigateTabs"
+      >
+        <button
+          v-for="item in modes"
+          :id="`login-tab-${item.key}`"
+          :key="item.key"
+          type="button"
+          role="tab"
+          :aria-selected="mode === item.key"
+          aria-controls="login-account-panel"
+          :tabindex="mode === item.key ? 0 : -1"
+          :disabled="disabled"
+          @click="changeMode(item.key)"
+        >
+          {{ item.label }}
+        </button>
+      </div>
+      <div id="login-account-panel" role="tabpanel" :aria-labelledby="`login-tab-${mode}`">
+        <div :class="{ 'email-input': mode === 'student' }">
+          <input
+            id="login-username"
+            v-model="form[mode]"
+            :aria-label="accountLabel"
+            autocomplete="username"
+            :inputmode="mode === 'student' ? 'numeric' : 'text'"
+            :maxlength="mode === 'student' ? 64 : 254"
+            autocapitalize="none"
+            :spellcheck="false"
+            :aria-invalid="!!errors.username"
+            :aria-describedby="
+              [
+                mode === 'student' ? 'login-email-suffix' : '',
+                errors.username ? 'login-username-error' : '',
+              ]
+                .filter(Boolean)
+                .join(' ') || undefined
+            "
+            :disabled="disabled"
+            @blur="checkField('username')"
+            @input="clearField('username')"
+          />
+          <span v-if="mode === 'student'" id="login-email-suffix">{{ CAMPUS_EMAIL_SUFFIX }}</span>
+        </div>
+        <p v-if="errors.username" id="login-username-error" class="field-error" role="alert">
+          {{ errors.username }}
+        </p>
+      </div>
     </div>
     <div class="form-field">
       <label for="login-password">密码</label>
@@ -89,7 +165,7 @@ onBeforeUnmount(() => {
         autocomplete="current-password"
         :aria-invalid="!!(errors.password || auth.error)"
         :aria-describedby="errors.password || auth.error ? 'login-password-error' : undefined"
-        :disabled="auth.loggingIn"
+        :disabled="disabled"
         @blur="checkField('password')"
         @input="clearField('password')"
       />
@@ -167,6 +243,41 @@ button {
   width: 100%;
   margin-top: 28px;
   cursor: pointer;
+}
+.login-modes {
+  display: flex;
+  gap: 28px;
+  margin-bottom: 18px;
+}
+.login-modes button {
+  position: relative;
+  width: auto;
+  margin: 0;
+  padding: 0 0 11px;
+  border: 0;
+  color: #96968e;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+.login-modes button[aria-selected='true'] {
+  color: #2b2a26;
+  font-weight: 800;
+}
+.login-modes button[aria-selected='true']::after {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 30px;
+  height: 2px;
+  border-radius: 2px;
+  background: #2b2a26;
+  content: '';
+}
+.login-modes button:focus-visible {
+  outline: 2px solid #a2a8af;
+  outline-offset: 4px;
 }
 .form-footnote {
   margin: 20px 0 0;

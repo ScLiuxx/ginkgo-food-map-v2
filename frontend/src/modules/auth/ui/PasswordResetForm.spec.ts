@@ -41,7 +41,7 @@ describe('password reset form', () => {
 
   function fill(values: Partial<Record<string, string>> = {}) {
     const fields = {
-      'reset-email': 'Student@STD.UESTC.EDU.CN',
+      'reset-email': ' Student ',
       'reset-code': '012345',
       'reset-password': 'NewPassword2026',
       'reset-confirm-password': 'NewPassword2026',
@@ -83,6 +83,8 @@ describe('password reset form', () => {
   })
 
   it.each([
+    [{ 'reset-email': '' }, '学生邮箱'],
+    [{ 'reset-email': 'student@std.uestc.edu.cn' }, '学生邮箱'],
     [{ 'reset-email': 'student@example.com' }, '学生邮箱'],
     [{ 'reset-code': '12ab' }, '6位数字'],
     [{ 'reset-password': 'abc' }, '密码至少需要4位'],
@@ -94,6 +96,24 @@ describe('password reset form', () => {
     await submit()
     expect(host.querySelector('[role="alert"]')?.textContent).toContain(message)
     expect(resetPassword).not.toHaveBeenCalled()
+  })
+
+  it('sends verification to the composed email and preserves leading zeroes', async () => {
+    vi.mocked(sendPasswordResetCode).mockResolvedValue()
+    fill({ 'reset-email': ' 001234567890 ' })
+    host.querySelector<HTMLButtonElement>('.code-button')!.click()
+    await nextTick()
+    expect(sendPasswordResetCode).toHaveBeenCalledWith('001234567890@std.uestc.edu.cn')
+    expect(host.querySelector('#reset-email-suffix')?.textContent).toBe('@std.uestc.edu.cn')
+  })
+
+  it('does not send verification for a full or malformed email prefix', async () => {
+    for (const value of ['student@std.uestc.edu.cn', 'student@example.com', 'a b']) {
+      fill({ 'reset-email': value })
+      host.querySelector<HTMLButtonElement>('.code-button')!.click()
+      await nextTick()
+    }
+    expect(sendPasswordResetCode).not.toHaveBeenCalled()
   })
 
   it('shows reset errors, clears passwords and preserves the old login on failure', async () => {

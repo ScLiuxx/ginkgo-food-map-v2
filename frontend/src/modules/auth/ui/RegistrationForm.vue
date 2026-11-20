@@ -13,6 +13,7 @@ import {
   accountErrorField,
 } from '../model/accountValidation'
 import { useRegistrationStore } from '../model/registration.store'
+import { campusEmail as completeCampusEmail, CAMPUS_EMAIL_SUFFIX } from '../model/campusEmail'
 
 const RESEND_SECONDS = 60
 
@@ -52,7 +53,7 @@ const cooldown = ref(0)
 let cooldownTimer: ReturnType<typeof globalThis.setInterval> | undefined
 
 // 后缀固定展示与拼接，用户仅输入邮箱前缀，完整邮箱仍由服务端校验。
-const campusEmail = computed(() => `${form.email.trim()}@std.uestc.edu.cn`)
+const campusEmail = computed(() => completeCampusEmail(form.email))
 const feedback = computed(() => (remoteField.value ? null : registrationStore.error))
 const codeButtonText = computed(() => {
   if (registrationStore.sendingCode) return '正在发送…'
@@ -134,7 +135,7 @@ onBeforeUnmount(() => {
             @blur="checkField('email')"
             @input="clearField('email')"
           />
-          <span id="email-suffix">@std.uestc.edu.cn</span>
+          <span id="email-suffix">{{ CAMPUS_EMAIL_SUFFIX }}</span>
         </div>
         <button
           class="code-button"
