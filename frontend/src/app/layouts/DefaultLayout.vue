@@ -90,6 +90,7 @@ const mapPage = computed(() => route.path === '/map' || route.path === '/preview
     min-height: 0;
   }
   .map-shell {
+    height: 100vh;
     height: 100dvh;
     min-height: 0;
     padding-bottom: 0;

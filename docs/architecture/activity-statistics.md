@@ -1,6 +1,6 @@
 # 使用统计存储结构
 
-状态：V49、Redis资源、前后端采集／同步／清理／读取已接入；本地已备份升级并启用实际采集，尚未发布到服务器。项目默认关闭，由环境显式开启。业务规则及上线步骤见[统计计划](../plans/admin-activity-statistics.md)，现行协议见[使用统计API](../api/statistics.md)，字段与约束见[MySQL结构](mysql-schema.md#activity-statistics)。
+状态：V49、Redis资源、前后端采集／同步／清理／读取已接入，代码已随首次部署发布到服务器；2026-11-20用户核对依赖并开启服务器环境开关，等待本轮自动发布重启生效。项目默认关闭，由环境显式开启。业务规则及上线步骤见[统计计划](../plans/admin-activity-statistics.md)，现行协议见[使用统计API](../api/statistics.md)，字段与约束见[MySQL结构](mysql-schema.md#activity-statistics)。
 
 ## 存储分工
 

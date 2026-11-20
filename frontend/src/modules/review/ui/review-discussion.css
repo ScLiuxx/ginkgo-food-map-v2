@@ -88,6 +88,7 @@
   inset: 0;
   width: 100%;
   max-width: none;
+  height: 100vh;
   height: 100dvh;
   max-height: none;
   margin: 0;
@@ -184,6 +185,7 @@
     inset: 0;
     margin: auto;
     width: min(720px, calc(100vw - 64px));
+    height: min(688px, calc(100vh - 64px));
     height: min(688px, calc(100dvh - 64px));
     border-radius: 14px;
     box-shadow: 0 22px 100px #18263826;

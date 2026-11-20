@@ -257,6 +257,7 @@ onBeforeUnmount(() => {
 .link-existing-dialog {
   width: min(560px, calc(100vw - 32px));
   max-width: min(560px, calc(100vw - 32px));
+  max-height: 90vh;
   max-height: 90dvh;
   box-sizing: border-box;
   border: 1px solid var(--admin-border);
@@ -270,6 +271,7 @@ onBeforeUnmount(() => {
 .dialog-layout {
   display: flex;
   flex-direction: column;
+  max-height: calc(90vh - 2px);
   max-height: calc(90dvh - 2px);
 }
 .dialog-content {
@@ -380,6 +382,7 @@ header button {
 }
 .results {
   min-height: 112px;
+  max-height: 34vh;
   max-height: 34dvh;
   overflow: auto;
   margin: 16px 0 0;

@@ -4,7 +4,7 @@
 
 CI（持续集成）用于检查修改能否正常编译、通过测试；CD 在这里指检查通过后自动部署。创建 PR 不会自动合并代码。
 
-本文说明源码定义的行为，不代表所有业务链路已验收。截至 2026-11-20，[PR #4](https://github.com/kanno111/foodmap/pull/4) 已合并到 develop，PR 与合并提交的三项检查均通过，用户已授权将 `AUTO_DEPLOY_ENABLED` 开启为 `true`。首次发布发现参数格式与单连接传输问题，现已规范部署 Secret 并增加分片并行上传，正式启动结果以 develop 最新 Actions 为准。后续进度见[实施计划](../../docs/plans/cicd-improvements.md)。
+本文说明源码定义的行为，不代表所有业务链路已验收。截至 2026-11-20，[PR #4](https://github.com/kanno111/foodmap/pull/4) 已合并到 develop，发布开关已按用户授权开启。修复参数格式和单连接传输问题后，[首次完整流水线](https://github.com/kanno111/foodmap/actions/runs/44682553571)四项任务全部成功，线上版本为 `f89f6c2`，后端健康及公网基础访问通过并已启用开机启动。访问地址为 <http://43.139.87.34/>，未导入本地业务数据。真实邮件、COS和地图等后续验收见[实施计划](../../docs/plans/cicd-improvements.md)。
 
 ## 提交、推送与 PR
 

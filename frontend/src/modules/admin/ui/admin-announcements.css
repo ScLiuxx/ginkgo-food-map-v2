@@ -11,6 +11,7 @@
 .announcement-shell {
   display: grid;
   grid-template-columns: var(--admin-sidebar-width) minmax(0, 1fr);
+  min-height: calc(100vh - var(--admin-header-height));
   min-height: calc(100dvh - var(--admin-header-height));
 }
 .announcement-workspace main {
@@ -299,6 +300,7 @@ select:focus-visible {
 }
 .announcement-dialog.record-dialog {
   width: min(560px, calc(100% - 32px));
+  max-height: 80vh;
   max-height: 80dvh;
   padding: 0;
   overflow: hidden;
@@ -308,6 +310,7 @@ select:focus-visible {
 .record-dialog-shell {
   display: flex;
   flex-direction: column;
+  max-height: calc(80vh - 2px);
   max-height: calc(80dvh - 2px);
 }
 .record-dialog-header {

@@ -158,6 +158,7 @@ onUnmounted(() => globalThis.document.removeEventListener('pointerdown', outside
   left: 0;
   right: 0;
   z-index: 3;
+  max-height: min(248px, 40vh);
   max-height: min(248px, 40dvh);
   overflow-y: auto;
   overscroll-behavior: contain;

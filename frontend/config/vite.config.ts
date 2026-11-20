@@ -3,12 +3,17 @@ import { fileURLToPath, URL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig, loadEnv } from 'vite'
 import { amapProxy } from './amapProxy'
+import { cssCompatibility } from './cssCompatibility'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
   return {
-    plugins: [vue(), amapProxy(env)],
+    plugins: [vue(), amapProxy(env), cssCompatibility()],
+    build: {
+      // 部分手机浏览器仍使用旧内核，不能将手机断点压缩成 width <= 700px。
+      cssTarget: ['chrome95', 'safari15'],
+    },
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('../src', import.meta.url)),

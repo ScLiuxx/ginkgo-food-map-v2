@@ -2,13 +2,15 @@
 
 最后核对日期：2026-11-20（腾讯云改用GitHub托管机器通过SSH发布，旧服务器记录保留日期边界）。
 
-最新部署进度：PR #4已合并、发布开关已按用户授权开启；合并后CI三项检查通过，首次发布正在处理传输问题，尚不能视为服务已上线。大包采用4MiB分片、最多8路SCP上传，完整重组及SHA-256校验后才激活；实际进度与首次验收见[本轮计划](../plans/cicd-improvements.md)及Actions。
+最新部署结果：PR #4已合并、发布开关true；修复后的[Actions 44682553571](https://github.com/kanno111/foodmap/actions/runs/44682553571)四项任务全部成功，线上版本f89f6c2。后端active／running、health为UP，公网首页／登录页／版本／公开接口检查通过，用户设置开机启动后已核对enabled。访问地址<http://43.139.87.34/>，公开店铺总数0、启用分类9，未导入本地业务数据。大包按4MiB、最多8路SCP传输，重组并校验后激活；完整验证边界见[本轮计划](../plans/cicd-improvements.md)。
 
 ## 当前状态
 
+使用统计：2026-11-20用户授权开启，已以ubuntu执行单次配置操作，核对MySQL V49统计表、Redis AOF／everysec、noeviction及内存限额，备份服务器`/etc/foodmap/backend.env`后将`ACTIVITY_STATISTICS_ENABLED`设为`true`。本轮应用自动发布重启后才生效，统计从实际首次启用时刻开始，不回补历史。该开关与`AUTO_DEPLOY_ENABLED`、Actuator指标采集独立；初始化模板继续默认关闭，不会覆盖服务器现有配置。修改私有配置需要管理员权限，部署账号仍仅允许重启／停止后端。
+
 项目迁入独立仓库 [kanno111/foodmap](https://github.com/kanno111/foodmap)，默认分支为 `develop`。新历史从原 develop 的 V2 重构基线开始，随后保存登录、注册及 CI/CD 修改，不包含基线之前的旧系统提交。
 
-本轮目标为全新腾讯云服务器`43.139.87.34`，2核8GB、80GB，实际系统为Ubuntu22.04.5 LTS／x86_64。用户选择develop推送检查通过后自动发布；仓库配置已在功能分支调整，服务器已完成Nginx等待页配置，现按用户要求改为GitHub通过SSH发布，账号密钥／GitHubSecrets和首次发布尚待验收，详见[本轮计划](../plans/cicd-improvements.md)。流水线位于[ci-cd.yml](../../.github/workflows/ci-cd.yml)，实际执行结果见[Actions](https://github.com/kanno111/foodmap/actions)。
+当前腾讯云服务器为`43.139.87.34`，2核8GB、80GB，Ubuntu22.04.5 LTS／x86_64。GitHub通过SSH完成首次程序发布、版本和基础健康验证；develop后续检查通过自动发布。首次配置过程及真实业务待验收范围见[本轮计划](../plans/cicd-improvements.md)，流水线位于[ci-cd.yml](../../.github/workflows/ci-cd.yml)，实际执行结果见[Actions](https://github.com/kanno111/foodmap/actions)。
 
 现行新配置在GitHub托管机器运行，通过SSH发布到`production`环境，不再使用服务器Runner标签，并要求仓库变量`AUTO_DEPLOY_ENABLED`为字符串`true`。变量在服务器准备完成后一次开启，此后无需逐次确认；未设置时只运行检查，不会向旧服务器或尚未配置的新服务器发布。
 

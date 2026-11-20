@@ -707,6 +707,7 @@ dialog .buttons {
 /* 只在电脑端启用整屏双栏，手机继续沿用列表与详情上下阅读，不提前切换交互。 */
 @media (min-width: 801px) {
   .admin-review-preview {
+    height: 100vh;
     height: 100dvh;
     min-height: 480px;
     display: flex;

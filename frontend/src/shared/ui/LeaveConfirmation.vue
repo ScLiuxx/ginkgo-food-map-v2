@@ -49,6 +49,7 @@ defineExpose({ ask })
 .leave-confirmation {
   box-sizing: border-box;
   width: min(360px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
   max-height: calc(100dvh - 32px);
   padding: 24px;
   overflow: auto;

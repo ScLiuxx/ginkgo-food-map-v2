@@ -212,6 +212,7 @@ a:focus-visible {
 }
 dialog {
   width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
   max-height: calc(100dvh - 40px);
   overflow-y: auto;
   padding: 26px;
