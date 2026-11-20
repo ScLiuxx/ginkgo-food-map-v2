@@ -19,6 +19,19 @@ backend/config/application-local.yml
 backend/secrets/
 # Prometheus采集密码和Grafana管理员密码只保存在本机，Docker配置通过secret引用。
 deploy/monitoring/secrets/
+# 服务器初始化生成物不应放回源码目录；误复制时也不能纳入Git。
+deploy/infrastructure/secrets/
+deploy/infrastructure/config/redis.conf
+deploy/infrastructure/backend-database.env
+# ES部署的官方IK二进制安装包只保存在仓库外或服务器，不纳入Git。
+deploy/elasticsearch/server/analysis-ik.zip
+# 后端私有配置只在服务器或仓库外保存，避免误复制后提交。
+deploy/application/input.json
+deploy/application/backend.env
+deploy/application/jwt-private.pem
+deploy/application/jwt-public.pem
+deploy/nginx/amap-input.json
+deploy/nginx/amap-credentials.conf
 *.log
 __pycache__/
 

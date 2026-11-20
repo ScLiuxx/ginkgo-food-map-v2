@@ -103,6 +103,10 @@ jobs:
     name: Frontend checks
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      # JS Key允许进入浏览器构建；高德安全密钥只留在服务器Nginx配置。
+      VITE_AMAP_KEY: ${{ vars.VITE_AMAP_KEY }}
+      VITE_AMAP_SERVICE_HOST: /_AMapService
     steps:
       - uses: actions/checkout@v4
         with:
@@ -112,6 +116,14 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      - name: Require browser map configuration before automatic deployment
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop' && vars.AUTO_DEPLOY_ENABLED == 'true'
+        shell: bash
+        run: |
+          [[ "$VITE_AMAP_KEY" =~ ^[[:xdigit:]]{32}$ ]] || {
+            echo 'Configure repository variable VITE_AMAP_KEY before deployment.' >&2
+            exit 1
+          }
       - name: Install locked dependencies
         working-directory: frontend
         run: npm ci
@@ -129,10 +141,10 @@ jobs:
   deploy:
     name: Deploy checked commit
     needs: [backend, frontend, deployment-checks]
-    # 仓库变量是首次配置的就绪开关，开启后无需逐次确认；PR不进入服务器Runner。
+    # 仓库变量是首次配置的就绪开关，开启后无需逐次确认；PR不读取部署密钥。
     if: github.repository == 'kanno111/foodmap' && github.event_name == 'push' && github.ref == 'refs/heads/develop' && vars.AUTO_DEPLOY_ENABLED == 'true'
-    # 腾讯云专属标签，避免误用尚未移除的旧服务器Runner。
-    runs-on: [self-hosted, Linux, X64, foodmap-tencent-production]
+    # 测试、打包和SSH客户端均在GitHub托管机器执行。
+    runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 20
     # 不取消正在切换版本的部署，避免进程被中断后留下半完成状态。
@@ -150,7 +162,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # 使用系统 Python，服务器无需安装 gh，也不保存长期 GitHub 访问令牌。
+          # 使用本作业的只读令牌确认develop，服务器无需连接GitHub。
           python3 - <<'PY'
           import json, os, urllib.request
           url = f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/git/ref/heads/develop"
@@ -190,19 +202,16 @@ jobs:
           printf '%s\n' "$GITHUB_SHA" > release/frontend/version.txt
           tar -czf release.tar.gz -C release backend.jar frontend commit.txt
           sha256sum release.tar.gz > SHA256SUMS
-      - name: Activate release on this server
+      - name: Upload and activate checked release over SSH
         if: steps.latest.outputs.current == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         shell: bash
-        run: |
-          set -euo pipefail
-          # Runner 由 foodmap-deploy 运行，本地复制产物；自动发布不再连接入站 SSH。
-          [[ "$(id -un)" == 'foodmap-deploy' ]]
-          release_id="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          [[ "$release_id" =~ ^[a-f0-9]{40}-[0-9]+-[0-9]+$ ]]
-          incoming="/opt/foodmap/incoming/${release_id}"
-          mkdir -m 700 "$incoming"
-          cp release.tar.gz SHA256SUMS deploy/deploy.sh deploy/healthcheck.py "$incoming/"
-          bash "$incoming/deploy.sh" "$release_id"
+        run: bash deploy/ssh-publish.sh
 
   deployment-checks:
     name: Deployment checks
@@ -212,7 +221,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - name: Check script syntax and release failure handling
         run: |
           bash -n deploy/deploy.sh
+          bash -n deploy/ssh-publish.sh
+          sudo visudo -cf deploy/foodmap-deploy.sudoers
+          python3 -m py_compile deploy/application/prepare.py deploy/nginx/prepare.py
           python3 -m unittest discover -s deploy/tests -v

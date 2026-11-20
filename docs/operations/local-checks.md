@@ -13,9 +13,14 @@ Windows从仓库根目录使用[统一检查入口](../../tools/Check-Project.ps
 ./tools/Check-Project.ps1 -Task FrontendBuild
 # 发布前按范围需要时执行完整前端检查，已包含Lint、测试、类型检查及构建。
 ./tools/Check-Project.ps1 -Task FrontendCheck
+
+# 部署工具的假凭据／临时文件检查；不连接真实数据库或云服务。
+./tools/Check-Project.ps1 -Task DeploymentTest
 ```
 
 集成测试仍需显式开启对应开关、提供隔离服务器及随机测试库配置；入口不自动启用或跳过集成测试。可通过`-MavenArguments @('-Dactivity.backend.integration=true')`传入开关，凭据使用本地环境变量，不写入命令、日志或仓库。不要将开发业务库、真实OSS或现有ES索引用于测试。
+
+`DeploymentTest`运行`deploy/tests/`中的Python标准库测试，沿用互斥和2GiB可提交内存门槛；不启动JVM、Node或真实应用。Windows跳过依赖Linux发布／符号链接语义的用例，不能将跳过视为验收；CI在Ubuntu执行同目录全部用例。
 
 ## 默认资源与输出
 

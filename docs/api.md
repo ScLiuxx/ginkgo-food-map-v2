@@ -21,7 +21,7 @@
 | [消息、公告与实时提醒](api/notifications.md) | 收件箱、未读／已读、删除、回复定位、SSE、公告与处理结果 |
 | [内容举报与处置](api/moderation.md) | 提交举报、管理员核查、驳回及永久删除 |
 | [使用统计](api/statistics.md) | 普通用户主动访问上报、管理员日汇总及七日活跃读取 |
-| [状态、指标与代理入口](api/system.md) | 应用状态、Actuator、Nginx探针与高德开发代理 |
+| [状态、指标与代理入口](api/system.md) | 应用状态、Actuator、Nginx探针与高德开发／生产代理 |
 
 ## 新店附带点评的当前范围
 

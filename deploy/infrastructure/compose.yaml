@@ -1,0 +1,77 @@
+name: foodmap-infra
+
+# 腾讯云首轮部署：Java和Nginx运行在宿主机，数据端口仅对宿主机开放。
+services:
+  mysql:
+    image: mysql:8.4
+    pull_policy: never
+    container_name: foodmap-mysql
+    restart: unless-stopped
+    mem_limit: 1536m
+    pids_limit: 256
+    environment:
+      MYSQL_DATABASE: foodmap
+      MYSQL_USER: foodmap
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_password
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+    command:
+      - --innodb-buffer-pool-size=256M
+      - --max-connections=50
+      - --default-time-zone=+08:00
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    secrets:
+      - mysql_password
+      - mysql_root_password
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - MYSQL_PWD="$$(cat /run/secrets/mysql_password)" mysql --protocol=TCP -h127.0.0.1 -ufoodmap -Dfoodmap -Nse 'SELECT 1' | grep -qx 1
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:8-alpine
+    pull_policy: never
+    container_name: foodmap-redis
+    restart: unless-stopped
+    mem_limit: 768m
+    pids_limit: 128
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+      # 配置文件在宿主机私有目录内；单文件挂载允许容器redis用户读取。
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - REDISCLI_AUTH="$$(sed -n 's/^requirepass //p' /usr/local/etc/redis/redis.conf)" redis-cli ping | grep -qx PONG
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+secrets:
+  mysql_password:
+    file: ./secrets/mysql_password
+  mysql_root_password:
+    file: ./secrets/mysql_root_password
+
+volumes:
+  mysql_data:
+  redis_data:

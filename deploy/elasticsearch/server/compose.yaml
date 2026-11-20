@@ -1,0 +1,49 @@
+name: foodmap-search
+
+services:
+  elasticsearch:
+    image: foodmap-elasticsearch:9.5.4-ik
+    pull_policy: never
+    build:
+      context: ./build
+      network: none
+    container_name: foodmap-elasticsearch
+    restart: unless-stopped
+    mem_limit: 2g
+    pids_limit: 512
+    environment:
+      cluster.name: foodmap-search
+      node.name: foodmap-search-1
+      discovery.type: single-node
+      # 当前后端使用无认证本机连接；宿主机仅发布回环地址，勿开放公网9200。
+      xpack.security.enabled: "false"
+      xpack.ml.enabled: "false"
+      ingest.geoip.downloader.enabled: "false"
+      ES_JAVA_OPTS: "-Xms1g -Xmx1g -XX:ActiveProcessorCount=2"
+    ports:
+      - "127.0.0.1:9200:9200"
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+      # 基础词典来自固定版本插件镜像；仅覆盖自有配置和扩展词表。
+      - ./ik/IKAnalyzer.cfg.xml:/usr/share/elasticsearch/config/analysis-ik/IKAnalyzer.cfg.xml:ro
+      - ./ik/foodmap-food.dic:/usr/share/elasticsearch/config/analysis-ik/foodmap-food.dic:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl --fail --silent 'http://127.0.0.1:9200/_cluster/health?wait_for_status=yellow&timeout=5s' >/dev/null
+      interval: 10s
+      timeout: 8s
+      retries: 18
+      start_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  elasticsearch_data:
