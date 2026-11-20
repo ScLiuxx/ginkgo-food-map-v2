@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
-/** 非空V46升级验证；只操作当前测试创建的随机回环库，绝不迁移开发库。 */
+/** 非空V46到V47专项升级验证；只操作当前测试创建的随机回环库，绝不迁移开发库。 */
 @EnabledIfSystemProperty(named = "restaurant.integration", matches = "true")
 class RestaurantLinkExistingSchemaIntegrationTest {
     @Test
@@ -84,6 +84,7 @@ class RestaurantLinkExistingSchemaIntegrationTest {
                         Flyway.configure()
                                 .dataSource(url, user, password)
                                 .locations("classpath:db/migration")
+                                .target("47")
                                 .load();
                 assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
                 assertThat(

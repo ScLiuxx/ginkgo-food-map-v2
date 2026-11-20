@@ -139,11 +139,20 @@ app:
       connect-timeout: 2s
       socket-timeout: 3s
   file:
+    cos:
+      # 开启后新图片写入COS；读取和删除仍按媒体记录的桶名匹配，无跨云失败兜底。
+      enabled: ${COS_ENABLED:false}
+      region: ${COS_REGION:}
+      bucket: ${COS_BUCKET:}
+      secret-id: ${COS_SECRET_ID:}
+      secret-key: ${COS_SECRET_KEY:}
+      session-token: ${COS_SESSION_TOKEN:}
     oss:
       enabled: ${OSS_ENABLED:false}
       endpoint: ${OSS_ENDPOINT:}
       region: ${OSS_REGION:}
       bucket: ${OSS_BUCKET:}
+      # 四个目录、临时有效期及清理间隔供OSS/COS共用，兼容既有配置键。
       # 普通餐厅和窗口的点评照片共用此目录，归属由数据库记录。
       prefix: review-images/
       # 商家投稿、纠错附图及正式相册共用此同级目录，审核后不移动对象。

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('BackendTest', 'BackendVerify', 'FrontendTest', 'FrontendBuild', 'FrontendCheck')]
+    [ValidateSet('BackendTest', 'BackendVerify', 'FrontendTest', 'FrontendBuild', 'FrontendCheck', 'DeploymentTest')]
     [string]$Task,
     [string[]]$Tests = @(),
     [string[]]$MavenArguments = @()
@@ -60,6 +60,14 @@ try {
         # Preserve those logs and judge the child by its exit code instead of treating warnings as crashes.
         $ErrorActionPreference = 'Continue'
         & mvn @maven
+        $result = $LASTEXITCODE
+        $ErrorActionPreference = 'Stop'
+    } elseif ($Task -eq 'DeploymentTest') {
+        Push-Location $repoRoot
+        $locationChanged = $true
+        Get-Command python -ErrorAction Stop | Out-Null
+        $ErrorActionPreference = 'Continue'
+        & python -m unittest discover -s deploy/tests -v
         $result = $LASTEXITCODE
         $ErrorActionPreference = 'Stop'
     } else {

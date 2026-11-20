@@ -61,7 +61,7 @@ class UserProfileApiIntegrationTest {
     @Autowired AuthenticationProperties authentication;
     @MockitoBean LoginSessionService sessions;
     @MockitoSpyBean UserProfileMapper profiles;
-    @MockitoBean com.foodmap.file.storage.OssStorageClient storage;
+    @MockitoBean com.foodmap.file.storage.ImageStorageClient storage;
     private String owner;
 
     @DynamicPropertySource
@@ -514,6 +514,7 @@ class UserProfileApiIntegrationTest {
                     Flyway.configure()
                             .dataSource(url(name), username(), password())
                             .locations("classpath:db/migration")
+                            .target("48")
                             .load();
             assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
             var after = db.queryForMap("SELECT * FROM users WHERE id=7");

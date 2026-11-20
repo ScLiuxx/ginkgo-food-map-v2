@@ -3,7 +3,7 @@ package com.foodmap.file.service;
 import com.foodmap.common.exception.BusinessException;
 import com.foodmap.file.exception.FileErrorCode;
 import com.foodmap.file.mapper.MediaFileMapper;
-import com.foodmap.file.storage.OssStorageClient;
+import com.foodmap.file.storage.ImageStorageClient;
 
 import lombok.RequiredArgsConstructor;
 
@@ -20,7 +20,7 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 public class MediaFileService {
     private final MediaFileMapper files;
-    private final OssStorageClient storage;
+    private final ImageStorageClient storage;
     private final com.foodmap.security.service.CurrentActorService actors;
 
     /** 用户服务先锁本人用户行；文件按升序锁定，绑定新图和释放旧图随资料事务一起回滚。 */

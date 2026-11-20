@@ -68,7 +68,7 @@ class RestaurantWriteApiIntegrationTest {
     @Autowired private JwtEncoder encoder;
     @Autowired private AuthenticationProperties authentication;
     @MockitoBean private LoginSessionService sessions;
-    @MockitoBean private com.foodmap.file.storage.OssStorageClient storage;
+    @MockitoBean private com.foodmap.file.storage.ImageStorageClient storage;
     @MockitoSpyBean private RestaurantWriteMapper mapper;
 
     @MockitoSpyBean

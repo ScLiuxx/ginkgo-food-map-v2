@@ -22,7 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.foodmap.common.exception.BusinessException;
 import com.foodmap.file.exception.FileErrorCode;
-import com.foodmap.file.storage.OssStorageClient;
+import com.foodmap.file.storage.ImageStorageClient;
 import com.foodmap.growth.mapper.GrowthRewardMapper;
 import com.foodmap.notification.mapper.NotificationMapper;
 import com.foodmap.restaurant.dto.RestaurantChangeRequest;
@@ -108,7 +108,7 @@ class RestaurantJointSubmissionApiIntegrationTest {
     @Autowired private JwtEncoder encoder;
     @Autowired private AuthenticationProperties authentication;
     @MockitoBean private LoginSessionService sessions;
-    @MockitoBean private OssStorageClient storage;
+    @MockitoBean private ImageStorageClient storage;
     @MockitoSpyBean private ReviewSubmissionMapper submissionMapper;
     @MockitoSpyBean private ReviewPhotoMapper reviewPhotos;
     @MockitoSpyBean private ReviewWriteMapper reviewWrites;
@@ -1325,8 +1325,8 @@ class RestaurantJointSubmissionApiIntegrationTest {
         assertThat(
                         jdbc.queryForMap(
                                 "SELECT name,address,CAST(created_by AS CHAR)"
-                                    + " created_by,CAST(updated_by AS CHAR) updated_by FROM"
-                                    + " restaurants WHERE id=991"))
+                                        + " created_by,CAST(updated_by AS CHAR) updated_by FROM"
+                                        + " restaurants WHERE id=991"))
                 .containsEntry("name", "已收录餐厅")
                 .containsEntry("address", "原有地址")
                 .containsEntry("created_by", "22")

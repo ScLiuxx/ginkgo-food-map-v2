@@ -25,16 +25,7 @@ public class OssConfiguration {
         if (!p.getEndpoint().matches("https://oss-[a-z0-9-]+\\.aliyuncs\\.com")
                 || !p.getBucket().matches("[a-z0-9][a-z0-9-]{1,61}[a-z0-9]")
                 || p.getRegion().isBlank()
-                || !p.getPrefix().matches("[A-Za-z0-9][A-Za-z0-9/_-]*/")
-                || !p.getRestaurantPrefix().matches("[A-Za-z0-9][A-Za-z0-9/_-]*/")
-                || p.getPrefix().equals(p.getRestaurantPrefix())
-                || !p.getWindowPrefix().matches("[A-Za-z0-9][A-Za-z0-9/_-]*/")
-                || p.getWindowPrefix().equals(p.getPrefix())
-                || p.getWindowPrefix().equals(p.getRestaurantPrefix())
-                || !p.getAvatarPrefix().matches("[A-Za-z0-9][A-Za-z0-9/_-]*/")
-                || java.util.Set.of(p.getPrefix(), p.getRestaurantPrefix(), p.getWindowPrefix())
-                        .contains(p.getAvatarPrefix())
-                || p.getTemporaryTtl().toSeconds() < 1) {
+                || !p.validImageSettings()) {
             throw new IllegalStateException("OSS配置无效，请核对HTTPS Endpoint、Region、Bucket和临时有效期");
         }
         var config = new ClientBuilderConfiguration();

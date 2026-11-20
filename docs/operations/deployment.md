@@ -1,37 +1,73 @@
 # 自动检查与发布
 
-最后核对日期：2026-10-27。
+最后核对日期：2026-11-20（腾讯云改用GitHub托管机器通过SSH发布，旧服务器记录保留日期边界）。
 
 ## 当前状态
 
 项目迁入独立仓库 [kanno111/foodmap](https://github.com/kanno111/foodmap)，默认分支为 `develop`。新历史从原 develop 的 V2 重构基线开始，随后保存登录、注册及 CI/CD 修改，不包含基线之前的旧系统提交。
 
-服务器 `8.137.98.235` 使用自托管 GitHub Actions Runner 执行发布，前后端构建和测试仍在 GitHub 托管机器运行。流水线位于 [ci-cd.yml](../../.github/workflows/ci-cd.yml)，实际执行结果见[新仓库 Actions](https://github.com/kanno111/foodmap/actions)。
+本轮目标为全新腾讯云服务器`43.139.87.34`，2核8GB、80GB，实际系统为Ubuntu22.04.5 LTS／x86_64。用户选择develop推送检查通过后自动发布；仓库配置已在功能分支调整，服务器已完成Nginx等待页配置，现按用户要求改为GitHub通过SSH发布，账号密钥／GitHubSecrets和首次发布尚待验收，详见[本轮计划](../plans/cicd-improvements.md)。流水线位于[ci-cd.yml](../../.github/workflows/ci-cd.yml)，实际执行结果见[Actions](https://github.com/kanno111/foodmap/actions)。
+
+现行新配置在GitHub托管机器运行，通过SSH发布到`production`环境，不再使用服务器Runner标签，并要求仓库变量`AUTO_DEPLOY_ENABLED`为字符串`true`。变量在服务器准备完成后一次开启，此后无需逐次确认；未设置时只运行检查，不会向旧服务器或尚未配置的新服务器发布。
+
+用户已明确本次暂不配置Actuator指标采集，也不部署Prometheus、Grafana等监控／告警服务，不生成或启用独立指标采集凭据。下方监控相关内容保留为既有能力说明，属于后续可选阶段。本轮发布只保留服务器本机`/actuator/health`健康检查，以判断启动及依赖状态和触发失败回滚；不新增公网Actuator代理。
+
+用户通过SSH回传基础安装结果：Java21、Nginx1.18、Docker29.10及Compose5.8已安装，Nginx／Docker均active。MySQL8.4、Redis8-alpine容器已启动且均healthy，端口仅绑定127.0.0.1:3306和127.0.0.1:6379；应用配置随后已生成，SSH登录与首次发布仍待完成。数据服务的配置边界及容器内MySQL客户端用法见[初始化说明](../../deploy/infrastructure/README.md)，容器健康结果不代替应用连接、备份恢复及MySQL8.4全链路验收。
+
+ES9.5.4官方镜像已由用户下载成功；[ES／IK部署文件](../../deploy/elasticsearch/server/README.md)及带已校验官方插件包的传输目录已准备。派生镜像固定基础镜像摘要和IK9.5.4，使用1GiB堆、2GiB容器上限和独立数据卷，9200只绑定回环地址；初始化会持久化所需`vm.max_map_count`设置。本机仅完成Python、插件包和Compose静态核对；用户随后回传服务器容器healthy及`analysis-ik 9.5.4`插件列表，确认服务已启动和插件已加载。既有初始化工具的只读检查也已由用户回传通过，v004结构、别名及写索引标记符合定义，当前0条文档；不导入本机开发数据。扩展词典分词及应用实际搜索仍待验收。
+
+腾讯云服务器直连Docker Hub超时时，可按[官方说明](https://cloud.tencent.com/document/product/1207/45596)将Docker daemon的`registry-mirrors`设为`["https://mirror.ccs.tencentyun.com"]`。该地址仅支持腾讯云内网访问，本机不能解析并不等于服务器不可用。修改前备份`/etc/docker/daemon.json`并保留其他键，对候选文件执行`dockerd --validate --config-file`后再替换和重启；用`docker info`及实际镜像拉取验证，不能把Docker安装的APT源当作容器镜像加速源。用户执行后已回传两个数据服务镜像拉取成功。
+
+以下旧服务器`8.137.98.235`的上线结果为2026-10-27历史实测，不表示当前可用或已迁入腾讯云：
 
 此前首轮检查全部通过，但 GitHub 托管 Runner 无法连接仅允许本机来源的 SSH，发布步骤以255退出。现改为服务器主动连接 GitHub、下载同一次检查的产物并在本地发布，自动发布不再依赖入站 SSH；原有 SSH 来源限制继续保留。
 
 访问地址为 `http://8.137.98.235`。首次服务器主动发布已于2026-10-27成功，运行记录为 [Actions 40528088040](https://github.com/kanno111/foodmap/actions/runs/40528088040)，发布提交为 `a8df8ff62f578220d626682147fd7cf1b4f80069`。首页、登录页、注册页和公开 API 均返回200，匿名 `/auth/me` 返回预期401，后端健康状态为 UP。当前仅配置 HTTP，尚未配置域名和 HTTPS。
 
+## 首次创建运行账号与目录
+
+本节用于全新腾讯云服务器，在SSH终端逐条执行；两个账号不授予通用sudo或Docker组权限。若提示同名账号／目录已存在，先核对归属，不改已有权限或覆盖配置。
+
+```bash
+sudo adduser --system --group --no-create-home foodmap
+sudo adduser --system --group --home /opt/foodmap-runner --no-create-home --shell /bin/bash foodmap-deploy
+sudo install -d -o foodmap-deploy -g foodmap-deploy -m 755 /opt/foodmap /opt/foodmap/releases
+sudo install -d -o foodmap-deploy -g foodmap-deploy -m 700 /opt/foodmap/incoming /opt/foodmap-runner
+sudo install -d -o root -g foodmap -m 750 /etc/foodmap
+id foodmap
+id foodmap-deploy
+```
+
+`foodmap`仅运行后端；`foodmap-deploy`接受专用SSH密钥并管理版本文件。版本目录允许后端及Nginx读取，待发布目录与Runner工作区只允许发布账号访问；配置目录仅root和后端组可进入，后续`backend.env`由root以0600保存。此步不创建业务数据、生成密钥或启动应用。2026-11-19用户已回传两个账号及目录归属正确：`/etc/foodmap`为root:foodmap、0750，`/opt/foodmap`为foodmap-deploy:foodmap-deploy、0755，原Runner目录为同发布账号、0700；改用SSH后该目录继续作为发布账号home，不运行Runner。
+
+后端配置见[私有配置首次准备](../../deploy/application/README.md)：用户确认沿用现有SMTP，从本机被忽略的配置中仅整理邮件和COS参数，通过SSH加密传输；数据库密码在服务器读取，JWT及验证码HMAC独立生成。源码只包含脚本与说明，真实输入保存在仓库外私有目录；初始化拒绝覆盖已存在的配置或密钥，不发送邮件、调用COS或启动应用。用户已回传服务器生成成功，`backend.env`为root:root、0600，JWT文件为root:foodmap、0640，临时输入副本已删除；应用实际读取与服务连通性仍待验收。
+
+服务安装步骤在同一说明中：复用systemd模板，新增[有限sudo配置](../../deploy/foodmap-deploy.sudoers)，先执行服务器端静态校验再安装，仅允许发布账号重启／停止该项目后端。用户已回传单元loaded／inactive、运行账号foodmap，以及sudo仅允许预期两项命令；不提前启动应用。首次发布前不创建虚假的`current`或启用自动发布变量，首次发布成功后再启用后端开机启动。
+
+服务器已按[Nginx及高德生产代理](../../deploy/nginx/README.md)安装njs固定上游代理、TLS验证及私有凭据，初始化保留默认站点备份，用户完成独立配置检查和显式reload。后续请求已返回503及`Application deployment pending`，确认项目入口生效。前端JS Key的GitHub仓库变量、真实高德请求、前端构建与SSH发布仍待设置或验收；本机部署检查边界见上述说明，不将规则测试等同于真实高德请求成功。
+
+首次站点初始化曾因Ubuntu22.04源无njs包而失败；按官方源、签名核对及安装预览纠正后，用户已安装Nginx1.30.7及配套njs并启用HTTP模块，保留Ubuntu站点加载方式。上述503结果为纠正后的项目站点实际结果；早期1.18.0及未加载模块的输出仅表示当时状态。
+
 ## 改名后的部署前置条件
 
 2026-11-17项目内名称统一为`foodmap`，本次仅修改本地源码和部署模板，没有连接或修改服务器。下方“当前状态”和“服务器部署结构”保留此前实测名称；后续命令使用新命名，不代表服务器已完成迁移。
 
-再次向`develop`推送前，应同步服务器上的`foodmap`应用账号、`foodmap-deploy` Runner账号及标签、`/opt/foodmap`发布目录、`/etc/foodmap/backend.env`、`foodmap-backend.service`、Nginx配置和sudo授权。运行配置仍可连接原数据库、Redis和OSS，不能因为改名新建空卷替换原数据。JWT默认签发者和受众已改为`foodmap`／`foodmap-api`，浏览器存储键和缓存前缀也已更新，升级后需重新登录；现有缓存等待过期后重新生成。
+再次向`develop`推送前，应同步服务器上的`foodmap`应用账号、`foodmap-deploy`发布账号及SSH授权、`/opt/foodmap`发布目录、`/etc/foodmap/backend.env`、`foodmap-backend.service`、Nginx配置和sudo授权。运行配置仍可连接原数据库、Redis和OSS，不能因为改名新建空卷替换原数据。JWT默认签发者和受众已改为`foodmap`／`foodmap-api`，浏览器存储键和缓存前缀也已更新，升级后需重新登录；现有缓存等待过期后重新生成。
 
-用户已将GitHub仓库更名为`kanno111/foodmap`，本地`origin`和文档链接已同步。按用户要求暂不处理CI/CD，工作流仓库身份条件仍保留旧值，后续恢复发布时单独核对。监控的任务名、数据源UID和告警名称已更新模板，部署时须同步Prometheus／Grafana配置；不重建已有指标数据卷。IK词典新文件为`foodmap-food.dic`，启用新配置前需同步该文件。部署模板迁移尚未在服务器验收。
+GitHub仓库已更名为`kanno111/foodmap`，本地`origin`、文档和本轮工作流仓库身份条件已同步。监控的任务名、数据源UID和告警名称已更新模板，部署时须同步Prometheus／Grafana配置；不重建已有指标数据卷。IK词典新文件为`foodmap-food.dic`，启用新配置前需同步该文件。部署模板迁移尚未在服务器验收。
 
 ## 触发条件与执行流程
 
 使用统计默认关闭。发布本功能前先备份目标数据库、核对V49迁移，再显式配置`ACTIVITY_STATISTICS_ENABLED=true`；启用后会保存唯一采集起点，不回补历史。首次启用、暂停恢复、Redis权限与持久化检查以及当前单后端实例限制集中见[采集运行约定](../architecture/activity-statistics.md#采集运行约定)。2026-11-19已在本地备份并升级V49，通过被忽略的local配置显式启用；尚未修改服务器配置或发布本功能。
 
-仅远程 `develop` 分支的 `push` 触发本工作流，包括合并其他分支后产生的推送。其他分支推送、Pull Request 和仅在本地提交不会触发。
+向`develop`提交PR及远程`develop`的push均触发检查，普通功能分支push和仅在本地提交不触发。PR更新时取消旧一轮PR检查；develop运行及部署不中断。只有本仓库develop推送且发布就绪变量开启，检查成功后才执行服务器发布；PR不读取部署密钥，也不连接生产服务器。
 
-1. 后端使用 Java 21 执行 Maven `verify`，启用真实 MySQL、Redis 集成测试。CI 使用临时 MySQL 8.4 和 Redis 8 服务，不访问生产数据库；测试报告即使失败也保留7天。
+1. 后端使用Java21执行Maven `verify`，显式开启既有认证／商户／点评／Redis测试及新增统计结构、统计后端集成测试。CI使用临时MySQL8.4和Redis8；统计MySQL映射13306、Redis使用独立16379服务，随机测试库与业务连接隔离，不访问开发库、生产数据库或真实OSS。测试报告即使失败也保留7天；其他可选专项开关不因`verify`自动启用。
 2. 前端使用 Node.js 24 和 `npm ci`，执行 ESLint、Vitest、TypeScript 类型检查及 Vite 生产构建。
 3. 检查部署脚本语法，运行发布、失败回滚及 HTTP 健康检查测试。
 4. 三项检查全部通过后，取本次运行生成的 JAR 和前端产物，打包并生成 SHA-256 校验文件，不在服务器重新构建源码。产物保留7天。
 5. 发布开始前核对远程 `develop` 最新提交；若当前提交已经被新推送取代，跳过本次发布。发布任务串行执行，不中断正在切换版本的任务。
-6. 服务器上的 `foodmap-deploy` Runner 下载本次运行的产物，将发布包和脚本复制到本地待发布目录。发布脚本再次验证校验和、压缩包路径和提交号，然后原子切换当前版本链接并重启后端。
+6. GitHub托管发布机器通过SSH创建版本专属目录，以SCP上传同一轮产物和脚本；全部上传成功后才调用远端发布入口。发布脚本再次验证校验和、压缩包路径和提交号，然后原子切换当前版本链接并重启后端。
 7. 同时验证后端健康、前端提交号、登录页面、公开 API 及匿名认证响应。失败时尝试恢复上一版程序，并将本次 Actions 标记为失败。
 
 在 GitHub 仓库的 **Actions → CI and automatic deployment** 查看每个步骤及失败日志。检查失败时不会进入发布，线上已有版本继续运行。流水线核对的是发布开始时的最新提交；发布期间若又有推送，后续通过检查的版本会继续更新。
@@ -76,7 +112,7 @@ Invoke-WebRequest -Uri http://127.0.0.1:8080/actuator/prometheus -Headers @{ Aut
 
 ## 图片存储目录
 
-同一私有OSS Bucket下统一使用四个同级目录：
+新图片支持腾讯云COS；启用COS后新上传优先使用COS，不因失败回退到OSS。同一私有桶下统一使用四个同级目录，无需手工创建：
 
 ```text
 Bucket/
@@ -88,31 +124,37 @@ Bucket/
 
 `app.file.oss.prefix`配置为`review-images/`，`app.file.oss.restaurant-prefix`配置为`restaurant-images/`，`app.file.oss.window-prefix`配置为`windows-images/`，`app.file.oss.avatar-prefix`配置为`avatars/`；本地配置与默认配置保持一致，不再使用`review-images/restaurants/`。文件名由服务端随机生成，用户、店铺和点评归属保存在数据库中，不继续分目录。图片绑定或审核通过时沿用原对象，不移动文件。
 
-RAM凭证需允许`review-images/*`、`restaurant-images/*`、`windows-images/*`和`avatars/*`对象的PutObject、GetObject和DeleteObject；仅创建OSS目录不会自动获得权限。WINDOW上传用途由后端额外限制为管理员。Bucket及对象保持私有，页面通过后端校验可见性后读取。
+四个目录及`app.file.oss.temporary-ttl`、`app.file.oss.cleanup-delay-ms`仍使用原有配置键，供COS和OSS共用。名称中保留`oss`用于兼容已有环境，并不表示COS需要OSS凭证。
+
+腾讯云后端环境配置（凭证只填服务器上的`/etc/foodmap/backend.env`或本机被忽略的配置文件）：
+
+```dotenv
+COS_ENABLED=true
+COS_REGION=ap-guangzhou
+COS_BUCKET=nidianfoodmap-1535748846
+COS_SECRET_ID=replace-with-cam-secret-id
+COS_SECRET_KEY=replace-with-cam-secret-key
+COS_SESSION_TOKEN=
+OSS_ENABLED=false
+```
+
+若本机`application-local.yml`显式配置了`app.file.oss.enabled`，也要将其改为`false`，避免覆盖环境变量。COS可用长期CAM密钥；手动填临时凭证时需同时填写会话令牌并自行在到期前更新，当前不自动获取／刷新CVM角色凭证。
+
+CAM策略仅授予上述四个前缀对象的`name/cos:PutObject`、`name/cos:GetObject`、`name/cos:DeleteObject`，资源范围限定目标桶；无需ListBucket、桶管理或PutObjectACL。代码不设置对象ACL，继承私有桶；桶和对象必须保持私有，且版本控制保持未开启，否则删除标记不能保证图片物理回收。旧OSS兼容模式下RAM需相应的对象Put/Get/Delete权限。WINDOW上传用途仍仅限管理员。
+
+页面继续由后端校验可见性后读取图片，不需要浏览器直连COS、CORS、公开读或新增前端密钥。首次部署后手动验证四种图片用途、私密／待审图片隔离、取消、替换和删除；自动化测试不得写入真实COS。
+
+本轮仅切换新图片，不复制历史对象、不改旧媒体记录。读取和删除严格按已登记桶名匹配已启用的提供者；关闭OSS后旧图可能不可读，旧记录保留且不参与回收。将来重新开启OSS会恢复其读取和清理，需先核对意图。新版本测试和构建通过后再改运行配置、重启；回退到不支持COS的旧JAR将无法读取新COS图片，不能把记录的桶名批量改成另一家存储来解决。
 
 修改前缀只影响新上传文件，既有文件按数据库记录的Bucket与存储键读取。清理旧图片时须先备份，核对数据库关联与实际对象，删除图片关联并刷新相关店铺的搜索封面，不能只在OSS控制台删除文件。2026-11-08本地旧图清理已同步完成，证据见[开发记录](../history/development-04.md#2026-11-08图片存储目录统一与旧图清理)；不代表服务器配置或线上数据已同步修改。
 
-## 发布 Runner 与权限
+## SSH发布配置与权限
 
-Runner 以独立的 `foodmap-deploy` 用户运行，并通过 systemd 开机启动。服务器主动通过 HTTPS 连接 GitHub 和产物下载服务，不需要为 GitHub 开放22端口，也不需要固定 GitHub Runner 的出口 IP。
+2026-11-20用户选择改为GitHub通过SSH发布，服务器不再下载安装或注册自托管Runner。完整的公钥安装、生产环境Secrets、主机公钥固定、网络前提及验收步骤集中见[SSH发布配置](ssh-deployment.md)。`foodmap-deploy`继续管理版本文件，有限sudo仍仅允许重启／停止后端；不使用root部署。
 
-在仓库 **Settings → Actions → Runners** 确认 `foodmap-production` 为 Online/Idle。服务器检查方式：
+本次沿用同一轮检查产物、发布锁、版本校验、健康检查及程序失败回滚。SSH私钥仅保存在受限本机目录及GitHub生产环境Secret；GitHub临时文件在步骤退出时删除。主机公钥由现有可信服务器终端取得，不关闭校验。用户确认TCP22安全组允许IPv4来源，真实GitHub访问仍待验证。
 
-```bash
-cd /opt/foodmap-runner
-sudo ./svc.sh status
-# 需要维护时，由管理员停止或重新启动；不要在发布过程中重启 Runner。
-sudo ./svc.sh stop
-sudo ./svc.sh start
-```
-
-Runner 只用于本仓库可信 `develop` 推送的发布任务，不用于外部 Pull Request 或不可信代码的构建。修改工作流、推送 develop 以及管理 Runner 的权限等同于发布权限，应只授予可信维护者。Runner 用户不能读取 root 专属的应用环境配置，也没有通用 sudo、Docker 管理权限。
-
-首次注册使用仓库管理 API 签发的短期注册令牌，只用于本次配置，不提交到代码或保存到工作流 Secrets。Runner 注册后由自身凭据连接 GitHub；每次发布读取 GitHub API 使用只读、限本任务有效的 `GITHUB_TOKEN`，不保存个人访问令牌。
-
-重装服务器时，在上述 Runners 页面移除失效记录并按 **New self-hosted runner** 的说明下载安装包，核对 SHA-256；以 `foodmap-deploy` 用户注册，名称使用 `foodmap-production`、自定义标签使用 `foodmap-deploy`，工作目录使用 `_work`。随后由管理员在安装目录执行 `./svc.sh install foodmap-deploy` 和 `./svc.sh start`。
-
-旧 SSH 发布使用的 `DEPLOY_HOST`、`DEPLOY_PORT`、`DEPLOY_USER`、`DEPLOY_SSH_KEY` 和 `DEPLOY_KNOWN_HOSTS` Secrets 已不被工作流读取。本次保留这些历史配置及本机 SSH 密钥；管理员 SSH 继续只从原有允许来源访问。
+旧服务器自托管Runner的安装与验收记录属于下方历史结果；未收到新服务器Runner已注册的证据，不自动删除目录或停止未知服务。旧Secrets可能仍指向旧服务器，必须按新说明全部配置为腾讯云生产环境值后再开启发布开关。
 
 ## 发布后的检查与排查
 

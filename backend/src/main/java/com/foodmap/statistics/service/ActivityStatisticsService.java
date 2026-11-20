@@ -33,7 +33,7 @@ public class ActivityStatisticsService {
     private static final long MAX_SAFE_INTEGER = 9_007_199_254_740_991L;
     private final ActivityStatisticsProperties properties;
     private final ActivityStatisticsMapper mapper;
-    private final ActivityStatisticsWriter writer;
+    private final ActivityStatisticsWriterService writer;
     private final ActivityRedisStore redis;
     private final ActivityTime time;
     private final Set<LocalDate> failedDates = new HashSet<>();

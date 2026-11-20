@@ -19,6 +19,8 @@ docs/
 
 ## 按问题查找
 
+- 腾讯云自动发布：[CI/CD流程与示意图](../.github/workflows/README.md)、[运行与验收边界](operations/deployment.md)、[GitHub通过SSH配置](operations/ssh-deployment.md)；服务器无需安装自托管Runner，首次发布仍待完成。
+
 ES 监控的实际故障验证见[故障演练报告](history/elasticsearch-metrics-fault-drill-2026-11-10.md)：保留首次超时失败依据，已修复并验证暂停无响应时的及时降级、熔断与恢复。
 
 | 想了解什么 | 阅读入口 |
@@ -31,6 +33,8 @@ ES 监控的实际故障验证见[故障演练报告](history/elasticsearch-metr
 
 ## 设计与计划
 
+- 图片存储：[切换至COS](plans/oss-to-cos.md)，只接入新图片，不迁移历史图片；定向测试和打包通过，本机已启用COS并重启，用户确认真实上传成功，删除待手动验收；已恢复CI/CD部署教学。
+- CI/CD：[腾讯云首次部署与流水线完善](plans/cicd-improvements.md)，已确认全新Ubuntu22.04服务器及develop检查通过自动发布；当前为配置阶段，运行约定见[自动检查与发布](operations/deployment.md)。
 - 用户活跃度：[管理端统计计划](plans/admin-activity-statistics.md)集中维护业务口径、上线步骤及验收范围；[MySQL日汇总结构](architecture/mysql-schema.md#activity-statistics)、[Redis集合及存储协作](architecture/activity-statistics.md)和[接口契约](api/statistics.md)已实现；本地已备份升级V49并启用实际采集，前端读取正式接口。项目默认关闭，服务器尚未发布本功能。
 - 新店附带点评：[业务规则与实施计划](plans/restaurant-review-submission.md)，使用方式见[功能说明](features.md#补充店铺与纠错)，联合提交、本人操作及[店铺已收录](api/submissions.md#link-existing)协议见[投稿接口](api/submissions.md)。
 - 帮我选一家：[业务规则与实施计划](plans/restaurant-picker.md)。独立六项条件（含最低评分）、等概率抽取、本轮不重复、回看及详情返回已接通；[查询接口](api/discovery.md#picker)不写入抽取记录、不调整表结构。

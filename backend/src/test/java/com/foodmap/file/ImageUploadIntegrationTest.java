@@ -55,9 +55,10 @@ class ImageUploadIntegrationTest {
     @Autowired JwtEncoder encoder;
     @Autowired AuthenticationProperties authentication;
     @MockitoBean LoginSessionService sessions;
-    @MockitoBean com.foodmap.file.storage.OssStorageClient storage;
+    @MockitoBean com.foodmap.file.storage.ImageStorageClient storage;
     @Autowired com.foodmap.file.mapper.MediaFileMapper files;
     @Autowired com.foodmap.file.service.MediaFileService media;
+    @Autowired com.foodmap.file.config.CosProperties cosProperties;
     @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
     private String owner, other;
 
@@ -81,6 +82,7 @@ class ImageUploadIntegrationTest {
     @BeforeEach
     void setup() {
         reset(sessions, storage);
+        cosProperties.setEnabled(false);
         // 图片发布测试也会触发首次点评奖励，先清理本测试库内的成长状态。
         jdbc.update("DELETE FROM growth_rewards");
         jdbc.update("DELETE FROM growth_accounts");
@@ -98,19 +100,19 @@ class ImageUploadIntegrationTest {
         for (long id : List.of(11L, 22L)) {
             jdbc.update(
                     "INSERT INTO users(id,username,email,password_hash,email_verified)"
-                        + " VALUES(?,?,?,?,TRUE)",
+                            + " VALUES(?,?,?,?,TRUE)",
                     id,
                     "reviewer_" + id,
                     "reviewer" + id + "@example.test",
                     "test-only");
             jdbc.update(
                     "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE"
-                        + " code='ROLE_USER'",
+                            + " code='ROLE_USER'",
                     id);
         }
         jdbc.update(
                 "INSERT INTO restaurants(id,name,category_code,created_by)"
-                    + " VALUES(1,'发布店','OTHER',11),(2,'另一店','OTHER',11)");
+                        + " VALUES(1,'发布店','OTHER',11),(2,'另一店','OTHER',11)");
         when(sessions.isActive(anyString(), anyLong(), anyLong())).thenReturn(true);
         owner = token(11, false);
         other = token(22, false);
@@ -158,9 +160,15 @@ class ImageUploadIntegrationTest {
     }
 
     private com.foodmap.file.job.MediaCleanupJob cleanupJob() {
+        // 部分重试用例会reset存储模拟；每次重建任务时恢复启用桶配置。
+        when(storage.cleanupBuckets())
+                .thenReturn(
+                        List.of(
+                                cosProperties.isEnabled()
+                                        ? cosProperties.getBucket()
+                                        : "test-oss-bucket"));
         return new com.foodmap.file.job.MediaCleanupJob(
-                new com.foodmap.file.service.MediaCleanupService(
-                        files, storage, transactions));
+                new com.foodmap.file.service.MediaCleanupService(files, storage, transactions));
     }
 
     @Test
@@ -181,6 +189,53 @@ class ImageUploadIntegrationTest {
                         eq("test-oss-bucket"),
                         matches("review-images/[a-f0-9-]+\\.jpg"),
                         any(byte[].class));
+    }
+
+    @Test
+    void cosUploadRegistersTheTargetBucketAndCancellationUsesTheSameBucket() throws Exception {
+        cosProperties.setEnabled(true);
+        cosProperties.setBucket("fixture-images-1234567890");
+        String id = uploadId();
+        var row = files.find(Long.parseLong(id));
+        assertThat(row.getBucketName()).isEqualTo("fixture-images-1234567890");
+        verify(storage).put(eq(row.getBucketName()), eq(row.getStorageKey()), any(byte[].class));
+        mvc.perform(delete("/api/files/images/" + id).header("Authorization", "Bearer " + owner))
+                .andExpect(status().isNoContent());
+        verify(storage).delete(row.getBucketName(), row.getStorageKey());
+        verify(storage, never()).delete(eq("test-oss-bucket"), anyString());
+    }
+
+    @Test
+    void disabledOldBucketCannotBlockCosCleanupOrBeModified() throws Exception {
+        // 旧记录多于单批50条，仍不能挤占COS回收名额。
+        for (int index = 0; index < 55; index++) {
+            jdbc.update(
+                    """
+                    INSERT INTO media_files(uploader_user_id,bucket_name,storage_key,content_type,
+                    byte_size,width,height,sha256,status,expires_at,purpose)
+                    VALUES(11,'test-oss-bucket',?,'image/jpeg',1,1,1,UNHEX(SHA2(?,256)),
+                    'PENDING_DELETE',CURRENT_TIMESTAMP-INTERVAL 1 DAY,'REVIEW')
+                    """,
+                    "review-images/old-" + index + ".jpg",
+                    "old-" + index);
+        }
+        cosProperties.setEnabled(true);
+        cosProperties.setBucket("fixture-images-1234567890");
+        String id = uploadId();
+        var row = files.find(Long.parseLong(id));
+        jdbc.update(
+                "UPDATE media_files SET expires_at=CURRENT_TIMESTAMP-INTERVAL 1 SECOND WHERE id=?",
+                id);
+        cleanupJob().cleanup();
+        assertThat(files.find(Long.parseLong(id))).isNull();
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT COUNT(*) FROM media_files WHERE"
+                                    + " bucket_name='test-oss-bucket' AND status='PENDING_DELETE'",
+                                Long.class))
+                .isEqualTo(55);
+        verify(storage).delete(row.getBucketName(), row.getStorageKey());
+        verify(storage, never()).delete(eq("test-oss-bucket"), anyString());
     }
 
     @Test
@@ -257,7 +312,7 @@ class ImageUploadIntegrationTest {
         String id = uploadId();
         jdbc.update(
                 "UPDATE media_files SET status='BOUND',expires_at=NULL,bound_at=CURRENT_TIMESTAMP"
-                    + " WHERE id=?",
+                        + " WHERE id=?",
                 id);
         mvc.perform(delete("/api/files/images/" + id).header("Authorization", "Bearer " + owner))
                 .andExpect(status().isConflict());
@@ -342,14 +397,14 @@ class ImageUploadIntegrationTest {
         assertThat(
                         jdbc.queryForList(
                                 "SELECT media_file_id FROM restaurant_change_photos WHERE"
-                                    + " request_id=? ORDER BY position",
+                                        + " request_id=? ORDER BY position",
                                 String.class,
                                 id))
                 .containsExactly(second, first);
         assertThat(
                         jdbc.queryForObject(
                                 "SELECT COUNT(*) FROM media_files WHERE status='BOUND' AND"
-                                    + " purpose='RESTAURANT'",
+                                        + " purpose='RESTAURANT'",
                                 Long.class))
                 .isEqualTo(2);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurants", Long.class))
@@ -498,7 +553,7 @@ class ImageUploadIntegrationTest {
         assertThat(
                         jdbc.queryForObject(
                                 "SELECT review_count FROM restaurant_review_statistics WHERE"
-                                    + " restaurant_id=1",
+                                        + " restaurant_id=1",
                                 Long.class))
                 .isEqualTo(1);
         when(storage.read(anyString(), anyString())).thenReturn(JpegImageProcessorTest.jpeg(5, 5));
@@ -509,7 +564,7 @@ class ImageUploadIntegrationTest {
         publish(input).andExpect(status().isConflict());
         jdbc.update(
                 "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP,delete_reason_code='SYSTEM'"
-                    + " WHERE id=1");
+                        + " WHERE id=1");
         mvc.perform(get("/api/reviews/" + review + "/photos/0")).andExpect(status().isNotFound());
     }
 
@@ -597,7 +652,7 @@ class ImageUploadIntegrationTest {
         String id = uploadId();
         jdbc.update(
                 "UPDATE media_files SET status='UPLOADING',expires_at=CURRENT_TIMESTAMP-INTERVAL 1"
-                    + " SECOND WHERE id=?",
+                        + " SECOND WHERE id=?",
                 id);
         cleanupJob().cleanup();
         assertThat(files.find(Long.parseLong(id)).getStatus()).isEqualTo("PENDING_DELETE");

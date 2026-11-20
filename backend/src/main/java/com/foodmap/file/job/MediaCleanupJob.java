@@ -4,14 +4,14 @@ import com.foodmap.file.service.MediaCleanupService;
 
 import lombok.RequiredArgsConstructor;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /** 定时触发器只负责调度，状态转换与删除重试交给清理服务。 */
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "app.file.oss.enabled", havingValue = "true")
+@ConditionalOnExpression("${app.file.oss.enabled:false} or ${app.file.cos.enabled:false}")
 public class MediaCleanupJob {
     private final MediaCleanupService cleanup;
 
