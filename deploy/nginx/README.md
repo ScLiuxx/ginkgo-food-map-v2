@@ -105,6 +105,22 @@ rm -- ~/foodmap-setup/amap-input.json
 
 ## 变更与失败恢复边界
 
+### 已安装站点的JSONP响应类型修复
+
+高德PlaceSearch采用JSONP，但上游可能返回JSON或二进制类型；`nosniff`开启时浏览器会拒绝执行，表现为原生接口成功而SDK搜索报错。`amap-proxy.js`新增响应头处理，共用配置通过`js_header_filter`挂到两个固定上游；只对合法callback的成功文本响应纠正类型，不关闭安全检查、不调整密钥或改写正文。
+
+现有应用CI/CD不会更新`/etc/nginx/foodmap`。单独将本目录的`update-jsonp.py`、`amap-proxy.js`、`amap-proxy-common.conf`放到服务器同一目录后，以ubuntu运行：
+
+```bash
+sudo python3 /opt/foodmap/nginx-jsonp-update-20261120/update-jsonp.py
+```
+
+更新脚本先检查现有两个文件是否为已核对基线或当前修复版，遇到未知人工修改即停止；校验现有Nginx，保存root专属`.foodmap-before-jsonp-*`备份后原子替换文件，再执行`nginx -t`及reload。校验／reload失败时恢复原文件并尝试重新加载旧配置，恢复失败明确要求人工检查；重复执行只校验，不重复reload。站点、凭据、应用和数据库保持原样。脚本需管理员权限，不扩大部署账号sudo。
+
+更新后应分别验收普通JSON查询和真实SDK搜索：前者仍为JSON，后者收到JavaScript类型且保留nosniff，页面选店结果可用；仅curl接口成功不能代替浏览器验收。不要重新运行首次初始化脚本，也不要使用`nginx -T`输出凭据。
+
+2026-11-20用户已执行上述更新，配置校验与reload成功，备份为`/etc/nginx/.foodmap-before-jsonp-wmem_94n`。独立核对代理文件指纹一致，线上提交页真实搜索／选店回填通过，普通JSON及非法callback检查正常；认证与所有业务写入均模拟或阻止，未提交测试申请。Nginx及后端保持active，未重启后端。源码仍在`fix/amap-jsonp`待提交，服务器配置已单独生效。
+
 - 初始化只用于全新服务器，拒绝既有项目配置、同名符号链接或除Ubuntu默认站点之外的已启用站点。原默认站点文件不删除，停用其启用链接前保存原内容和链接目标到root专属`/etc/nginx/.foodmap-before-*/`。
 - 项目配置安装到`/etc/nginx/sites-available/foodmap`，启用链接为`sites-enabled/foodmap`；代理脚本和公用配置位于`/etc/nginx/foodmap/`，凭据配置仅root以0600读取。真实JS Key和安全密钥只在私有文件中提供，不进入源码。
 - 在安装前后均执行`nginx -t`，后者失败时撤回本次启用链接、恢复默认站点链接，并将未启用的新配置保存在上述私有备份目录。诊断仅保存到root专属`validation.log`，不自动打印可能含凭据的错误正文。脚本不reload；既有Nginx进程继续使用旧配置，由管理员校验成功后显式reload。
