@@ -27,6 +27,12 @@ const results = requests.map(input => {
         internalRedirect(target) { this.result = { target, query: this.variables.foodmap_amap_query, path: this.variables.foodmap_amap_path }; }
     };
     policy.handle(request);
+    if (input.response && request.result.target) {
+        request.status = input.response.status;
+        request.headersOut = { ...input.response.headers };
+        policy.responseHeaders(request);
+        request.result.headers = request.headersOut;
+    }
     return request.result;
 });
 process.stdout.write(JSON.stringify(results));
@@ -91,3 +97,48 @@ process.stdout.write(JSON.stringify(results));
         ])
         self.assertEqual(results[0]["status"], 404)
         self.assertEqual(results[1]["target"], "@foodmap_amap_rest")
+
+    def test_jsonp_repairs_only_successful_text_response_types_and_keeps_nosniff(self):
+        for path in ("/v3/place/text", "/v4/map/styles", "/v3/log/init"):
+            for content_type in ("application/json;charset=UTF-8", "application/octet-stream", "text/plain"):
+                with self.subTest(path=path, content_type=content_type):
+                    result = self.run_requests([{
+                        "path": "/_AMapService" + path,
+                        "args": "keywords=test&callback=AMap._cb123",
+                        "response": {"status": 200, "headers": {
+                            "Content-Type": content_type, "X-Content-Type-Options": "nosniff",
+                            "Cache-Control": "no-store",
+                        }},
+                    }])[0]
+                    self.assertEqual(result["headers"]["Content-Type"], "application/javascript; charset=UTF-8")
+                    self.assertEqual(result["headers"]["X-Content-Type-Options"], "nosniff")
+                    self.assertEqual(result["headers"]["Cache-Control"], "no-store")
+
+    def test_plain_json_images_and_errors_keep_original_types(self):
+        for args, status, content_type in (
+            ("keywords=test", 200, "application/json"),
+            ("keywords=test&callback=cb", 200, "image/png"),
+            ("keywords=test&callback=cb", 200, "text/html"),
+            ("keywords=test&callback=cb", 400, "application/json"),
+            ("keywords=test&callback=cb", 502, "application/octet-stream"),
+        ):
+            with self.subTest(args=args, status=status, content_type=content_type):
+                result = self.run_requests([{"args": args, "response": {
+                    "status": status, "headers": {"Content-Type": content_type},
+                }}])[0]
+                self.assertEqual(result["headers"]["Content-Type"], content_type)
+
+    def test_invalid_jsonp_callbacks_never_reach_upstream(self):
+        for callback in ("", "alert(1)", "cb;alert", "cb..name", "1cb", "cb%0A", "a" * 129,
+                         "cb&callback=other", "cb&CALLBACK=other"):
+            with self.subTest(callback=callback):
+                result = self.run_requests([{"args": "keywords=test&callback=" + callback}])[0]
+                self.assertEqual(result["status"], 400)
+                self.assertNotIn("target", result)
+
+    def test_both_production_upstreams_install_the_response_filter(self):
+        directory = SCRIPT.parent
+        common = (directory / "amap-proxy-common.conf").read_text(encoding="utf-8")
+        site = (directory.parent / "nginx.conf").read_text(encoding="utf-8")
+        self.assertIn("js_header_filter foodmap_amap.responseHeaders;", common)
+        self.assertEqual(site.count("include /etc/nginx/foodmap/amap-proxy-common.conf;"), 2)

@@ -95,7 +95,7 @@
 
 **接口与权限**
 
-`GET /_AMapService/v3/place/text`由Vite开发代理插件或生产Nginx njs提供。凭据由服务端配置并覆盖客户端同名参数，不进入业务响应；生产模板已实现，服务器安装和真实高德验收仍待完成。
+`GET /_AMapService/v3/place/text`由Vite开发代理插件或生产Nginx njs提供。凭据由服务端配置并覆盖客户端同名参数，不进入业务响应；生产代理及本轮JSONP响应类型修复已单独更新服务器Nginx文件并完成浏览器验证。
 
 **请求参数**
 
@@ -103,10 +103,13 @@
 | --- | --- |
 | `keywords` | 必填，去空白后最多100字符 |
 | `page` | 默认1，范围1–100 |
+| `callback` | SDK可选JSONP回调。生产代理只允许单一、最长128字符的JavaScript标识符或点分路径；拒绝空值、重复、大小写变体及表达式 |
 
 **响应**
 
 返回高德原生格式，不使用业务响应封装。代理固定餐饮类型050000、每页10条、城市成都市、`citylimit=false`。
+
+生产代理对合法JSONP请求的成功文本响应（高德可能标为`application/json`、`application/octet-stream`或`text/plain`）修正为`application/javascript; charset=UTF-8`，保留`nosniff`及`no-store`，不改上游正文。未带callback的JSON、图片及HTTP错误响应不改类型；非法callback在转发前返回400 `MAP_SEARCH_INVALID_QUERY`。
 
 代理自身错误返回`{"code":"错误代码"}`：不支持的方法为405 `MAP_METHOD_NOT_ALLOWED`，未配置凭据为503 `MAP_PROXY_NOT_CONFIGURED`，非法路径／超过8192长度的查询串为404 `MAP_PATH_NOT_ALLOWED`，搜索参数非法为400 `MAP_SEARCH_INVALID_QUERY`，上游重定向或连接失败分别为502 `MAP_UPSTREAM_REDIRECT`／`MAP_UPSTREAM_UNAVAILABLE`。生产代理对非法百分号编码或查询中的控制字符也返回400；高德原生错误仍按其自身协议处理。首次发布前站点统一返回503等待状态，尚不进入代理处理。
 

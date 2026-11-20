@@ -4,7 +4,18 @@
 
 上一阶段（2026-11-03—2026-11-18）的完整记录已归档至[开发记录04](history/development-04.md)，更早记录见[文档导航](README.md#历史追溯)。
 
+## 2026-11-20：高德JSONP代理响应修复
+
+- 用户授权删除两个已合并分支`fix/mobile-layout-compat`、`fix/http-request-id`的本地及GitHub远端副本；已核对没有未合并提交并完成删除。另经明确同意从develop的29c0fed创建`fix/amap-jsonp`，不直接提交或发布。
+- 用户随后授权关闭自动发布开关，提交／推送并通过PR合并本轮修复，合并后只执行CI、不重复上传应用；已核对并暂设`AUTO_DEPLOY_ENABLED=false`，等待合并后流水线完整结束且deploy明确skipped再恢复true。Nginx修复此前已单独生效，不调整工作流或使用skip-ci跳过检查；最终开关与合并结果另存本轮仓库外证据。
+- 实际SDK重现幸福铁板烧搜索：代理HTTP200、info=OK及6条匹配，但JSONP被标为application/json，nosniff导致浏览器拒绝执行；地图初始化也出现octet-stream类型问题。新增njs响应头过滤器并在两个固定上游启用，仅修正合法callback／成功文本响应，保留普通JSON、图片、错误响应、nosniff及no-store，拒绝空白、重复及表达式回调；同步代理API。不改变高德排序、范围或本站业务数据。
+- 新增既有Nginx的专用更新脚本：检查已知基线、防止覆盖人工修改，root私有备份、原子替换两个公开代理文件、配置校验与reload，失败恢复文件并尝试加载旧配置。现有CI/CD只更新应用，服务器代理需管理员单独执行；不扩大部署账号权限，不接触凭据及站点。
+- 验证：统一入口43项部署检查中36通过、7项Windows缺少Linux文件语义跳过；涵盖合法JSONP修正、普通JSON／图片／错误保持、非法callback拒绝、未知配置拒绝覆盖、重复更新及失败恢复。真实高德SDK配合新过滤器的浏览器响应对照搜索成功、无业务写入；该验证不替代真实Nginx加载，服务器更新和最终浏览器验收待完成。证据位于仓库外`D:\eat\.codex-previews\amap-search-diagnostic-20261120\`。未改前后端应用源码，不重复运行应用全量测试或构建，未提交／推送。
+- 服务器落地：用户以ubuntu执行更新脚本，配置验证及reload成功，备份`/etc/nginx/.foodmap-before-jsonp-wmem_94n`。独立核对线上两个代理文件指纹与本轮源码一致、Nginx／后端active；线上生产提交页使用真实SDK与代理，模拟认证并拦截业务写入，幸福铁板烧搜索实际展示5条可用结果（高德count=6），选店后正常回填名称。普通GET仍返回JSON，合法JSONP返回JavaScript并保留nosniff／no-store，非法callback返回400；店铺总数仍22,510。未提交申请、发邮件或写COS，未重启后端。证据含`live-page-results.json`、两张页面截图及`server-verification.json`，无需等待应用CI/CD即可验收本次代理修复。
+
 ## 2026-11-20：HTTP请求编号兼容与食堂分类修正
+
+- 后续发布结果：用户确认分支后通过PR #6合并到develop的29c0fed，[Actions 44707400854](https://github.com/kanno111/foodmap/actions/runs/44707400854)四项全部成功；后端健康、版本及线上资源检查通过，严格模拟业务API验证公网HTTP非安全上下文下“＋”打开、选店、失败同UUID重试及关闭恢复滚动。统计启用时间保持原值、店铺总数仍22,510；证据`D:\eat\.codex-previews\http-compat-20261120\release-result.md`，无真实测试点评发布。
 
 - 用户确认暂用HTTP访问，域名及备案尚未完成。严格模拟普通用户与全部API，以公网IP作为页面来源复现点击“＋”时`crypto.randomUUID is not a function`、弹窗未打开且页面滚动被锁；同一构建在localhost可正常打开，明确了安全上下文差异及此前验证缺口。
 - 用户明确同意从develop的0d65f48创建`fix/http-request-id`，并授权提交、经PR检查后合并及自动发布供验收；本轮保留全部已完成修复及文档，不直接推送develop。

@@ -36,6 +36,35 @@ function replace(pairs, name, value) {
     return result;
 }
 
+function callbackName(pairs) {
+    var callbacks = pairs.filter(function (pair) {
+        return pair[0].toLowerCase() === 'callback';
+    });
+    if (!callbacks.length) return '';
+    // JSONP只接受单一的标识符／点路径，拒绝空值、重复参数和脚本表达式。
+    if (callbacks.length !== 1 || callbacks[0][0] !== 'callback'
+            || callbacks[0][1].length > 128
+            || !/^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$/.test(callbacks[0][1])) {
+        throw new Error('Invalid callback');
+    }
+    return callbacks[0][1];
+}
+
+function responseHeaders(r) {
+    if (r.status < 200 || r.status >= 300) return;
+    var type = r.headersOut['Content-Type'] || '';
+    // 高德JSONP有时标成JSON或二进制；仅合法callback且成功的文本响应修正类型。
+    // 普通JSON、图片、错误响应和nosniff保持原样，不修改上游正文。
+    if (!/^(?:application\/(?:json|octet-stream)|text\/plain)(?:\s*;|$)/i.test(type)) return;
+    try {
+        if (callbackName(parseQuery(r.variables.foodmap_amap_query || ''))) {
+            r.headersOut['Content-Type'] = 'application/javascript; charset=UTF-8';
+        }
+    } catch (error) {
+        // 非正常转发上下文不放宽响应类型。
+    }
+}
+
 function handle(r) {
     if (r.method !== 'GET') {
         r.headersOut.Allow = 'GET';
@@ -58,6 +87,7 @@ function handle(r) {
     var pairs;
     try {
         pairs = parseQuery(raw);
+        callbackName(pairs);
         if (path === '/v3/place/text') {
             var keyword = first(pairs, 'keywords').trim();
             var page = first(pairs, 'page') || '1';
@@ -88,4 +118,4 @@ function handle(r) {
         ? '@foodmap_amap_web' : '@foodmap_amap_rest');
 }
 
-export default { handle: handle };
+export default { handle: handle, responseHeaders: responseHeaders };
