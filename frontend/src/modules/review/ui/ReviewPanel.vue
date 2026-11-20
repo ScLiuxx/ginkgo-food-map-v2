@@ -572,6 +572,7 @@ dialog {
 .lightbox img {
   display: block;
   max-width: 85vw;
+  max-height: 75vh;
   max-height: 75dvh;
   margin-top: 10px;
 }

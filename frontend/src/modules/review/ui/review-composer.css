@@ -11,8 +11,10 @@
 .review-dialog {
   box-sizing: border-box;
   width: min(560px, calc(100% - 48px));
+  height: min(820px, 90vh);
   height: min(820px, 90dvh);
   max-width: none;
+  max-height: 90vh;
   max-height: 90dvh;
   padding: 0;
   border: 0;
@@ -432,6 +434,7 @@ select:focus-visible {
     position: fixed;
     inset: 0;
     width: 100%;
+    height: 100vh;
     height: 100dvh;
     max-height: none;
     margin: 0;

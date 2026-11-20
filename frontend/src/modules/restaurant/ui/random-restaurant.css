@@ -21,6 +21,7 @@
   --light: #fff2e6;
   --line: #eceff2;
   width: min(520px, calc(100% - 40px));
+  max-height: calc(100vh - 48px);
   max-height: calc(100dvh - 48px);
   padding: 0;
   border: 1px solid #ffffff;
@@ -68,6 +69,7 @@
 .picker-shell {
   display: flex;
   flex-direction: column;
+  max-height: calc(100vh - 50px);
   max-height: calc(100dvh - 50px);
   min-height: 0;
 }
@@ -511,10 +513,12 @@
 @media (max-width: 650px) {
   .random-dialog {
     width: calc(100% - 24px);
+    max-height: calc(100vh - 28px);
     max-height: calc(100dvh - 28px);
     border-radius: 22px;
   }
   .picker-shell {
+    max-height: calc(100vh - 30px);
     max-height: calc(100dvh - 30px);
   }
   .dialog-header {

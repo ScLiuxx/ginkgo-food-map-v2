@@ -19,7 +19,7 @@ docs/
 
 ## 按问题查找
 
-- 腾讯云自动发布：[CI/CD流程与示意图](../.github/workflows/README.md)、[运行与验收边界](operations/deployment.md)、[GitHub通过SSH配置](operations/ssh-deployment.md)；服务器无需安装自托管Runner，首次发布仍待完成。
+- 腾讯云自动发布：[CI/CD流程与示意图](../.github/workflows/README.md)、[运行与验收边界](operations/deployment.md)、[GitHub通过SSH配置](operations/ssh-deployment.md)；服务器无需安装自托管Runner，首次基础发布已验证，真实业务链路继续验收。
 
 ES 监控的实际故障验证见[故障演练报告](history/elasticsearch-metrics-fault-drill-2026-11-10.md)：保留首次超时失败依据，已修复并验证暂停无响应时的及时降级、熔断与恢复。
 

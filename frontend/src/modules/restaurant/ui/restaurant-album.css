@@ -126,6 +126,7 @@
 .album-lightbox img {
   display: block;
   max-width: 85vw;
+  max-height: 72vh;
   max-height: 72dvh;
   margin: 12px auto 0;
 }

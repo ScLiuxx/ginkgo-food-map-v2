@@ -197,6 +197,7 @@
 .contribution-dialog {
   box-sizing: border-box;
   width: min(600px, calc(100vw - 24px));
+  max-height: 90vh;
   max-height: 90dvh;
   padding: 0;
   border: 0;
@@ -527,6 +528,7 @@
 }
 .contribution-lightbox {
   width: min(1000px, calc(100vw - 24px));
+  height: min(800px, 85vh);
   height: min(800px, 85dvh);
   padding: 36px 10px 10px;
   border: 0;

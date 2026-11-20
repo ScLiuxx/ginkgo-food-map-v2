@@ -2,6 +2,7 @@
 .content-dialog {
   box-sizing: border-box;
   width: min(640px, calc(100vw - 32px));
+  max-height: 85vh;
   max-height: 85dvh;
   overflow: auto;
   padding: 26px 28px;

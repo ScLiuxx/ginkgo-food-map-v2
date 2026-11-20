@@ -258,7 +258,9 @@ function refresh() {
   position: fixed;
   inset: 0 0 0 auto;
   width: min(560px, 100vw);
+  height: 100vh;
   height: 100dvh;
+  max-height: 100vh;
   max-height: 100dvh;
   max-width: 100vw;
   margin: 0;
@@ -385,6 +387,7 @@ h2 span {
   .history-dialog {
     inset: 0;
     width: min(720px, calc(100vw - 64px));
+    height: min(688px, calc(100vh - 64px));
     height: min(688px, calc(100dvh - 64px));
     margin: auto;
     border-radius: 14px;
@@ -451,7 +454,9 @@ button:focus-visible {
   .history-dialog {
     inset: auto 0 0;
     width: 100%;
+    height: 88vh;
     height: 88dvh;
+    max-height: 88vh;
     max-height: 88dvh;
     border-radius: 20px 20px 0 0;
   }

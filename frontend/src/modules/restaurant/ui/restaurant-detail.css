@@ -1,5 +1,6 @@
 /* 按确认稿使用浅灰页面和白色内容区，标题、评分、正文依次建立阅读层次。 */
 .detail-page {
+  min-height: calc(100vh - 76px);
   min-height: calc(100dvh - 76px);
   background: #f7f8fa;
 }

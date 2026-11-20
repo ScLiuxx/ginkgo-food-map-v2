@@ -43,6 +43,7 @@
   display: grid;
   grid-template-columns: 376px minmax(0, 1fr);
   grid-template-rows: 68px auto minmax(0, 1fr);
+  height: calc(100vh - 156px - var(--map-topline-height));
   height: calc(100dvh - 156px - var(--map-topline-height));
   min-height: 480px;
   background: white;
@@ -452,6 +453,7 @@
 /* 筛选使用低对比选项和文字层级，保持原生dialog焦点管理与完整可点击区域。 */
 .map-filter-dialog {
   width: min(440px, calc(100% - 32px));
+  max-height: calc(100vh - 40px);
   max-height: calc(100dvh - 40px);
   padding: 28px;
   border: 0;

@@ -156,6 +156,7 @@ onUnmounted(() => {
 }
 .notification-review-photo {
   max-width: min(96vw, 920px);
+  max-height: 95vh;
   max-height: 95dvh;
   border: 0;
   border-radius: 12px;
@@ -176,6 +177,7 @@ onUnmounted(() => {
 .notification-review-photo img {
   display: block;
   max-width: 100%;
+  max-height: 78vh;
   max-height: 78dvh;
   object-fit: contain;
 }

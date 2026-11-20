@@ -1,6 +1,6 @@
 # GitHub通过SSH发布到腾讯云
 
-本页为2026-11-20起的现行发布配置。用户选择GitHub托管机器完成检查、打包和SSH上传，服务器不再安装或注册自托管Runner。沿用`production`环境、develop检查通过后自动发布、首次就绪变量、服务账号与现有健康检查／回滚脚本；专用密钥真实SSH登录及既有权限已验证，用户反馈5项生产环境Secrets已填写，实际读取和发布仍待Actions验收。
+本页为2026-11-20起的现行发布配置。GitHub托管机器完成检查、打包和SSH上传，服务器不安装自托管Runner。`production`环境、专用密钥及固定主机公钥已在[首次完整流水线](https://github.com/kanno111/foodmap/actions/runs/44682553571)实际使用成功，线上版本f89f6c2；发布开关true，后端运行／健康及开机启动验证通过。访问地址<http://43.139.87.34/>，生产业务验收范围见[计划](../plans/cicd-improvements.md)。
 
 ## 发布链路
 
@@ -10,7 +10,7 @@ PR和develop推送运行前后端及部署检查。只有本仓库develop推送�
 
 ## 当前服务器与密钥准备
 
-目标为`43.139.87.34:22`，Ubuntu22.04.5，后端和Nginx配置已准备，入口返回503等待首次发布。用户确认腾讯云安全组TCP22允许全部IPv4来源；未修改安全组、宿主机防火墙或全局SSH设置，真实GitHub来源连通性仍须首次Actions验证。普通GitHub托管机器出口IP会变化，后续收紧来源时需另选固定出口或维护相应策略。
+目标为`43.139.87.34:22`，Ubuntu22.04.5，后端和Nginx已运行，入口由首发前的503等待页变为正式前端。用户确认腾讯云安全组TCP22允许全部IPv4来源；真实GitHub来源连通性及SSH／SCP已通过本次Actions。未修改安全组、宿主机防火墙或全局SSH设置；普通GitHub托管机器出口IP会变化，后续收紧来源时需另选固定出口或维护相应策略。
 
 已在本机仓库外`D:\eat\.codex-secrets\foodmap-ssh-deploy-20261120\foodmap-deploy-ed25519`生成无口令部署私钥，目录ACL仅当前用户、SYSTEM和Administrators。公钥传输副本为`D:\eat\.codex-previews\ssh-deploy-20261120\foodmap-deploy.pub`。仅上传公钥到服务器，私钥留待复制到GitHub生产环境Secret；不发送私钥到聊天。未创建、解锁或设置部署账号密码。
 
@@ -95,7 +95,9 @@ Get-Content -Raw D:\eat\.codex-secrets\foodmap-ssh-deploy-20261120\foodmap-deplo
 
 PR #4的最新检查通过后，用户进一步明确授权开启发布并合并；开关已设为true，合并提交为`43db856`，合并后的三项检查也通过。首次发布因DEPLOY_HOST格式不符在连接前退出；已用GitHub环境公钥加密重写5项已确认的部署参数，从本机已验证文件读取私钥／主机公钥并规范换行，不打印值，再仅重跑失败发布任务。随后实测单连接约30–43KiB/s、约84MiB包上传缓慢；8路HTTPS范围读取采样的总速率约206KiB/s，此值只是采样，不代表完整SCP发布速度。停止尚未激活的慢速任务，增加有界分片并行SCP修复，启动结果待最新Actions及服务器检查。没有导入本地数据库、Redis或演示数据，未放宽服务器防护规则。
 
-服务器如仅下载／解压过Runner，文件可暂时保留，不启动`run.sh`或执行注册。当前没有收到Runner已注册／安装服务的证据，不自动删目录；若实际已有服务，先确认是否承担旧任务再停用。首次发布成功后由管理员启用`foodmap-backend.service`开机启动。
+首次完整发布成功后，独立只读核对后端health为UP、前端版本等于f89f6c2、公网基础页面和API返回正常，公开店铺0、启用分类9。用户以ubuntu设置开机启动，代理核对UnitFileState=enabled及ActiveState=active，未扩大部署账号sudo权限。没有导入本地数据库、Redis或演示统计；真实邮件、图片、地图及实际回退演练仍待验收。
+
+服务器如仅下载／解压过Runner，文件可暂时保留，不启动`run.sh`或执行注册。当前没有收到Runner已注册／安装服务的证据，不自动删目录；若实际已有服务，先确认是否承担旧任务再停用。
 
 ## 本机代理导致SSH连接提前关闭
 

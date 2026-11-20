@@ -260,6 +260,7 @@ watch(
 .gallery-lightbox img {
   display: block;
   max-width: 85vw;
+  max-height: 72vh;
   max-height: 72dvh;
   margin-top: 12px;
 }

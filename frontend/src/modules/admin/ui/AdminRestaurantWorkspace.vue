@@ -248,6 +248,7 @@ onBeforeRouteUpdate(() => !busy.value)
 .shell {
   display: grid;
   grid-template-columns: var(--admin-sidebar-width) minmax(0, 1fr);
+  min-height: calc(100vh - var(--admin-header-height));
   min-height: calc(100dvh - var(--admin-header-height));
 }
 main {
