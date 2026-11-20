@@ -572,7 +572,9 @@ describe('review interactions matching the original site', () => {
     expect(vi.mocked(gateway.publish).mock.calls[0]?.[0].restaurantId).toBe('201')
     expect(host.querySelector('.add-missing')).toBeNull()
   })
-  it('validates text, keeps failed drafts and retry IDs, and renews IDs for changed content', async () => {
+  it('opens over HTTP, keeps failed drafts and retry IDs, and renews IDs for changed content', async () => {
+    const crypto = globalThis.crypto
+    vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) })
     login()
     await mount(ReviewComposer)
     await open()
@@ -689,6 +691,8 @@ describe('review interactions matching the original site', () => {
     expect(host.querySelector('dialog')!.open).toBe(false)
   })
   it('renders safe cards, retains failed replies and reuses the same retry ID', async () => {
+    const crypto = globalThis.crypto
+    vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) })
     login()
     await mount(ReviewPanel, { restaurantId: '1' })
     expect(host.querySelector('.review-card')!.textContent).toContain('3.94')

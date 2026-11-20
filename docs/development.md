@@ -4,7 +4,17 @@
 
 上一阶段（2026-11-03—2026-11-18）的完整记录已归档至[开发记录04](history/development-04.md)，更早记录见[文档导航](README.md#历史追溯)。
 
+## 2026-11-20：HTTP请求编号兼容与食堂分类修正
+
+- 用户确认暂用HTTP访问，域名及备案尚未完成。严格模拟普通用户与全部API，以公网IP作为页面来源复现点击“＋”时`crypto.randomUUID is not a function`、弹窗未打开且页面滚动被锁；同一构建在localhost可正常打开，明确了安全上下文差异及此前验证缺口。
+- 用户明确同意从develop的0d65f48创建`fix/http-request-id`，并授权提交、经PR检查后合并及自动发布供验收；本轮保留全部已完成修复及文档，不直接推送develop。
+- 新增共享`createRequestId`：优先原生randomUUID，不可用时用getRandomValues生成标准UUID v4，仍使用安全随机数；点评、两处回复、投稿及高德选店草稿、公告和窗口维护七个生产文件全部接入，保留同内容重试复用请求号、内容变化更新请求号的规则。浏览器定位的安全上下文限制不在此修复中绕过；没有调整后端接口、数据库结构或已执行迁移。
+- 用户授权仅将18条其他高校食堂改为普通餐厅。先通过管理员只读接口逐一核对ID／名称、完整资料及包含删除记录的窗口集合为空，保存服务器备份`/opt/foodmap/corrections/other-colleges-20261120T084259Z/before.json`，再走现有管理接口改为REGULAR／OTHER，保留其他业务字段和统计。线上总数仍22,510，食堂筛选仅本校15条；18条ES文档均已同步。授权的数据修正与自动化测试分开，未向线上发布测试点评、上传图片或创建用户。
+- 验证：统一入口7文件89项定向测试、类型检查及生产构建通过，修改文件Lint／格式和差异检查通过。Edge使用本地生产产物、全部模拟API，覆盖公网HTTP非安全上下文及localhost：写点评打开、回车搜索选店、提交失败保留正文、同UUID重试成功、完成后关闭并恢复页面滚动，无脚本异常或请求外泄。证据在仓库外`D:\eat\.codex-previews\http-compat-20261120\`，数据修正及搜索同步证据在`D:\eat\.codex-previews\canteen-audit-20261120\`。未跑后端／全量测试；代码尚未提交或发布，保留当前develop分支。
+
 ## 2026-11-20：手机布局兼容修复
+
+- 后续发布结果：PR #5检查通过后合并，develop及线上版本0d65f48；[Actions 44700733598](https://github.com/kanno111/foodmap/actions/runs/44700733598)四项均成功。独立核对后端active／running、health为UP、开机启动enabled，公网版本及CSS正确；统计接口enabled=true，采集起点北京时间16:27:09，首次读取为0且首日PARTIAL。发布前后店铺数均22,510，管理员核对会话已撤销；华为夸克真机继续由用户验收。详细证据`D:\eat\.codex-previews\mobile-compat-20261120\deployed-verification.json`。
 
 - 用户同意从develop的f89f6c2创建`fix/mobile-layout-compat`，原CI/CD分支已删除，保留7份既有未提交文档。华为夸克截图出现电脑字号、品牌换行、筛选拥挤及168px配图；线上主CSS有76处`width<=…`等媒体查询范围语法，旧内核可能整段忽略。显式设置Vite的CSS目标为Chrome95／Safari15，构建结果保留传统min-width／max-width；新增产物检查插件，发现范围语法时直接阻止构建通过。只调整CSS兼容目标，不声称完成旧浏览器JavaScript兼容支持。
 - 在地图、管理工作区、点评及资料弹窗等23文件的40处动态视口高度前加入等价vh回退，现代浏览器继续优先dvh。统计页“统计尚未启用”对应首次部署的`ACTIVITY_STATISTICS_ENABLED=false`，与Actuator无关；本轮未修改生产开关或重启服务，启用前数据不回补。

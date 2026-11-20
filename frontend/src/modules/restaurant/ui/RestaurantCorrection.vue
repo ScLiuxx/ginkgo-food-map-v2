@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { createRequestId } from '@/shared/lib/createRequestId'
 import AppLink from '@/shared/ui/AppLink.vue'
 import LeaveConfirmation from '@/shared/ui/LeaveConfirmation.vue'
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
@@ -143,7 +144,7 @@ const content = computed(() =>
 )
 const baseline = ref(content.value)
 const dirty = computed(() => content.value !== baseline.value)
-let clientRequestId = globalThis.crypto.randomUUID()
+let clientRequestId = createRequestId()
 let lastSubmissionMode: boolean | undefined
 let controller: globalThis.AbortController | undefined
 let generation = 0,
@@ -174,7 +175,7 @@ const visibleCategories = computed(() =>
 watch(
   content,
   () => {
-    if (!saving.value) clientRequestId = globalThis.crypto.randomUUID()
+    if (!saving.value) clientRequestId = createRequestId()
   },
   { flush: 'sync' },
 )
@@ -380,7 +381,7 @@ async function submit(includeReview = false) {
     if (reviewError.value) return
   }
   if (lastSubmissionMode !== undefined && lastSubmissionMode !== includeReview)
-    clientRequestId = globalThis.crypto.randomUUID()
+    clientRequestId = createRequestId()
   lastSubmissionMode = includeReview
   saving.value = true
   saveError.value = ''

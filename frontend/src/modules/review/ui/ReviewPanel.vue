@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { createRequestId } from '@/shared/lib/createRequestId'
 import { inject, onUnmounted, provide, ref, watch, computed } from 'vue'
 import { activeReplyEditorKey } from '../model/replyEditor'
 import { useRouter, useRoute } from 'vue-router'
@@ -138,7 +139,7 @@ async function reply(item: ReviewItem) {
   // 网络失败保留同次请求号；账号切换或正文改变才生成新号。
   let request = replyRequests.get(item.id)
   if (!request || request.body !== text.trim()) {
-    request = { body: text.trim(), id: globalThis.crypto.randomUUID() }
+    request = { body: text.trim(), id: createRequestId() }
     replyRequests.set(item.id, request)
   }
   try {

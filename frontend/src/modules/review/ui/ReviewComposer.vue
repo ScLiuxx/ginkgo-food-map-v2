@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { createRequestId } from '@/shared/lib/createRequestId'
 import { computed, inject, nextTick, onUnmounted, ref, useId, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { reviewDestination } from '@/shared/lib/reviewNavigation'
@@ -204,7 +205,7 @@ async function open() {
       : undefined
   previousOverflow = globalThis.document.documentElement.style.overflow
   globalThis.document.documentElement.style.overflow = 'hidden'
-  requestId = globalThis.crypto.randomUUID()
+  requestId = createRequestId()
   submittedContent = ''
   body.value = ''
   scores.value = { taste: 7, value: 7, service: 7, ambience: 7 }
@@ -304,7 +305,7 @@ async function submit() {
     body.value.trim(),
     photos.value.map((p) => p.fileId ?? p.url),
   ])
-  if (submittedContent && submittedContent !== content) requestId = globalThis.crypto.randomUUID()
+  if (submittedContent && submittedContent !== content) requestId = createRequestId()
   submittedContent = content
   try {
     const result = await gateway.publish({
