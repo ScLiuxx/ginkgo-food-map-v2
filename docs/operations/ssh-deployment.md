@@ -4,7 +4,7 @@
 
 ## 发布链路
 
-PR和develop推送运行前后端及部署检查。只有本仓库develop推送、检查全部通过且仓库变量`AUTO_DEPLOY_ENABLED=true`才读取生产部署Secrets。托管机器确认当前提交未被新的develop提交替代，下载同一轮已检查产物、生成版本包及SHA-256，通过SSH创建独立待发布目录、SCP上传4个文件，再运行远端`deploy.sh`。上传失败不激活；远端仍使用发布锁、归档校验、健康检查及程序失败回滚，Flyway迁移不自动回滚。
+PR和develop推送运行前后端及部署检查。只有本仓库develop推送、检查全部通过且仓库变量`AUTO_DEPLOY_ENABLED=true`才读取生产部署Secrets。托管机器确认当前提交未被新的develop提交替代，下载同一轮已检查产物、生成版本包及SHA-256，通过SSH创建独立待发布目录，将包按4MiB分片、最多8路SCP并行上传；全部分片完成后上传校验文件及两个脚本。远端拼接并校验原包，通过后删除分片并执行`deploy.sh`。任意上传失败不激活；远端仍使用发布锁、归档校验、健康检查及程序失败回滚，Flyway迁移不自动回滚。
 
 服务器无需连接GitHub、编译项目或运行应用测试，SSH使用现有`foodmap-deploy`账号及专用Ed25519密钥。源码不包含真实密钥；GitHub临时私钥文件0600、主机公钥强校验，步骤成功或失败均清理临时文件，不使用`StrictHostKeyChecking=no`或在线扫描结果作为首次信任依据。
 
@@ -93,7 +93,7 @@ Get-Content -Raw D:\eat\.codex-secrets\foodmap-ssh-deploy-20261120\foodmap-deplo
 
 电脑使用专用私钥与可信known_hosts的非交互登录、`sudo -n -l`及目录权限检查已通过，未启动尚无产物的后端。用户已确认5项GitHubSecrets、两项仓库变量及production的develop分支限制均配置完成，发布开关false。关闭本机代理后只读预检通过：SSH、SFTP列表、发布工具和可写目录正常，后端单元loaded／inactive且运行账号foodmap，Nginx active且返回503等待页，MySQL／Redis／ES回环端口可达，ES集群green，磁盘剩余约65GiB。未上传产物或访问业务凭据。
 
-用户已明确授权提交／推送功能分支并创建PR运行GitHub检查；API已核对production分支限制、部署Secret名称及仓库变量，Secret值未读取。发布开关原有尾随换行已规范为精确字符串false。检查通过且首次发布条件核对完成后，再安排开关true、合并develop及首次发布，核对生产版本、健康状态、注册邮件、COS及地图。当前进入PR检查阶段、未开启发布；电脑SSH及SFTP列表成功不等同于GitHub来源、SCP实际上传或业务验收。
+PR #4的最新检查通过后，用户进一步明确授权开启发布并合并；开关已设为true，合并提交为`43db856`，合并后的三项检查也通过。首次发布因DEPLOY_HOST格式不符在连接前退出；已用GitHub环境公钥加密重写5项已确认的部署参数，从本机已验证文件读取私钥／主机公钥并规范换行，不打印值，再仅重跑失败发布任务。随后实测单连接约30–43KiB/s、约84MiB包上传缓慢；8路HTTPS范围读取采样的总速率约206KiB/s，此值只是采样，不代表完整SCP发布速度。停止尚未激活的慢速任务，增加有界分片并行SCP修复，启动结果待最新Actions及服务器检查。没有导入本地数据库、Redis或演示数据，未放宽服务器防护规则。
 
 服务器如仅下载／解压过Runner，文件可暂时保留，不启动`run.sh`或执行注册。当前没有收到Runner已注册／安装服务的证据，不自动删目录；若实际已有服务，先确认是否承担旧任务再停用。首次发布成功后由管理员启用`foodmap-backend.service`开机启动。
 

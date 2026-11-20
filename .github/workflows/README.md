@@ -4,7 +4,7 @@
 
 CI（持续集成）用于检查修改能否正常编译、通过测试；CD 在这里指检查通过后自动部署。创建 PR 不会自动合并代码。
 
-本文说明源码定义的行为，不代表新版流程已经在线上发布成功。截至 2026-11-20，服务器连接和发布前只读检查通过，GitHub 配置已核对，`AUTO_DEPLOY_ENABLED=false`，[PR #4](https://github.com/kanno111/foodmap/pull/4) 已进入实际检查阶段，正式发布待进行。实际检查结果以 PR 最新 Actions 为准，后续进度见[实施计划](../../docs/plans/cicd-improvements.md)。
+本文说明源码定义的行为，不代表所有业务链路已验收。截至 2026-11-20，[PR #4](https://github.com/kanno111/foodmap/pull/4) 已合并到 develop，PR 与合并提交的三项检查均通过，用户已授权将 `AUTO_DEPLOY_ENABLED` 开启为 `true`。首次发布发现参数格式与单连接传输问题，现已规范部署 Secret 并增加分片并行上传，正式启动结果以 develop 最新 Actions 为准。后续进度见[实施计划](../../docs/plans/cicd-improvements.md)。
 
 ## 提交、推送与 PR
 
@@ -41,7 +41,7 @@ flowchart TD
     ENV --> LATEST{是否仍为 develop 最新提交}
     LATEST -->|否| SKIP[跳过过时提交]
     LATEST -->|是| PACKAGE[下载同轮已检查产物<br/>生成版本包与 SHA-256]
-    PACKAGE --> SSH[SSH 创建待发布目录<br/>SCP 上传包与脚本]
+    PACKAGE --> SSH[SSH 创建待发布目录<br/>SCP 分片并行上传]
     SSH --> SERVER[调用服务器发布入口]
 ```
 
@@ -93,7 +93,9 @@ production 环境按当前方案仅允许 develop，不设置逐次人工审批�
 
 ## 服务器如何发布与回退
 
-[ssh-publish.sh](../../deploy/ssh-publish.sh) 在 GitHub 机器校验目标、端口、版本编号和发布包，使用临时 0600 私钥文件及严格主机公钥校验连接服务器。上传 `release.tar.gz`、`SHA256SUMS`、`deploy.sh`、`healthcheck.py` 四个文件；全部上传成功后才调用远端发布入口。临时凭据文件在该脚本正常或异常退出时清理，不在线扫描后盲目信任主机。
+[ssh-publish.sh](../../deploy/ssh-publish.sh) 在 GitHub 机器校验目标、端口、版本编号和发布包，使用临时 0600 私钥文件及严格主机公钥校验连接服务器。将 `release.tar.gz` 按 4MiB 分片，最多同时运行 8 个 SCP 上传连接；所有分片完成后上传 `SHA256SUMS`、`deploy.sh`、`healthcheck.py`。任意分片或元数据上传失败均停止，不调用激活入口。
+
+远端按编号顺序拼接回原始 `release.tar.gz`，使用原 SHA-256 校验成功后删除分片，再调用既有 `deploy.sh`。分片不会改变应用内容、版本标识或回退规则；失败的待发布目录保留供排查。GitHub 临时分片和凭据文件在该脚本正常或异常退出时清理，不在线扫描后盲目信任主机。此设计来自首次约 84MiB 产物跨境单连接上传缓慢的实测，采用有界并发，不提高应用测试 worker 数。
 
 服务器目录如下，每次发布使用独立的“提交 SHA－运行编号－重试编号”：
 

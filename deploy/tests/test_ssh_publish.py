@@ -34,12 +34,18 @@ ssh-keygen() {
 ssh() {
     printf 'ssh %s\n' "$*" >> calls
     case "${*: -1}" in
-        bash*) test "${FAIL_ACTIVATE:-0}" != 1 ;;
+        *"bash './deploy.sh'"*) test "${FAIL_ACTIVATE:-0}" != 1 ;;
         *) test "${FAIL_CONNECT:-0}" != 1 ;;
     esac
 }
 scp() {
     printf 'scp %s\n' "$*" >> calls
+    if [[ "$*" == *release.part.0001* && "${FAIL_SECOND_CHUNK:-0}" == 1 ]]; then
+        return 1
+    fi
+    if [[ "$*" == *healthcheck.py* && "${FAIL_METADATA:-0}" == 1 ]]; then
+        return 1
+    fi
     test "${FAIL_UPLOAD:-0}" != 1
 }
 export -f ssh-keygen ssh scp
@@ -73,18 +79,37 @@ export -f ssh-keygen ssh scp
         result = self.publish()
         self.assertEqual(result.returncode, 0, result.stderr)
         calls = self.calls().splitlines()
-        self.assertEqual(len(calls), 4)
+        self.assertEqual(len(calls), 5)
         self.assertIn("StrictHostKeyChecking=yes", calls[1])
         self.assertIn("BatchMode=yes", calls[1])
         self.assertIn("mkdir '/opt/foodmap/incoming/" + "a" * 40 + "-123-2'", calls[1])
         self.assertTrue(calls[2].startswith("scp "))
-        self.assertIn("healthcheck.py", calls[2])
-        self.assertIn("bash '/opt/foodmap/incoming/", calls[3])
+        self.assertIn("release.part.0000", calls[2])
+        self.assertIn("healthcheck.py", calls[3])
+        self.assertIn("cat release.part.* > release.tar.gz", calls[4])
+        self.assertIn("sha256sum --check --status SHA256SUMS", calls[4])
+        self.assertIn("bash './deploy.sh'", calls[4])
 
     def test_failed_upload_does_not_activate_and_cleans_credentials(self):
         self.assertNotEqual(self.publish(FAIL_UPLOAD="1").returncode, 0)
         self.assertIn("scp ", self.calls())
-        self.assertNotIn("bash '/opt/foodmap", self.calls())
+        self.assertNotIn("bash './deploy.sh'", self.calls())
+
+    def test_failure_in_one_of_multiple_chunks_never_uploads_metadata_or_activates(self):
+        artifact = b"x" * (5 * 1024 * 1024)
+        (self.root / "release.tar.gz").write_bytes(artifact)
+        (self.root / "SHA256SUMS").write_bytes(
+            (hashlib.sha256(artifact).hexdigest() + "  release.tar.gz\n").encode())
+        self.assertNotEqual(self.publish(FAIL_SECOND_CHUNK="1").returncode, 0)
+        self.assertIn("release.part.0000", self.calls())
+        self.assertIn("release.part.0001", self.calls())
+        self.assertNotIn("healthcheck.py", self.calls())
+        self.assertNotIn("bash './deploy.sh'", self.calls())
+
+    def test_failed_metadata_upload_does_not_assemble_or_activate(self):
+        self.assertNotEqual(self.publish(FAIL_METADATA="1").returncode, 0)
+        self.assertIn("healthcheck.py", self.calls())
+        self.assertNotIn("cat release.part.*", self.calls())
 
     def test_failed_connection_does_not_upload(self):
         self.assertNotEqual(self.publish(FAIL_CONNECT="1").returncode, 0)
@@ -98,7 +123,7 @@ export -f ssh-keygen ssh scp
 
     def test_remote_activation_failure_is_reported(self):
         self.assertNotEqual(self.publish(FAIL_ACTIVATE="1").returncode, 0)
-        self.assertIn("bash '/opt/foodmap", self.calls())
+        self.assertIn("bash './deploy.sh'", self.calls())
 
     def test_nondefault_port_uses_bracketed_known_host(self):
         result = self.publish(DEPLOY_PORT="2222")

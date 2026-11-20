@@ -45,6 +45,30 @@ options=(-F /dev/null -i "$ssh_directory/key"
 target="$DEPLOY_USER@$DEPLOY_HOST"
 incoming="/opt/foodmap/incoming/$release_id"
 ssh "${options[@]}" -p "$deploy_port" "$target" "umask 077; mkdir '$incoming'" < /dev/null
-scp "${options[@]}" -P "$deploy_port" release.tar.gz SHA256SUMS deploy/deploy.sh deploy/healthcheck.py "$target:$incoming/"
-# 仅在所有文件上传成功后激活；远端沿用锁、校验、健康检查和回滚。
-ssh "${options[@]}" -p "$deploy_port" "$target" "bash '$incoming/deploy.sh' '$release_id'" < /dev/null
+
+# 首次发布实测跨境单连接很慢；固定4MiB分片、最多8路并发，限制进程和内存占用。
+split --bytes=4M --numeric-suffixes=0 --suffix-length=4 release.tar.gz "$ssh_directory/release.part."
+parts=("$ssh_directory"/release.part.*)
+upload_pids=()
+wait_uploads() {
+    local failed=0
+    local pid
+    for pid in "${upload_pids[@]}"; do
+        wait "$pid" || failed=1
+    done
+    upload_pids=()
+    [[ "$failed" -eq 0 ]] || fail 'Release chunk upload failed; activation skipped'
+}
+printf 'Uploading %s release chunks; at most 8 parallel connections.\n' "${#parts[@]}"
+for part in "${parts[@]}"; do
+    scp "${options[@]}" -P "$deploy_port" "$part" "$target:$incoming/" &
+    upload_pids+=("$!")
+    if [[ "${#upload_pids[@]}" -eq 8 ]]; then
+        wait_uploads
+    fi
+done
+wait_uploads
+scp "${options[@]}" -P "$deploy_port" SHA256SUMS deploy/deploy.sh deploy/healthcheck.py "$target:$incoming/"
+# 分片全部到齐后才重组，校验原包成功才删除分片并调用既有发布／回滚入口。
+ssh "${options[@]}" -p "$deploy_port" "$target" \
+    "cd '$incoming' && cat release.part.* > release.tar.gz && sha256sum --check --status SHA256SUMS && rm -- release.part.* && bash './deploy.sh' '$release_id'" < /dev/null
