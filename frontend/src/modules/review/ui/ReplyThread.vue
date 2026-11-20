@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { createRequestId } from '@/shared/lib/createRequestId'
 import UserAvatar from '@/modules/account/ui/UserAvatar.vue'
 import { computed, inject, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -280,7 +281,7 @@ async function send() {
   }
   const body = draft.value.trim(),
     owner = context
-  if (!request || request.body !== body) request = { body, id: globalThis.crypto.randomUUID() }
+  if (!request || request.body !== body) request = { body, id: createRequestId() }
   const current = request
   postController = new globalThis.AbortController()
   sending.value = true

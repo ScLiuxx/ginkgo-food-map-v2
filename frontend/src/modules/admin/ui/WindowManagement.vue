@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { createRequestId } from '@/shared/lib/createRequestId'
 import AppLink from '@/shared/ui/AppLink.vue'
 import { onUnmounted, ref, watch } from 'vue'
 import { isAxiosError } from 'axios'
@@ -75,7 +76,7 @@ function edit(row?: CanteenWindow) {
         businessStatus: row.businessStatus,
       }
     : blank()
-  requestId = globalThis.crypto.randomUUID()
+  requestId = createRequestId()
   submitted = ''
   formOpen.value = true
   error.value = ''
@@ -92,7 +93,7 @@ async function save() {
     pricePerPerson: input.value.priceKind === 'UNKNOWN' ? null : input.value.pricePerPerson,
   }
   const fingerprint = JSON.stringify(payload)
-  if (submitted && fingerprint !== submitted) requestId = globalThis.crypto.randomUUID()
+  if (submitted && fingerprint !== submitted) requestId = createRequestId()
   submitted = fingerprint
   busy.value = true
   error.value = ''
