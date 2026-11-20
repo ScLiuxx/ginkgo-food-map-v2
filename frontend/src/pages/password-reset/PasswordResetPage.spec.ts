@@ -91,7 +91,7 @@ describe('找回密码页面返回入口', () => {
     setAccessToken('old-session')
     vi.mocked(resetPassword).mockResolvedValue({ username: 'foodmap_user' })
     for (const [id, value] of Object.entries({
-      'reset-email': 'student@std.uestc.edu.cn',
+      'reset-email': 'student',
       'reset-code': '012345',
       'reset-password': 'NewPassword2026',
       'reset-confirm-password': 'NewPassword2026',
@@ -104,6 +104,11 @@ describe('找回密码页面返回入口', () => {
       .querySelector('form')!
       .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/login'))
+    expect(resetPassword).toHaveBeenCalledWith({
+      email: 'student@std.uestc.edu.cn',
+      verificationCode: '012345',
+      newPassword: 'NewPassword2026',
+    })
     expect(getAccessToken()).toBeNull()
     expect(consumeResetLogin()).toBe('foodmap_user')
   })
