@@ -38,7 +38,7 @@ class ReviewRecommendationSchemaIntegrationTest {
                 + " request_id,HEX(request_hash) request_hash,created_at,updated_at FROM reviews"
                 + " ORDER BY id";
 
-    /** 先构造真实V45二态记录，按当前全部迁移升级，测试不能手工改写旧摘要来绕过兼容问题。 */
+    /** 构造真实V45二态记录，仅验证V46迁移；后续迁移由完整迁移链测试覆盖。 */
     @BeforeAll
     void prepare() throws Exception {
         database = "foodmap_review_attitude_it_" + UUID.randomUUID().toString().replace("-", "");
@@ -64,7 +64,7 @@ class ReviewRecommendationSchemaIntegrationTest {
                     UUID.randomUUID().toString());
         }
         before = jdbc.queryForList(SNAPSHOT);
-        migrated = migration(null).migrate().migrationsExecuted;
+        migrated = migration("46").migrate().migrationsExecuted;
     }
 
     /** 只删除本次确实创建的随机库，禁止清理开发数据库。 */
@@ -93,8 +93,8 @@ class ReviewRecommendationSchemaIntegrationTest {
                                         + " column_name='is_recommended'",
                                 Integer.class))
                 .isZero();
-        assertThat(migration(null).migrate().migrationsExecuted).isZero();
-        migration(null).validate();
+        assertThat(migration("46").migrate().migrationsExecuted).isZero();
+        migration("46").validate();
     }
 
     @ParameterizedTest

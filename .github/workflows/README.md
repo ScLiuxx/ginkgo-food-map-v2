@@ -4,7 +4,7 @@
 
 CI（持续集成）用于检查修改能否正常编译、通过测试；CD 在这里指检查通过后自动部署。创建 PR 不会自动合并代码。
 
-本文说明源码定义的行为，不代表新版流程已经在线上执行成功。截至 2026-11-20，服务器连接和发布前只读检查通过，GitHub 配置已核对，`AUTO_DEPLOY_ENABLED=false`，本轮已获授权进入功能分支 PR 检查阶段，正式发布待进行。实际检查结果以 Actions 为准，后续进度见[实施计划](../../docs/plans/cicd-improvements.md)。
+本文说明源码定义的行为，不代表新版流程已经在线上发布成功。截至 2026-11-20，服务器连接和发布前只读检查通过，GitHub 配置已核对，`AUTO_DEPLOY_ENABLED=false`，[PR #4](https://github.com/kanno111/foodmap/pull/4) 已进入实际检查阶段，正式发布待进行。实际检查结果以 PR 最新 Actions 为准，后续进度见[实施计划](../../docs/plans/cicd-improvements.md)。
 
 ## 提交、推送与 PR
 
