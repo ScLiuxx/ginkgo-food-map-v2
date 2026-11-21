@@ -289,8 +289,8 @@ async function submit() {
     error.value = '请选择推荐、一般或不推荐。'
     return
   }
-  if (!validBody(body.value, 5, 500)) {
-    error.value = '请填写5–500字的评价（不计首尾空白）。'
+  if (!validBody(body.value, 1, 500)) {
+    error.value = '请填写评价，最多500字（不计首尾空白）。'
     return
   }
   busy.value = true

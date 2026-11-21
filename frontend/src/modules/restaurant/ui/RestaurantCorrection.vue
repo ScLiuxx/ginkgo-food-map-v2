@@ -374,8 +374,8 @@ async function submit(includeReview = false) {
   }
   reviewError.value = ''
   if (includeReview) {
-    if (!canAttachReview.value || !review.recommendation || !validBody(review.body, 5, 500))
-      reviewError.value = '请选择推荐态度，并填写5–500字的点评正文。'
+    if (!canAttachReview.value || !review.recommendation || !validBody(review.body, 1, 500))
+      reviewError.value = '请选择推荐态度并填写点评正文，最多500字。'
     else if (reviewBusy.value)
       reviewError.value = '请等待点评图片上传完成，失败的图片可重试或移除。'
     if (reviewError.value) return

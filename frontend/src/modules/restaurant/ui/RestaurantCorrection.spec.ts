@@ -258,7 +258,7 @@ describe('商户资料补充与纠错', () => {
     await submit()
     expect(submitNewRestaurant).not.toHaveBeenCalled()
     expect(host.textContent).toContain('请选择推荐态度')
-    await field('说说你的用餐体验', '牛肉面汤底不错，出餐也很快。')
+    await field('说说你的用餐体验', '好')
     ;[...host.querySelectorAll<HTMLButtonElement>('.choices button')]
       .find((b) => b.textContent?.trim() === '一般')!
       .click()
@@ -272,7 +272,7 @@ describe('商户资料补充与纠错', () => {
       photoIds: ['101'],
       review: {
         recommendation: 'NEUTRAL',
-        body: '牛肉面汤底不错，出餐也很快。',
+        body: '好',
         photoIds: ['202'],
       },
     })

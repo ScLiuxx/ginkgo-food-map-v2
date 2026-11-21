@@ -7,7 +7,7 @@ import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.HttpStatus;
 
-/** 回复错误单独命名，避免误用点评的5–500字提示。 */
+/** 回复错误单独命名，避免误用点评的正文上限提示。 */
 @Getter
 @RequiredArgsConstructor
 public enum ReplyErrorCode implements ErrorCode {

@@ -16,7 +16,7 @@ public enum ReviewErrorCode implements ErrorCode {
     REQUEST_DELETED("REVIEW_REQUEST_DELETED", HttpStatus.CONFLICT, "该次发布的点评已删除，请勿重放旧请求"),
     INVALID_CURSOR("REVIEW_INVALID_CURSOR", HttpStatus.BAD_REQUEST, "历史游标无效或不属于该餐厅和作者，请刷新点评列表"),
     INVALID_QUERY("REVIEW_INVALID_QUERY", HttpStatus.BAD_REQUEST, "资源ID必须为规范正整数"),
-    INVALID_INPUT("REVIEW_INVALID_INPUT", HttpStatus.BAD_REQUEST, "请检查UUID、四维半分、推荐及5–500字正文"),
+    INVALID_INPUT("REVIEW_INVALID_INPUT", HttpStatus.BAD_REQUEST, "请检查UUID、四维半分、推荐及正文（必填，最多500字）"),
     REQUEST_CONFLICT("REVIEW_REQUEST_CONFLICT", HttpStatus.CONFLICT, "本次提交编号已用于不同内容，请核对提交结果"),
     SUBMISSION_STATE_CONFLICT(
             "REVIEW_SUBMISSION_STATE_CONFLICT", HttpStatus.CONFLICT, "申请类型、归属或点评状态不支持此操作"),

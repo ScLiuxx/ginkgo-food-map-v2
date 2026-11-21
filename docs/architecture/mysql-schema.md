@@ -1,6 +1,6 @@
 # MySQL 表结构
 
-本文集中维护 MySQL 业务表的当前字段、类型、默认值、枚举、主键、索引、外键与字段约束。覆盖当前迁移定义的35张应用表，本地开发库已执行至V49，按下列分组查阅；Flyway自建的迁移历史表不属于应用表。
+本文集中维护 MySQL 业务表的当前字段、类型、默认值、枚举、主键、索引、外键与字段约束。覆盖当前迁移定义的35张应用表，当前源码迁移至V50（取消点评五字下限），本地开发库此前已执行至V49；V50本轮仅在隔离测试库验证，按下列分组查阅；Flyway自建的迁移历史表不属于应用表。
 
 ## 目录
 
@@ -489,7 +489,7 @@ restaurant_id为逻辑引用，无物理外键。
 | `ambience_score` | `decimal(3,1)` | 否 | 环境0至10，步进0.5 |
 | `overall_score` | `decimal(4,2)` | 是 | 四维平均后HALF_UP两位；数据库生成 |
 | `recommendation` | `varchar(16)`，ascii_bin | 否 | 无默认值；RECOMMENDED推荐、NEUTRAL一般、NOT_RECOMMENDED不推荐 |
-| `body` | `varchar(500)` | 否 | 去首尾空白的5至500码点纯文本 |
+| `body` | `varchar(500)` | 否 | 去首尾空白的1至500码点纯文本 |
 | `client_request_id` | `binary(16)` | 否 | 本次发布UUID |
 | `request_hash` | `binary(32)` | 否 | 服务端计算的规范化内容SHA-256 |
 | `created_at` | `timestamp(6)` | 否 | 创建时间；默认CURRENT_TIMESTAMP(6) |
@@ -497,7 +497,7 @@ restaurant_id为逻辑引用，无物理外键。
 
 索引 `(restaurant_id,author_user_id,created_at,id)`；索引 `(restaurant_id,created_at,id)`；索引 `(window_id,author_user_id,created_at,id)`；索引 `(window_id,created_at,id)`；索引 `(author_user_id,restaurant_id,created_at,id)`；主键 `(id)`；唯一键 `(author_user_id,client_request_id)`。
 
-restaurant_id与window_id二选一。四维评分0–10，步长0.5；overall_score为四维均值，保留两位。recommendation仅允许上述三个大小写精确且无空白的编码。正文5–500字符。相同账号与请求UUID唯一，允许多次真实点评。删除为物理删除。
+restaurant_id与window_id二选一。四维评分0–10，步长0.5；overall_score为四维均值，保留两位。recommendation仅允许上述三个大小写精确且无空白的编码。正文非空且最多500码点。相同账号与请求UUID唯一，允许多次真实点评。删除为物理删除。
 
 ### `review_photos`：点评照片关联
 
@@ -528,7 +528,7 @@ position范围0–4；media_file_id唯一。
 | `service_score` | `decimal(3,1)` | 是 | 默认NULL；服务0至10，步进0.5 |
 | `ambience_score` | `decimal(3,1)` | 是 | 默认NULL；环境0至10，步进0.5 |
 | `recommendation` | `varchar(16)`，ascii_bin | 是 | 默认NULL；RECOMMENDED推荐、NEUTRAL一般、NOT_RECOMMENDED不推荐 |
-| `body` | `varchar(500)` | 是 | 默认NULL；无首尾空白的5至500码点正文 |
+| `body` | `varchar(500)` | 是 | 默认NULL；无首尾空白的1至500码点正文 |
 | `client_request_id` | `binary(16)` | 否 | 无默认值；作者提交请求UUID |
 | `request_hash` | `binary(32)` | 否 | 无默认值；首次规范化请求SHA-256 |
 | `content_hash` | `binary(32)` | 否 | 无默认值；当前规范化内容与有序附图SHA-256 |
@@ -547,7 +547,7 @@ CHECK约束：
 
 - `chk_review_submission_ids`：当前申请、原始申请和作者ID限定1至9223372036854775807。
 - `chk_review_submission_status`：状态仅允许上述三个大写值，且不得含空白。
-- `chk_review_submission_content`：WAITING及WITHDRAWN必须完整保存四维评分、三态态度及正文；评分范围0至10、步进0.5，态度不得含空白，正文5至500码点且无首尾空白。PUBLISHED的四维评分、态度、正文必须全部为NULL。
+- `chk_review_submission_content`：WAITING及WITHDRAWN必须完整保存四维评分、三态态度及正文；评分范围0至10、步进0.5，态度不得含空白，正文1至500码点且无首尾空白。PUBLISHED的四维评分、态度、正文必须全部为NULL。
 - `chk_review_submission_result`：WAITING不含发布或撤回结果；WITHDRAWN只有不早于创建时间的撤回时间；PUBLISHED必须具有正Long范围的正式点评ID及不早于创建时间的发布时间，且没有撤回时间。
 
 ### `review_submission_photos`：待发布点评图片关联

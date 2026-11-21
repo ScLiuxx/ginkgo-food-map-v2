@@ -92,7 +92,7 @@ public final class ReviewPublishPolicy {
             row.setServiceScore(score(scores.getService()));
             row.setAmbienceScore(score(scores.getAmbience()));
             String body = trim(request.getBody());
-            if (body.codePointCount(0, body.length()) < 5
+            if (body.isEmpty()
                     || body.codePointCount(0, body.length()) > 500) {
                 throw new IllegalArgumentException();
             }

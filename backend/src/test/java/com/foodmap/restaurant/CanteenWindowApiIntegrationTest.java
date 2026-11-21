@@ -56,6 +56,17 @@ import java.util.UUID;
 @Import(TestJwtKeys.class)
 @EnabledIfSystemProperty(named = "review.integration", matches = "true")
 class CanteenWindowApiIntegrationTest {
+    @Test
+    void publishesOneCharacterWindowReview() throws Exception {
+        String window = createWindow(983, "短点评窗口");
+        mvc.perform(post("/api/canteen-windows/" + window + "/reviews")
+                        .header("Authorization", "Bearer " + owner)
+                        .contentType("application/json")
+                        .content(reviewBody(8).replace("窗口真实点评测试", "好")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.windowId").value(window));
+        org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject("SELECT body FROM reviews", String.class)).isEqualTo("好");
+    }
     private static String database;
     private static boolean created;
     @Autowired MockMvc mvc;

@@ -404,6 +404,18 @@ class ReviewWriteApiIntegrationTest {
         assertThat(count("reviews")).isZero();
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"好", "不错", "很好吃", "味道不错", "🍜"})
+    void publishesShortBodiesAndReplaysTheSameReceipt(String body) throws Exception {
+        var data = input(8, true, UUID.randomUUID().toString());
+        data.put("body", "　" + body + "\u00a0");
+        publish(owner, 1, data).andExpect(status().isCreated());
+        publish(owner, 1, data).andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT body FROM reviews", String.class)).isEqualTo(body);
+        assertThat(count("reviews")).isEqualTo(1);
+        assertStats(1, 1, 1, "8");
+    }
+
     @Test
     void validatesFieldsScoresAndUnicode() throws Exception {
         for (double value : List.of(-0.5, 10.5, 7.1, 7.4)) {
@@ -416,7 +428,7 @@ class ReviewWriteApiIntegrationTest {
             data.put(field, List.of());
             publish(owner, 1, data).andExpect(status().isBadRequest());
         }
-        for (String body : List.of("1234", "🥟".repeat(501), "   ")) {
+        for (String body : List.of("", "🥟".repeat(501), "   ")) {
             var data = input(7, true, UUID.randomUUID().toString());
             data.put("body", body);
             publish(owner, 1, data).andExpect(status().isBadRequest());

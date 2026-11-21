@@ -319,7 +319,7 @@ describe('review interactions matching the original site', () => {
     })
     await mount(ReviewComposer)
     await open()
-    await fill('窗口独立评价不会计入父食堂')
+    await fill('好')
     expect(host.querySelector<HTMLButtonElement>('[type=submit]')!.disabled).toBe(true)
     await submit()
     expect(gateway.publish).not.toHaveBeenCalled()
@@ -328,6 +328,7 @@ describe('review interactions matching the original site', () => {
     expect(host.querySelector<HTMLButtonElement>('[type=submit]')!.disabled).toBe(false)
     await submit()
     expect(vi.mocked(gateway.publish).mock.calls[0]![0].restaurantId).toBe('canteen-w1')
+    expect(vi.mocked(gateway.publish).mock.calls[0]![0].body).toBe('好')
     await choose('楼层', '2楼')
     expect(host.querySelector<HTMLSelectElement>('[aria-label="窗口"]')!.value).toBe('')
     await choose('窗口', 'canteen-w2')
@@ -391,9 +392,9 @@ describe('review interactions matching the original site', () => {
   it('rounds half up, distinguishes zero, and counts Unicode code points', () => {
     expect(overall(review.scores)).toBe(7.88)
     expect(overall({ taste: 0, value: 0, service: 0, ambience: 0 })).toBe(0)
-    expect(validBody(' 😀😀😀😀😀 ', 5, 500)).toBe(true)
+    expect(validBody(' 🍜 ', 1, 500)).toBe(true)
     expect(validBody('     ', 1, 200)).toBe(false)
-    expect(validBody('字'.repeat(501), 5, 500)).toBe(false)
+    expect(validBody('字'.repeat(501), 1, 500)).toBe(false)
   })
   it('shows reviews without content filters or explanations and paginates five-star scores', async () => {
     const second = {
@@ -493,6 +494,20 @@ describe('review interactions matching the original site', () => {
     await open()
     expect(host.querySelector('.attitude [aria-pressed=true]')).toBeNull()
   })
+
+  it.each(['好', '不错', '很好吃', '味道不错', '🍜'])(
+    'publishes short nonblank text %s',
+    async (body) => {
+      login()
+      await mount(ReviewComposer, { restaurant: restaurantFixture, fixedTarget: true })
+      await open()
+      await fill('　' + body + ' ')
+      await submit()
+      expect(gateway.publish).toHaveBeenCalledWith(
+        expect.objectContaining({ restaurantId: restaurantFixture.id, body }),
+      )
+    },
+  )
 
   it('fits the visible mobile viewport and restores background scrolling and focus on close', async () => {
     login()
