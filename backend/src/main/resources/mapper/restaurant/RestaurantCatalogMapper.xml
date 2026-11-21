@@ -61,6 +61,12 @@
         <if test="query.restaurantType != ''">AND r.restaurant_type = #{query.restaurantType}</if>
         <if test="query.diningMode == 'dineIn'">AND r.supports_dine_in = TRUE</if>
         <if test="query.diningMode == 'delivery'">AND r.supports_delivery = TRUE</if>
+        <if test="query.hasReviews != null">
+            <choose>
+                <when test="query.hasReviews">AND COALESCE(s.review_count, 0) &gt; 0</when>
+                <otherwise>AND COALESCE(s.review_count, 0) = 0</otherwise>
+            </choose>
+        </if>
         <if test="query.hideClosed">AND r.business_status = 'OPERATING'</if>
         <!-- 两项均在COUNT与LIMIT之前执行；NULL不能通过上限比较，未知值不会当作0。 -->
         <if test="query.maxPrice != null">

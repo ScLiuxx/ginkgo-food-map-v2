@@ -69,7 +69,7 @@ const dimensions = [
           @input="emit('change', { body: ($event.target as HTMLTextAreaElement).value })"
         />
       </label>
-      <p class="body-count">{{ Array.from(draft.body.trim()).length }}/500 · 至少5字</p>
+      <p class="body-count">{{ Array.from(draft.body.trim()).length }}/500</p>
       <h3>点评照片 <span>选填</span></h3>
       <SubmissionPhotos
         :draft="photos"

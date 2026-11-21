@@ -31,6 +31,19 @@ function filters(overrides: Partial<CatalogFilters> = {}): CatalogFilters {
 }
 
 describe('restaurant reading rules', () => {
+  it('filters by effective review count rather than score or participant count', () => {
+    const items = [
+      candidate('none', null),
+      candidate('reviewed', null, { reviewCount: 1, participantCount: 0 }),
+    ]
+    expect(filterRestaurants(items, filters({ hasReviews: true })).map((r) => r.id)).toEqual([
+      'reviewed',
+    ])
+    expect(filterRestaurants(items, filters({ hasReviews: false })).map((r) => r.id)).toEqual([
+      'none',
+    ])
+    expect(filterRestaurants(items, filters({ hasReviews: null }))).toHaveLength(2)
+  })
   it('searches across name, address, category and tags without case sensitivity', () => {
     const items = [
       candidate('a', null, {
@@ -92,7 +105,10 @@ describe('restaurant reading rules', () => {
 
   it('does not invent a distance for missing, unconfirmed or invalid coordinates', () => {
     const campus = candidate('campus', null, {
-      latitude: 30.7544, longitude: 103.9312, needsLocation: false, distanceKm: 0,
+      latitude: 30.7544,
+      longitude: 103.9312,
+      needsLocation: false,
+      distanceKm: 0,
     })
     expect(campusDistance(campus, [103.9312, 30.7544])).toBe(0)
     expect(campusDistance({ ...campus, latitude: null }, [103.9312, 30.7544])).toBeNull()
@@ -100,7 +116,12 @@ describe('restaurant reading rules', () => {
     expect(campusDistance({ ...campus, latitude: NaN }, [103.9312, 30.7544])).toBeNull()
     expect(campusDistance({ ...campus, latitude: 91 }, [103.9312, 30.7544])).toBeNull()
     const items = [
-      candidate('far', null, { latitude: 30.65, longitude: 104.08, needsLocation: false, distanceKm: 20 }),
+      candidate('far', null, {
+        latitude: 30.65,
+        longitude: 104.08,
+        needsLocation: false,
+        distanceKm: 20,
+      }),
       campus,
       candidate('unknown', null, { needsLocation: true }),
     ]

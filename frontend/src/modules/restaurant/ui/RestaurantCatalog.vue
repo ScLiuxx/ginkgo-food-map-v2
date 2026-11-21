@@ -11,6 +11,7 @@ const hasFilters = computed(
   () =>
     !!catalog.filters.restaurantType ||
     !!catalog.filters.diningMode ||
+    catalog.filters.hasReviews != null ||
     !!catalog.filters.category ||
     catalog.filters.hideClosed ||
     catalog.filters.maxPrice !== null ||

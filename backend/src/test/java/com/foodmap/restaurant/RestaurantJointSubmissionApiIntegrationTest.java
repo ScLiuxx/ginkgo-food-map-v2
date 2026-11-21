@@ -196,6 +196,27 @@ class RestaurantJointSubmissionApiIntegrationTest {
         admin = token(33);
     }
 
+    /** 短正文在待审保存与两种正式发布路径使用相同规则。 */
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shortAttachedReviewPublishesThroughApprovalOrExistingShop(boolean linkExisting) throws Exception {
+        var input = shop();
+        var attached = review("NEUTRAL");
+        attached.put("body", "　好\u00a0");
+        input.put("review", attached);
+        String id = data(submit(input).andExpect(status().isCreated()).andReturn()).path("id").asString();
+        assertThat(jdbc.queryForObject("SELECT body FROM review_submissions", String.class)).isEqualTo("好");
+        if (linkExisting) {
+            existingShop(991);
+            link(id, "991").andExpect(status().isOk());
+        } else {
+            approve(id, approval(input)).andExpect(status().isOk());
+        }
+        assertThat(jdbc.queryForObject("SELECT body FROM reviews", String.class)).isEqualTo("好");
+        assertThat(jdbc.queryForObject("SELECT author_user_id FROM reviews", Long.class)).isEqualTo(11L);
+        assertThat(jdbc.queryForObject("SELECT status FROM review_submissions", String.class)).isEqualTo("PUBLISHED");
+    }
+
     /** 仅清理本次确实创建的随机库，不接受任意库名。 */
     @AfterAll
     static void cleanup() throws SQLException {
@@ -351,7 +372,7 @@ class RestaurantJointSubmissionApiIntegrationTest {
                 "targetId",
                 "missingDimension",
                 "nonHalfScore",
-                "shortBody",
+                "blankBody",
                 "tooLongBody",
                 "tooManyPhotos",
                 "duplicatePhotos",
@@ -377,7 +398,7 @@ class RestaurantJointSubmissionApiIntegrationTest {
                     review.put(
                             "scores",
                             Map.of("taste", 8.1, "value", 7, "service", 6, "ambience", 5));
-            case "shortBody" -> review.put("body", "四个字");
+            case "blankBody" -> review.put("body", "　\u00a0 ");
             case "tooLongBody" -> review.put("body", "🥟".repeat(501));
             case "tooManyPhotos" -> review.put("photoIds", List.of("1", "2", "3", "4", "5", "6"));
             case "duplicatePhotos" -> review.put("photoIds", List.of("1", "1"));

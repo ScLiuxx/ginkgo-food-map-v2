@@ -38,6 +38,46 @@ class ReviewSubmissionSchemaIntegrationTest {
     private Map<String, Object> oldRequest;
     private int migrated;
 
+    /** V49升级V50保留旧数据；新下限同时覆盖正式、待审、撤回与已发布清空规则。 */
+    @Test
+    void v50AllowsShortBodiesWithoutRewritingRowsOrWeakeningOtherChecks() throws SQLException {
+        var name = createDatabase();
+        flyway(name, "49").migrate();
+        var sql = jdbc(name);
+        sql.update("INSERT INTO reviews(id,restaurant_id,author_user_id,taste_score,value_score,service_score,"
+                + "ambience_score,recommendation,body,client_request_id,request_hash)"
+                + " VALUES(1,101,11,8,8,8,8,'NEUTRAL','原有点评保持不变',UUID_TO_BIN(UUID()),UNHEX(REPEAT('ab',32)))");
+        sql.update("INSERT INTO review_submissions(id,restaurant_request_id,origin_request_id,author_user_id,"
+                + "taste_score,value_score,service_score,ambience_score,recommendation,body,client_request_id,request_hash,content_hash,publish_request_id)"
+                + " VALUES(1,301,301,11,8,8,8,8,'NEUTRAL','待发布点评保持不变',UUID_TO_BIN(UUID()),"
+                + "UNHEX(REPEAT('aa',32)),UNHEX(REPEAT('bb',32)),UUID_TO_BIN(UUID()))");
+        var oldFormal = sql.queryForMap("SELECT * FROM reviews WHERE id=1");
+        var oldPending = sql.queryForMap("SELECT * FROM review_submissions WHERE id=1");
+        invalid(() -> sql.update("UPDATE reviews SET body='好' WHERE id=1"), 3819);
+        invalid(() -> sql.update("UPDATE review_submissions SET body='好' WHERE id=1"), 3819);
+        assertThat(flyway(name, "50").migrate().migrationsExecuted).isEqualTo(1);
+        assertThat(sql.queryForMap("SELECT * FROM reviews WHERE id=1")).usingRecursiveComparison().isEqualTo(oldFormal);
+        assertThat(sql.queryForMap("SELECT * FROM review_submissions WHERE id=1")).usingRecursiveComparison().isEqualTo(oldPending);
+        assertThat(flyway(name, "50").migrate().migrationsExecuted).isZero();
+        for (String table : List.of("reviews", "review_submissions")) {
+            for (String body : List.of("好", "不错", "很好吃", "味道不错", "🍜", "🍜".repeat(500))) {
+                sql.update("UPDATE " + table + " SET body=? WHERE id=1", body);
+                assertThat(sql.queryForObject("SELECT body FROM " + table + " WHERE id=1", String.class)).isEqualTo(body);
+            }
+            for (String assignment : List.of("body=''", "body=NULL", "body=' '", "body=' 好'", "body='好 '", "taste_score=NULL")) {
+                invalid(() -> sql.update("UPDATE " + table + " SET " + assignment + " WHERE id=1"), 3819, 1048);
+            }
+            invalid(() -> sql.update("UPDATE " + table + " SET body=? WHERE id=1", "🍜".repeat(501)), 1406, 3819);
+        }
+        sql.update("UPDATE review_submissions SET body='好',status='WITHDRAWN',withdrawn_at=CURRENT_TIMESTAMP(6) WHERE id=1");
+        invalid(() -> sql.update("UPDATE review_submissions SET body='' WHERE id=1"), 3819);
+        invalid(() -> sql.update("UPDATE review_submissions SET status='PUBLISHED',withdrawn_at=NULL,"
+                + "published_at=CURRENT_TIMESTAMP(6),published_review_id=1 WHERE id=1"), 3819);
+        sql.update("UPDATE review_submissions SET status='PUBLISHED',taste_score=NULL,value_score=NULL,"
+                + "service_score=NULL,ambience_score=NULL,recommendation=NULL,body=NULL,withdrawn_at=NULL,"
+                + "published_at=CURRENT_TIMESTAMP(6),published_review_id=1 WHERE id=1");
+    }
+
     /** 在V44库保存真实旧结构夹具，再升级；同时验证新的迁移没有改写二态态度或统计。 */
     @BeforeAll
     void initialize() throws SQLException {

@@ -20,6 +20,25 @@ import java.util.UUID;
 
 /** 验证纯规则边界与规范化，数据库幂等/并发由真实MySQL集成测试覆盖。 */
 class ReviewPublishPolicyTest {
+    @ParameterizedTest
+    @ValueSource(strings = {"好", "不错", "很好吃", "味道不错", "🍜"})
+    void acceptsShortNonBlankBodies(String body) {
+        var input = request();
+        input.setBody("\u00a0" + body + "　");
+        assertThat(ReviewPublishPolicy.normalize("1", 11, input).getBody()).isEqualTo(body);
+    }
+
+    @Test
+    void preservesNonBlankAndUnicodeUpperBoundary() {
+        var input = request();
+        for (String body : List.of("", " \u00a0　", "🍜".repeat(501))) {
+            input.setBody(body);
+            assertThatThrownBy(() -> ReviewPublishPolicy.normalize("1", 11, input))
+                    .isInstanceOf(BusinessException.class);
+        }
+        input.setBody("🍜".repeat(500));
+        assertThat(ReviewPublishPolicy.normalize("1", 11, input).getBody()).isEqualTo(input.getBody());
+    }
     private ReviewPublishRequest request() {
         var request = new ReviewPublishRequest();
         var scores = new ReviewPublishRequest.Scores();

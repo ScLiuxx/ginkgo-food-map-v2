@@ -47,7 +47,7 @@
 {"clientRequestId":"d6fb79a2-6866-41ae-9c38-13d239668c21","scores":{"taste":8,"value":7.5,"service":7,"ambience":8},"recommendation":"RECOMMENDED","body":"这次出餐很快，分量也比较足。","photoIds":[]}
 ```
 
-UUID必填；四维完整，0–10且步进0.5；recommendation必填且仅接受大小写精确的字符串`RECOMMENDED`（推荐）、`NEUTRAL`（一般）、`NOT_RECOMMENDED`（不推荐），无默认值，布尔值、数字、空白别名及旧字段`recommended`均拒绝。正文去首尾Unicode空白后5–500码点，按纯文本展示。photoIds最多5个唯一、本人有效REVIEW临时文件ID。未知字段及嵌套scores额外字段拒绝。
+UUID必填；四维完整，0–10且步进0.5；recommendation必填且仅接受大小写精确的字符串`RECOMMENDED`（推荐）、`NEUTRAL`（一般）、`NOT_RECOMMENDED`（不推荐），无默认值，布尔值、数字、空白别名及旧字段`recommended`均拒绝。正文去首尾Unicode空白后必须非空，最多500码点，不再要求至少5字，按纯文本展示。photoIds最多5个唯一、本人有效REVIEW临时文件ID。未知字段及嵌套scores额外字段拒绝。
 
 **响应**
 

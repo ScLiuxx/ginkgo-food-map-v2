@@ -27,6 +27,17 @@ class RestaurantReadControllerTest {
     private RestaurantReadService service;
     private MockMvc mvc;
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void bindsReviewPresenceWithoutDroppingFalse(boolean hasReviews) throws Exception {
+        when(service.list(any())).thenReturn(new RestaurantPageVo());
+        mvc.perform(get("/api/restaurants").param("hasReviews", Boolean.toString(hasReviews)))
+                .andExpect(status().isOk());
+        var query = ArgumentCaptor.forClass(RestaurantListQuery.class);
+        verify(service).list(query.capture());
+        assertThat(query.getValue().getHasReviews()).isEqualTo(hasReviews);
+    }
+
     @BeforeEach
     void prepare() {
         service = mock(RestaurantReadService.class);
@@ -74,6 +85,7 @@ class RestaurantReadControllerTest {
         "pageSize,101",
         "pageSize,abc",
         "hideClosed,maybe",
+        "hasReviews,maybe",
         "sort,id desc",
         "sort,PRICE",
         "category,other",

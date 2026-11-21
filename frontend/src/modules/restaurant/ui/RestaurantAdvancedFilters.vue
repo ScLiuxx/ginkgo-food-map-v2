@@ -24,6 +24,7 @@ const filters = computed(() => props.filters ?? catalog.filters)
 const groups = computed(() => [
   ...(props.mapFilters ? [{ key: 'category', label: '美食分类' }] : []),
   { key: 'price', label: '人均消费' },
+  { key: 'reviews', label: '点评' },
   { key: 'venue', label: props.campusFilters ? '餐厅类型' : '场所类型' },
   { key: 'dining', label: '用餐方式' },
   ...(props.mapFilters ? [{ key: 'status', label: '经营状态' }] : []),
@@ -35,18 +36,21 @@ const prices = [20, 30, 50, 100]
 const count = computed(
   () =>
     Number(filters.value.maxPrice !== null) +
+    Number(filters.value.hasReviews != null) +
     (props.mapFilters ? Number(!!filters.value.category) + Number(filters.value.hideClosed) : 0) +
     (props.campusFilters
       ? Number(!!filters.value.restaurantType) + Number(!!filters.value.diningMode)
       : 0),
 )
 const draft = reactive<{
+  hasReviews: boolean | null
   maxPrice: number | null
   restaurantType: NonNullable<CatalogFilters['restaurantType']>
   diningMode: NonNullable<CatalogFilters['diningMode']>
   category: string
   hideClosed: boolean
 }>({
+  hasReviews: null,
   category: '',
   hideClosed: false,
   restaurantType: '',
@@ -101,6 +105,7 @@ function open() {
   Object.assign(draft, {
     restaurantType: filters.value.restaurantType || '',
     diningMode: filters.value.diningMode || '',
+    hasReviews: filters.value.hasReviews ?? null,
     maxPrice: filters.value.maxPrice,
     category: filters.value.category,
     hideClosed: filters.value.hideClosed,
@@ -140,6 +145,9 @@ function apply() {
     filters.value.hideClosed = draft.hideClosed
   }
   Object.assign(filters.value, {
+    ...(draft.hasReviews !== null || filters.value.hasReviews !== undefined
+      ? { hasReviews: draft.hasReviews }
+      : {}),
     maxPrice: draft.maxPrice,
     // 已移除距离入口，确认筛选时清除旧会话残留的距离限制。
     maxDistanceMeters: null,
@@ -155,6 +163,7 @@ function apply() {
 }
 function reset() {
   Object.assign(draft, {
+    hasReviews: null,
     category: '',
     hideClosed: false,
     maxPrice: null,
@@ -274,6 +283,32 @@ onUnmounted(cleanup)
               <p>包含所选金额；已填报金额和估值均可筛选，价格未知的餐厅将排除。</p>
             </fieldset>
             <!-- 首页与地图共用已接通的服务端筛选，列表和点位使用相同语义。 -->
+            <fieldset data-group="reviews">
+              <legend>点评</legend>
+              <div class="advanced-choices">
+                <button
+                  type="button"
+                  :aria-pressed="draft.hasReviews === null"
+                  @click="draft.hasReviews = null"
+                >
+                  全部
+                </button>
+                <button
+                  type="button"
+                  :aria-pressed="draft.hasReviews === true"
+                  @click="draft.hasReviews = true"
+                >
+                  有点评
+                </button>
+                <button
+                  type="button"
+                  :aria-pressed="draft.hasReviews === false"
+                  @click="draft.hasReviews = false"
+                >
+                  无点评
+                </button>
+              </div>
+            </fieldset>
             <template v-if="campusFilters">
               <fieldset data-group="venue">
                 <legend>餐厅类型</legend>

@@ -42,6 +42,9 @@ public class RestaurantListQuery {
     @Pattern(regexp = "(?:dineIn|delivery)?", message = "用餐方式错误")
     private String diningMode = "";
 
+    /** 按当前有效点评数筛选；null不限，false同时包含没有统计行的店铺。 */
+    private Boolean hasReviews;
+
     /** 用户单次授权取得的GCJ-02位置，仅用于本次查询，不写入数据库。 */
     @DecimalMin("-90")
     @DecimalMax("90")

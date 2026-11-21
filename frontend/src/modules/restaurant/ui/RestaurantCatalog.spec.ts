@@ -332,6 +332,7 @@ describe('restaurant catalog API integration', () => {
         .find((b) => b.textContent?.trim() === label)!
         .click()
     choose('30 元以下')
+    choose('无点评')
     await settle()
     expect(fetchRestaurants).toHaveBeenCalledTimes(calls)
     expect(store.filters.maxPrice).toBeNull()
@@ -347,19 +348,20 @@ describe('restaurant catalog API integration', () => {
         sort: 'recommend',
         hideClosed: true,
         maxPrice: 30,
+        hasReviews: false,
         maxDistanceMeters: null,
       },
       1,
       8,
       expect.any(AbortSignal),
     )
-    expect(trigger.querySelector('.filter-count')?.textContent).toBe('1')
-    expect(host.querySelectorAll('.advanced-tags button')).toHaveLength(1)
+    expect(trigger.querySelector('.filter-count')?.textContent).toBe('2')
+    expect(host.querySelectorAll('.advanced-tags button')).toHaveLength(2)
     trigger.click()
     await settle()
     expect(
       [...dialog.querySelectorAll('[aria-pressed="true"]')].map((b) => b.textContent?.trim()),
-    ).toEqual(['30 元以下', '全部', '不限'])
+    ).toEqual(['30 元以下', '无点评', '全部', '不限'])
     dialog.querySelector<HTMLButtonElement>('.reset-advanced')!.click()
     dialog.dispatchEvent(new Event('cancel', { cancelable: true }))
     await settle()
@@ -381,6 +383,7 @@ describe('restaurant catalog API integration', () => {
       maxDistanceMeters: null,
     })
     expect(host.querySelector('.advanced-tags')).toBeNull()
+    expect(store.filters.hasReviews).toBeNull()
     expect(trigger.querySelector('.filter-count')).toBeNull()
   })
 
@@ -398,6 +401,8 @@ describe('restaurant catalog API integration', () => {
       category: 'HOT_POT',
     })
     expect(host.querySelector('.filter-count')?.textContent).toBe('1')
+    store.filters.hasReviews = false
+    await settle()
     vi.mocked(fetchRestaurants).mockResolvedValue(
       pageFixture({ total: 0, totalPages: 0, records: [] }),
     )
@@ -407,6 +412,7 @@ describe('restaurant catalog API integration', () => {
     await settle()
     expect(store.filters).toMatchObject({ maxPrice: null, maxDistanceMeters: null, category: '' })
     expect(host.querySelector('.advanced-tags')).toBeNull()
+    expect(store.filters.hasReviews).toBeNull()
   })
 
   it('keeps focus behavior when requesting the next server page', async () => {

@@ -116,7 +116,7 @@
 | --- | --- |
 | `scores` | 必填完整taste/value/service/ambience；十分制0–10，步进0.5，与正式点评相同，不预先舍入非法精度 |
 | `recommendation` | 必填精确字符串RECOMMENDED／NEUTRAL／NOT_RECOMMENDED，无默认值；布尔值、数字、大小写或空白别名非法 |
-| `body` | 必填；去Unicode首尾空白后5–500码点，纯文本 |
+| `body` | 必填；去Unicode首尾空白后非空、最多500码点，纯文本 |
 | `photoIds` | 默认空，不能null；最多5个唯一正Long字符串，按原顺序保存，必须为本人未过期TEMPORARY状态的REVIEW用途文件 |
 
 **响应**

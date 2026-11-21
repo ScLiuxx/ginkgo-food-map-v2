@@ -61,6 +61,7 @@ export async function fetchMapPoints(
     params: {
       ...filters,
       ...bounds,
+      hasReviews: filters.hasReviews ?? undefined,
       maxPrice: filters.maxPrice ?? undefined,
       maxDistanceMeters: filters.maxDistanceMeters ?? undefined,
     },

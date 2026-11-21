@@ -2,6 +2,7 @@ import { AxiosHeaders } from 'axios'
 import type { InternalAxiosRequestConfig } from 'axios'
 import { afterEach, describe, expect, it } from 'vitest'
 import { httpClient } from '@/shared/api/httpClient'
+import { fetchMapPoints } from '@/modules/map/api/mapApi'
 import { clearAccessToken, setAccessToken } from '@/shared/api/authSession'
 import {
   fetchRestaurant,
@@ -24,6 +25,49 @@ afterEach(() => {
 
 /** 使用真实Axios配置验证查询白名单、路径和模型转换，防止前后端协议漂移。 */
 describe('restaurant HTTP API', () => {
+  it.each([null, true, false])(
+    'sends map review filter %s with the viewport',
+    async (hasReviews) => {
+      let requested!: InternalAxiosRequestConfig
+      httpClient.defaults.adapter = async (config) => {
+        requested = config
+        return {
+          config,
+          status: 200,
+          statusText: '',
+          headers: new AxiosHeaders(),
+          data: {
+            data: {
+              records: [],
+              points: [],
+              matchedCount: 0,
+              returnedCount: 0,
+              limit: 100,
+              truncated: false,
+            },
+          },
+        }
+      }
+      await fetchMapPoints(
+        {
+          keyword: '',
+          category: '',
+          sort: 'score',
+          hideClosed: false,
+          maxPrice: null,
+          maxDistanceMeters: null,
+          hasReviews,
+        },
+        { west: 103, east: 105, south: 30, north: 31 },
+      )
+      const url = new URL(httpClient.getUri(requested), 'http://test.local')
+      expect(url.pathname).toBe('/api/restaurants/map-points')
+      expect(url.searchParams.get('hasReviews')).toBe(
+        hasReviews === null ? null : String(hasReviews),
+      )
+      expect(url.searchParams.get('west')).toBe('103')
+    },
+  )
   it('uses the five-point reputation for display exactly once and preserves unrated null', () => {
     const model = toRestaurantModel({ ...responseFixture, score: 10, reputationScore: 3.75 })
     expect(model.reputationScore).toBe(3.75)
@@ -166,45 +210,52 @@ describe('restaurant HTTP API', () => {
     })
   })
 
-  it('sends only current filters and pages without legacy rating conditions', async () => {
-    let requested!: InternalAxiosRequestConfig
-    httpClient.defaults.adapter = async (config) => {
-      requested = config
-      return {
-        config,
-        status: 200,
-        statusText: '',
-        headers: new AxiosHeaders(),
-        data: {
-          success: true,
-          data: { page: 3, pageSize: 8, total: 19, totalPages: 3, records: [responseFixture] },
-        },
+  it.each([undefined, null, true, false])(
+    'sends review filter %s without dropping false or sending empty values',
+    async (hasReviews) => {
+      let requested!: InternalAxiosRequestConfig
+      httpClient.defaults.adapter = async (config) => {
+        requested = config
+        return {
+          config,
+          status: 200,
+          statusText: '',
+          headers: new AxiosHeaders(),
+          data: {
+            success: true,
+            data: { page: 3, pageSize: 8, total: 19, totalPages: 3, records: [responseFixture] },
+          },
+        }
       }
-    }
-    const result = await fetchRestaurants(
-      {
-        keyword: '火锅%_',
-        category: 'HOT_POT',
-        sort: 'price',
-        hideClosed: true,
-        maxPrice: 30,
-        maxDistanceMeters: 1000,
-      },
-      3,
-      8,
-    )
-    const url = new URL(httpClient.getUri(requested), 'http://test.local')
-    expect(url.searchParams.has('tiers')).toBe(false)
-    expect(url.searchParams.has('view')).toBe(false)
-    expect(url.searchParams.has('tiers[]')).toBe(false)
-    expect(url.searchParams.get('keyword')).toBe('火锅%_')
-    expect(url.searchParams.get('page')).toBe('3')
-    expect(url.searchParams.get('hideClosed')).toBe('true')
-    expect(url.searchParams.get('maxPrice')).toBe('30')
-    expect(url.searchParams.get('maxDistanceMeters')).toBe('1000')
-    expect(result.total).toBe(19)
-    expect(result.records[0]?.id).toBe(responseFixture.id)
-  })
+      const result = await fetchRestaurants(
+        {
+          keyword: '火锅%_',
+          category: 'HOT_POT',
+          sort: 'price',
+          hideClosed: true,
+          maxPrice: 30,
+          maxDistanceMeters: 1000,
+          hasReviews,
+        },
+        3,
+        8,
+      )
+      const url = new URL(httpClient.getUri(requested), 'http://test.local')
+      expect(url.searchParams.has('tiers')).toBe(false)
+      expect(url.searchParams.has('view')).toBe(false)
+      expect(url.searchParams.has('tiers[]')).toBe(false)
+      expect(url.searchParams.get('keyword')).toBe('火锅%_')
+      expect(url.searchParams.get('page')).toBe('3')
+      expect(url.searchParams.get('hideClosed')).toBe('true')
+      expect(url.searchParams.get('maxPrice')).toBe('30')
+      expect(url.searchParams.get('maxDistanceMeters')).toBe('1000')
+      expect(url.searchParams.get('hasReviews')).toBe(
+        hasReviews == null ? null : String(hasReviews),
+      )
+      expect(result.total).toBe(19)
+      expect(result.records[0]?.id).toBe(responseFixture.id)
+    },
+  )
 
   it('loads categories and a direct detail through their independent endpoints', async () => {
     const paths: string[] = []

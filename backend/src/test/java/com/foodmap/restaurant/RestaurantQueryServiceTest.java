@@ -131,10 +131,13 @@ class RestaurantQueryServiceTest {
     void offlineFallsBackWholeRequestAndKeepsManualSort() throws Exception {
         var q = query("咖啡");
         q.setSort("price");
+        q.setHasReviews(false);
         bounds(q);
         when(reader.search(any(), anyBoolean())).thenThrow(new IOException("connection refused"));
         var result = service.list(q);
         var map = service.mapPoints(q);
+        verify(mysql).list(argThat(sql -> Boolean.FALSE.equals(sql.getHasReviews())));
+        verify(mysql).mapPoints(argThat(sql -> Boolean.FALSE.equals(sql.getHasReviews())));
         assertThat(result.getTotal()).isEqualTo(19);
         assertThat(result.getSearch().isDegraded()).isTrue();
         assertThat(result.getSearch().getEffectiveSort()).isEqualTo("price");
