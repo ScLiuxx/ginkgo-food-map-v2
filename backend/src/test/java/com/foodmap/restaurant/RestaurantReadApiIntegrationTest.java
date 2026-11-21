@@ -140,6 +140,37 @@ class RestaurantReadApiIntegrationTest {
         }
     }
 
+    /** 缺统计行与零条均为无点评，分页、关键词、地图及最后一条删除后的结果保持一致。 */
+    @Test
+    void filtersReviewsBeforePaginationIncludingZeroAndMissingStatistics() throws Exception {
+        statistics(101, 2, 1, 0, "8", "8", "8", "8", "8");
+        statistics(102, 0, 0, 0, "0", "0", "0", "0", "0");
+        statistics(106, 1, 1, 0, "8", "8", "8", "8", "8");
+        mvc.perform(get("/api/restaurants").param("hasReviews", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.records[0].id").value("101"));
+        mvc.perform(get("/api/restaurants").param("hasReviews", "false").param("pageSize", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(6))
+                .andExpect(jsonPath("$.data.records.length()").value(1));
+        mvc.perform(get("/api/restaurants").param("hasReviews", "false").param("keyword", "A同名"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.records[0].id").value("102"));
+        mvc.perform(get("/api/restaurants/map-points").param("hasReviews", "true")
+                        .param("west", "103").param("east", "105").param("south", "30").param("north", "31"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.matchedCount").value(1))
+                .andExpect(jsonPath("$.data.points[0].id").value("101"))
+                .andExpect(jsonPath("$.data.records[0].id").value("101"));
+        jdbc.update("DELETE FROM restaurant_review_statistics WHERE restaurant_id=101");
+        mvc.perform(get("/api/restaurants").param("hasReviews", "true"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(0));
+        mvc.perform(get("/api/restaurants"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(7));
+    }
+
     /** 访客读取含历史停用编码的完整字典，九个主营大类及历史类都按字典顺序返回。 */
     @Test
     void shouldReadAllCategoriesInStableOrder() throws Exception {

@@ -241,6 +241,7 @@ export const useRestaurantCatalog = defineStore('restaurant-catalog', () => {
     Object.assign(filters, {
       ...(filters.restaurantType !== undefined ? { restaurantType: '' } : {}),
       ...(filters.diningMode !== undefined ? { diningMode: '' } : {}),
+      ...(filters.hasReviews !== undefined ? { hasReviews: null } : {}),
       keyword: '',
       category: '',
       sort: 'auto',

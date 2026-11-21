@@ -46,6 +46,8 @@ export interface CatalogFilters {
   /** 由后端在COUNT和分页前过滤，类型与分类独立，用餐方式只匹配明确支持。 */
   restaurantType?: '' | 'REGULAR' | 'CANTEEN'
   diningMode?: '' | 'dineIn' | 'delivery'
+  /** 当前有效点评数大于0／等于0；空值不限，服务端在分页前执行。 */
+  hasReviews?: boolean | null
   keyword: string
   category: string
   sort: RestaurantSort

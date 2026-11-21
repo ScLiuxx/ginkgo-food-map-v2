@@ -81,11 +81,20 @@ const cuisineCategories = computed(() =>
         catalog.filters.maxPrice !== null ||
         catalog.filters.maxDistanceMeters !== null ||
         catalog.filters.restaurantType ||
-        catalog.filters.diningMode
+        catalog.filters.diningMode ||
+        catalog.filters.hasReviews != null
       "
       class="advanced-tags"
       aria-label="已应用的高级筛选"
     >
+      <button
+        v-if="catalog.filters.hasReviews != null"
+        type="button"
+        aria-label="移除点评筛选"
+        @click="catalog.filters.hasReviews = null"
+      >
+        {{ catalog.filters.hasReviews ? '有点评' : '无点评' }} <span aria-hidden="true">×</span>
+      </button>
       <button
         v-if="catalog.filters.restaurantType"
         type="button"

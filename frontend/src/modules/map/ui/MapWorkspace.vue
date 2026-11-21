@@ -47,6 +47,7 @@ if (restored) {
     longitude: undefined,
     restaurantType: undefined,
     diningMode: undefined,
+    hasReviews: undefined,
     ...restored.filters,
   })
 }
@@ -158,6 +159,7 @@ const advancedCount = computed(
     Number(filters.maxPrice !== null) +
     Number(filters.maxDistanceMeters !== null) +
     Number(!!filters.restaurantType) +
+    Number(filters.hasReviews != null) +
     Number(!!filters.diningMode),
 )
 const loading = computed(() => !props.preview && viewport.loading.value)
@@ -304,6 +306,9 @@ onUnmounted(() => {
           />
         </div>
         <div v-if="advancedCount" class="map-applied">
+          <button v-if="filters.hasReviews != null" @click="filters.hasReviews = null">
+            {{ filters.hasReviews ? '有点评' : '无点评' }} ×
+          </button>
           <button v-if="filters.maxPrice !== null" @click="filters.maxPrice = null">
             人均 ≤ {{ filters.maxPrice }}元 ×</button
           ><button

@@ -188,6 +188,9 @@ public class RestaurantSearchReader {
         if (query.getHideClosed()) {
             filters.add(term("businessStatus", "OPERATING"));
         }
+        if (query.getHasReviews() != null) {
+            filters.add(range("reviewCount", query.getHasReviews() ? Map.of("gt", 0) : Map.of("lte", 0)));
+        }
         if (query.getMaxPrice() != null) {
             filters.add(Map.of("bool", Map.of("must_not", List.of(term("priceKind", "UNKNOWN")))));
             filters.add(range("pricePerPerson", Map.of("lte", query.getMaxPrice())));

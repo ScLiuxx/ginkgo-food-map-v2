@@ -122,7 +122,12 @@ describe('地图浏览现场恢复', () => {
   })
   it('离开再返回恢复条件、实际视角、选中店铺和列表位置，刷新仍使用原候选范围', async () => {
     const catalog = useRestaurantCatalog(pinia)
-    Object.assign(catalog.filters, { keyword: '火锅', maxPrice: 30, hideClosed: true })
+    Object.assign(catalog.filters, {
+      keyword: '火锅',
+      maxPrice: 30,
+      hideClosed: true,
+      hasReviews: false,
+    })
     await vi.advanceTimersByTimeAsync(300)
     await flush()
     host.querySelectorAll<HTMLButtonElement>('.map-card-list .map-restaurant')[5]!.click()
@@ -138,7 +143,12 @@ describe('地图浏览现场恢复', () => {
     expect(saved.viewport.bounds).toEqual(fixture.bounds)
     expect(saved.scrollTop).toBe(840)
     // 模拟离开期间首页改了共享条件；地图快照不能被这些修改污染。
-    Object.assign(catalog.filters, { keyword: '其他', maxPrice: null, diningMode: 'delivery' })
+    Object.assign(catalog.filters, {
+      keyword: '其他',
+      maxPrice: null,
+      diningMode: 'delivery',
+      hasReviews: true,
+    })
     await new Promise<void>((resolve) => {
       const stop = router.afterEach(() => {
         stop()
@@ -159,6 +169,7 @@ describe('地图浏览现场恢复', () => {
         maxPrice: 30,
         hideClosed: true,
         diningMode: undefined,
+        hasReviews: false,
       }),
       fixture.bounds,
       expect.anything(),

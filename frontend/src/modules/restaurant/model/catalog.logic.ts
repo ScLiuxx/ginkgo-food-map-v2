@@ -67,6 +67,8 @@ export function filterRestaurants(
   const keyword = filters.keyword.trim().toLocaleLowerCase()
   const result = restaurants.filter((restaurant) => {
     if (filters.hideClosed && restaurant.closed) return false
+    if (filters.hasReviews != null && restaurant.reviewCount > 0 !== filters.hasReviews)
+      return false
     if (filters.category && restaurant.category !== filters.category) return false
     if (
       keyword &&

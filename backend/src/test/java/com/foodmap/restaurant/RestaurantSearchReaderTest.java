@@ -21,6 +21,21 @@ import tools.jackson.databind.ObjectMapper;
 /** 不完整搜索不能伪装成空结果；覆盖真实ES成功回归无法稳定制造的超时/部分分片失败。 */
 class RestaurantSearchReaderTest {
     @Test
+    void filtersEffectiveReviewCountForCatalogAndMap() {
+        var reader = new RestaurantSearchReader(mock(ElasticsearchClient.class), new ObjectMapper(),
+                new RestaurantSearchQueryProperties(),
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+        var query = new RestaurantListQuery();
+        for (boolean map : new boolean[] {false, true}) {
+            assertThat(reader.request(query, map, "").query().toString()).doesNotContain("reviewCount");
+            query.setHasReviews(true);
+            assertThat(reader.request(query, map, "").query().toString()).contains("\"reviewCount\":{\"gt\":0}");
+            query.setHasReviews(false);
+            assertThat(reader.request(query, map, "").query().toString()).contains("\"reviewCount\":{\"lte\":0}");
+            query.setHasReviews(null);
+        }
+    }
+    @Test
     void singleHanQueryUsesCharacterOrAndDefaultsToScore() {
         var reader =
                 new RestaurantSearchReader(

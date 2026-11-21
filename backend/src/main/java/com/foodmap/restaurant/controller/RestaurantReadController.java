@@ -38,7 +38,7 @@ public class RestaurantReadController {
                 .anyMatch(key -> key.equals("view") || key.equals("tiers") || key.startsWith("tiers["))) {
             throw new BusinessException(RestaurantErrorCode.INVALID_INPUT, "已不支持杯型或评分分档视图筛选");
         }
-        binder.setAllowedFields("keyword", "category", "restaurantType", "diningMode", "sort", "hideClosed",
+        binder.setAllowedFields("keyword", "category", "restaurantType", "diningMode", "hasReviews", "sort", "hideClosed",
                 "latitude", "longitude", "maxPrice", "maxDistanceMeters", "page", "pageSize", "west", "south", "east", "north");
     }
 

@@ -77,6 +77,7 @@
 | `category` | 空 | 大写分类编码；空表示不限 |
 | `restaurantType` | 空 | REGULAR普通餐厅 / CANTEEN食堂；空或省略不限，大小写严格匹配 |
 | `diningMode` | 空 | dineIn支持堂食 / delivery支持外卖；空或省略不限，只匹配明确true，false及null不命中 |
+| `hasReviews` | 无 | true仅有点评、false仅无点评，省略或空值不限；按当前有效reviewCount是否大于0判断，缺统计行为无点评；目录、关键词与地图均在计数和分页前过滤，ES沿用短暂同步延迟 |
 | `sort` | auto | auto/relevance/score/reviews/price/distance/recommend；auto在多字关键词时请求相关度，空关键词或单个汉字使用综合分；显式排序保持有效；四维排序仍返回400 |
 | `hideClosed` | false | true时隐藏停业商户 |
 | `maxPrice` | 无 | 大于0，最多8位整数和2位小数；未知价格不符合上限筛选 |

@@ -155,6 +155,7 @@ export async function fetchRestaurants(
         keyword: filters.keyword,
         restaurantType: filters.restaurantType || undefined,
         diningMode: filters.diningMode || undefined,
+        hasReviews: filters.hasReviews ?? undefined,
         category: filters.category,
         sort: filters.sort,
         hideClosed: filters.hideClosed,

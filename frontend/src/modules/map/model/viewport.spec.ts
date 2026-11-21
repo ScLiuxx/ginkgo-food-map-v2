@@ -84,6 +84,7 @@ describe('以地图范围为核心的统一候选集', () => {
     filters.restaurantType = 'CANTEEN'
     filters.diningMode = 'dineIn'
     filters.maxPrice = 30
+    filters.hasReviews = false
     state.move(area)
     state.move({ ...area, east: 104.3 })
     state.move({ ...area, east: 104.3 })
@@ -92,7 +93,12 @@ describe('以地图范围为核心的统一候选集', () => {
     await vi.advanceTimersByTimeAsync(1)
     expect(fetchMapPoints).toHaveBeenCalledTimes(1)
     expect(vi.mocked(fetchMapPoints).mock.calls[0]?.slice(0, 2)).toEqual([
-      expect.objectContaining({ restaurantType: 'CANTEEN', diningMode: 'dineIn', maxPrice: 30 }),
+      expect.objectContaining({
+        restaurantType: 'CANTEEN',
+        diningMode: 'dineIn',
+        maxPrice: 30,
+        hasReviews: false,
+      }),
       { ...area, east: 104.3 },
     ])
   })
