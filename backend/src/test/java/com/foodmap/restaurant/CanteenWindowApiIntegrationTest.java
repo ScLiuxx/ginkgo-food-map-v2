@@ -58,14 +58,18 @@ import java.util.UUID;
 class CanteenWindowApiIntegrationTest {
     @Test
     void publishesOneCharacterWindowReview() throws Exception {
-        String window = createWindow(983, "短点评窗口");
+        // 本类共享隔离库，使用独立编号范围，不能与既有固定ID夹具重叠。
+        long canteen = 1_000_000L + (UUID.randomUUID().getMostSignificantBits() & 0x7fffffffL);
+        String window = createWindow(canteen, "短点评窗口");
         mvc.perform(post("/api/canteen-windows/" + window + "/reviews")
                         .header("Authorization", "Bearer " + owner)
                         .contentType("application/json")
                         .content(reviewBody(8).replace("窗口真实点评测试", "好")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.windowId").value(window));
-        org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject("SELECT body FROM reviews", String.class)).isEqualTo("好");
+        org.assertj.core.api.Assertions.assertThat(
+                        jdbc.queryForObject("SELECT body FROM reviews WHERE window_id=?", String.class, window))
+                .isEqualTo("好");
     }
     private static String database;
     private static boolean created;
