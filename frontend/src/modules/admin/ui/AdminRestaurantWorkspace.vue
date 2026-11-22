@@ -49,6 +49,10 @@ function closeDelete() {
   deleteTarget.value = null
   busy.value = false
 }
+function clearSearch() {
+  keyword.value = ''
+  search()
+}
 
 // 写入结果确认前留在当前页面，避免导航销毁状态后误以为操作未提交。
 onBeforeRouteLeave(() => !busy.value)
@@ -74,29 +78,78 @@ onBeforeRouteUpdate(() => !busy.value)
             {{ notice || `店铺资料已保存，ID：${route.query.saved}` }}
           </p>
           <form class="toolbar" @submit.prevent="search">
-            <input
-              v-model="keyword"
-              aria-label="搜索店铺"
-              placeholder="搜索店名、地址或标签"
-              type="search"
-              :disabled="busy"
-            />
-            <select v-model="category" aria-label="美食分类" :disabled="busy">
+            <div class="search-field">
+              <input
+                v-model="keyword"
+                aria-label="搜索店铺"
+                placeholder="搜索店名、地址或标签"
+                type="search"
+                :disabled="busy"
+              />
+              <button
+                v-if="keyword"
+                type="button"
+                class="mobile-only search-clear"
+                aria-label="清空搜索"
+                :disabled="busy"
+                @click="clearSearch"
+              >
+                ×
+              </button>
+              <button class="mobile-only search-submit" aria-label="查询店铺" :disabled="busy">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  aria-hidden="true"
+                >
+                  <circle cx="10.5" cy="10.5" r="6.5" />
+                  <path d="m16 16 4.5 4.5" />
+                </svg>
+              </button>
+            </div>
+            <select v-model="category" class="desktop-only" aria-label="美食分类" :disabled="busy">
               <option value="">全部美食</option>
               <option v-for="item in categories" :key="item.code" :value="item.code">
                 {{ item.name }}
               </option>
             </select>
-            <button class="primary" :disabled="busy">查询</button
-            ><button type="button" :disabled="busy || loading" @click="reload">刷新</button>
+            <button class="primary desktop-only" :disabled="busy">查询</button
+            ><button type="button" class="desktop-only" :disabled="busy || loading" @click="reload">
+              刷新
+            </button>
           </form>
           <p v-if="categoryError" class="alert" role="alert">
             分类加载失败：{{ categoryError }}
             <button @click="loadCategories">重试</button>
           </p>
           <div class="list-summary">
-            <span>{{ loading ? '正在加载…' : `共 ${total} 家公开店铺` }}</span
-            ><span class="muted">包含停业店铺 · 每页 {{ pageSize }} 家</span>
+            <span class="desktop-only">{{ loading ? '正在加载…' : `共 ${total} 家公开店铺` }}</span>
+            <span class="mobile-only mobile-total" role="status">{{
+              loading ? '正在加载…' : `共 ${total.toLocaleString('zh-CN')} 家店铺`
+            }}</span>
+            <label class="mobile-only mobile-category"
+              ><select
+                v-model="category"
+                aria-label="筛选美食分类"
+                :disabled="busy"
+                @change="search"
+              >
+                <option value="">全部分类</option>
+                <option v-for="item in categories" :key="item.code" :value="item.code">
+                  {{ item.name }}
+                </option></select
+              ><svg
+                viewBox="0 0 12 12"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                aria-hidden="true"
+              >
+                <path d="m3 4.5 3 3 3-3" /></svg
+            ></label>
+            <span class="muted desktop-only">包含停业店铺 · 每页 {{ pageSize }} 家</span>
           </div>
           <p v-if="error" class="alert" role="alert">
             {{ error }} <button @click="reload">重新加载</button>
@@ -116,21 +169,35 @@ onBeforeRouteUpdate(() => !busy.value)
               </thead>
               <tbody>
                 <tr v-for="item in items" :key="item.id">
-                  <td>
-                    <strong>{{ item.name }}</strong
-                    ><small>{{ item.address || '地址待补充' }}</small
-                    ><small>ID：{{ item.id }}</small>
+                  <td class="merchant-summary">
+                    <strong class="merchant-name">{{ item.name }}</strong
+                    ><small class="merchant-address" :title="item.address">{{
+                      item.address || '地址待补充'
+                    }}</small
+                    ><small class="merchant-id">ID：{{ item.id }}</small>
+                    <span class="mobile-only mobile-meta"
+                      ><span>{{
+                        item.restaurantType === 'CANTEEN' ? '食堂' : item.category || '分类未知'
+                      }}</span
+                      ><template v-if="item.price !== null"
+                        ><span class="meta-separator" aria-hidden="true">·</span
+                        ><span>¥{{ item.price }} / 人</span></template
+                      ></span
+                    >
                   </td>
-                  <td>
+                  <td class="desktop-only">
                     {{ item.restaurantType === 'CANTEEN' ? '食堂' : item.category || '分类未知' }}
                   </td>
-                  <td>
+                  <td class="desktop-only">
                     {{ item.price === null ? '未知' : `¥${item.price}` }}
                   </td>
-                  <td>
-                    <span class="badge" :class="{ closed: item.closed }">{{
-                      item.closed ? '停业' : '正常经营'
-                    }}</span>
+                  <td class="merchant-status">
+                    <span class="badge" :class="{ closed: item.closed }"
+                      ><span class="desktop-only">{{ item.closed ? '停业' : '正常经营' }}</span
+                      ><span class="mobile-only mobile-status-label">{{
+                        item.closed ? '停业' : '营业'
+                      }}</span></span
+                    >
                   </td>
                   <td class="actions">
                     <AppLink :to="`/admin/restaurants/${item.id}/edit`">编辑</AppLink
@@ -146,7 +213,7 @@ onBeforeRouteUpdate(() => !busy.value)
               </tbody>
             </table>
           </div>
-          <nav class="pagination" aria-label="店铺分页">
+          <nav class="pagination desktop-only" aria-label="店铺分页">
             <label
               >每页
               <select v-model="pageSize" aria-label="每页数量" :disabled="loading || busy">
@@ -190,6 +257,42 @@ onBeforeRouteUpdate(() => !busy.value)
               ><button :disabled="loading || busy || !totalPages">跳转</button>
             </form>
           </nav>
+          <nav class="mobile-only mobile-pagination" aria-label="店铺分页">
+            <select v-model="pageSize" aria-label="每页数量" :disabled="loading || busy">
+              <option v-for="size in [10, 20, 50, 100]" :key="size" :value="size">
+                {{ size }} 条 / 页
+              </option>
+            </select>
+            <div class="mobile-pager">
+              <button :disabled="page <= 1 || loading || busy" aria-label="上一页" @click="page--">
+                <svg
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.4"
+                  aria-hidden="true"
+                >
+                  <path d="m10 4-4 4 4 4" />
+                </svg></button
+              ><span class="mobile-page-number"
+                ><b>{{ page }}</b> / {{ Math.max(1, totalPages) }}</span
+              ><button
+                :disabled="page >= totalPages || loading || busy"
+                aria-label="下一页"
+                @click="page++"
+              >
+                <svg
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.4"
+                  aria-hidden="true"
+                >
+                  <path d="m6 4 4 4-4 4" />
+                </svg>
+              </button>
+            </div>
+          </nav>
           <RestaurantDeleteDialog
             v-if="deleteTarget"
             :id="deleteTarget.id"
@@ -206,7 +309,13 @@ onBeforeRouteUpdate(() => !busy.value)
 </template>
 
 <style scoped>
-/* 四个管理入口共用灰底、白色内容区与橙色操作；窄屏表格仍独立滚动。 */
+/* 电脑保留表格；手机将同一批资料排成紧凑列表，不增加另一套查询状态。 */
+.mobile-only {
+  display: none;
+}
+.search-field {
+  display: contents;
+}
 .management {
   min-height: 100vh;
   background: var(--admin-canvas);
@@ -438,8 +547,113 @@ select:focus-visible {
     max-width: 150px;
   }
 }
-/* 手机端按店铺分组展示，编辑及删除入口无需横向滚动即可操作。 */
+/* 手机搜索、分类和分页复用原查询；窄屏内完整展示操作，不依赖横向滚动。 */
 @media (max-width: 600px) {
+  .desktop-only,
+  .merchant-id {
+    display: none;
+  }
+  main {
+    padding: 22px 16px 28px;
+  }
+  .heading {
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 19px;
+  }
+  .heading h1 {
+    font-size: 23px;
+  }
+  .heading .primary {
+    padding: 9px 13px;
+    font-size: 13px;
+    border-radius: 6px;
+  }
+  .toolbar {
+    display: block;
+  }
+  .search-field {
+    display: flex;
+    align-items: center;
+    height: 45px;
+    overflow: hidden;
+    border: 1px solid var(--admin-border);
+    border-radius: 7px;
+    background: var(--admin-surface);
+  }
+  .toolbar input {
+    width: 0;
+    min-width: 0;
+    padding: 12px 0 12px 14px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    font-size: 13px;
+  }
+  .toolbar input::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+  }
+  .toolbar input::placeholder {
+    color: #9099a5;
+  }
+  .search-field .search-clear,
+  .search-field .search-submit {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 44px;
+    height: 43px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    color: #7e8996;
+  }
+  .search-clear {
+    font-size: 21px;
+  }
+  .search-submit svg {
+    width: 18px;
+    height: 18px;
+  }
+  .list-summary {
+    align-items: center;
+    gap: 8px;
+    height: 54px;
+    margin: 0;
+    color: #818b98;
+    font-size: 12px;
+  }
+  .mobile-total {
+    display: inline;
+    font-variant-numeric: tabular-nums;
+  }
+  .mobile-category {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: none;
+  }
+  .mobile-category select {
+    appearance: none;
+    max-width: 135px;
+    min-height: 44px;
+    padding: 10px 19px 10px 6px;
+    border: 0;
+    background: transparent;
+    color: #6b7785;
+    font-size: 12px;
+  }
+  .mobile-category svg {
+    position: absolute;
+    right: 0;
+    width: 12px;
+    height: 12px;
+    pointer-events: none;
+  }
+  .table-wrap {
+    overflow: hidden;
+    border-radius: 8px;
+  }
   table {
     min-width: 0;
   }
@@ -450,21 +664,171 @@ select:focus-visible {
     display: block;
   }
   tr {
+    position: relative;
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px 9px;
     border-bottom: 1px solid var(--admin-divider);
-    padding: 12px 0;
+    padding: 17px 16px 10px;
+  }
+  tr:last-child {
+    border-bottom: 0;
   }
   td {
     border: 0;
-    padding: 8px 12px;
+    padding: 0;
   }
-  td:first-child {
+  td.merchant-summary {
+    display: contents;
     width: auto;
+  }
+  .merchant-name {
     grid-column: 1 / -1;
+    grid-row: 1;
+    padding-right: 42px;
+    min-width: 0;
+    font-size: 14px;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+  }
+  .merchant-address {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    margin: 0;
+    overflow: hidden;
+    color: #818c9a;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mobile-meta {
+    display: flex;
+    grid-column: 1;
+    grid-row: 3;
+    align-items: center;
+    min-width: 0;
+    gap: 6px;
+    overflow: hidden;
+    color: #788695;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .mobile-meta > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .meta-separator {
+    color: #b1b8c1;
+  }
+  .merchant-status {
+    position: absolute;
+    top: 22px;
+    right: 16px;
+  }
+  .merchant-status .badge {
+    padding: 0;
+    background: none;
+    color: #718879;
+    font-size: 10px;
+  }
+  .merchant-status .closed {
+    color: #8b939d;
+  }
+  .mobile-status-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .mobile-status-label::before {
+    content: '';
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
   }
   td.actions {
-    grid-column: 1 / -1;
+    display: flex;
+    grid-column: 2;
+    grid-row: 3;
+    align-items: center;
+    gap: 2px;
+    margin: 0 -4px 0 0;
+  }
+  .actions > a,
+  .actions > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    min-height: 42px;
+    margin: 0;
+    padding: 8px 4px;
+    border: 0;
+    background: transparent;
+    font-size: 12px;
+  }
+  .mobile-pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 18px 0 4px;
+    color: #7e8996;
+    font-size: 11px;
+  }
+  .mobile-pagination select {
+    max-width: 115px;
+    padding: 8px 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: inherit;
+  }
+  .mobile-pager {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mobile-pager button {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+  }
+  .mobile-pager svg {
+    width: 14px;
+    height: 14px;
+  }
+  .mobile-page-number {
+    min-width: 55px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .mobile-page-number b {
+    font-weight: 500;
+    color: #596777;
+  }
+}
+@media (max-width: 350px) {
+  main {
+    padding-right: 13px;
+    padding-left: 13px;
+  }
+  tr {
+    padding-right: 13px;
+    padding-left: 13px;
+    column-gap: 6px;
+  }
+  .merchant-name {
+    font-size: 13px;
+  }
+  .merchant-status {
+    right: 13px;
+  }
+  .mobile-meta {
+    gap: 4px;
   }
 }
 </style>
