@@ -7,9 +7,13 @@ import { isAxiosError } from 'axios'
 import { authToken, getAccessToken } from '@/shared/api/authSession'
 import { createRequestId } from '@/shared/lib/createRequestId'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
+import { useDraftPhotos } from '@/modules/file/model/useDraftPhotos'
+import { compressPhoto } from '@/modules/file/model/photos'
+import { uploadImage, cancelImage } from '@/modules/file/api/mediaApi'
 import {
   fetchManagedWindows,
   saveWindow,
+  addWindowPhoto,
   type CanteenWindow,
   type WindowInput,
 } from '@/modules/restaurant/api/canteenWindowApi'
@@ -25,6 +29,16 @@ const context = useWindowManagementBrowsing().enter(props.id)
 const token = getAccessToken()
 const controller = new globalThis.AbortController()
 const row = ref<CanteenWindow>()
+const createdWindow = ref<CanteenWindow>()
+const draft = useDraftPhotos(
+  { uploadPhoto: (file, owner) => uploadImage(file, owner, 'WINDOW'), cancelPhoto: cancelImage },
+  () => (token === getAccessToken() ? token : null),
+)
+const { photos: draftPhotos, pending: uploadingPhotos, failed: failedPhotos } = draft
+const processingPhotos = ref(false),
+  draftPhotoError = ref('')
+const boundPhotos = new Set<string>()
+let photoGeneration = 0
 const canteenName = ref('')
 const loading = ref(true),
   loadError = ref(''),
@@ -50,8 +64,12 @@ const normalized = () => ({
   pricePerPerson: input.value.priceKind === 'UNKNOWN' ? null : input.value.pricePerPerson,
 })
 const baseline = ref(JSON.stringify(normalized()))
-const dirty = computed(() => JSON.stringify(normalized()) !== baseline.value)
-const locked = computed(() => busy.value || photoBusy.value)
+const dirty = computed(
+  () => JSON.stringify(normalized()) !== baseline.value || draftPhotos.value.length > 0,
+)
+const locked = computed(
+  () => busy.value || photoBusy.value || processingPhotos.value || uploadingPhotos.value,
+)
 const leaveConfirmation = ref<InstanceType<typeof LeaveConfirmation>>()
 const returnPath = `/admin/restaurants/${props.id}/windows`
 let active = true,
@@ -59,6 +77,40 @@ let active = true,
   requestId = createRequestId(),
   submitted = ''
 const valid = () => active && !!token && token === getAccessToken() && !changed.value
+
+function clearDraft() {
+  photoGeneration++
+  for (let index = draftPhotos.value.length - 1; index >= 0; index--) {
+    const fileId = draftPhotos.value[index]?.fileId
+    draft.remove(index, !!fileId && boundPhotos.has(fileId))
+  }
+}
+/** 新建先上传临时WINDOW照片，不创建窗口；取消只清理本次未绑定文件。 */
+async function choosePhotos(event: globalThis.Event) {
+  const field = event.target as globalThis.HTMLInputElement
+  const files = Array.from(field.files ?? [])
+  field.value = ''
+  if (!files.length || locked.value || uncertainCreate.value || createdWindow.value || !valid())
+    return
+  draftPhotoError.value = ''
+  if (files.length + draftPhotos.value.length > 5) {
+    draftPhotoError.value = '最多添加5张照片，请先移除多余照片。'
+    return
+  }
+  const ticket = photoGeneration
+  processingPhotos.value = true
+  try {
+    for (const file of files) {
+      const jpeg = await compressPhoto(file)
+      if (!valid() || ticket !== photoGeneration) return
+      draft.add(jpeg)
+    }
+  } catch (reason) {
+    if (valid() && ticket === photoGeneration) draftPhotoError.value = toErrorMessage(reason)
+  } finally {
+    if (ticket === photoGeneration) processingPhotos.value = false
+  }
+}
 
 /** 编辑仅从授权列表确认归属；删除或跨食堂窗口不能加载照片。 */
 async function load() {
@@ -95,7 +147,15 @@ async function load() {
   }
 }
 async function save() {
-  if (!valid() || locked.value || loading.value || loadError.value || photoPending.value) return
+  if (
+    !valid() ||
+    locked.value ||
+    loading.value ||
+    loadError.value ||
+    photoPending.value ||
+    failedPhotos.value
+  )
+    return
   const payload = normalized()
   const fingerprint = JSON.stringify(payload)
   if (submitted && submitted !== fingerprint) requestId = createRequestId()
@@ -103,14 +163,27 @@ async function save() {
   busy.value = true
   error.value = ''
   try {
-    const result = await saveWindow(
-      props.id,
-      props.windowId ?? null,
-      { ...payload, ...(!props.windowId ? { clientRequestId: requestId } : {}) },
-      token!,
-    )
+    const result =
+      createdWindow.value ??
+      (await saveWindow(
+        props.id,
+        props.windowId ?? null,
+        { ...payload, ...(!props.windowId ? { clientRequestId: requestId } : {}) },
+        token!,
+      ))
     if (!valid()) return
     uncertainCreate.value = false
+    if (!props.windowId) {
+      createdWindow.value = result
+      // 新建已确认后只重试未确认的照片入册，不能再次创建或重传文件。
+      for (const photo of draftPhotos.value) {
+        if (!photo.fileId || boundPhotos.has(photo.fileId)) continue
+        await addWindowPhoto(result.id, photo.fileId, token!)
+        if (!valid()) return
+        boundPhotos.add(photo.fileId)
+      }
+      draft.clear(true)
+    }
     saved = true
     baseline.value = fingerprint
     context.notice = `窗口已保存：${result.name}`
@@ -120,8 +193,12 @@ async function save() {
     await router.replace(props.windowId ? returnPath : `${returnPath}/${result.id}/edit`)
   } catch (reason) {
     const status = isAxiosError(reason) ? reason.response?.status : undefined
-    if (valid() && !props.windowId && (!status || status >= 500)) uncertainCreate.value = true
-    if (valid()) error.value = `${toErrorMessage(reason)}。相同内容可安全重试。`
+    if (valid() && !props.windowId && !createdWindow.value && (!status || status >= 500))
+      uncertainCreate.value = true
+    if (valid())
+      error.value = createdWindow.value
+        ? `${toErrorMessage(reason)}。窗口已创建，照片尚未全部保存，请重试保存照片。`
+        : `${toErrorMessage(reason)}。相同内容可安全重试。`
   } finally {
     busy.value = false
   }
@@ -148,6 +225,7 @@ function beforeUnload(event: globalThis.BeforeUnloadEvent) {
 watch(authToken, () => {
   if (token !== getAccessToken()) {
     changed.value = true
+    clearDraft()
     controller.abort()
     row.value = undefined
     canteenName.value = ''
@@ -169,6 +247,7 @@ onBeforeRouteUpdate(
 onMounted(() => globalThis.addEventListener('beforeunload', beforeUnload))
 onBeforeUnmount(() => {
   active = false
+  clearDraft()
   controller.abort()
   globalThis.removeEventListener('beforeunload', beforeUnload)
 })
@@ -179,7 +258,13 @@ void load()
   <section class="window-editor window-page" :aria-busy="loading">
     <LeaveConfirmation
       ref="leaveConfirmation"
-      :message="photoPending ? '照片保存尚未确认，确定离开？' : '窗口资料尚未保存，确定离开？'"
+      :message="
+        createdWindow
+          ? '窗口已创建，照片尚未全部保存，确定离开？'
+          : photoPending
+            ? '照片保存尚未确认，确定离开？'
+            : '窗口资料或照片尚未保存，确定离开？'
+      "
     />
     <AppLink class="window-back" :to="returnPath" :aria-disabled="locked || uncertainCreate"
       >‹ 返回窗口管理</AppLink
@@ -198,8 +283,8 @@ void load()
       {{ loadError }} <button type="button" @click="load">重试读取</button>
     </div>
     <form v-else class="window-surface" @submit.prevent="save">
-      <div class="window-form-layout" :class="{ creating: !windowId }">
-        <fieldset :disabled="locked || uncertainCreate || photoPending">
+      <div class="window-form-layout">
+        <fieldset :disabled="locked || uncertainCreate || photoPending || !!createdWindow">
           <legend>窗口资料</legend>
           <label>窗口名称<input v-model="input.name" required maxlength="40" /></label>
           <div class="window-field-pair">
@@ -262,6 +347,63 @@ void load()
           @pending="photoPending = $event"
           @changed="photosChanged"
         />
+        <section
+          v-else
+          class="window-photo-management window-draft-photos"
+          aria-label="新增窗口照片"
+        >
+          <div class="window-photo-heading">
+            <h2>窗口照片</h2>
+            <span>{{ draftPhotos.length }} / 5 张</span>
+          </div>
+          <div class="window-photo-grid">
+            <figure v-for="(photo, index) in draftPhotos" :key="photo.url">
+              <img :src="photo.url" alt="新增窗口照片预览" />
+              <figcaption v-if="index === 0">封面</figcaption>
+              <button
+                class="window-remove-photo"
+                type="button"
+                aria-label="移除照片"
+                :disabled="locked || uncertainCreate || !!createdWindow"
+                @click="draft.remove(index)"
+              >
+                ×
+              </button>
+              <span v-if="photo.state === 'uploading'" class="window-photo-progress" role="status"
+                >正在上传…</span
+              >
+              <button
+                v-if="photo.state === 'failed'"
+                class="window-photo-retry"
+                type="button"
+                :disabled="locked || uncertainCreate || !!createdWindow"
+                @click="draft.retry(photo)"
+              >
+                重试上传
+              </button>
+            </figure>
+            <label v-if="draftPhotos.length < 5" class="window-photo-upload">
+              <span aria-hidden="true">＋</span><span>添加照片</span>
+              <input
+                type="file"
+                aria-label="添加窗口照片"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                :disabled="locked || uncertainCreate || !!createdWindow"
+                @change="choosePhotos"
+              />
+            </label>
+          </div>
+          <p class="window-photo-note">首张为封面 · 随窗口一起保存</p>
+          <p v-if="draftPhotoError" role="alert">{{ draftPhotoError }}</p>
+          <p
+            v-for="photo in draftPhotos.filter((item) => item.error)"
+            :key="photo.url"
+            role="alert"
+          >
+            {{ photo.error }}
+          </p>
+        </section>
       </div>
       <div class="window-form-feedback">
         <p v-if="uncertainCreate" role="status">
@@ -276,8 +418,20 @@ void load()
           :to="returnPath"
           :aria-disabled="locked || uncertainCreate"
           >取消</AppLink
-        ><button class="window-primary" type="submit" :disabled="locked || photoPending">
-          {{ busy ? '正在保存…' : uncertainCreate ? '重试确认创建结果' : '保存窗口' }}
+        ><button
+          class="window-primary"
+          type="submit"
+          :disabled="locked || photoPending || failedPhotos"
+        >
+          {{
+            busy
+              ? '正在保存…'
+              : createdWindow
+                ? '重试保存照片'
+                : uncertainCreate
+                  ? '重试确认创建结果'
+                  : '保存窗口'
+          }}
         </button>
       </footer>
     </form>
