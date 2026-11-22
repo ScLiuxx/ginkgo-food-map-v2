@@ -97,7 +97,7 @@ describe('窗口照片管理', () => {
   it('删除需确认，失败后可重试；成功后重新读取', async () => {
     await choose()
     vi.mocked(removeWindowPhoto).mockRejectedValueOnce(new Error('删除超时'))
-    button('删除照片').click()
+    host.querySelector<HTMLButtonElement>('[aria-label="删除照片"]')!.click()
     await settle()
     expect(removeWindowPhoto).not.toHaveBeenCalled()
     button('确认删除照片').click()

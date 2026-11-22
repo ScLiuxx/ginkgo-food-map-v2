@@ -1,51 +1,48 @@
 <script setup lang="ts">
-import { createRequestId } from '@/shared/lib/createRequestId'
 import AppLink from '@/shared/ui/AppLink.vue'
-import { onUnmounted, ref, watch } from 'vue'
-import { isAxiosError } from 'axios'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { authToken, getAccessToken } from '@/shared/api/authSession'
 import {
   fetchManagedWindows,
-  saveWindow,
   setWindowDeleted,
   type CanteenWindow,
-  type WindowInput,
 } from '@/modules/restaurant/api/canteenWindowApi'
+import { fetchRestaurantManagement } from '@/modules/restaurant/api/restaurantApi'
 import { useRestaurantCatalog } from '@/modules/restaurant/model/catalog.store'
+import { useWindowManagementBrowsing } from '../model/windowManagementBrowsing'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
-import WindowPhotoManagement from './WindowPhotoManagement.vue'
-const props = defineProps<{ id: string }>()
-const token = getAccessToken(),
-  catalog = useRestaurantCatalog()
-const rows = ref<CanteenWindow[]>([])
-const error = ref(''),
-  notice = ref(''),
-  busy = ref(false),
-  loading = ref(false),
-  uncertainCreate = ref(false),
-  changed = ref(false)
-const editing = ref<string | null>(null),
-  formOpen = ref(false),
-  confirming = ref<CanteenWindow | null>(null)
-const photoWindow = ref<CanteenWindow | null>(null)
-const photoBusy = ref(false)
-const blank = (): WindowInput => ({
-  name: '',
-  floorNumber: 1,
+import WindowManagementPreview from './WindowManagementPreview.vue'
 
-  description: null,
-  priceKind: 'UNKNOWN',
-  pricePerPerson: null,
-  businessStatus: 'OPERATING',
-})
-const input = ref<WindowInput>(blank())
-let requestId = '',
-  submitted = '',
-  generation = 0
+const props = defineProps<{ id: string }>()
+const token = getAccessToken()
+const catalog = useRestaurantCatalog()
+const context = useWindowManagementBrowsing().enter(props.id)
+const rows = ref<CanteenWindow[]>([])
+const canteenName = ref('')
+const error = ref(''),
+  busy = ref(false),
+  loading = ref(true),
+  changed = ref(false)
+const confirming = ref<CanteenWindow | null>(null)
+const viewing = ref<string | null>(null)
+const confirmation = ref<globalThis.HTMLDialogElement>()
+const page = ref<globalThis.HTMLElement>()
 const controller = new globalThis.AbortController()
-const valid = () => !!token && token === getAccessToken() && !changed.value
-/** 读取包含软删除记录的授权集合；失败后保留明确错误和重试入口。 */
+let active = true,
+  generation = 0
+const valid = () => active && !!token && token === getAccessToken() && !changed.value
+const basePath = `/admin/restaurants/${props.id}/windows`
+
+async function restorePosition() {
+  await nextTick()
+  if (!valid()) return
+  const button = [
+    ...(page.value?.querySelectorAll<globalThis.HTMLElement>('[data-window]') ?? []),
+  ].find((element) => element.dataset.window === context.focusId)
+  button?.focus({ preventScroll: true })
+}
+/** 返回时重新读取授权集合，等待内容就绪后恢复位置与原编辑按钮焦点。 */
 async function load() {
   if (!valid()) return
   const ticket = ++generation
@@ -53,70 +50,37 @@ async function load() {
   error.value = ''
   try {
     const items = await fetchManagedWindows(props.id, token!, controller.signal)
-    if (ticket === generation && valid()) {
-      rows.value = items
+    if (ticket !== generation || !valid()) return
+    rows.value = items
+    canteenName.value = items[0]?.canteenName ?? ''
+    if (!canteenName.value) {
+      const parent = await fetchRestaurantManagement(props.id, token!, controller.signal)
+      if (ticket !== generation || !valid()) return
+      canteenName.value = parent.restaurant.name
     }
   } catch (reason) {
     if (ticket === generation && valid()) error.value = toErrorMessage(reason)
   } finally {
-    if (ticket === generation) loading.value = false
+    if (ticket === generation && valid()) {
+      loading.value = false
+      void restorePosition()
+    }
   }
 }
-function edit(row?: CanteenWindow) {
-  if (busy.value || uncertainCreate.value || !valid()) return
-  editing.value = row?.id ?? null
-  input.value = row
-    ? {
-        name: row.name,
-        floorNumber: row.floorNumber,
-
-        description: row.description,
-        priceKind: row.priceKind,
-        pricePerPerson: row.pricePerPerson,
-        businessStatus: row.businessStatus,
-      }
-    : blank()
-  requestId = createRequestId()
-  submitted = ''
-  formOpen.value = true
-  error.value = ''
-  notice.value = ''
+function remember(id = '') {
+  context.scrollTop = globalThis.scrollY ?? 0
+  context.focusId = id
 }
-/** 创建结果未知时冻结原内容和UUID，先确认原回执，避免改动内容后重试造成重复窗口。 */
-async function save() {
+function confirm(row: CanteenWindow) {
   if (busy.value || !valid()) return
-  const payload = {
-    ...input.value,
-    name: input.value.name.trim(),
-
-    description: input.value.description?.trim() || null,
-    pricePerPerson: input.value.priceKind === 'UNKNOWN' ? null : input.value.pricePerPerson,
-  }
-  const fingerprint = JSON.stringify(payload)
-  if (submitted && fingerprint !== submitted) requestId = createRequestId()
-  submitted = fingerprint
-  busy.value = true
+  confirming.value = row
   error.value = ''
-  try {
-    const result = await saveWindow(
-      props.id,
-      editing.value,
-      { ...payload, ...(!editing.value ? { clientRequestId: requestId } : {}) },
-      token!,
-    )
-    if (!valid()) return
-    uncertainCreate.value = false
-    formOpen.value = false
-    notice.value = `窗口已保存：${result.name}`
-    catalog.invalidate()
-    await load()
-  } catch (reason) {
-    const status = isAxiosError(reason) ? reason.response?.status : undefined
-    if (valid() && !editing.value && (!status || status >= 500)) uncertainCreate.value = true
-    if (valid()) error.value = `${toErrorMessage(reason)}。请核对列表；相同内容可安全重试。`
-  } finally {
-    busy.value = false
-  }
+  confirmation.value?.showModal()
+}
+function closeConfirmation() {
+  if (busy.value) return
+  confirmation.value?.close()
+  confirming.value = null
 }
 async function applyDelete() {
   const row = confirming.value
@@ -126,12 +90,13 @@ async function applyDelete() {
   try {
     await setWindowDeleted(row.id, !row.deleted, token!)
     if (!valid()) return
+    confirmation.value?.close()
     confirming.value = null
-    notice.value = row.deleted ? '窗口已恢复。' : '窗口已删除，历史点评保留，可在此恢复。'
+    context.notice = row.deleted ? '窗口已恢复。' : '窗口已删除，历史点评保留。'
     catalog.invalidate()
     await load()
   } catch (reason) {
-    if (valid()) error.value = `${toErrorMessage(reason)}。可刷新核对后重试。`
+    if (valid()) error.value = `${toErrorMessage(reason)}。可重试或重新读取列表核对。`
   } finally {
     busy.value = false
   }
@@ -142,252 +107,139 @@ watch(authToken, () => {
     generation++
     controller.abort()
     rows.value = []
-    formOpen.value = false
+    canteenName.value = ''
+    viewing.value = null
+    confirmation.value?.close()
     confirming.value = null
   }
 })
-onUnmounted(() => {
+onBeforeRouteLeave(() => !busy.value)
+onBeforeRouteUpdate(() => !busy.value)
+onBeforeUnmount(() => {
+  active = false
   generation++
   controller.abort()
+  confirmation.value?.close()
 })
-onBeforeRouteLeave(() => !busy.value && !photoBusy.value)
-onBeforeRouteUpdate(() => !busy.value && !photoBusy.value)
 void load()
 </script>
+
 <template>
-  <section class="window-management">
-    <AppLink to="/admin/restaurants">← 返回商户管理</AppLink>
-    <h1>窗口管理</h1>
-    <p>所属食堂：{{ rows[0]?.canteenName || id }}。窗口名称和楼层独立维护，点评始终归属原窗口。</p>
+  <section ref="page" class="window-management window-page" :aria-busy="loading">
+    <AppLink class="window-back" to="/admin/restaurants">‹ 返回商户管理</AppLink>
+    <div class="window-heading">
+      <div>
+        <h1>窗口管理</h1>
+        <p v-if="canteenName" class="window-context">
+          {{ canteenName }} · {{ rows.length }} 个窗口
+        </p>
+      </div>
+      <AppLink
+        v-if="!changed"
+        class="window-primary"
+        :to="`${basePath}/new`"
+        :aria-disabled="busy || loading"
+        @click="remember()"
+        >＋ 新增窗口</AppLink
+      >
+    </div>
     <p v-if="changed" role="alert">登录身份已变化，请重新进入窗口管理。</p>
     <template v-else>
-      <button :disabled="busy || loading || uncertainCreate" @click="edit()">＋ 新增窗口</button>
-      <button :disabled="busy || loading" @click="load">刷新列表</button>
-      <AppLink :to="`/restaurants/${id}`">查看食堂</AppLink>
-      <p v-if="error" role="alert">{{ error }}</p>
-      <p v-if="notice" role="status">{{ notice }}</p>
+      <p v-if="context.notice" class="window-notice" role="status">{{ context.notice }}</p>
+      <div v-if="error && !confirming" class="window-error" role="alert">
+        {{ error }}
+        <button type="button" :disabled="busy || loading" @click="load">重试读取列表</button>
+      </div>
       <p v-if="loading" role="status">正在加载窗口…</p>
-      <div v-else class="table-wrap">
-        <table>
+      <div v-else class="window-list window-surface">
+        <table v-if="rows.length">
           <thead>
             <tr>
-              <th>窗口</th>
+              <th>窗口名称</th>
               <th>楼层</th>
-              <th>状态</th>
-              <th>操作</th>
+              <th>经营状态</th>
+              <th class="operation-heading">操作</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in rows" :key="row.id">
-              <td data-label="窗口">
-                {{ row.name }}<small>ID：{{ row.id }}</small>
-              </td>
-              <td data-label="楼层">{{ row.floorNumber }}层</td>
-              <td data-label="状态">
-                {{ row.deleted ? '已删除' : row.businessStatus === 'CLOSED' ? '停业' : '营业' }}
-              </td>
-              <td data-label="操作">
-                <AppLink v-if="!row.deleted" :to="`/canteen-windows/${row.id}`">查看</AppLink>
-                <button v-if="!row.deleted" :disabled="busy || uncertainCreate" @click="edit(row)">
-                  编辑 / 停业
-                </button>
-                <button
-                  v-if="!row.deleted"
-                  :disabled="busy || photoBusy"
-                  @click="photoWindow = row"
+            <tr v-for="row in rows" :key="row.id" :class="{ deleted: row.deleted }">
+              <td class="window-name">{{ row.name }}</td>
+              <td class="window-floor">{{ row.floorNumber }} 楼</td>
+              <td class="window-status-cell">
+                <span
+                  class="window-status"
+                  :class="{ muted: row.deleted || row.businessStatus === 'CLOSED' }"
+                  >{{
+                    row.deleted ? '已删除' : row.businessStatus === 'CLOSED' ? '停业' : '营业'
+                  }}</span
                 >
-                  照片管理
-                </button>
-                <button :disabled="busy" @click="confirming = row">
-                  {{ row.deleted ? '恢复' : '删除' }}
-                </button>
+              </td>
+              <td>
+                <div class="window-actions">
+                  <template v-if="!row.deleted">
+                    <AppLink
+                      :to="`${basePath}/${row.id}/edit`"
+                      :data-window="row.id"
+                      :aria-disabled="busy"
+                      @click="remember(row.id)"
+                      >编辑</AppLink
+                    >
+                    <button type="button" :disabled="busy" @click="viewing = row.id">查看</button>
+                  </template>
+                  <button
+                    type="button"
+                    :class="{ 'window-danger-text': !row.deleted }"
+                    :disabled="busy"
+                    @click="confirm(row)"
+                  >
+                    {{ row.deleted ? '恢复' : '删除' }}
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
         </table>
-        <p v-if="!rows.length">暂无窗口，点击新增窗口录入。</p>
+        <p v-else-if="!error" class="window-empty">暂无窗口，点击“新增窗口”录入。</p>
       </div>
-      <WindowPhotoManagement
-        v-if="photoWindow"
-        :id="photoWindow.id"
-        :key="photoWindow.id"
-        :name="photoWindow.name"
-        @close="photoWindow = null"
-        @busy="photoBusy = $event"
-        @changed="load"
-      />
-      <section v-if="confirming" class="confirm" aria-label="确认窗口操作">
-        <p>
-          确认{{ confirming.deleted ? '恢复' : '删除' }}「{{ confirming.name }}」？历史点评将保留。
-        </p>
-        <button :disabled="busy" @click="applyDelete">确认操作</button
-        ><button :disabled="busy" @click="confirming = null">取消</button>
-      </section>
-      <form v-if="formOpen" @submit.prevent="save">
-        <h2>{{ editing ? '编辑窗口' : '新增窗口' }}</h2>
-        <p v-if="uncertainCreate" role="status">
-          上次创建结果尚未确认，资料已锁定。请重试原请求确认结果后再新增其他窗口。
-        </p>
-        <fieldset :disabled="busy || uncertainCreate">
-          <label>窗口名称<input v-model="input.name" required maxlength="40" /></label>
-          <label
-            >楼层<input
-              v-model.number="input.floorNumber"
-              type="number"
-              min="-10"
-              max="100"
-              step="1"
-              required
-          /></label>
-          <label>窗口介绍<textarea v-model="input.description" maxlength="500" rows="3" /></label>
-          <label
-            >人均价格类型<select v-model="input.priceKind">
-              <option value="UNKNOWN">未知</option>
-              <option value="EXACT">准确价格</option>
-              <option value="ESTIMATE">估计价格</option>
-            </select></label
-          >
-          <label v-if="input.priceKind !== 'UNKNOWN'"
-            >人均金额<input
-              v-model.number="input.pricePerPerson"
-              type="number"
-              min="1"
-              max="5000"
-              step="1"
-              required
-          /></label>
-          <label
-            >经营状态<select v-model="input.businessStatus">
-              <option value="OPERATING">营业</option>
-              <option value="CLOSED">停业</option>
-            </select></label
-          >
-          <p>停业后仍可阅读历史点评，不再接受新点评；重新开业后恢复发布。</p>
-        </fieldset>
-        <button type="submit" :disabled="busy">
-          {{ busy ? '正在保存…' : uncertainCreate ? '重试确认创建结果' : '保存窗口' }}
-        </button>
-        <button type="button" :disabled="busy || uncertainCreate" @click="formOpen = false">
-          取消
-        </button>
-      </form>
     </template>
+    <WindowManagementPreview
+      v-if="viewing && !changed"
+      :id="viewing"
+      :canteen-id="id"
+      @close="viewing = null"
+    />
+    <dialog
+      ref="confirmation"
+      class="window-confirm"
+      aria-labelledby="window-confirm-title"
+      @cancel.prevent="closeConfirmation"
+      @close="confirming = null"
+    >
+      <template v-if="confirming">
+        <h2 id="window-confirm-title">
+          {{ confirming.deleted ? '恢复' : '删除' }}“{{ confirming.name }}”？
+        </h2>
+        <p>
+          {{
+            confirming.deleted
+              ? '恢复后重新展示该窗口，原有点评保留。'
+              : '删除后不再展示该窗口，历史点评保留。你可以在窗口列表中恢复。'
+          }}
+        </p>
+        <p v-if="error" role="alert">{{ error }}</p>
+        <footer>
+          <button class="window-secondary" :disabled="busy" @click="closeConfirmation">取消</button
+          ><button
+            :class="confirming.deleted ? 'window-primary' : 'window-danger'"
+            :disabled="busy"
+            @click="applyDelete"
+          >
+            {{ busy ? '正在处理…' : confirming.deleted ? '恢复窗口' : '删除窗口' }}
+          </button>
+        </footer>
+      </template>
+    </dialog>
   </section>
 </template>
-<style scoped>
-.window-management {
-  color: #25313d;
-}
-h1 {
-  font-size: 28px;
-}
-p,
-small {
-  color: #7b8791;
-  line-height: 1.8;
-}
-small {
-  display: block;
-}
-a {
-  color: #d57a20;
-  margin-right: 14px;
-}
-button {
-  cursor: pointer;
-  padding: 9px 14px;
-  background: white;
-  border: 1px solid #dfe3e7;
-  border-radius: 5px;
-  margin: 4px;
-}
-button:disabled {
-  opacity: 0.5;
-}
-.table-wrap {
-  overflow: auto;
-  margin-top: 20px;
-}
-table {
-  border-collapse: collapse;
-  width: 100%;
-  min-width: 550px;
-}
-th,
-td {
-  text-align: left;
-  padding: 16px;
-  border-bottom: 1px solid #edf0f2;
-}
-th {
-  background: #fafbfc;
-}
-form,
-.confirm {
-  border: 1px solid #e5e8ec;
-  padding: 24px;
-  margin-top: 20px;
-  border-radius: 8px;
-}
-fieldset {
-  border: 0;
-  padding: 0;
-}
-label {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 16px;
-  max-width: 620px;
-}
-input,
-select,
-textarea {
-  font: inherit;
-  padding: 10px;
-  border: 1px solid #dfe3e7;
-  border-radius: 5px;
-}
-[role='alert'] {
-  color: #a44d2e;
-}
-/* 窄屏逐条展示完整操作，避免删除/恢复按钮藏在横向滚动区。 */
-@media (max-width: 600px) {
-  table,
-  tbody,
-  tr,
-  td {
-    display: block;
-    min-width: 0;
-  }
-  thead {
-    display: none;
-  }
-  tr {
-    border-bottom: 1px solid #dfe3e7;
-    padding: 14px 0;
-  }
-  td {
-    border: 0;
-    padding: 6px 0;
-    overflow-wrap: anywhere;
-  }
-  td::before {
-    content: attr(data-label);
-    display: block;
-    font-size: 12px;
-    color: #7b8791;
-    margin-bottom: 4px;
-  }
-  form,
-  .confirm {
-    padding: 16px;
-  }
-  input,
-  select,
-  textarea {
-    min-width: 0;
-    width: 100%;
-    box-sizing: border-box;
-  }
-}
-</style>
+
+<style src="./window-management.css"></style>

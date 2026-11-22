@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { authToken, getAccessToken } from '@/shared/api/authSession'
 import { uploadImage, cancelImage } from '@/modules/file/api/mediaApi'
@@ -13,8 +13,15 @@ import {
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 
 /** 相册操作立即保存；上传和入册分开，结果未知时保留原fileId供幂等重试。 */
-const props = defineProps<{ id: string; name: string }>()
-const emit = defineEmits<{ close: []; changed: []; busy: [value: boolean] }>()
+const props = withDefaults(defineProps<{ id: string; name: string; disabled?: boolean }>(), {
+  disabled: false,
+})
+const emit = defineEmits<{
+  close: []
+  changed: []
+  busy: [value: boolean]
+  pending: [value: boolean]
+}>()
 const token = getAccessToken()
 const photos = ref<WindowPhoto[]>([])
 const busy = ref(false),
@@ -28,6 +35,8 @@ let active = true
 const valid = () => active && !!token && getAccessToken() === token
 const controller = new globalThis.AbortController()
 watch(busy, (value) => emit('busy', value), { flush: 'sync' })
+watch(pendingId, (value) => emit('pending', !!value), { flush: 'sync' })
+const locked = computed(() => busy.value || props.disabled)
 
 async function load() {
   if (!valid()) return
@@ -63,7 +72,16 @@ async function choose(event: globalThis.Event) {
   const input = event.target as globalThis.HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
-  if (!file || busy.value || !valid() || pendingId.value || photos.value.length >= 5) return
+  if (
+    !file ||
+    locked.value ||
+    loading.value ||
+    !loaded.value ||
+    !valid() ||
+    pendingId.value ||
+    photos.value.length >= 5
+  )
+    return
   busy.value = true
   error.value = ''
   try {
@@ -85,7 +103,7 @@ async function choose(event: globalThis.Event) {
   }
 }
 async function retry() {
-  if (busy.value || !valid()) return
+  if (locked.value || !valid()) return
   busy.value = true
   error.value = ''
   try {
@@ -98,7 +116,7 @@ async function retry() {
 }
 async function remove() {
   const id = confirming.value
-  if (!id || busy.value || !valid()) return
+  if (!id || locked.value || !valid()) return
   busy.value = true
   error.value = ''
   try {
@@ -130,101 +148,204 @@ void load()
 
 <template>
   <section class="window-photo-management" :aria-label="`${name}的窗口照片`">
-    <h2>{{ name }} · 窗口照片</h2>
-    <p>最多5张，首张作为封面。上传和删除后立即保存。</p>
+    <div class="photo-heading">
+      <h2>窗口照片</h2>
+      <span v-if="loaded">{{ photos.length }} / 5 张</span>
+    </div>
     <p v-if="error" role="alert">{{ error }}</p>
     <p v-if="loading" role="status">正在读取照片…</p>
-    <button v-if="!loading && (!loaded || (!!error && !pendingId))" type="button" @click="load">
+    <button
+      v-if="!loading && (!loaded || (!!error && !pendingId))"
+      class="photo-retry"
+      type="button"
+      :disabled="locked"
+      @click="load"
+    >
       重试读取照片
     </button>
     <div class="photos">
       <figure v-for="photo in photos" :key="photo.id">
         <img :src="photo.url" :alt="`${name}的窗口照片`" />
-        <figcaption>{{ photo.cover ? '封面' : '窗口照片' }}</figcaption>
-        <button type="button" :disabled="busy || !!pendingId" @click="confirming = photo.id">
-          删除照片
+        <figcaption v-if="photo.cover">封面</figcaption>
+        <button
+          class="remove-photo"
+          type="button"
+          aria-label="删除照片"
+          :disabled="locked || !!pendingId || loading"
+          @click="confirming = photo.id"
+        >
+          ×
         </button>
       </figure>
       <figure v-if="preview">
         <img :src="preview" alt="本次上传预览" />
         <figcaption>等待保存</figcaption>
       </figure>
+      <label
+        v-if="loaded && photos.length < 5 && !pendingId"
+        class="upload"
+        :class="{ disabled: locked || loading }"
+      >
+        <span aria-hidden="true">＋</span><span>上传照片</span>
+        <input
+          type="file"
+          aria-label="上传窗口照片"
+          accept="image/jpeg,image/png,image/webp"
+          :disabled="locked || loading"
+          @change="choose"
+        />
+      </label>
     </div>
-    <p v-if="loaded && !photos.length && !preview">暂无窗口照片</p>
-    <label v-if="loaded && photos.length < 5 && !pendingId" class="upload">
-      上传照片<input
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        :disabled="busy || loading"
-        @change="choose"
-      />
-    </label>
+    <p class="photo-note">首张为封面 · 上传、删除后立即保存</p>
+    <p v-if="loaded && !photos.length && !preview" class="photo-empty">暂无窗口照片</p>
     <p v-if="busy" role="status">正在处理，请稍候…</p>
-    <div v-if="pendingId">
+    <div v-if="pendingId" class="photo-feedback">
       <p>图片已上传，保存结果尚未确认。请重试确认。</p>
-      <button type="button" :disabled="busy" @click="retry">重试保存照片</button>
+      <button type="button" :disabled="locked" @click="retry">重试保存照片</button>
     </div>
-    <div v-if="confirming" role="group" aria-label="确认删除照片">
-      <p>确认删除这张照片？删除后无法恢复。</p>
-      <button type="button" :disabled="busy" @click="remove">确认删除照片</button>
-      <button type="button" :disabled="busy" @click="confirming = null">取消删除</button>
+    <div v-if="confirming" class="photo-feedback" role="group" aria-label="确认删除照片">
+      <p>删除这张照片？删除后无法恢复。</p>
+      <div class="photo-confirm-actions">
+        <button class="photo-danger" type="button" :disabled="locked" @click="remove">
+          确认删除照片</button
+        ><button type="button" :disabled="locked" @click="confirming = null">取消删除</button>
+      </div>
     </div>
-    <button type="button" :disabled="busy" @click="emit('close')">关闭照片管理</button>
   </section>
 </template>
-
 <style scoped>
 .window-photo-management {
-  border: 1px solid #e5e8ec;
-  border-radius: 8px;
-  padding: 20px;
-  margin-top: 20px;
+  min-width: 0;
 }
+.photo-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.photo-heading span,
 p {
-  color: #687583;
+  color: var(--admin-muted);
+  font-size: 12px;
   line-height: 1.8;
 }
-.photos {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
+p {
+  margin: 12px 0;
 }
-figure {
+.photos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+figure,
+.upload {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: 1.12;
   margin: 0;
-  width: 140px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--admin-surface-muted);
 }
 img {
-  width: 140px;
-  height: 110px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  border-radius: 6px;
-  background: #f3f4f5;
+  display: block;
 }
 figcaption {
-  font-size: 12px;
-  color: #687583;
-  margin: 6px 0;
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: white;
+  background: #29313bbd;
 }
 button {
-  padding: 9px 12px;
-  margin: 5px 5px 5px 0;
-  border: 1px solid #dfe3e7;
-  border-radius: 5px;
-  background: white;
   cursor: pointer;
+  font: inherit;
+  border: 1px solid var(--admin-border);
+  padding: 8px 12px;
+  background: white;
+  border-radius: 5px;
+  color: var(--admin-secondary);
 }
 button:disabled {
   opacity: 0.5;
+  cursor: not-allowed;
 }
-.upload {
+.remove-photo {
+  position: absolute;
+  right: 7px;
+  top: 7px;
   display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  font-size: 17px;
+  background: #fffffff2;
+}
+.window-photo-management .upload {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   gap: 8px;
-  margin: 16px 0;
+  border: 1px dashed #d5dae0;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--admin-secondary);
 }
-input {
-  max-width: 100%;
+.upload span:first-child {
+  font-size: 26px;
+  font-weight: 300;
+  line-height: 1;
 }
+.upload input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  padding: 0;
+}
+.upload:focus-within {
+  outline: 2px solid var(--admin-focus);
+  outline-offset: 3px;
+}
+.upload.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.photo-feedback {
+  padding: 10px 12px;
+  margin-top: 15px;
+  background: var(--admin-surface-muted);
+  border-radius: 6px;
+}
+.photo-confirm-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.photo-danger,
 [role='alert'] {
-  color: #a44d2e;
+  color: var(--admin-danger);
+}
+.photo-retry {
+  margin-bottom: 12px;
 }
 </style>
