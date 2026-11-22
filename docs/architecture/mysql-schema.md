@@ -301,14 +301,15 @@ position范围0～4。
 | `restaurant_id` | `bigint unsigned` | 否 | 所属正式商户，正long范围 |
 | `media_file_id` | `bigint unsigned` | 否 | file模块逻辑ID，正long范围 |
 | `position` | `int unsigned` | 否 | 商户内顺序0–2147483647；0为默认封面 |
-| `source_request_id` | `bigint unsigned` | 否 | 来源申请，正long范围 |
+| `source_request_id` | `bigint unsigned` | 是 | 来源申请，正long范围；管理员直接照片为空 |
+| `uploaded_by` | `bigint unsigned` | 是 | 管理员直接照片的真实上传者，正long范围；审核来源照片为空 |
 | `created_at` | `timestamp(6)` | 否 | 正式关联创建时间，由数据库生成 |
 
 主键`(id)`；唯一键`(media_file_id)`、`(restaurant_id,position)`；普通索引`(source_request_id,position,id)`。
 
 外键：restaurant_id → restaurants.id，source_request_id → restaurant_change_requests.id，删除/更新RESTRICT。media_file_id为文件逻辑ID，无跨模块外键。
 
-position范围0～2147483647，同一商户内唯一；0表示默认封面。
+position范围0～2147483647，同一商户内唯一；0表示默认封面。V52要求source_request_id与uploaded_by恰有一项非空，保留历史审核外键及旧数据；管理员照片不伪造申请。uploaded_by为认证服务提供的用户逻辑ID，无跨模块外键。相册替换及媒体状态更新与商户保存同事务。
 
 <a id="restaurant-favorites"></a>
 

@@ -34,6 +34,7 @@ public class RestaurantWriteService {
     private final Validator validator;
     private final RestaurantPhotoService albums;
     private final RestaurantSearchOutboxService searchOutbox;
+    private final RestaurantPhotoManagementService photoManagement;
 
     /** 仅管理员可获取管理资料，含删除记录；公开详情仍隐藏已删除商户。 */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -56,6 +57,9 @@ public class RestaurantWriteService {
         row.setUpdatedBy(actor.getUserId());
         mapper.insert(row);
         if (!tags.isEmpty()) mapper.insertTags(row.getId(), tags);
+        if (request instanceof com.foodmap.restaurant.dto.RestaurantDirectSaveRequest direct) {
+            photoManagement.replace(row.getId(), actor.getUserId(), direct.getPhotos());
+        }
         // 插入商户取得版本1后，在当前事务记录任务；后续审核/相册失败也会撤销任务。
         searchOutbox.record(row.getId());
         return managementVo(mapper.selectManagementById(row.getId()));
@@ -80,6 +84,9 @@ public class RestaurantWriteService {
             conflict();
         mapper.deleteTags(current.getId());
         if (!tags.isEmpty()) mapper.insertTags(current.getId(), tags);
+        if (request instanceof com.foodmap.restaurant.dto.RestaurantDirectSaveRequest direct) {
+            photoManagement.replace(current.getId(), actor.getUserId(), direct.getPhotos());
+        }
         searchOutbox.record(current.getId());
         return managementVo(mapper.selectManagementById(current.getId()));
     }

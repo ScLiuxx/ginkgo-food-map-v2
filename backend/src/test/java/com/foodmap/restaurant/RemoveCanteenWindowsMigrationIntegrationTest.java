@@ -40,7 +40,7 @@ class RemoveCanteenWindowsMigrationIntegrationTest {
             Flyway.configure().dataSource(url, user, password).target("50").load().migrate();
             var jdbc = new JdbcTemplate(new DriverManagerDataSource(url, user, password));
             seed(jdbc);
-            var migration = Flyway.configure().dataSource(url, user, password).load();
+            var migration = Flyway.configure().dataSource(url, user, password).target("51").load();
             // 模拟数据清理已提交、窗口表已删除，但点评字段DDL执行前进程失败。
             try (var db = DriverManager.getConnection(url, user, password)) {
                 assertThatThrownBy(

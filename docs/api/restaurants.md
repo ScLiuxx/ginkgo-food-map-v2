@@ -18,6 +18,7 @@
 | POST | `/api/restaurants` | 管理员 | 201 | [直接维护餐厅](#management) |
 | PUT | `/api/restaurants/{id}` | 管理员 | 200 | [直接维护餐厅](#management) |
 | DELETE | `/api/restaurants/{id}` | 管理员 | 200 | [直接维护餐厅](#management) |
+| GET | `/api/admin/restaurants/{id}/review-photos` | 管理员 | 200 | [点评选图](#admin-review-photos) |
 
 <a id="public-read"></a>
 
@@ -112,7 +113,7 @@
 
 食堂响应使用`"restaurantType":"CANTEEN","categoryCode":null,"categoryName":null`。不传category时目录及地图包含食堂；指定美食品类时不包含食堂。餐厅类型通过现有前端独立筛选选择，不把CANTEEN作为美食分类参数。
 
-目录、详情及管理回执的restaurant新增coverPhoto：无正式相册首图为null，否则为`{id,position:0,cover:true,url}`，例如`{"id":"801","position":0,"cover":true,"url":"/api/restaurants/101/photos/801"}`。首页/地图卡片直接使用此正式封面；ES列表直接按投影中的coverPhotoId组装同源图片地址，图片读取仍校验当前可见性；SQL降级在分页完成后按当前页商户ID集合一次批量补齐元数据，不逐卡片读取相册/点评，不在列表查询中访问云存储。查询要求商户未删除、来源申请已通过且目标一致；仅有待审照片或点评照片不会产生封面。
+目录、详情及管理回执的restaurant新增coverPhoto：无正式相册首图为null，否则为`{id,position:0,cover:true,url}`，例如`{"id":"801","position":0,"cover":true,"url":"/api/restaurants/101/photos/801"}`。首页/地图卡片直接使用此正式封面；ES列表直接按投影中的coverPhotoId组装同源图片地址，图片读取仍校验当前可见性；SQL降级在分页完成后按当前页商户ID集合一次批量补齐元数据，不逐卡片读取相册/点评，不在列表查询中访问云存储。查询要求商户未删除，且为管理员直接照片或来源申请已通过且目标一致；仅有待审照片或点评照片不会产生封面。
 
 **错误码**
 
@@ -230,7 +231,7 @@
 
 直接维护接收restaurantType（REGULAR/CANTEEN）及supportsDineIn、supportsDelivery（true支持、false不支持、null未知）。管理页面始终显式提交类型及两个三态字段；提供类型时这三个字段完整替换，省略用餐方式等价于null，可将已有支持/不支持清为未知。食堂categoryCode必须为null，普通餐厅必须有有效分类；切换类型及分类在同一事务中保存。成功保存推进一次搜索投影版本，任何失败整体回滚。
 
-兼容旧客户端：restaurantType省略或null且两个用餐方式均为null/省略时，新建为普通餐厅/用餐方式未知，更新保持已有这三个字段；省略类型却提交非null用餐方式返回400。非法类型400；未知、身份、申请UUID或图片字段仍不接受。不改变用户投稿和审核的独立DTO及历史幂等摘要。
+兼容旧客户端：restaurantType省略或null且两个用餐方式均为null/省略时，新建为普通餐厅/用餐方式未知，更新保持已有这三个字段；省略类型却提交非null用餐方式返回400。非法类型400；未知、身份和申请UUID字段仍不接受。不改变用户投稿和审核的独立DTO及历史幂等摘要。
 
 管理员直接新建食堂的示例（PUT同样支持）：
 
@@ -238,12 +239,14 @@
 {"name":"校内餐厅","restaurantType":"CANTEEN","categoryCode":null,"supportsDineIn":true,"supportsDelivery":false,"priceKind":"UNKNOWN","pricePerPerson":null,"address":"校内地址","latitude":30.7544,"longitude":103.9312,"locationConfirmed":true,"businessStatus":"OPERATING","tags":[]}
 ```
 
+可选`photos`为按展示顺序排列的完整相册，最多1000项；省略或null保留相册，空数组清空。每项必须且只能提供`photoId`（本店已有正式关联）或`fileId`（当前管理员上传的RESTAURANT临时文件），ID均为字符串。首项成为封面，重复文件或跨店照片拒绝；如`[{"photoId":"801"},{"fileId":"902"}]`。资料、相册关联、文件绑定／释放及搜索Outbox在同一事务保存，失败整体回滚。更新成功响应丢失时，本店已绑定的当前管理员文件可用原fileId重试；不允许复用其他店或其他管理员已绑定文件。已有photoId及创建时间保持稳定；移除管理员图片登记媒体清理，移除历史投稿图片仅取消公开关联，保留申请图片。点评选图先读取JPEG，再独立上传RESTAURANT文件，不共享点评文件生命周期。新建无幂等键，超时须核对结果。
+
 **响应**
 
 | 接口 | 规则与响应 |
 | --- | --- |
 | `GET /api/restaurants/{id}/management` | 仅管理员可读，包含已删除记录；成功data为`{restaurant,deleted}` |
-| `POST /api/restaurants` | 基础字段加restaurantType、supportsDineIn、supportsDelivery；不含申请UUID或照片字段；201及Location，data为管理资料 |
+| `POST /api/restaurants` | 基础字段加restaurantType、supportsDineIn、supportsDelivery；可附带photos，不含申请UUID；201及Location，data为管理资料 |
 | `PUT /api/restaurants/{id}` | 与直接新建相同字段，完整替换，成功200及管理资料；省略可选项按默认值处理，不能当PATCH |
 | `DELETE /api/restaurants/{id}` | 无请求体/版本；软删除，成功200、deleted=true，不删除标签与统计，公开入口隐藏 |
 
@@ -256,3 +259,9 @@
 **副作用与限制**
 
 这些接口均需有效Bearer及数据库当前管理员角色。普通用户即使是历史创建者也返回403 AUTH_FORBIDDEN，只能使用[用户商户申请](submissions.md#create-and-change)申请接口；创建者和操作者来自服务端认证上下文，不接受客户端身份。
+
+<a id="admin-review-photos"></a>
+
+### 管理员点评选图
+
+`GET /api/admin/restaurants/{id}/review-photos?page=1`要求管理员及未删除的目标商户。page为1–834，每页12张，按点评发布时间、点评ID倒序及照片位置正序；返回`{records:[{reviewId,position,url,username,body,createdAt}],hasMore}`，url为`/api/reviews/{reviewId}/photos/{position}`。仅包含本店当前有效点评的照片，不暴露媒体文件ID。空列表200，页码非法400，商户不存在／已删除404，非管理员403；响应禁止缓存。图片读取和重新上传仍走原有受控媒体接口。

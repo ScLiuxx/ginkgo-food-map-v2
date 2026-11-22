@@ -534,7 +534,7 @@ describe('商户资料补充与纠错', () => {
     await field('支持堂食', 'true')
     await field('支持外卖', 'false')
     expect(host.querySelector('input[inputmode="decimal"]')).toBeNull()
-    expect(host.querySelector('input[type="file"]')).toBeNull()
+    expect(host.querySelector('input[aria-label="选择商户照片"]')).not.toBeNull()
     await submit()
     expect(createRestaurant).toHaveBeenCalledWith(
       expect.objectContaining({

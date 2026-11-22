@@ -46,6 +46,8 @@ import {
 } from '../model/restaurantForm'
 import type { RestaurantErrors } from '../model/restaurantForm'
 import RestaurantAlbum from './RestaurantAlbum.vue'
+import AdminRestaurantPhotos from './AdminRestaurantPhotos.vue'
+import type { RestaurantPhotoSelection } from '../api/restaurantPhotoManagementApi'
 import {
   readMerchantSubmission,
   type MerchantSubmissionPlace,
@@ -97,6 +99,9 @@ const pageTitle = computed(() =>
 const token = getAccessToken()
 const sessionChanged = ref(false)
 const photoInput = ref<globalThis.HTMLInputElement>()
+const adminPhotos = ref<InstanceType<typeof AdminRestaurantPhotos>>()
+const adminPhotoSelection = ref<RestaurantPhotoSelection[]>([])
+const adminPhotoState = ref({ loading: false, busy: false, dirty: false, error: '' })
 const processingPhotos = ref(false)
 const photoError = ref('')
 const photoDraft = useSubmissionPhotos('RESTAURANT', () => (sessionChanged.value ? null : token))
@@ -143,7 +148,7 @@ const content = computed(() =>
   ]),
 )
 const baseline = ref(content.value)
-const dirty = computed(() => content.value !== baseline.value)
+const dirty = computed(() => content.value !== baseline.value || adminPhotoState.value.dirty)
 let clientRequestId = createRequestId()
 let lastSubmissionMode: boolean | undefined
 let controller: globalThis.AbortController | undefined
@@ -388,17 +393,26 @@ async function submit(includeReview = false) {
   try {
     // 管理员直接保存完整业务资料，三态显式提交；不附带投稿UUID或未支持的图片ID。
     if (props.admin) {
+      if (
+        adminPhotoState.value.loading ||
+        adminPhotoState.value.busy ||
+        adminPhotoState.value.error
+      ) {
+        throw new Error(adminPhotoState.value.error || '请等待商户照片处理完成。')
+      }
       const input = {
         ...restaurantInput(form, extra.restaurantType),
         restaurantType: extra.restaurantType,
         supportsDineIn: extra.dineIn === '' ? null : extra.dineIn === 'true',
         supportsDelivery: extra.delivery === '' ? null : extra.delivery === 'true',
+        ...(adminPhotoState.value.dirty ? { photos: adminPhotoSelection.value } : {}),
       }
       const result = props.submission
         ? await createRestaurant(input, token)
         : await updateRestaurant(props.id, input, token)
       if (!disposed && getAccessToken() === token && !sessionChanged.value) {
         receipt.value = result.restaurant.id
+        adminPhotos.value?.saved()
         await router.replace({ path: '/admin/restaurants', query: { saved: result.restaurant.id } })
       }
       return
@@ -507,6 +521,7 @@ onBeforeUnmount(() => {
     :class="{
       'submission-page': submission && !admin,
       'receipt-page': receipt && !sessionChanged,
+      'admin-correction': admin,
     }"
   >
     <LeaveConfirmation ref="leaveConfirmation" message="资料尚未提交，确定离开？" />
@@ -580,7 +595,7 @@ onBeforeUnmount(() => {
       <p v-if="sourceRequest?.rejectReason" class="notice">
         驳回原因：{{ sourceRequest.rejectReason }}
       </p>
-      <p v-show="step === 'restaurant'" class="intro">
+      <p v-show="!admin && step === 'restaurant'" class="intro">
         {{
           admin
             ? '搜索并选择高德门店，核对资料后直接保存。'
@@ -675,7 +690,7 @@ onBeforeUnmount(() => {
               }}</small>
             </fieldset>
             <!-- 已公开相册独立只读回显，不进入新上传草稿、五张上限、清理队列或提交photoIds。 -->
-            <fieldset v-if="!submission && !requestId" class="existing-merchant-photos">
+            <fieldset v-if="!admin && !submission && !requestId" class="existing-merchant-photos">
               <legend>当前商户照片</legend>
               <p class="intro">
                 {{
@@ -793,8 +808,18 @@ onBeforeUnmount(() => {
             />
           </section>
         </div>
+        <aside v-if="admin" class="admin-photo-column">
+          <AdminRestaurantPhotos
+            ref="adminPhotos"
+            :id="id"
+            :key="id"
+            :disabled="saving || sessionChanged"
+            @selection="adminPhotoSelection = $event"
+            @state="adminPhotoState = $event"
+          />
+        </aside>
       </div>
-      <p v-if="step === 'restaurant'" class="notice">
+      <p v-if="!admin && step === 'restaurant'" class="notice">
         {{ admin ? '保存后立即更新公开资料。食堂不设置美食品类。' : '审核通过后更新公开资料。' }}
       </p>
       <p v-if="Object.keys(errors).length" role="alert" class="error">请修改标记的字段后再提交。</p>
@@ -856,10 +881,16 @@ onBeforeUnmount(() => {
           }}
         </button>
       </div>
-      <div v-else class="actions">
+      <div v-else class="actions" :class="{ 'admin-save-actions': admin }">
         <button
           type="submit"
-          :disabled="saving || processingPhotos || uploadingPhotos || failedPhotos"
+          :disabled="
+            saving ||
+            processingPhotos ||
+            uploadingPhotos ||
+            failedPhotos ||
+            (admin && (adminPhotoState.loading || adminPhotoState.busy || !!adminPhotoState.error))
+          "
         >
           {{
             saving
@@ -883,6 +914,104 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.correction-page.admin-correction {
+  width: 100%;
+  margin: 0 0 60px;
+}
+.admin-correction h1 {
+  font-size: 25px;
+}
+.admin-correction form {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.admin-correction .submission-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  background: white;
+  border: 1px solid #e8ebef;
+  border-radius: 9px;
+  overflow: hidden;
+}
+.admin-correction .submission-main {
+  padding: 5px 28px 22px;
+  border-right: 1px solid #edf0f3;
+}
+.admin-correction fieldset {
+  padding: 16px 0 0;
+  border: 0;
+  margin: 18px 0 0;
+  border-radius: 0;
+  background: none;
+}
+.admin-correction legend {
+  padding: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.admin-correction label {
+  font-size: 12px;
+}
+.admin-correction .fields {
+  gap: 16px 18px;
+}
+.admin-photo-column {
+  padding: 26px;
+  min-width: 0;
+}
+.admin-correction .admin-save-actions {
+  position: fixed;
+  bottom: 0;
+  left: var(--admin-sidebar-width, 202px);
+  right: 0;
+  z-index: 5;
+  margin: 0;
+  padding: 18px 40px;
+  border-top: 1px solid #edf0f3;
+  background: #fff;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.admin-correction .admin-save-actions > button {
+  order: 2;
+  background: var(--admin-primary, #b65f1d);
+  border-color: var(--admin-primary, #b65f1d);
+}
+.admin-correction .admin-save-actions > a {
+  font-size: 13px;
+  border: 1px solid #e1e5ea;
+  border-radius: 6px;
+  padding: 8px 18px;
+  color: #626d7b;
+}
+.admin-correction :is(input:not([type='checkbox']), select, textarea) {
+  font-size: 13px;
+  border-color: #e1e5ea;
+  border-radius: 6px;
+}
+.admin-correction :is(input, select, textarea):focus {
+  outline: none;
+  border-color: #d3d9df;
+  box-shadow: none;
+}
+@media (max-width: 800px) {
+  .admin-correction .submission-layout {
+    grid-template-columns: 1fr;
+  }
+  .admin-correction .submission-main {
+    border-right: 0;
+    border-bottom: 1px solid #edf0f3;
+    padding: 0 20px 20px;
+  }
+  .admin-photo-column {
+    padding: 22px 20px;
+  }
+  .admin-correction .admin-save-actions {
+    left: 0;
+    padding: 16px 22px;
+  }
+}
 .correction-page {
   width: min(820px, calc(100% - 32px));
   margin: 30px auto 100px;

@@ -8,10 +8,16 @@ import com.foodmap.restaurant.exception.RestaurantErrorCode;
 import com.foodmap.restaurant.mapper.RestaurantPhotoMapper;
 import com.foodmap.restaurant.support.RestaurantIdentifiers;
 import com.foodmap.restaurant.vo.RestaurantPhotoViews;
+import com.foodmap.review.dto.RestaurantReviewPhotos;
+import com.foodmap.review.service.RestaurantReviewPhotoService;
+
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -22,25 +28,48 @@ import java.util.stream.Collectors;
 public class RestaurantPhotoService {
     private final RestaurantPhotoMapper photos;
     private final MediaFileService files;
+    private final RestaurantReviewPhotoService reviewPhotos;
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public RestaurantReviewPhotos.Page reviewPhotos(String id, int page) {
+        if (page < 1 || page > 834) {
+            throw new BusinessException(RestaurantErrorCode.INVALID_INPUT);
+        }
+        long restaurant = RestaurantIdentifiers.id(id);
+        if (photos.visibleRestaurant(restaurant) == null) {
+            throw new BusinessException(RestaurantErrorCode.NOT_FOUND);
+        }
+        return reviewPhotos.page(restaurant, page);
+    }
 
     /** 仅批量查询当前页封面元数据，不访问OSS；复用调用方事务保持封面与目录的快照一致。 */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public Map<Long, RestaurantPhotoViews.Item> covers(List<Long> ids) {
         if (ids.isEmpty()) return Map.of();
         if (ids.size() > 100) throw new BusinessException(RestaurantErrorCode.INVALID_INPUT);
-        return photos.covers(ids).stream().collect(Collectors.toMap(RestaurantPhotoEntity::getRestaurantId, RestaurantPhotoService::view));
+        return photos.covers(ids).stream()
+                .collect(
+                        Collectors.toMap(
+                                RestaurantPhotoEntity::getRestaurantId,
+                                RestaurantPhotoService::view));
     }
 
     /** 同一快照验证父商户、游标和有界列表；空相册200，越权/不存在游标404。 */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public RestaurantPhotoViews.Page page(String id, RestaurantPhotoQuery query) {
-        if (query == null || query.getLimit() == null || query.getLimit() < 1 || query.getLimit() > 50)
+        if (query == null
+                || query.getLimit() == null
+                || query.getLimit() < 1
+                || query.getLimit() > 50)
             throw new BusinessException(RestaurantErrorCode.INVALID_INPUT);
         long restaurant = RestaurantIdentifiers.id(id);
-        if (photos.visibleRestaurant(restaurant) == null) throw new BusinessException(RestaurantErrorCode.NOT_FOUND);
+        if (photos.visibleRestaurant(restaurant) == null)
+            throw new BusinessException(RestaurantErrorCode.NOT_FOUND);
         int after = -1;
         if (query.getCursor() != null) {
-            Integer position = photos.cursorPosition(restaurant, RestaurantIdentifiers.id(query.getCursor()));
+            Integer position =
+                    photos.cursorPosition(restaurant, RestaurantIdentifiers.id(query.getCursor()));
             if (position == null) throw new BusinessException(RestaurantErrorCode.PHOTO_NOT_FOUND);
             after = position;
         }
@@ -55,15 +84,19 @@ public class RestaurantPhotoService {
 
     /** 每次从当前可见商户与正式关联解析引用，再校验原上传人/用途/状态，禁止任意文件ID访问。 */
     public byte[] photo(String id, String photoId) {
-        var reference = photos.file(RestaurantIdentifiers.id(id), RestaurantIdentifiers.id(photoId));
+        var reference =
+                photos.file(RestaurantIdentifiers.id(id), RestaurantIdentifiers.id(photoId));
         if (reference == null) throw new BusinessException(RestaurantErrorCode.PHOTO_NOT_FOUND);
-        return files.readPublishedRestaurant(reference.getMediaFileId(), reference.getSubmittedBy());
+        return files.readPublishedRestaurant(
+                reference.getMediaFileId(), reference.getSubmittedBy());
     }
 
     /** 固定本站受控地址及稳定关联ID；封面只由商户内position=0确定，与分页起点无关。 */
     public static RestaurantPhotoViews.Item view(RestaurantPhotoEntity row) {
-        var result = new RestaurantPhotoViews.Item(); result.setId(row.getId().toString());
-        result.setPosition(row.getPosition()); result.setCover(row.getPosition() == 0);
+        var result = new RestaurantPhotoViews.Item();
+        result.setId(row.getId().toString());
+        result.setPosition(row.getPosition());
+        result.setCover(row.getPosition() == 0);
         result.setUrl("/api/restaurants/" + row.getRestaurantId() + "/photos/" + row.getId());
         return result;
     }
