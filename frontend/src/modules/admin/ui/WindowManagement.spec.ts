@@ -9,11 +9,17 @@ import {
   saveWindow,
   setWindowDeleted,
   fetchWindowPhotos,
+  addWindowPhoto,
   type CanteenWindow,
 } from '@/modules/restaurant/api/canteenWindowApi'
 import { fetchRestaurantManagement } from '@/modules/restaurant/api/restaurantApi'
 import WindowManagement from './WindowManagement.vue'
 import WindowEditor from './WindowEditor.vue'
+import { uploadImage, cancelImage } from '@/modules/file/api/mediaApi'
+import { compressPhoto } from '@/modules/file/model/photos'
+
+vi.mock('@/modules/file/api/mediaApi', () => ({ uploadImage: vi.fn(), cancelImage: vi.fn() }))
+vi.mock('@/modules/file/model/photos', () => ({ compressPhoto: vi.fn() }))
 
 vi.mock('@/modules/restaurant/api/canteenWindowApi', () => ({
   fetchManagedWindows: vi.fn(),
@@ -52,6 +58,17 @@ describe('窗口独立管理页', () => {
     restoreDialog: () => void
   beforeEach(async () => {
     vi.resetAllMocks()
+    vi.stubGlobal(
+      'URL',
+      class extends URL {
+        static createObjectURL = vi.fn(() => 'blob:mock-' + Math.random())
+        static revokeObjectURL = vi.fn()
+      },
+    )
+    vi.mocked(compressPhoto).mockImplementation(async (file) => file)
+    vi.mocked(uploadImage).mockResolvedValue('51')
+    vi.mocked(cancelImage).mockResolvedValue(undefined)
+    vi.mocked(addWindowPhoto).mockResolvedValue([])
     restoreDialog = mockDialog()
     setAccessToken('original-admin')
     vi.mocked(fetchManagedWindows).mockResolvedValue([row])
@@ -97,6 +114,7 @@ describe('窗口独立管理页', () => {
     clearAccessToken()
     restoreDialog()
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
   const button = (text: string) =>
     [...host.querySelectorAll<HTMLButtonElement>('button')].find(
@@ -120,6 +138,18 @@ describe('窗口独立管理页', () => {
       .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     await settle()
   }
+  async function addPhotos(count = 1) {
+    const field = host.querySelector<HTMLInputElement>('[aria-label="添加窗口照片"]')!
+    Object.defineProperty(field, 'files', {
+      configurable: true,
+      value: Array.from(
+        { length: count },
+        (_, index) => new File(['fixture'], `${index}.jpg`, { type: 'image/jpeg' }),
+      ),
+    })
+    field.dispatchEvent(new Event('change', { bubbles: true }))
+    await settle()
+  }
 
   it('列表仅保留三个操作，编辑进入独立页并合并照片，返回恢复按钮焦点', async () => {
     expect(host.querySelector('.window-actions')?.textContent?.replace(/\s/g, '')).toBe(
@@ -141,6 +171,7 @@ describe('窗口独立管理页', () => {
     vi.mocked(saveWindow).mockRejectedValueOnce(new Error('网络超时')).mockResolvedValueOnce(row)
     await navigate(base + '/new')
     await fillName('新窗口')
+    await addPhotos()
     await save()
     const original = vi.mocked(saveWindow).mock.calls[0]!
     expect(original[2].clientRequestId).toMatch(/^[0-9a-f-]{36}$/)
@@ -153,6 +184,8 @@ describe('窗口独立管理页', () => {
     await settle()
     expect(vi.mocked(saveWindow).mock.calls[1]).toEqual(original)
     expect(fetchWindowPhotos).toHaveBeenCalledTimes(1)
+    expect(uploadImage).toHaveBeenCalledTimes(1)
+    expect(addWindowPhoto).toHaveBeenCalledWith('1', '51', 'original-admin')
   })
   it('查看留在管理端只读弹窗，照片失败可重试，Esc关闭', async () => {
     vi.mocked(fetchWindowPhotos).mockRejectedValueOnce(new Error('照片读取失败'))
@@ -251,7 +284,7 @@ describe('窗口独立管理页', () => {
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe(base))
     expect(saveWindow).not.toHaveBeenCalled()
   })
-  it('新建无窗口的食堂仍读取真实名称，创建前不请求照片', async () => {
+  it('新建无窗口的食堂仍读取真实名称，创建前显示添加图片但不读取公开相册', async () => {
     vi.mocked(fetchManagedWindows).mockResolvedValue([])
     vi.mocked(fetchRestaurantManagement).mockResolvedValue({
       restaurant: { name: '空食堂', restaurantType: 'CANTEEN' },
@@ -260,6 +293,88 @@ describe('窗口独立管理页', () => {
     await navigate(base + '/new')
     expect(host.textContent).toContain('空食堂')
     expect(fetchWindowPhotos).not.toHaveBeenCalled()
+    expect(host.querySelector('[aria-label="添加窗口照片"]')).not.toBeNull()
+  })
+  it('新建页选图可预览、移除，只清理临时图，不提前创建窗口', async () => {
+    await navigate(base + '/new')
+    await addPhotos()
+    expect(host.querySelector('.window-draft-photos img')).not.toBeNull()
+    expect(uploadImage).toHaveBeenCalledWith(expect.any(File), 'original-admin', 'WINDOW')
+    expect(saveWindow).not.toHaveBeenCalled()
+    button('×').click()
+    await settle()
+    expect(cancelImage).toHaveBeenCalledWith('51', 'original-admin')
+    expect(host.querySelector('.window-draft-photos img')).toBeNull()
+  })
+  it('创建成功后部分照片入册失败，只重试剩余照片，不重复创建或上传', async () => {
+    await navigate(base + '/new')
+    await fillName('带图窗口')
+    vi.mocked(uploadImage).mockResolvedValueOnce('51').mockResolvedValueOnce('52')
+    await addPhotos(2)
+    vi.mocked(addWindowPhoto)
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(new Error('第二张入册超时'))
+      .mockResolvedValueOnce([])
+    await save()
+    expect(host.textContent).toContain('窗口已创建，照片尚未全部保存')
+    expect(host.querySelector('fieldset')!.disabled).toBe(true)
+    await save()
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe(base + '/1/edit'))
+    expect(saveWindow).toHaveBeenCalledTimes(1)
+    expect(uploadImage).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(addWindowPhoto).mock.calls).toEqual([
+      ['1', '51', 'original-admin'],
+      ['1', '52', 'original-admin'],
+      ['1', '52', 'original-admin'],
+    ])
+    expect(cancelImage).not.toHaveBeenCalled()
+  })
+  it('上传失败阻止创建，原图重试成功后才允许保存', async () => {
+    await navigate(base + '/new')
+    await fillName('带图窗口')
+    vi.mocked(uploadImage).mockRejectedValueOnce(new Error('上传失败')).mockResolvedValueOnce('51')
+    await addPhotos()
+    await save()
+    expect(saveWindow).not.toHaveBeenCalled()
+    button('重试上传').click()
+    await settle()
+    await save()
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe(base + '/1/edit'))
+    expect(addWindowPhoto).toHaveBeenCalledWith('1', '51', 'original-admin')
+  })
+  it('最多五张，超限不上传；取消选图草稿需确认并回收临时图', async () => {
+    await navigate(base + '/new')
+    await addPhotos(6)
+    expect(host.textContent).toContain('最多添加5张照片')
+    expect(uploadImage).not.toHaveBeenCalled()
+    await addPhotos()
+    link('取消').click()
+    await settle()
+    const dialog = document.querySelector<HTMLDialogElement>('.leave-confirmation')!
+    await vi.waitFor(() => expect(dialog.open).toBe(true))
+    dialog.querySelector<HTMLButtonElement>('.leave')!.click()
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe(base))
+    expect(cancelImage).toHaveBeenCalledWith('51', 'original-admin')
+    expect(saveWindow).not.toHaveBeenCalled()
+  })
+  it('上传期间禁止创建，换号后迟到文件用原账号回收', async () => {
+    await navigate(base + '/new')
+    await fillName('带图窗口')
+    let resolve!: (id: string) => void
+    vi.mocked(uploadImage).mockReturnValueOnce(
+      new Promise((done) => {
+        resolve = done
+      }),
+    )
+    await addPhotos()
+    await save()
+    expect(saveWindow).not.toHaveBeenCalled()
+    setAccessToken('another-account')
+    await settle()
+    resolve('53')
+    await settle()
+    expect(cancelImage).toHaveBeenCalledWith('53', 'original-admin')
+    expect(addWindowPhoto).not.toHaveBeenCalled()
   })
   it.each([
     { ...row, deleted: true },
