@@ -1,5 +1,6 @@
 import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
 import { captureResourceTarget } from '@/shared/test/captureResourceTarget'
+import { mockDialog } from '@/shared/test/mockDialog'
 /* eslint-disable vue/one-component-per-file -- 独立桩组件用于验证详情刷新时的挂载稳定性。 */
 import { createPinia } from 'pinia'
 import { AxiosError, AxiosHeaders } from 'axios'
@@ -51,6 +52,7 @@ vi.mock('@/modules/review', async () => {
 describe('restaurant detail API integration', () => {
   let app: App | undefined
   let host: HTMLDivElement
+  let restoreDialog: () => void
   const currentId = ref(restaurantFixture.id)
   const router = createRouter({
     history: createMemoryHistory(),
@@ -64,6 +66,7 @@ describe('restaurant detail API integration', () => {
   }
   beforeEach(async () => {
     vi.resetAllMocks()
+    restoreDialog = mockDialog()
     vi.mocked(fetchRestaurant).mockResolvedValue(restaurantFixture)
     vi.mocked(fetchRestaurantAlbum).mockResolvedValue({
       records: [],
@@ -76,6 +79,7 @@ describe('restaurant detail API integration', () => {
   })
   afterEach(() => {
     app?.unmount()
+    restoreDialog()
     host.remove()
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
