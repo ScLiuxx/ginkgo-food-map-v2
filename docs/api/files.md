@@ -73,7 +73,7 @@ AVATAR额外要求正方形且边长不超过512px，否则400 `FILE_INVALID_AVA
 
 **副作用与限制**
 
-原商户申请图片通过[申请私有图片](submissions.md#admin-photos)管理员接口核对；审核正式发布后另通过[正式商户相册列表](restaurants.md#album)、[正式商户图片读取](restaurants.md#photo)的商户相册关联公开，不能用点评图片接口或任意文件ID读取。图片绑定、申请/点评及关联在各自数据库事务提交；正式发布与审核事务原子提交，BOUND本身不等于公开。已传给浏览器的字节无法撤回。
+原商户申请图片通过[申请私有图片](submissions.md#admin-photos)管理员接口核对；审核正式发布后另通过[正式商户相册列表](restaurants.md#album)、[正式商户图片读取](restaurants.md#photo)的商户相册关联公开，不能用点评图片接口或任意文件ID读取。图片绑定、申请/点评及关联在各自数据库事务提交；正式发布与审核事务原子提交，BOUND本身不等于公开。管理员也可通过[直接维护](restaurants.md#management)同事务绑定独立商户照片或移除关联；选用点评照片重新上传为RESTAURANT文件，原点评不受影响。已传给浏览器的字节无法撤回。
 
 新店附带点评图片另走[本人附带点评图片](submissions.md#my-review-photos)，仅申请提交人且为点评作者可读，管理员无例外。该私有入口不因文件已BOUND而公开，也不复用正式点评图片入口。
 

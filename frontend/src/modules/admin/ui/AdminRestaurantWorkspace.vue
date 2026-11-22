@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import AppLink from '@/shared/ui/AppLink.vue'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import RestaurantDeleteDialog from '@/modules/restaurant/ui/RestaurantDeleteDialog.vue'
+import type { RestaurantManagement } from '@/modules/restaurant/api/restaurantApi'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import { useAdminRestaurants } from '../model/useAdminRestaurants'
 import AdminSidebar from './AdminSidebar.vue'
@@ -31,19 +33,22 @@ const {
   error,
   categoryError,
   notice,
-  selected,
-  inspecting,
   busy,
-  actionError,
-  confirming,
   sessionChanged,
   reload,
   loadCategories,
-  inspect,
-  applyAction,
-  close,
   search,
 } = useAdminRestaurants(enabled)
+
+const deleteTarget = ref<{ id: string; name: string } | null>(null)
+function removed(result: RestaurantManagement) {
+  notice.value = `「${result.restaurant.name}」已删除。`
+  void reload()
+}
+function closeDelete() {
+  deleteTarget.value = null
+  busy.value = false
+}
 
 // 写入结果确认前留在当前页面，避免导航销毁状态后误以为操作未提交。
 onBeforeRouteLeave(() => !busy.value)
@@ -129,7 +134,13 @@ onBeforeRouteUpdate(() => !busy.value)
                   </td>
                   <td class="actions">
                     <AppLink :to="`/admin/restaurants/${item.id}/edit`">编辑</AppLink
-                    ><button :disabled="busy || inspecting" @click="inspect(item.id)">删除</button>
+                    ><button
+                      :disabled="busy"
+                      class="danger"
+                      @click="deleteTarget = { id: item.id, name: item.name }"
+                    >
+                      删除
+                    </button>
                   </td>
                 </tr>
               </tbody>
@@ -179,48 +190,14 @@ onBeforeRouteUpdate(() => !busy.value)
               ><button :disabled="loading || busy || !totalPages">跳转</button>
             </form>
           </nav>
-          <p v-if="inspecting" role="status">正在读取店铺资料…</p>
-          <section v-if="selected" class="detail" aria-labelledby="management-title">
-            <div class="heading">
-              <h2 id="management-title">{{ selected.restaurant.name }}</h2>
-              <button :disabled="busy" @click="close">关闭</button>
-            </div>
-            <p>
-              ID：{{ selected.restaurant.id }} ·
-              {{ selected.deleted ? '已删除' : '公开中' }}
-            </p>
-            <p class="muted">
-              {{ selected.restaurant.address || '地址待补充' }}
-            </p>
-            <p v-if="selected.deleted">该店铺已删除，请刷新列表。</p>
-            <p v-else>删除后从列表、地图和搜索中下架，历史点评及资料保留。</p>
-            <div class="actions">
-              <AppLink
-                v-if="!selected.deleted && !busy"
-                :to="`/admin/restaurants/${selected.restaurant.id}/edit`"
-                >编辑资料</AppLink
-              ><button
-                v-if="!selected.deleted && !confirming"
-                class="danger"
-                :disabled="busy"
-                @click="confirming = true"
-              >
-                删除店铺
-              </button>
-            </div>
-            <div
-              v-if="confirming && !selected.deleted"
-              class="confirm"
-              role="group"
-              aria-label="确认店铺操作"
-            >
-              <p>确认删除「{{ selected.restaurant.name }}」？</p>
-              <button class="primary" :disabled="busy" @click="applyAction">
-                {{ busy ? '正在处理…' : '确认操作' }}</button
-              ><button :disabled="busy" @click="confirming = false">取消</button>
-            </div>
-          </section>
-          <p v-if="actionError" class="alert" role="alert">{{ actionError }}</p>
+          <RestaurantDeleteDialog
+            v-if="deleteTarget"
+            :id="deleteTarget.id"
+            :name="deleteTarget.name"
+            @busy="busy = $event"
+            @deleted="removed"
+            @close="closeDelete"
+          />
         </template>
         <p v-else class="alert" role="alert">登录状态已变化，请重新进入商户管理。</p>
       </main>
@@ -411,21 +388,6 @@ strong {
 .pagination label {
   white-space: nowrap;
 }
-.detail {
-  background: var(--admin-surface);
-  margin-top: 22px;
-  border: 1px solid var(--admin-border);
-  border-radius: 8px;
-  padding: 24px;
-  overflow-wrap: anywhere;
-}
-.detail .heading {
-  margin-bottom: 10px;
-}
-.detail p {
-  font-size: 13px;
-  line-height: 1.8;
-}
 .notice,
 .alert {
   padding: 13px 16px;
@@ -440,18 +402,6 @@ strong {
 .alert {
   background: var(--admin-danger-soft);
   color: var(--admin-danger);
-}
-.confirm {
-  background: var(--admin-accent-soft);
-  color: var(--admin-accent-text);
-}
-.confirm {
-  padding: 16px;
-  margin-top: 16px;
-  border-radius: 5px;
-}
-.confirm button {
-  margin-right: 10px;
 }
 .danger {
   color: var(--admin-danger) !important;

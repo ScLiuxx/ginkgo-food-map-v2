@@ -47,6 +47,8 @@ import {
 import type { RestaurantErrors } from '../model/restaurantForm'
 import RestaurantAlbum from './RestaurantAlbum.vue'
 import AdminRestaurantPhotos from './AdminRestaurantPhotos.vue'
+import RestaurantDeleteDialog from './RestaurantDeleteDialog.vue'
+import type { RestaurantManagement } from '../api/restaurantApi'
 import type { RestaurantPhotoSelection } from '../api/restaurantPhotoManagementApi'
 import {
   readMerchantSubmission,
@@ -102,6 +104,13 @@ const photoInput = ref<globalThis.HTMLInputElement>()
 const adminPhotos = ref<InstanceType<typeof AdminRestaurantPhotos>>()
 const adminPhotoSelection = ref<RestaurantPhotoSelection[]>([])
 const adminPhotoState = ref({ loading: false, busy: false, dirty: false, error: '' })
+const deleteOpen = ref(false),
+  deleting = ref(false)
+async function deleted(result: RestaurantManagement) {
+  receipt.value = result.restaurant.id
+  deleting.value = false
+  await router.replace('/admin/restaurants')
+}
 const processingPhotos = ref(false)
 const photoError = ref('')
 const photoDraft = useSubmissionPhotos('RESTAURANT', () => (sessionChanged.value ? null : token))
@@ -250,7 +259,8 @@ async function load() {
           ? Promise.resolve(undefined)
           : props.admin
             ? fetchRestaurantManagement(props.id, token, controller.signal).then((snapshot) => {
-                if (snapshot.deleted) throw new Error('店铺已删除，请先在商户管理中恢复。')
+                if (snapshot.deleted)
+                  throw new Error('店铺已删除，历史资料仍保留，请返回商户管理。')
                 return snapshot.restaurant
               })
             : fetchCorrectionSource(props.id, controller.signal),
@@ -354,7 +364,14 @@ async function changeStep(value: 'restaurant' | 'review') {
 }
 
 function nextStep() {
-  if (!token || saving.value || sessionChanged.value || getAccessToken() !== token) return
+  if (
+    !token ||
+    saving.value ||
+    deleting.value ||
+    sessionChanged.value ||
+    getAccessToken() !== token
+  )
+    return
   if (!canAttachReview.value || !validateShop()) return
   review.enabled = true
   void changeStep('review')
@@ -368,7 +385,14 @@ function submitCurrentStep() {
 
 /** 固定账号与同次请求ID；区分明确的仅店铺／联合提交意图，避免重试摘要冲突。 */
 async function submit(includeReview = false) {
-  if (!token || saving.value || sessionChanged.value || getAccessToken() !== token) return
+  if (
+    !token ||
+    saving.value ||
+    deleting.value ||
+    sessionChanged.value ||
+    getAccessToken() !== token
+  )
+    return
   if (reviewLocked.value && !includeReview) {
     nextStep()
     return
@@ -486,6 +510,7 @@ async function addPhotos(files: globalThis.FileList | null) {
 }
 const leaveConfirmation = ref<InstanceType<typeof LeaveConfirmation> | null>(null)
 function canLeave() {
+  if (deleting.value) return false
   return (
     !!receipt.value ||
     (!saving.value &&
@@ -498,7 +523,11 @@ onBeforeRouteUpdate(canLeave)
 function beforeUnload(event: globalThis.BeforeUnloadEvent) {
   if (
     !receipt.value &&
-    (dirty.value || saving.value || processingPhotos.value || reviewPhotos.processing.value)
+    (dirty.value ||
+      saving.value ||
+      deleting.value ||
+      processingPhotos.value ||
+      reviewPhotos.processing.value)
   ) {
     event.preventDefault()
     event.returnValue = ''
@@ -812,8 +841,8 @@ onBeforeUnmount(() => {
         </div>
         <aside v-if="admin" class="admin-photo-column">
           <AdminRestaurantPhotos
-            ref="adminPhotos"
             :id="id"
+            ref="adminPhotos"
             :key="id"
             :disabled="saving || sessionChanged"
             @selection="adminPhotoSelection = $event"
@@ -864,6 +893,7 @@ onBeforeUnmount(() => {
           type="submit"
           :disabled="
             saving ||
+            deleting ||
             processingPhotos ||
             uploadingPhotos ||
             failedPhotos ||
@@ -888,6 +918,7 @@ onBeforeUnmount(() => {
           type="submit"
           :disabled="
             saving ||
+            deleting ||
             processingPhotos ||
             uploadingPhotos ||
             failedPhotos ||
@@ -910,8 +941,26 @@ onBeforeUnmount(() => {
                   : '提交审核'
           }}</button
         ><AppLink :to="detailPath">取消</AppLink>
+        <button
+          v-if="admin && !submission"
+          type="button"
+          class="delete-merchant"
+          :disabled="saving || deleting || adminPhotoState.busy"
+          @click="deleteOpen = true"
+        >
+          删除店铺
+        </button>
       </div>
     </form>
+    <RestaurantDeleteDialog
+      v-if="deleteOpen"
+      :id="id"
+      :name="sourceName"
+      :discard-changes="dirty"
+      @busy="deleting = $event"
+      @deleted="deleted"
+      @close="deleteOpen = false"
+    />
   </section>
 </template>
 
@@ -954,9 +1003,17 @@ onBeforeUnmount(() => {
 }
 .admin-correction label {
   font-size: 12px;
+  margin: 8px 0;
+  gap: 6px;
 }
 .admin-correction .fields {
-  gap: 16px 18px;
+  gap: 12px 18px;
+}
+.admin-correction .fields label {
+  margin: 0;
+}
+.admin-correction small:empty {
+  display: none;
 }
 .admin-photo-column {
   padding: 26px;
@@ -980,7 +1037,15 @@ onBeforeUnmount(() => {
   background: var(--admin-primary, #b65f1d);
   border-color: var(--admin-primary, #b65f1d);
 }
+.admin-correction .admin-save-actions > .delete-merchant {
+  order: 0;
+  margin-right: auto;
+  background: transparent;
+  border-color: transparent;
+  color: #b44949;
+}
 .admin-correction .admin-save-actions > a {
+  order: 1;
   font-size: 13px;
   border: 1px solid #e1e5ea;
   border-radius: 6px;
@@ -996,6 +1061,10 @@ onBeforeUnmount(() => {
   outline: none;
   border-color: #d3d9df;
   box-shadow: none;
+}
+.admin-correction :is(button, a, select):focus-visible {
+  outline: 2px solid #969da7;
+  outline-offset: 3px;
 }
 @media (max-width: 800px) {
   .admin-correction .submission-layout {

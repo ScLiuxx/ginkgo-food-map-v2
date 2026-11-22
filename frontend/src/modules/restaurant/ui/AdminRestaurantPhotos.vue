@@ -93,10 +93,10 @@ async function loadImage(row: Row, ticket: number) {
     const blob = await fetchRestaurantAlbumImage(props.id, row.photoId!, controller.signal)
     if (ticket !== generation || !active()) return
     if (row.url && urls.has(row.url)) {
-      URL.revokeObjectURL(row.url)
+      globalThis.URL.revokeObjectURL(row.url)
       urls.delete(row.url)
     }
-    row.url = URL.createObjectURL(blob)
+    row.url = globalThis.URL.createObjectURL(blob)
     urls.add(row.url)
     row.failed = false
   } catch {
@@ -107,7 +107,7 @@ async function load() {
   const ticket = ++generation
   controller.abort()
   controller = new globalThis.AbortController()
-  for (const url of urls) URL.revokeObjectURL(url)
+  for (const url of urls) globalThis.URL.revokeObjectURL(url)
   urls.clear()
   draft.clear()
   rows.value = []
@@ -161,11 +161,11 @@ function remove(row: Row) {
 function cover(index: number) {
   if (!blocked.value && !busy.value) rows.value.unshift(rows.value.splice(index, 1)[0]!)
 }
-async function addLocal(files: FileList | null) {
+async function addLocal(files: globalThis.FileList | null) {
   if (!blocked.value) await draft.addFiles(files)
 }
-function changeFiles(event: Event) {
-  const input = event.target as HTMLInputElement
+function changeFiles(event: globalThis.Event) {
+  const input = event.target as globalThis.HTMLInputElement
   void addLocal(input.files)
   input.value = ''
 }
@@ -216,7 +216,8 @@ function closePicker() {
 }
 function toggle(photo: ReviewPhotoCandidate) {
   const next = new Set(selected.value)
-  next.has(key(photo)) ? next.delete(key(photo)) : next.add(key(photo))
+  if (next.has(key(photo))) next.delete(key(photo))
+  else next.add(key(photo))
   selected.value = next
 }
 async function addSelected() {
@@ -270,7 +271,7 @@ onBeforeUnmount(() => {
   controller.abort()
   pickerController.abort()
   draft.clear()
-  for (const url of urls) URL.revokeObjectURL(url)
+  for (const url of urls) globalThis.URL.revokeObjectURL(url)
 })
 </script>
 

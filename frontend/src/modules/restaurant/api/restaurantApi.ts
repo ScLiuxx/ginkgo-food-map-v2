@@ -3,6 +3,7 @@ import { httpClient } from '@/shared/api/httpClient'
 import type { CatalogFilters, RestaurantReadModel } from '../model/restaurant.types'
 import { restaurantPhotoUrl, type RestaurantAlbumPhoto } from './restaurantAlbumApi'
 import type { AttachedReviewInput } from '../model/attachedReview'
+import type { RestaurantPhotoSelection } from './restaurantPhotoManagementApi'
 
 /** API字段独立于页面模型，保留字符串ID和所有空值，不将未知价格或评分转换为0。 */
 export interface RestaurantResponse {
@@ -202,7 +203,13 @@ export async function fetchRestaurantManagement(
 }
 
 /** 新建不会自动重试；超时可能已提交，调用方应先核对目录。 */
-export async function createRestaurant(input: RestaurantSaveInput, token: string) {
+/** 管理员相册可选，省略保留、空数组清空；普通投稿不接受此字段。 */
+export interface RestaurantDirectSaveInput extends Omit<RestaurantSaveInput, 'locationConfirmed'> {
+  locationConfirmed?: boolean | null
+  photos?: RestaurantPhotoSelection[] | null
+}
+
+export async function createRestaurant(input: RestaurantDirectSaveInput, token: string) {
   const response = await httpClient.post<ApiResponse<RestaurantManagement>>(
     '/api/restaurants',
     input,
@@ -212,7 +219,11 @@ export async function createRestaurant(input: RestaurantSaveInput, token: string
 }
 
 /** 整份保存及标签替换由后端事务完成，不附加版本号或客户端身份字段。 */
-export async function updateRestaurant(id: string, input: RestaurantSaveInput, token: string) {
+export async function updateRestaurant(
+  id: string,
+  input: RestaurantDirectSaveInput,
+  token: string,
+) {
   const response = await httpClient.put<ApiResponse<RestaurantManagement>>(
     `/api/restaurants/${encodeURIComponent(id)}`,
     input,
