@@ -280,7 +280,7 @@ onUnmounted(cleanup)
                   {{ price }} 元以下
                 </button>
               </div>
-              <p>包含所选金额；已填报金额和估值均可筛选，价格未知的餐厅将排除。</p>
+              <p>包含所选金额；未填写人均的餐厅将排除。</p>
             </fieldset>
             <!-- 首页与地图共用已接通的服务端筛选，列表和点位使用相同语义。 -->
             <fieldset data-group="reviews">

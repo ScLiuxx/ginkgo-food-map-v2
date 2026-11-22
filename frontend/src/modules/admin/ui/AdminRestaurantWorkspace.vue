@@ -120,11 +120,7 @@ onBeforeRouteUpdate(() => !busy.value)
                     {{ item.restaurantType === 'CANTEEN' ? '食堂' : item.category || '分类未知' }}
                   </td>
                   <td>
-                    {{
-                      item.price === null
-                        ? '未知'
-                        : `¥${item.price}${item.priceKind === 'estimate' ? '（估）' : ''}`
-                    }}
+                    {{ item.price === null ? '未知' : `¥${item.price}` }}
                   </td>
                   <td>
                     <span class="badge" :class="{ closed: item.closed }">{{

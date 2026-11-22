@@ -81,15 +81,6 @@ defineEmits<{ select: [] }>()
             >暂无消费信息</span
           >
           <b v-else class="map-price-value">{{ priceLabel(restaurant) }}</b>
-          <small
-            v-if="
-              restaurant.priceKind === 'estimate' &&
-              restaurant.price !== null &&
-              restaurant.price > 0
-            "
-            class="map-price-kind"
-            >价格估值</small
-          >
         </span>
       </span>
       <span class="map-location">

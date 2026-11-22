@@ -122,7 +122,7 @@ describe('restaurant detail API integration', () => {
     await mount()
     expect(host.querySelector('.hero-score')?.textContent).toBe('3.5')
     expect(host.querySelector('.detail-subtitle .star-symbols')).toBeNull()
-    expect(host.querySelector('.detail-service-tags .hero-price')?.textContent).toContain('约 ¥20')
+    expect(host.querySelector('.detail-service-tags .hero-price')?.textContent).toContain('¥20')
     const toggle = host.querySelector<HTMLButtonElement>('.score-toggle')!
     const dimensions = host.querySelector<HTMLElement>('.score-summary')!
     expect(toggle.getAttribute('aria-controls')).toBe(dimensions.id)

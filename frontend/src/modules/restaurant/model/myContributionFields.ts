@@ -50,12 +50,7 @@ export function contributionFields(values: Values): ContributionField[] {
       restaurantType === 'CANTEEN' ? typeName : `${typeName} · ${categoryName}`,
       [restaurantType, category],
     ),
-    row(
-      'price',
-      '人均消费',
-      knownPrice ? `${values.priceKind === 'ESTIMATE' ? '约 ' : ''}¥${price} / 人` : '未知',
-      knownPrice ? [values.priceKind === 'ESTIMATE' ? 'ESTIMATE' : 'EXACT', price] : null,
-    ),
+    row('price', '人均消费', knownPrice ? `¥${price} / 人` : '未知', knownPrice ? price : null),
     row('address', '店铺地址', clean(values.address) || '未填写', clean(values.address)),
     row(
       'businessStatus',

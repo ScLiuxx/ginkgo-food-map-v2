@@ -53,10 +53,10 @@ export function campusDistance(
   return 6371 * 2 * Math.asin(Math.sqrt(Math.min(1, a)))
 }
 
-/** 金额来源同时展示，旧档位估值不能被当成已核实的精确消费。 */
+/** 界面统一展示可选金额；旧价格来源编码仅保留在接口兼容层。 */
 export function priceLabel(restaurant: RestaurantReadModel): string {
   if (restaurant.price === null || restaurant.price <= 0) return '人均待补'
-  return `${restaurant.priceKind === 'estimate' ? '约 ' : ''}¥${restaurant.price}`
+  return `¥${restaurant.price}`
 }
 
 /** 客户端预览筛选：将来由服务端提供分页时替换数据来源，不将当前页误当完整集合。 */

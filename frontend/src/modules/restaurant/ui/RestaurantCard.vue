@@ -92,8 +92,7 @@ const distanceLabel = computed(() =>
             }"
           >
             <template v-if="restaurant.price !== null && restaurant.price > 0"
-              ><small>人均</small><b>{{ priceLabel(restaurant) }}</b
-              ><small v-if="restaurant.priceKind === 'estimate'">估值</small></template
+              ><small>人均</small><b>{{ priceLabel(restaurant) }}</b></template
             >
             <template v-else>人均待补</template>
           </span>

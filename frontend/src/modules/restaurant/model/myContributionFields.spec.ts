@@ -108,7 +108,7 @@ describe('本人投稿修改对照', () => {
       'dining',
       'tags',
     ])
-    expect(contributionChanges(source).find((row) => row.key === 'price')?.after).toBe('约 ¥0 / 人')
+    expect(contributionChanges(source).find((row) => row.key === 'price')?.after).toBe('¥0 / 人')
     source.approved = { ...proposed, restaurantType: 'CANTEEN' }
     expect(contributionChanges(source).map((row) => row.key)).toEqual(['category'])
   })

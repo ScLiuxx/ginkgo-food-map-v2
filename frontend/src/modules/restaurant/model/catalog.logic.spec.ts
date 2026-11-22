@@ -133,7 +133,7 @@ describe('restaurant reading rules', () => {
   })
 
   it('labels a legacy price estimate separately from an exact or missing price', () => {
-    expect(priceLabel(candidate('a', null, { price: 25, priceKind: 'estimate' }))).toBe('约 ¥25')
+    expect(priceLabel(candidate('a', null, { price: 25, priceKind: 'estimate' }))).toBe('¥25')
     expect(priceLabel(candidate('a', null, { price: 25, priceKind: 'exact' }))).toBe('¥25')
     expect(priceLabel(candidate('a', null, { price: null, priceKind: 'unknown' }))).toBe('人均待补')
   })

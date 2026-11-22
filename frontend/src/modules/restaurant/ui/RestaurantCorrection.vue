@@ -621,16 +621,8 @@ onBeforeUnmount(() => {
                   </select></label
                 >
                 <label
-                  >人均类型<select v-model="form.priceKind">
-                    <option value="UNKNOWN">未知</option>
-                    <option value="EXACT">填报具体金额</option>
-                    <option value="ESTIMATE">估值</option>
-                  </select></label
-                >
-                <label
-                  >人均消费（元）<input
+                  >人均消费（元，选填）<input
                     v-model="form.price"
-                    :disabled="form.priceKind === 'UNKNOWN'"
                     inputmode="numeric"
                     :aria-invalid="!!errors.price"
                   /><small>{{ errors.price || '1–5000 元，未知时可不填' }}</small></label

@@ -766,7 +766,6 @@ describe('商户资料补充与纠错', () => {
     await field('商户名称', '更正后店名')
     await field('美食品类', 'OTHER')
     await field('餐厅类型', 'CANTEEN')
-    await field('人均类型', 'EXACT')
     await field('人均消费', '42')
     await field('支持堂食', 'true')
     await field('支持外卖', 'false')

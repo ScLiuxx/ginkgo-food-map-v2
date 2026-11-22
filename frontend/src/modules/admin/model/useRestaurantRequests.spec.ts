@@ -48,7 +48,7 @@ const detail = (id: string): RequestDetail => ({
   proposed: {
     name: '真实申请' + id,
     supportsDineIn: false,
-    pricePerPerson: 0,
+    pricePerPerson: null,
     categoryCode: 'OTHER',
     priceKind: 'UNKNOWN',
     latitude: 30.7544,
@@ -190,7 +190,7 @@ describe('真实申请查询状态', () => {
     expect(state.items.value.map((entry) => entry.id)).toEqual(['11', '12'])
     expect(state.selected.value?.id).toBe('11')
     expect(state.comparison.value.find((row) => row.label === '堂食情况')?.after).toBe('不支持')
-    expect(state.comparison.value.find((row) => row.label === '人均消费')?.after).toBe('¥0')
+    expect(state.comparison.value.find((row) => row.label === '人均消费')?.after).toBe('未知')
     expect(fetchRequestPage).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'PENDING', page: 1, pageSize: 20 }),
       'request-reader',

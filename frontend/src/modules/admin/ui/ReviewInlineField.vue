@@ -60,7 +60,6 @@ function cancel() {
     v-else-if="
       [
         'categoryCode',
-        'priceKind',
         'businessStatus',
         'locationConfirmed',
         'restaurantType',
@@ -90,11 +89,6 @@ function cancel() {
         {{ category.name }}
       </option>
     </template>
-    <template v-else-if="field === 'priceKind'"
-      ><option value="UNKNOWN">未知</option>
-      <option value="EXACT">填报金额</option>
-      <option value="ESTIMATE">估值</option></template
-    >
     <template v-else-if="field === 'businessStatus'"
       ><option value="OPERATING">正常经营</option>
       <option value="CLOSED">停业</option></template

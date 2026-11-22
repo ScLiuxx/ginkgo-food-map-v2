@@ -58,7 +58,7 @@ export function validateRestaurantDraft(
   if (type === 'REGULAR' && !form.categoryCode) errors.categoryCode = '请选择餐厅分类。'
   if (characterCount(form.address.trim()) > 80) errors.address = '地址最多80个字符。'
   if (
-    form.priceKind !== 'UNKNOWN' &&
+    form.price.trim() !== '' &&
     (!/^\d+$/.test(form.price.trim()) || Number(form.price) < 1 || Number(form.price) > 5000)
   ) {
     errors.price = '人均需为1–5000的整数元。'
@@ -82,8 +82,8 @@ export function restaurantInput(
     name: form.name.trim(),
     // 即使草稿曾选择普通餐厅分类，食堂请求也始终显式使用null。
     categoryCode: type === 'CANTEEN' ? null : form.categoryCode,
-    priceKind: form.priceKind,
-    pricePerPerson: form.priceKind === 'UNKNOWN' ? null : Number(form.price),
+    priceKind: form.price.trim() ? 'EXACT' : 'UNKNOWN',
+    pricePerPerson: form.price.trim() ? Number(form.price) : null,
     address: form.address.trim() || null,
     latitude: Number(form.latitude),
     longitude: Number(form.longitude),

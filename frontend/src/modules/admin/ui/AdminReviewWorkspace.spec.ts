@@ -1,4 +1,4 @@
-import { createApp, nextTick } from 'vue'
+﻿import { createApp, nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearAccessToken, setAccessToken } from '@/shared/api/authSession'
@@ -128,7 +128,7 @@ describe('审核工作区资料展示与操作', () => {
     )
     await mount()
     expect(host.querySelector('.comparison thead')).toBeNull()
-    expect(host.querySelectorAll('.comparison tbody tr')).toHaveLength(12)
+    expect(host.querySelectorAll('.comparison tbody tr')).toHaveLength(11)
     expect(host.querySelectorAll('.comparison tbody tr:first-child > *')).toHaveLength(2)
     await click('.single-column .editable-value')
     const input = host.querySelector<HTMLInputElement>('input[aria-label="name"]')!
@@ -229,7 +229,7 @@ describe('审核工作区资料展示与操作', () => {
     expect(host.querySelector<HTMLButtonElement>('.btn.primary')!.disabled).toBe(true)
     await click('.query-error button')
     expect(host.querySelector('.query-error')).toBeNull()
-    expect(host.querySelectorAll('.single-column tbody tr')).toHaveLength(12)
+    expect(host.querySelectorAll('.single-column tbody tr')).toHaveLength(11)
     expect(approveRequest).not.toHaveBeenCalled()
   })
 })

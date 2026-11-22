@@ -258,12 +258,6 @@ export function useRestaurantRequests() {
             : `${data.latitude}, ${data.longitude}`,
       ],
       ['人均消费', (data) => (data.pricePerPerson == null ? '未知' : `¥${data.pricePerPerson}`)],
-      [
-        '价格口径',
-        (data) =>
-          ({ UNKNOWN: '未知', EXACT: '填报金额', ESTIMATE: '估值' })[String(data.priceKind)] ??
-          '未知',
-      ],
       ['堂食情况', (data) => yes(data.supportsDineIn)],
       ['外卖情况', (data) => yes(data.supportsDelivery)],
       [
@@ -288,7 +282,6 @@ export function useRestaurantRequests() {
       'address',
       'position',
       'pricePerPerson',
-      'priceKind',
       'supportsDineIn',
       'supportsDelivery',
       'businessStatus',
@@ -315,9 +308,7 @@ export function useRestaurantRequests() {
     if (key === 'categoryCode')
       draft.value.categoryName =
         categories.value.find((entry) => entry.code === value)?.name ?? value
-    if (key === 'priceKind' && value === 'UNKNOWN') draft.value.pricePerPerson = null
-    if (key === 'pricePerPerson' && value != null && draft.value.priceKind === 'UNKNOWN')
-      draft.value.priceKind = 'EXACT'
+    if (key === 'pricePerPerson') draft.value.priceKind = value == null ? 'UNKNOWN' : 'EXACT'
     decisionError.value = ''
   }
 
@@ -334,7 +325,7 @@ export function useRestaurantRequests() {
       throw new Error('请填写有效的经纬度')
     if (data.locationConfirmed !== true) throw new Error('请确认商户位置')
     if (
-      data.priceKind !== 'UNKNOWN' &&
+      data.pricePerPerson != null &&
       (typeof data.pricePerPerson !== 'number' ||
         !Number.isInteger(data.pricePerPerson) ||
         data.pricePerPerson < 1 ||
@@ -351,8 +342,8 @@ export function useRestaurantRequests() {
       latitude: data.latitude,
       longitude: data.longitude,
       locationConfirmed: true,
-      priceKind: data.priceKind as ReviewInput['priceKind'],
-      pricePerPerson: data.priceKind === 'UNKNOWN' ? null : Number(data.pricePerPerson),
+      priceKind: data.pricePerPerson == null ? 'UNKNOWN' : 'EXACT',
+      pricePerPerson: data.pricePerPerson == null ? null : Number(data.pricePerPerson),
       businessStatus: data.businessStatus as ReviewInput['businessStatus'],
       tags: Array.isArray(data.tags) ? [...data.tags] : [],
     }
