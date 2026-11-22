@@ -11,8 +11,7 @@ import {
 export type ReviewNotificationType = 'COMMENT' | 'REVIEW_LIKED' | 'REPLY_LIKED'
 export interface ReviewDetail {
   item: ReviewItem
-  restaurantId: string | null
-  windowId: string | null
+  restaurantId: string
   focusedReply?: ReplyPage['records'][number]
 }
 const id = (value: unknown): value is string =>
@@ -23,8 +22,7 @@ const date = (value: unknown): value is string =>
   typeof value === 'string' && Number.isFinite(Date.parse(value))
 const invalid = () => new Error('点评详情无法确认，请重新加载。')
 interface DetailDto {
-  restaurantId: string | null
-  windowId: string | null
+  restaurantId: string
   author: { id: string; username: string; level?: number | null }
   review: {
     id: string
@@ -38,7 +36,7 @@ interface DetailDto {
   }
 }
 
-/** 一次按稳定点评ID读取，明确区分窗口和普通店；拒绝错配、任意图片URL及私有附带字段。 */
+/** 一次按稳定点评ID读取，核验餐厅与食堂归属；拒绝错配、任意图片URL及私有附带字段。 */
 export async function fetchReviewDetail(
   reviewId: string,
   token: string,
@@ -56,10 +54,7 @@ export async function fetchReviewDetail(
     !data ||
     !review ||
     review.id !== reviewId ||
-    !(
-      (id(data.restaurantId) && data.windowId === null) ||
-      (data.restaurantId === null && id(data.windowId))
-    ) ||
+    !id(data.restaurantId) ||
     !id(data.author?.id) ||
     typeof data.author.username !== 'string' ||
     (data.author.level != null &&
@@ -90,7 +85,6 @@ export async function fetchReviewDetail(
     throw invalid()
   return {
     restaurantId: data.restaurantId,
-    windowId: data.windowId,
     item: {
       id: reviewId,
       authorId: data.author.id,
@@ -124,7 +118,7 @@ export async function fetchNotificationReview(
   signal: AbortSignal,
 ): Promise<ReviewDetail> {
   if (!id(sourceId) || !id(reviewId) || !id(userId)) throw invalid()
-  let target: { restaurantId: string | null; windowId?: string | null }
+  let target: { restaurantId: string }
   let focusedReply: ReviewDetail['focusedReply']
   if (type === 'COMMENT') {
     const reply = await fetchReplyTarget(sourceId, reviewId, userId, token, signal)
@@ -143,8 +137,7 @@ export async function fetchNotificationReview(
         targetType: string
         targetId: string
         reviewId: string
-        restaurantId: string | null
-        windowId?: string | null
+        restaurantId: string
         author: { id: string; username: string }
         body: string
         createdAt: string
@@ -181,7 +174,6 @@ export async function fetchNotificationReview(
   const detail = await fetchReviewDetail(reviewId, token, signal)
   if (
     detail.restaurantId !== target.restaurantId ||
-    detail.windowId !== (target.windowId ?? null) ||
     (type !== 'REPLY_LIKED' && detail.item.authorId !== userId)
   )
     throw invalid()

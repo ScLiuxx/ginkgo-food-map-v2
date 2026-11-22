@@ -158,9 +158,6 @@ class ActivityStatisticsBackendIntegrationTest {
                         + " VALUES(1,'测试餐厅','OTHER'),(2,'测试食堂','OTHER')");
         jdbc.update(
                 "UPDATE restaurants SET restaurant_type='CANTEEN',category_code=NULL WHERE id=2");
-        jdbc.update(
-                "INSERT INTO canteen_windows(id,canteen_id,name,floor_number,created_by)"
-                        + " VALUES(1,2,'测试窗口',1,33)");
         properties.setEnabled(true);
         statistics.maintain();
         redisDates.add(date());
@@ -295,7 +292,7 @@ class ActivityStatisticsBackendIntegrationTest {
     }
 
     @Test
-    void publishesRestaurantsWindowsReplaysAndDeletionWithoutRecounting() throws Exception {
+    void publishesRestaurantsCanteensReplaysAndDeletionWithoutRecounting() throws Exception {
         var input = review();
         String id =
                 data(call(true, "/api/restaurants/1/reviews", 11, input)
@@ -303,7 +300,7 @@ class ActivityStatisticsBackendIntegrationTest {
                         .get("reviewId")
                         .asText();
         call(true, "/api/restaurants/1/reviews", 11, input).andExpect(status().isOk());
-        call(true, "/api/canteen-windows/1/reviews", 11, review()).andExpect(status().isOk());
+        call(true, "/api/restaurants/2/reviews", 11, review()).andExpect(status().isCreated());
         call(true, "/api/restaurants/1/reviews", 33, review()).andExpect(status().isCreated());
         mvc.perform(delete("/api/reviews/" + id).header("Authorization", "Bearer " + token(11)))
                 .andExpect(status().isNoContent());

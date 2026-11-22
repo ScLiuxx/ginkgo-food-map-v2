@@ -39,7 +39,7 @@ ES 监控的实际故障验证见[故障演练报告](history/elasticsearch-metr
 - 新店附带点评：[业务规则与实施计划](plans/restaurant-review-submission.md)，使用方式见[功能说明](features.md#补充店铺与纠错)，联合提交、本人操作及[店铺已收录](api/submissions.md#link-existing)协议见[投稿接口](api/submissions.md)。
 - 帮我选一家：[业务规则与实施计划](plans/restaurant-picker.md)。独立六项条件（含最低评分）、等概率抽取、本轮不重复、回看及详情返回已接通；[查询接口](api/discovery.md#picker)不写入抽取记录、不调整表结构。
 - 餐厅榜单：[近期榜单计划](plans/hot-restaurants.md)记录规则及分阶段实施；[快照表](architecture/mysql-schema.md#restaurant-ranking-snapshots)、[读取接口与两级缓存](api/discovery.md#rankings)、内部计算已完成；实测见[MySQL基线](history/restaurant-ranking-read-2026-11-11.md)、[Redis对照](history/restaurant-ranking-redis-2026-11-11.md)、[Caffeine三模式对照及故障验证](history/restaurant-ranking-caffeine-2026-11-11.md)。自动发布、小时调度及防重叠已完成；首页入口及独立榜单页已按确认示意图接入，本地真实接口的空榜及模拟点评生成的20项榜单联调通过，上线验收待进行。
-- 食堂窗口：[资料、独立点评与评分汇总](api/windows.md#windows)，管理员维护及用户浏览已接通，窗口资料由管理员统一录入，用户窗口投稿审核暂不规划。
+- 食堂直接点评：[窗口体系移除计划](plans/remove-canteen-windows.md)，移除窗口及关联数据，食堂沿用餐厅点评与评分协议。
 
 - 业务访谈：[社区业务规则讨论记录](plans/community-rules.md)，逐项确认“我的”、消息、互动、风控及相关未完成业务，区分待讨论、暂定、已确认与暂缓，不代表已经实现。
 - 社区页面：[前端接入状态](plans/community-frontend.md)，覆盖个人中心、个人主页、消息、设置及内容互动入口；区分真实可用与等待后端的能力。

@@ -55,7 +55,7 @@
 
 **副作用与限制**
 
-普通餐厅只指定一个主营类目，没有二级分类；食堂由restaurantType=CANTEEN表示，categoryCode和categoryName均为null，不归入九类。食堂窗口同样不设分类。旧申请的原始分类编码和已完成审核快照保留；旧待审食堂首次通过时使用空分类，普通餐厅需选用可用分类。
+普通餐厅只指定一个主营类目，没有二级分类；食堂由restaurantType=CANTEEN表示，categoryCode和categoryName均为null，不归入九类。旧申请的原始分类编码和已完成审核快照保留；旧待审食堂首次通过时使用空分类，普通餐厅需选用可用分类。
 
 <a id="catalog"></a>
 
@@ -106,9 +106,9 @@
 }
 ```
 
-`reputationScore`为五分制综合口碑分，普通餐厅使用`((0.70*taste_sum+0.15*value_sum+0.10*service_sum+0.05*ambience_sum)/2+17.5)/(participant_count+5)`，由MySQL存储生成列维护，固定C=3.5、m=5，保留八位小数。原score保持十分制等权均分语义，不覆盖单条点评；前端主要综合分使用reputationScore，五分制只换算一次。食堂的reputationScore为原窗口等权均分换算五分制，不将跨窗口人数当作去重人数；窗口点评与四维展示不变。
+`reputationScore`为五分制综合口碑分，普通餐厅使用`((0.70*taste_sum+0.15*value_sum+0.10*service_sum+0.05*ambience_sum)/2+17.5)/(participant_count+5)`，由MySQL存储生成列维护，固定C=3.5、m=5，保留八位小数。原score保持十分制等权均分语义，不覆盖单条点评；前端主要综合分使用reputationScore，五分制只换算一次。食堂与普通餐厅使用同一套直接点评及口碑分计算规则。
 
-无人计分的分数/四维为null，真实0分保持0。reviewCount计全部有效点评，participantCount计每人最新有效代表。score为代表点评综合分累计值/人数，四舍五入保留一位小数。历史点评不重复贡献评分，原始累计值不变。餐厅及窗口的列表、详情与管理回执不再返回recommendRate；推荐态度仅保留在单条点评，不派生商户百分比，也不参与排序、筛选或榜单。地址、价格和位置未知保持null，不用模拟值补齐。列表/详情不返回创建者、删除元数据或数据库版本。ES列表没有四维和审计时间投影，因此dimensions四项及createdAt/updatedAt为null；详情仍读取MySQL并返回实际值。
+无人计分的分数/四维为null，真实0分保持0。reviewCount计全部有效点评，participantCount计每人最新有效代表。score为代表点评综合分累计值/人数，四舍五入保留一位小数。历史点评不重复贡献评分，原始累计值不变。餐厅及食堂的列表、详情与管理回执不再返回recommendRate；推荐态度仅保留在单条点评，不派生商户百分比，也不参与排序、筛选或榜单。地址、价格和位置未知保持null，不用模拟值补齐。列表/详情不返回创建者、删除元数据或数据库版本。ES列表没有四维和审计时间投影，因此dimensions四项及createdAt/updatedAt为null；详情仍读取MySQL并返回实际值。
 
 食堂响应使用`"restaurantType":"CANTEEN","categoryCode":null,"categoryName":null`。不传category时目录及地图包含食堂；指定美食品类时不包含食堂。餐厅类型通过现有前端独立筛选选择，不把CANTEEN作为美食分类参数。
 
@@ -228,7 +228,7 @@
 
 **请求参数**
 
-直接维护接收restaurantType（REGULAR/CANTEEN）及supportsDineIn、supportsDelivery（true支持、false不支持、null未知）。管理页面始终显式提交类型及两个三态字段；提供类型时这三个字段完整替换，省略用餐方式等价于null，可将已有支持/不支持清为未知。食堂categoryCode必须为null，普通餐厅必须有有效分类；切换类型及分类在同一事务中保存。有关联窗口（包括软删除窗口）的食堂不能改为普通餐厅，409 `RESTAURANT_STATE_CONFLICT`，原资料、标签和搜索版本均保留。成功保存推进一次搜索投影版本，任何失败整体回滚。
+直接维护接收restaurantType（REGULAR/CANTEEN）及supportsDineIn、supportsDelivery（true支持、false不支持、null未知）。管理页面始终显式提交类型及两个三态字段；提供类型时这三个字段完整替换，省略用餐方式等价于null，可将已有支持/不支持清为未知。食堂categoryCode必须为null，普通餐厅必须有有效分类；切换类型及分类在同一事务中保存。成功保存推进一次搜索投影版本，任何失败整体回滚。
 
 兼容旧客户端：restaurantType省略或null且两个用餐方式均为null/省略时，新建为普通餐厅/用餐方式未知，更新保持已有这三个字段；省略类型却提交非null用餐方式返回400。非法类型400；未知、身份、申请UUID或图片字段仍不接受。不改变用户投稿和审核的独立DTO及历史幂等摘要。
 

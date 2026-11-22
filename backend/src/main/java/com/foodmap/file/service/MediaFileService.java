@@ -208,35 +208,6 @@ public class MediaFileService {
         }
     }
 
-    /** 窗口服务先锁父食堂和窗口；仅允许绑定当前管理员本人上传的WINDOW用途图片。 */
-    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
-    @Transactional(propagation = Propagation.MANDATORY)
-    public void bindWindowPhoto(long id, long owner) {
-        bindPurpose(List.of(id), owner, "WINDOW");
-    }
-
-    /** 窗口服务已核对关联和管理员权限；允许其他管理员删除旧图，不改变上传者记录。 */
-    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
-    @Transactional(propagation = Propagation.MANDATORY)
-    public void releaseWindowPhoto(long id) {
-        var row = files.lock(id);
-        if (row == null
-                || !"WINDOW".equals(row.getPurpose())
-                || !"BOUND".equals(row.getStatus())
-                || files.releaseBound(id, row.getUploaderUserId()) != 1) {
-            throw new BusinessException(FileErrorCode.NOT_BINDABLE);
-        }
-    }
-
-    /** 仅供已核对窗口及父食堂可见性、相册关联的服务调用，删除后立即停止读取。 */
-    public byte[] readWindowPhoto(long id) {
-        var row = files.find(id);
-        if (row == null || !"BOUND".equals(row.getStatus()) || !"WINDOW".equals(row.getPurpose())) {
-            throw new BusinessException(FileErrorCode.NOT_FOUND);
-        }
-        return storage.read(row.getBucketName(), row.getStorageKey());
-    }
-
     private void bindPurpose(List<Long> ids, long owner, String purpose) {
         for (long id : ids.stream().sorted().toList()) {
             var row = files.lock(id);

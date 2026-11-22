@@ -31,9 +31,7 @@ const returnFocus =
     ? globalThis.document.activeElement
     : undefined
 const storeTo = computed(() =>
-  detail.value
-    ? `/${detail.value.windowId ? 'canteen-windows' : 'restaurants'}/${detail.value.windowId ?? detail.value.restaurantId}`
-    : undefined,
+  detail.value ? `/restaurants/${detail.value.restaurantId}` : undefined,
 )
 let generation = 0,
   controller: globalThis.AbortController | undefined

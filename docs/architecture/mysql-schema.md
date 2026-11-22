@@ -1,13 +1,13 @@
 # MySQL 表结构
 
-本文集中维护 MySQL 业务表的当前字段、类型、默认值、枚举、主键、索引、外键与字段约束。覆盖当前迁移定义的35张应用表，当前源码迁移至V50（取消点评五字下限），本地开发库此前已执行至V49；V50本轮仅在隔离测试库验证，按下列分组查阅；Flyway自建的迁移历史表不属于应用表。
+本文集中维护 MySQL 业务表的当前字段、类型、默认值、枚举、主键、索引、外键与字段约束。覆盖当前V51定义的32张应用表；V51移除窗口体系，实际环境升级及删除状态需按发布验收核对。按下列分组查阅；Flyway自建的迁移历史表不属于应用表。
 
 ## 目录
 
 - [应用元数据表结构](#app-metadata)
 - [使用统计日汇总表结构](#activity-statistics)
 - [用户账号、角色与安全审计表结构](#user-profile)
-- [餐厅、食堂与窗口表结构](#restaurant-schema)
+- [餐厅与食堂表结构](#restaurant-schema)
 - [店铺收藏表结构](#restaurant-favorites)
 - [餐厅榜单快照表结构](#restaurant-ranking-snapshots)
 - [商户搜索同步任务表结构](#restaurant-search-outbox)
@@ -147,9 +147,9 @@ CHECK约束`chk_security_audit_outcome`限定outcome为SUCCESS或FAILURE，按�
 
 <a id="restaurant-schema"></a>
 
-## 餐厅、食堂与窗口表结构
+## 餐厅与食堂表结构
 
-restaurant模块拥有餐厅资料、分类、标签、审核申请、相册、食堂窗口与评分统计表。存储引擎InnoDB，字符集utf8mb4，默认排序规则utf8mb4_0900_ai_ci；时间使用TIMESTAMP(6)，坐标使用GCJ-02，跨模块账号及文件使用逻辑ID引用。
+restaurant模块拥有餐厅资料、分类、标签、审核申请、相册与评分统计表。存储引擎InnoDB，字符集utf8mb4，默认排序规则utf8mb4_0900_ai_ci；时间使用TIMESTAMP(6)，坐标使用GCJ-02，跨模块账号及文件使用逻辑ID引用。
 
 ### `restaurant_categories`：餐厅分类
 
@@ -192,7 +192,7 @@ restaurant模块拥有餐厅资料、分类、标签、审核申请、相册、�
 | `supports_dine_in` | `tinyint(1)` | 是 | 是否支持堂食，NULL表示未知 |
 | `supports_delivery` | `tinyint(1)` | 是 | 是否支持外卖，NULL表示未知 |
 
-索引 `(category_code,deleted_at,name,id)`；索引 `(created_by,deleted_at,id)`；索引 `(restaurant_type,deleted_at,id)`；索引 `(deleted_at,name,id)`；主键 `(id)`；唯一键 `(id,restaurant_type)`。
+索引 `(category_code,deleted_at,name,id)`；索引 `(created_by,deleted_at,id)`；索引 `(restaurant_type,deleted_at,id)`；索引 `(deleted_at,name,id)`；主键 `(id)`。
 
 外键：`category_code` → `restaurant_categories.code`。
 
@@ -225,7 +225,7 @@ position范围0～7；同一餐厅内标签及位置分别唯一。
 | `service_sum` | `decimal(16,2)` | 否 | 服务累计分；默认0.00 |
 | `ambience_sum` | `decimal(16,2)` | 否 | 环境累计分；默认0.00 |
 | `overall_score_sum` | `decimal(16,2)` | 否 | 单条综合分累计值；默认0.00 |
-| `reputation_score` | `decimal(12,8)` | 是 | STORED生成列；普通餐厅五分制长期平滑口碑分，无计分用户为NULL；表达式为四维累计加权和÷2加17.5，再除以人数加5 |
+| `reputation_score` | `decimal(12,8)` | 是 | STORED生成列；普通餐厅与食堂五分制长期平滑口碑分，无计分用户为NULL；表达式为四维累计加权和÷2加17.5，再除以人数加5 |
 | `updated_at` | `timestamp(6)` | 否 | 最后修改时间；默认CURRENT_TIMESTAMP(6) |
 
 主键 `(restaurant_id)`。
@@ -310,64 +310,6 @@ position范围0～4。
 
 position范围0～2147483647，同一商户内唯一；0表示默认封面。
 
-### `canteen_windows`：食堂窗口
-
-| 字段 | 类型 | 可空 | 说明 |
-| --- | --- | --- | --- |
-| `id` | `bigint unsigned` | 否 | 主键；自增 |
-| `canteen_id` | `bigint unsigned` | 否 | 所属食堂ID |
-| `canteen_type` | `varchar(16)` | 否 | 外键类型锚点，固定CANTEEN；默认CANTEEN |
-| `name` | `varchar(40)` | 否 | 名称 |
-| `floor_number` | `smallint` | 否 | 楼层数，负数表示地下，0表示地面层 |
-| `description` | `varchar(500)` | 是 | 可选介绍，不代替菜品表 |
-| `price_per_person` | `smallint unsigned` | 是 | 参考整数元人均，未知为空 |
-| `price_kind` | `varchar(16)` | 否 | UNKNOWN未知、EXACT填报、ESTIMATE估值；默认UNKNOWN |
-| `cover_file_id` | `bigint unsigned` | 是 | file模块逻辑ID |
-| `business_status` | `varchar(16)` | 否 | OPERATING营业、CLOSED暂停或停止营业，保留历史点评；默认OPERATING |
-| `client_request_id` | `binary(16)` | 是 | 创建请求UUID；旧窗口为空 |
-| `request_hash` | `binary(32)` | 是 | 规范化创建内容及所属食堂的SHA-256摘要 |
-| `created_by` | `bigint unsigned` | 否 | 创建账号逻辑ID，必须为正数 |
-| `updated_by` | `bigint unsigned` | 是 | 最近修改账号逻辑ID |
-| `created_at` | `timestamp(6)` | 否 | 创建时间；默认CURRENT_TIMESTAMP(6) |
-| `updated_at` | `timestamp(6)` | 否 | 最后修改时间；默认CURRENT_TIMESTAMP(6) |
-| `deleted_at` | `timestamp(6)` | 是 | 软删除时间，NULL表示可见 |
-| `deleted_by` | `bigint unsigned` | 是 | 删除账号逻辑ID |
-
-唯一索引 `uk_window_create_request(created_by,client_request_id)`；索引 `(canteen_id,canteen_type)`；索引 `(canteen_id,floor_number,id)`；主键 `(id)`。
-
-canteen_type固定CANTEEN，与canteen_id组成复合外键引用restaurants(id,restaurant_type)。楼层范围-10～100，参考价格范围1～5000元，UNKNOWN时金额为空。
-
-### `canteen_window_photos`：窗口相册
-
-| 字段 | 类型 | 可空 | 说明 |
-| --- | --- | --- | --- |
-| `window_id` | `bigint unsigned` | 否 | 窗口ID；无默认值 |
-| `media_file_id` | `bigint unsigned` | 否 | 媒体逻辑ID；无默认值 |
-| `created_at` | `timestamp(6)` | 否 | 入册时间；默认CURRENT_TIMESTAMP(6) |
-
-主键`(window_id,media_file_id)`；唯一索引`uk_window_photo_file (media_file_id)`；普通索引`idx_window_photo_order (window_id,created_at,media_file_id)`。外键`window_id`→`canteen_windows.id`，删除/更新RESTRICT；媒体文件跨模块仅逻辑关联。CHECK要求两个ID均为1～9223372036854775807。InnoDB、utf8mb4、utf8mb4_0900_ai_ci。
-
-### `window_review_statistics`：窗口点评统计
-
-| 字段 | 类型 | 可空 | 说明 |
-| --- | --- | --- | --- |
-| `window_id` | `bigint unsigned` | 否 | 一窗口一行，和餐厅统计分离 |
-| `review_count` | `int unsigned` | 否 | 有效点评条数；默认0 |
-| `participant_count` | `int unsigned` | 否 | 计分参与人数；默认0 |
-| `recommend_count` | `int unsigned` | 否 | 最新计分点评中的推荐人数；默认0 |
-| `taste_sum` | `decimal(16,2)` | 否 | 味道累计分；默认0.00 |
-| `value_sum` | `decimal(16,2)` | 否 | 性价比累计分；默认0.00 |
-| `service_sum` | `decimal(16,2)` | 否 | 服务累计分；默认0.00 |
-| `ambience_sum` | `decimal(16,2)` | 否 | 环境累计分；默认0.00 |
-| `overall_score_sum` | `decimal(16,2)` | 否 | 单条综合分累计值；默认0.00 |
-| `updated_at` | `timestamp(6)` | 否 | 最后修改时间；默认CURRENT_TIMESTAMP(6) |
-
-主键 `(window_id)`。
-
-外键：`window_id` → `canteen_windows.id`。
-
-一窗口一行，累计值含义与餐厅点评统计一致。
-
 <a id="restaurant-favorites"></a>
 
 ## 店铺收藏表结构
@@ -380,7 +322,7 @@ restaurant模块拥有`restaurant_favorites`表。存储引擎InnoDB，字符集
 | --- | --- | --- | --- |
 | `id` | `bigint unsigned` | 否 | 自增主键；无显式默认值。 |
 | `user_id` | `bigint unsigned` | 否 | 收藏者用户逻辑ID，范围1～9223372036854775807；无默认值。 |
-| `restaurant_id` | `bigint unsigned` | 否 | 普通餐厅或食堂ID，范围1～9223372036854775807；无默认值，不是食堂窗口ID。 |
+| `restaurant_id` | `bigint unsigned` | 否 | 普通餐厅或食堂ID，范围1～9223372036854775807；无默认值， |
 | `created_at` | `timestamp(6)` | 否 | 默认CURRENT_TIMESTAMP(6)；收藏时间。 |
 
 | 名称 | 列 | 类型 |
@@ -471,7 +413,7 @@ restaurant_id为逻辑引用，无物理外键。
 
 ## 点评、回复与媒体表结构
 
-点评、回复、照片关联及发布回执归review模块；媒体文件登记归file模块。跨模块账号、餐厅、窗口和文件引用使用逻辑ID，由应用服务校验。
+点评、回复、照片关联及发布回执归review模块；媒体文件登记归file模块。跨模块账号、餐厅和文件引用使用逻辑ID，由应用服务校验。
 
 共用约定：InnoDB、utf8mb4；主键与资源ID使用BIGINT。时间使用TIMESTAMP(6)。同模块外键禁止级联删除，跨模块使用逻辑ID引用。
 
@@ -480,8 +422,7 @@ restaurant_id为逻辑引用，无物理外键。
 | 字段 | 类型 | 可空 | 说明 |
 | --- | --- | --- | --- |
 | `id` | `bigint unsigned` | 否 | 主键；自增 |
-| `restaurant_id` | `bigint unsigned` | 是 | 普通餐厅或历史食堂逻辑ID，与window_id二选一 |
-| `window_id` | `bigint unsigned` | 是 | 独立窗口逻辑ID，不填父食堂ID |
+| `restaurant_id` | `bigint unsigned` | 否 | 普通餐厅或食堂逻辑ID，范围1～9223372036854775807 |
 | `author_user_id` | `bigint unsigned` | 否 | 作者账号逻辑ID |
 | `taste_score` | `decimal(3,1)` | 否 | 味道0至10，步进0.5 |
 | `value_score` | `decimal(3,1)` | 否 | 性价比0至10，步进0.5 |
@@ -495,9 +436,9 @@ restaurant_id为逻辑引用，无物理外键。
 | `created_at` | `timestamp(6)` | 否 | 创建时间；默认CURRENT_TIMESTAMP(6) |
 | `updated_at` | `timestamp(6)` | 否 | 最后修改时间；默认CURRENT_TIMESTAMP(6) |
 
-索引 `(restaurant_id,author_user_id,created_at,id)`；索引 `(restaurant_id,created_at,id)`；索引 `(window_id,author_user_id,created_at,id)`；索引 `(window_id,created_at,id)`；索引 `(author_user_id,restaurant_id,created_at,id)`；主键 `(id)`；唯一键 `(author_user_id,client_request_id)`。
+索引 `(restaurant_id,author_user_id,created_at,id)`；索引 `(restaurant_id,created_at,id)`；索引 `(author_user_id,restaurant_id,created_at,id)`；主键 `(id)`；唯一键 `(author_user_id,client_request_id)`。
 
-restaurant_id与window_id二选一。四维评分0–10，步长0.5；overall_score为四维均值，保留两位。recommendation仅允许上述三个大小写精确且无空白的编码。正文非空且最多500码点。相同账号与请求UUID唯一，允许多次真实点评。删除为物理删除。
+restaurant_id必须为有效正数。四维评分0–10，步长0.5；overall_score为四维均值，保留两位。recommendation仅允许上述三个大小写精确且无空白的编码。正文非空且最多500码点。相同账号与请求UUID唯一，允许多次真实点评。删除为物理删除。
 
 ### `review_photos`：点评照片关联
 
@@ -588,13 +529,12 @@ CHECK约束：
 | `author_user_id` | `bigint unsigned` | 否 | 作者账号逻辑ID |
 | `client_request_id` | `binary(16)` | 否 | 本次发布UUID |
 | `review_id` | `bigint unsigned` | 否 | 发布的点评逻辑ID |
-| `restaurant_id` | `bigint unsigned` | 是 | 普通餐厅或历史食堂逻辑ID，与window_id二选一 |
-| `window_id` | `bigint unsigned` | 是 | 窗口逻辑ID，回执不随点评删除 |
+| `restaurant_id` | `bigint unsigned` | 否 | 普通餐厅或食堂逻辑ID，范围1～9223372036854775807 |
 | `deleted_at` | `timestamp(6)` | 是 | 资源删除时间，NULL表示尚未删除 |
 
 主键 `(author_user_id,client_request_id)`；唯一键 `(review_id)`。
 
-保存发布请求UUID、资源引用及删除时间。餐厅与窗口目标互斥；作者与请求UUID唯一。
+保存发布请求UUID、资源引用及删除时间。作者与请求UUID唯一。
 
 ### `reply_request_receipts`：回复请求回执
 
@@ -622,7 +562,7 @@ CHECK约束：
 | `height` | `smallint unsigned` | 否 | 解码高度不超过1200 |
 | `sha256` | `binary(32)` | 否 | 最终文件内容摘要，不唯一 |
 | `status` | `varchar(16)` | 否 | UPLOADING / TEMPORARY / BOUND / PENDING_DELETE |
-| `purpose` | `varchar(16)` | 否 | REVIEW点评图 / RESTAURANT商家申请图 / WINDOW窗口相册 / AVATAR头像；默认REVIEW，CHECK限定这四个值且不得包含空白 |
+| `purpose` | `varchar(16)` | 否 | REVIEW点评图 / RESTAURANT商家申请图 / AVATAR头像；默认REVIEW，CHECK限定这三个值且不得包含空白 |
 | `created_at` | `timestamp(6)` | 否 | 创建时间；默认CURRENT_TIMESTAMP(6) |
 | `updated_at` | `timestamp(6)` | 否 | 最后修改时间；默认CURRENT_TIMESTAMP(6) |
 | `expires_at` | `timestamp(6)` | 是 | 临时上传过期时间，由服务端设置 |

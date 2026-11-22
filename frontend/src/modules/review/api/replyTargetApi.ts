@@ -4,8 +4,7 @@ import type { ApiResponse } from '@/shared/api/api.types'
 
 export interface ReplyTarget {
   userId: string
-  restaurantId: string | null
-  windowId?: string | null
+  restaurantId: string
   reviewId: string
   replyId: string
   reviewAuthor: { id: string; username: string }
@@ -46,10 +45,7 @@ export async function fetchReplyTarget(
     data.userId !== userId ||
     data.replyId !== replyId ||
     data.reviewId !== reviewId ||
-    !(
-      (id(data.restaurantId) && !data.windowId) ||
-      (data.restaurantId === null && id(data.windowId))
-    ) ||
+    !id(data.restaurantId) ||
     !data.review ||
     data.review.id !== reviewId ||
     typeof data.review.body !== 'string' ||
@@ -71,7 +67,6 @@ export async function fetchReplyTarget(
   return {
     userId,
     restaurantId: data.restaurantId,
-    windowId: data.windowId,
     reviewId,
     replyId,
     reviewAuthor: {

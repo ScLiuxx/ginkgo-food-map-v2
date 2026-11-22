@@ -4,7 +4,6 @@ import com.foodmap.common.exception.BusinessException;
 import com.foodmap.growth.service.GrowthRewardApplicationService;
 import com.foodmap.notification.dto.ContentLikeNotification;
 import com.foodmap.notification.service.NotificationPublicationService;
-import com.foodmap.restaurant.service.CanteenWindowService;
 import com.foodmap.restaurant.service.RestaurantReviewTargetService;
 import com.foodmap.review.entity.ContentLikeEntity;
 import com.foodmap.review.entity.LikeTargetEntity;
@@ -44,7 +43,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ContentLikeService {
     private final ReviewParentService parents;
-    private final CanteenWindowService windows;
     private final ContentLikeMapper likeMapper;
     private final RestaurantReviewTargetService restaurantTargets;
     private final CurrentActorService currentActors;
@@ -141,20 +139,9 @@ public class ContentLikeService {
                                 .filter(Objects::nonNull)
                                 .distinct()
                                 .toList());
-        var visibleWindows =
-                windows.targets(
-                        rows.stream()
-                                .map(LikeTargetEntity::getWindowId)
-                                .filter(Objects::nonNull)
-                                .distinct()
-                                .toList());
         var valid =
                 rows.stream()
-                        .filter(
-                                r ->
-                                        r.getWindowId() != null
-                                                ? visibleWindows.containsKey(r.getWindowId())
-                                                : visible.containsKey(r.getRestaurantId()))
+                        .filter(r -> visible.containsKey(r.getRestaurantId()))
                         .map(LikeTargetEntity::getId)
                         .collect(Collectors.toSet());
         var counts =
@@ -211,13 +198,10 @@ public class ContentLikeService {
             throw missing();
         }
         var source = requireSource(row.getTargetType(), row.getTargetId());
-        if (source.getAuthorUserId() != user
-                || (source.getRestaurantId() == null && source.getWindowId() == null)) {
+        if (source.getAuthorUserId() != user || source.getRestaurantId() == null) {
             throw missing();
         }
-        if (source.getWindowId() != null
-                ? !windowVisible(source.getWindowId())
-                : restaurantTargets.visible(List.of(source.getRestaurantId())).isEmpty()) {
+        if (restaurantTargets.visible(List.of(source.getRestaurantId())).isEmpty()) {
             throw missing();
         }
         var name = publicAuthors.find(List.of(user)).get(Long.toString(user));
@@ -232,20 +216,10 @@ public class ContentLikeService {
         result.setReviewId(Long.toString(source.getReviewId()));
         result.setRestaurantId(
                 source.getRestaurantId() == null ? null : source.getRestaurantId().toString());
-        result.setWindowId(source.getWindowId() == null ? null : source.getWindowId().toString());
         result.setAuthor(name);
         result.setBody(source.getBody());
         result.setCreatedAt(source.getCreatedAt());
         return result;
-    }
-
-    private boolean windowVisible(long id) {
-        try {
-            windows.requireVisible(id);
-            return true;
-        } catch (BusinessException missing) {
-            return false;
-        }
     }
 
     private LikeTargetEntity requireSource(String type, long id) {

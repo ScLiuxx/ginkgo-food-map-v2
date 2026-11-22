@@ -6,7 +6,7 @@ export function isReturnDestination(value: unknown): value is string {
   // eslint-disable-next-line no-control-regex -- 明确拒绝控制字符，防止浏览器将异常地址解释为其他目标。
   if (typeof value !== 'string' || /[\\\u0000-\u0020\u007f]/.test(value)) return false
   const path = value.split(/[?#]/, 1)[0]
-  return /^\/(?:account(?:\/(?:reviews|favorites|contributions|settings|growth|following|followers))?|users\/[1-9]\d*(?:\/(?:following|followers))?|restaurants\/[1-9]\d*|canteen-windows\/[1-9]\d*|messages(?:\/(?:likes|comments|followers|system))?|restaurant-rankings|map)?$/.test(
+  return /^\/(?:account(?:\/(?:reviews|favorites|contributions|settings|growth|following|followers))?|users\/[1-9]\d*(?:\/(?:following|followers))?|restaurants\/[1-9]\d*|messages(?:\/(?:likes|comments|followers|system))?|restaurant-rankings|map)?$/.test(
     path ?? '',
   )
 }

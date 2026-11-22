@@ -13,7 +13,7 @@ describe('社区登录回跳', () => {
     '/restaurants/submit',
     '/restaurants/12/correction',
     '/restaurants/12?writeReview=1',
-    '/canteen-windows/12?writeReview=1',
+    '/restaurants/12?writeReview=1',
     '/account/reviews?page=2&writeReview=1',
     '/account/contributions?status=APPROVED&page=2&pageSize=20&writeReview=1',
     '/users/42?tab=favorites&page=2&writeReview=1',

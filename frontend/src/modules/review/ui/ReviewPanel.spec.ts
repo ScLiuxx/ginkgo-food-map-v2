@@ -1,11 +1,9 @@
-import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
 import { createApp, h, nextTick, reactive, type App } from 'vue'
 import { createPinia, disposePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useLoginStore } from '@/modules/auth'
 import { clearAccessToken } from '@/shared/api/authSession'
-import { windowReviewGateway } from '../api/reviewApi'
 import { reviewGatewayKey, unavailableReviewGateway, type ReviewItem } from '../model/review'
 import ReviewPanel from './ReviewPanel.vue'
 
@@ -51,7 +49,7 @@ const page = () => ({
   totalReviews: 2,
   totalPages: 1,
 })
-const props = reactive({ restaurantId: '501', starScale: true, window: false })
+const props = reactive({ restaurantId: '501', starScale: true })
 const list = vi.fn(),
   listReplies = vi.fn(),
   history = vi.fn(),
@@ -105,7 +103,6 @@ beforeEach(() => {
   host = document.createElement('div')
   document.body.append(host)
   props.restaurantId = '501'
-  props.window = false
   list.mockResolvedValue(page())
   listReplies.mockResolvedValue(replies)
   history.mockResolvedValue({
@@ -284,31 +281,5 @@ describe('店铺与窗口统一点评交互', () => {
     await settle()
     expect(list).toHaveBeenCalledTimes(reads)
     expect(host.querySelector('.delete-review')).toBeNull()
-  })
-  it('窗口历史和回复沿用窗口网关，不混入餐厅接口或店铺链接', async () => {
-    props.window = true
-    const windowList = vi.spyOn(windowReviewGateway, 'list').mockResolvedValue(page())
-    const windowReplies = vi.spyOn(windowReviewGateway, 'listReplies').mockResolvedValue(replies)
-    const windowHistory = vi.spyOn(windowReviewGateway, 'history').mockResolvedValue({
-      records: [{ ...item, id: '9', scoringStatus: 'history' }],
-      currentReviewId: '10',
-      hasMore: false,
-      nextCursor: null,
-    })
-    await mount()
-    await click('.more-review-actions')
-    await click('.history-trigger')
-    const panel = document.querySelector('.history-dialog')!
-    expect(windowList).toHaveBeenCalledWith('501', expect.any(AbortSignal), 1, 'DEFAULT')
-    expect(windowHistory).toHaveBeenCalledWith('501', '42', expect.any(AbortSignal), undefined)
-    await click('.review-body-link', panel)
-    const historical = [...document.querySelectorAll<HTMLDialogElement>('.discussion-dialog')].find(
-      (d) => d.open,
-    )!
-    expect(await captureLinkTarget(app, historical.querySelector('a'))).toBe('/canteen-windows/501')
-    expect(windowReplies).toHaveBeenLastCalledWith('9', expect.any(AbortSignal))
-    expect(list).not.toHaveBeenCalled()
-    expect(history).not.toHaveBeenCalled()
-    expect(listReplies).not.toHaveBeenCalled()
   })
 })

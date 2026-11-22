@@ -20,14 +20,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
-import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -57,14 +57,11 @@ class ReviewReadApiIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper json;
-    @Autowired
-    JwtEncoder encoder;
+    @Autowired JwtEncoder encoder;
 
-    @Autowired
-    AuthenticationProperties authentication;
+    @Autowired AuthenticationProperties authentication;
 
-    @MockitoBean
-    LoginSessionService sessions;
+    @MockitoBean LoginSessionService sessions;
     @MockitoSpyBean ReviewReadMapper reads;
     @MockitoSpyBean ReviewPhotoMapper photos;
     @MockitoSpyBean PublicAuthorMapper authors;
@@ -99,7 +96,6 @@ class ReviewReadApiIntegrationTest {
         jdbc.update("DELETE FROM growth_accounts");
         jdbc.update("DELETE FROM review_photos");
         jdbc.update("DELETE FROM reviews");
-        jdbc.update("DELETE FROM canteen_windows");
         jdbc.update("DELETE FROM restaurant_review_statistics");
         jdbc.update("DELETE FROM restaurants");
         jdbc.update("DELETE FROM user_roles");
@@ -109,7 +105,7 @@ class ReviewReadApiIntegrationTest {
                     + " VALUES(11,'read_owner','read11@example.test','private-password',TRUE),(22,'read_other','read22@example.test','private-password',TRUE)");
         jdbc.update(
                 "INSERT INTO restaurants(id,name,category_code,created_by)"
-                    + " VALUES(1,'读取店','OTHER',11),(2,'空店','OTHER',11)");
+                        + " VALUES(1,'读取店','OTHER',11),(2,'空店','OTHER',11)");
         when(sessions.isActive(anyString(), anyLong(), anyLong())).thenReturn(true);
     }
 
@@ -211,7 +207,7 @@ class ReviewReadApiIntegrationTest {
     private void like(long review, long user, boolean active) {
         jdbc.update(
                 "INSERT INTO content_likes(target_type,target_id,user_id,active)"
-                    + " VALUES('REVIEW',?,?,?)",
+                        + " VALUES('REVIEW',?,?,?)",
                 review,
                 user,
                 active);
@@ -318,7 +314,7 @@ class ReviewReadApiIntegrationTest {
         clearInvocations(reads);
         jdbc.update(
                 "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM'"
-                    + " WHERE id=1");
+                        + " WHERE id=1");
         mvc.perform(get("/api/restaurants/1/reviews"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("RESTAURANT_NOT_FOUND"));
@@ -574,7 +570,7 @@ class ReviewReadApiIntegrationTest {
                 .andExpect(status().isOk());
         jdbc.update(
                 "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM'"
-                    + " WHERE id=1");
+                        + " WHERE id=1");
         mvc.perform(get("/api/restaurants/1/reviews/authors/11/history"))
                 .andExpect(status().isNotFound());
     }
@@ -649,15 +645,16 @@ class ReviewReadApiIntegrationTest {
     private String token() {
         var now = Instant.now();
         var config = authentication.getJwt();
-        var claims = JwtClaimsSet.builder()
-                .issuer(config.getIssuer())
-                .audience(List.of(config.getAudience()))
-                .subject("22")
-                .issuedAt(now.minusSeconds(120))
-                .expiresAt(now.plusSeconds(600))
-                .id(UUID.randomUUID().toString())
-                .claim("credential_version", 0)
-                .build();
+        var claims =
+                JwtClaimsSet.builder()
+                        .issuer(config.getIssuer())
+                        .audience(List.of(config.getAudience()))
+                        .subject("22")
+                        .issuedAt(now.minusSeconds(120))
+                        .expiresAt(now.plusSeconds(600))
+                        .id(UUID.randomUUID().toString())
+                        .claim("credential_version", 0)
+                        .build();
         return encoder.encode(
                         JwtEncoderParameters.from(
                                 JwsHeader.with(SignatureAlgorithm.RS256).build(), claims))
@@ -686,24 +683,30 @@ class ReviewReadApiIntegrationTest {
         long old = 9007199254740993L;
         review(old, 1, 11, 6.5, "2026-10-29 01:00:00");
         review(102, 1, 11, 9, "2026-10-30 01:00:00");
-        jdbc.update("INSERT INTO review_photos(review_id,position,media_file_id) VALUES(?,0,501)", old);
+        jdbc.update(
+                "INSERT INTO review_photos(review_id,position,media_file_id) VALUES(?,0,501)", old);
         String viewer = token();
-        var response = mvc.perform(get("/api/reviews/" + old).header("Authorization", "Bearer " + viewer))
-                .andExpect(status().isOk())
-                .andExpect(header().string("Cache-Control", "no-store"))
-                .andExpect(jsonPath("$.data.restaurantId").value("1"))
-                .andExpect(jsonPath("$.data.windowId").isEmpty())
-                .andExpect(jsonPath("$.data.author.id").value("11"))
-                .andExpect(jsonPath("$.data.review.id").value(Long.toString(old)))
-                .andExpect(jsonPath("$.data.review.scoringStatus").value("history"))
-                .andExpect(jsonPath("$.data.review.scores.taste").value(6.5))
-                .andExpect(
-                        jsonPath("$.data.review.photos[0].url")
-                                .value("/api/reviews/" + old + "/photos/0"))
-                .andReturn();
+        var response =
+                mvc.perform(get("/api/reviews/" + old).header("Authorization", "Bearer " + viewer))
+                        .andExpect(status().isOk())
+                        .andExpect(header().string("Cache-Control", "no-store"))
+                        .andExpect(jsonPath("$.data.restaurantId").value("1"))
+                        .andExpect(jsonPath("$.data.author.id").value("11"))
+                        .andExpect(jsonPath("$.data.review.id").value(Long.toString(old)))
+                        .andExpect(jsonPath("$.data.review.scoringStatus").value("history"))
+                        .andExpect(jsonPath("$.data.review.scores.taste").value(6.5))
+                        .andExpect(
+                                jsonPath("$.data.review.photos[0].url")
+                                        .value("/api/reviews/" + old + "/photos/0"))
+                        .andReturn();
         assertThat(response.getResponse().getContentAsString())
                 .doesNotContain(
-                        "password", "email", "requestHash", "clientRequestId", "canDelete", "storageKey");
+                        "password",
+                        "email",
+                        "requestHash",
+                        "clientRequestId",
+                        "canDelete",
+                        "storageKey");
         mvc.perform(get("/api/reviews/102").header("Authorization", "Bearer " + viewer))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.review.scoringStatus").value("current"));
@@ -723,31 +726,9 @@ class ReviewReadApiIntegrationTest {
         mvc.perform(get("/api/reviews/101").header("Authorization", "Bearer " + viewer))
                 .andExpect(status().isNotFound());
         jdbc.update(
-                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM' WHERE id=1");
+                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM'"
+                    + " WHERE id=1");
         mvc.perform(get("/api/reviews/102").header("Authorization", "Bearer " + viewer))
-                .andExpect(status().isNotFound());
-    }
-
-    @Test
-    void exactWindowDetailSeparatesTargetAndRejectsDeletedWindowOrCanteen() throws Exception {
-        jdbc.update("UPDATE restaurants SET restaurant_type='CANTEEN',category_code=NULL WHERE id=2");
-        jdbc.update(
-                "INSERT INTO canteen_windows(id,canteen_id,name,floor_number,created_by) VALUES(201,2,'窗口',1,11)");
-        review(101, 1, 11, 8, "2026-10-29 01:00:00");
-        jdbc.update("UPDATE reviews SET restaurant_id=NULL,window_id=201 WHERE id=101");
-        String viewer = token();
-        mvc.perform(get("/api/reviews/101").header("Authorization", "Bearer " + viewer))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.restaurantId").isEmpty())
-                .andExpect(jsonPath("$.data.windowId").value("201"));
-        jdbc.update(
-                "UPDATE canteen_windows SET deleted_at=CURRENT_TIMESTAMP(6),deleted_by=11 WHERE id=201");
-        mvc.perform(get("/api/reviews/101").header("Authorization", "Bearer " + viewer))
-                .andExpect(status().isNotFound());
-        jdbc.update("UPDATE canteen_windows SET deleted_at=NULL,deleted_by=NULL WHERE id=201");
-        jdbc.update(
-                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM' WHERE id=2");
-        mvc.perform(get("/api/reviews/101").header("Authorization", "Bearer " + viewer))
                 .andExpect(status().isNotFound());
     }
 

@@ -6,13 +6,11 @@ import { useRouter, useRoute } from 'vue-router'
 import { authToken } from '@/shared/api/authSession'
 import { useLoginStore } from '@/modules/auth/model/login.store'
 import ReviewEntry from './ReviewEntry.vue'
-import { windowReviewGateway } from '../api/reviewApi'
 import ReviewHistory from './ReviewHistory.vue'
 import { reviewGatewayKey, unavailableReviewGateway, validBody } from '../model/review'
 import type { ReviewItem, ReviewSort } from '../model/review'
 import { detailPhotos, type DetailPhotoUpdate } from '../model/detailPhotos'
 const props = defineProps<{
-    window?: boolean
     restaurantId: string
     preview?: boolean
     revision?: number
@@ -20,9 +18,7 @@ const props = defineProps<{
     title?: string
   }>(),
   emit = defineEmits<{ changed: []; photos: [update: DetailPhotoUpdate] }>()
-const gateway = props.window
-    ? windowReviewGateway
-    : inject(reviewGatewayKey, unavailableReviewGateway),
+const gateway = inject(reviewGatewayKey, unavailableReviewGateway),
   auth = useLoginStore(),
   router = useRouter(),
   route = useRoute()
@@ -290,7 +286,6 @@ function view(url: string) {
     >
       <template v-if="!preview && gateway.history && item.historyCount" #history="{ restoreFocus }">
         <ReviewHistory
-          :window="window"
           :restaurant-id="restaurantId"
           :item="item"
           :viewer-id="viewerId"

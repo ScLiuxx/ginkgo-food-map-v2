@@ -2,21 +2,21 @@ package com.foodmap.restaurant.entity;
 
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
+
 import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 
-/**
- * 餐厅持久化读取模型，仅限 restaurant 模块内部使用，不直接序列化为接口响应。
- * 公开Mapper只读取展示列；受保护的写入模型通过独立子类补充归属，避免公开接口泄露。
- */
+/** 餐厅持久化读取模型，仅限 restaurant 模块内部使用，不直接序列化为接口响应。 公开Mapper只读取展示列；受保护的写入模型通过独立子类补充归属，避免公开接口泄露。 */
 @Data
 @TableName("restaurants")
 public class RestaurantEntity {
     private Long id;
+
     /** 仅内部回查校验，不映射到公开VO。 */
     private Long searchProjectionVersion;
+
     private String name;
     private String categoryCode;
     private String restaurantType;
@@ -44,20 +44,27 @@ public class RestaurantEntity {
     /** 同属restaurant模块的统计投影；条数含历史，人数只计每账号最新有效点评。 */
     @TableField(exist = false)
     private long reviewCount;
+
     @TableField(exist = false)
     private long participantCount;
+
     /** 均分由累计值除以人数取得；null表示无人计分，真实0分必须保留。 */
     @TableField(exist = false)
     private BigDecimal score;
-    /** 五分制长期口碑分；食堂保留窗口等权均分，不把跨窗口人数当作去重人数。 */
+
+    /** 五分制长期口碑分；餐厅与食堂统一从直接点评计算。 */
     @TableField(exist = false)
     private BigDecimal reputationScore;
+
     @TableField(exist = false)
     private BigDecimal taste;
+
     @TableField(exist = false)
     private BigDecimal value;
+
     @TableField(exist = false)
     private BigDecimal service;
+
     @TableField(exist = false)
     private BigDecimal ambience;
 }

@@ -41,7 +41,7 @@
 
 **请求参数**
 
-`POST /api/restaurants/{restaurantId}/reviews`，需Bearer，作者来自当前身份；停业可评，不存在/已删除餐厅404。
+`POST /api/restaurants/{restaurantId}/reviews`，需Bearer，普通餐厅与食堂均直接使用自身restaurantId，作者来自当前身份；停业可评，不存在/已删除餐厅404。
 
 ```json
 {"clientRequestId":"d6fb79a2-6866-41ae-9c38-13d239668c21","scores":{"taste":8,"value":7.5,"service":7,"ambience":8},"recommendation":"RECOMMENDED","body":"这次出餐很快，分量也比较足。","photoIds":[]}
@@ -128,10 +128,10 @@ UUID必填；四维完整，0–10且步进0.5；recommendation必填且仅接�
 200，`Cache-Control: no-store`。data示例：
 
 ```json
-{"restaurantId":"26","windowId":null,"author":{"id":"22","username":"同学甲","level":2},"review":{"id":"101","scores":{"taste":8,"value":7.5,"service":7,"ambience":8},"overallScore":7.63,"recommendation":"RECOMMENDED","body":"这次出餐很快，分量也比较足。","createdAt":"2026-11-03T06:00:00Z","scoringStatus":"history","photos":[{"id":"501","position":0,"url":"/api/reviews/101/photos/0"}]}}
+{"restaurantId":"26","author":{"id":"22","username":"同学甲","level":2},"review":{"id":"101","scores":{"taste":8,"value":7.5,"service":7,"ambience":8},"overallScore":7.63,"recommendation":"RECOMMENDED","body":"这次出餐很快，分量也比较足。","createdAt":"2026-11-03T06:00:00Z","scoringStatus":"history","photos":[{"id":"501","position":0,"url":"/api/reviews/101/photos/0"}]}}
 ```
 
-restaurantId与windowId严格互斥：普通店及历史食堂整体点评返回restaurantId，独立窗口点评返回windowId。author只包含公开署名信息，缺失作者显示“用户不可用”，level可为空；不返回邮箱、请求摘要、存储键或管理字段。review沿用[列表点评结构](#review-list)，photos按position从0连续排列、最多5张，URL仅为本站正式点评图片入口。scoringStatus按同店／同窗口同作者最新有效记录确定，历史返回history，绝不以最新点评替换请求ID。点评、父级可见性、代表状态、作者及图片引用来自同一只读快照。
+restaurantId始终为点评所属的普通餐厅或食堂ID，不再返回windowId。author只包含公开署名信息，缺失作者显示“用户不可用”，level可为空；不返回邮箱、请求摘要、存储键或管理字段。review沿用[列表点评结构](#review-list)，photos按position从0连续排列、最多5张，URL仅为本站正式点评图片入口。scoringStatus按同店同作者最新有效记录确定，历史返回history，绝不以最新点评替换请求ID。点评、父级可见性、代表状态、作者及图片引用来自同一只读快照。
 
 **错误码**
 
@@ -140,12 +140,12 @@ restaurantId与windowId严格互斥：普通店及历史食堂整体点评返回
 | 400 | `REVIEW_INVALID_QUERY` | ID非法、非正数或越界 |
 | 401 | `AUTH_UNAUTHENTICATED` | 缺少凭证、会话失效或账号不可用 |
 | 404 | `REVIEW_NOT_FOUND` | 点评不存在或已删除 |
-| 404 | `RESTAURANT_NOT_FOUND` | 普通店、窗口或父食堂不存在／已删除 |
+| 404 | `RESTAURANT_NOT_FOUND` | 普通餐厅或食堂不存在／已删除 |
 | 503 | `AUTH_SERVICE_UNAVAILABLE` | 认证依赖不可用 |
 
 **副作用与限制**
 
-只读，不改变消息已读、评分、经验或媒体绑定，不读取云存储图片字节。停业店／窗口可读，父级任一层删除后不可读。通知入口仍先调用[评论精确目标](notifications.md#reply-target)或[获赞精确目标](#like-target)核验本人源记录，再读取本接口的完整点评；两次读取为独立请求，不构成跨请求固定快照。回复列表使用[既有游标接口](#reply-publish-list)，前端将已鉴权的目标回复优先展示并按ID去重，不连续扫描所有分页。
+只读，不改变消息已读、评分、经验或媒体绑定，不读取云存储图片字节。停业店可读，父店删除后不可读。通知入口仍先调用[评论精确目标](notifications.md#reply-target)或[获赞精确目标](#like-target)核验本人源记录，再读取本接口的完整点评；两次读取为独立请求，不构成跨请求固定快照。回复列表使用[既有游标接口](#reply-publish-list)，前端将已鉴权的目标回复优先展示并按ID去重，不连续扫描所有分页。
 
 <a id="delete-review"></a>
 
@@ -191,7 +191,7 @@ restaurantId与windowId严格互斥：普通店及历史食堂整体点评返回
 {"author":{"id":"22","username":"同学甲"},"records":[{"restaurant":{"id":"26","name":"校园面馆","businessStatus":"OPERATING"},"currentReview":{"id":"101","scores":{"taste":8,"value":7.5,"service":7,"ambience":8},"overallScore":7.63,"recommendation":"RECOMMENDED","body":"这次出餐很快，分量也比较足。","createdAt":"2026-11-03T06:00:00Z","scoringStatus":"current","photos":[]},"historyCount":0,"nextHistoryCursor":null}],"totalGroups":1,"totalReviews":1,"page":1,"pageSize":8,"totalPages":1}
 ```
 
-每家店只返回该作者的最新有效点评，按createdAt、id倒序确定代表并排序，归组在LIMIT之前完成。totalGroups为当前可见店铺数，totalReviews包括这些店铺中的本人历史点评；空/越界页保留真实计数。restaurant只返回ID、名称和营业状态，不包含管理或删除元数据。普通餐厅、历史食堂整体点评及独立窗口点评均已接入；窗口按WINDOW类型和window_id独立归组，不与同号餐厅合并，目标投影见[窗口点评](windows.md#reviews)；停业可见，不存在/已删除店铺整组排除且不计总数，历史点评关联仍保留。
+每家店只返回该作者的最新有效点评，按createdAt、id倒序确定代表并排序，归组在LIMIT之前完成。totalGroups为当前可见店铺数，totalReviews包括这些店铺中的本人历史点评；空/越界页保留真实计数。restaurant只返回ID、名称和营业状态，不包含管理或删除元数据。普通餐厅及食堂直接点评统一按restaurant_id归组；停业可见，不存在/已删除店铺整组排除且不计总数，历史点评关联仍保留。
 
 **错误码**
 

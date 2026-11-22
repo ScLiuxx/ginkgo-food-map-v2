@@ -26,7 +26,20 @@ vi.mock('./ReviewDetailOriginal.vue', () => ({
 const settle = async () => {
   for (let i = 0; i < 12; i++) await nextTick()
 }
-const detail = { item: { body: '准确原点评' }, restaurantId: '1', windowId: null } as ReviewDetail
+const detail: ReviewDetail = {
+  restaurantId: '1',
+  item: {
+    id: '10',
+    username: '原作者',
+    body: '准确原点评',
+    createdAt: '2026-11-22T00:00:00Z',
+    scores: { taste: 8, value: 8, service: 8, ambience: 8 },
+    recommendation: 'RECOMMENDED',
+    photos: [],
+    replies: [],
+    canDelete: false,
+  },
+}
 let app: App | undefined, host: HTMLDivElement, pinia: ReturnType<typeof createPinia>
 let origin: HTMLButtonElement
 const closed = vi.fn()

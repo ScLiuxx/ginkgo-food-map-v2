@@ -8,7 +8,6 @@ import lombok.Data;
 @Data
 public class ReviewDetailVo {
     private String restaurantId;
-    private String windowId;
     private PublicAuthor author;
     private ReviewPageVo.CurrentReview review;
 }

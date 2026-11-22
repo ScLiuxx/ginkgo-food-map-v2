@@ -781,9 +781,6 @@ onBeforeUnmount(() => {
                 errors.tags || `最多8项、总计80字；当前${draftTags(form.tags).length}项`
               }}</small>
             </fieldset>
-            <p v-if="submission && !admin && extra.restaurantType === 'CANTEEN'" class="intro">
-              食堂需要评价具体窗口，收录后可前往窗口写点评。
-            </p>
           </div>
           <section v-if="step === 'review'" class="review-step">
             <div class="shop-summary" aria-label="点评对应的店铺">
@@ -806,11 +803,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <p v-if="step === 'restaurant'" class="notice">
-        {{
-          admin
-            ? '保存后立即更新公开资料。食堂不设置美食品类；已有窗口的食堂不能直接改为普通餐厅。'
-            : '审核通过后更新公开资料。'
-        }}
+        {{ admin ? '保存后立即更新公开资料。食堂不设置美食品类。' : '审核通过后更新公开资料。' }}
       </p>
       <p v-if="Object.keys(errors).length" role="alert" class="error">请修改标记的字段后再提交。</p>
       <p v-if="saveError" role="alert" class="error">

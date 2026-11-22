@@ -45,25 +45,18 @@ public class ReplyTargetService {
             throw new BusinessException(ReplyErrorCode.NOT_FOUND);
         }
         Long restaurant = source.getRestaurantId();
-        var review =
-                source.getWindowId() == null
-                        ? reviews.anchor(restaurant, owner, reply.getReviewId())
-                        : reviews.windowAnchor(source.getWindowId(), owner, reply.getReviewId());
+        var review = reviews.anchor(restaurant, owner, reply.getReviewId());
         var names =
                 authors.find(List.of(owner, reply.getAuthorUserId()).stream().distinct().toList());
         var result = new ReplyTargetVo();
         result.setUserId(Long.toString(owner));
         result.setRestaurantId(restaurant == null ? null : restaurant.toString());
-        result.setWindowId(source.getWindowId() == null ? null : source.getWindowId().toString());
         result.setReviewId(review.getId().toString());
         result.setReplyId(reply.getId().toString());
         result.setReviewAuthor(name(names, owner));
         result.setReplyAuthor(name(names, reply.getAuthorUserId()));
         var content = ReviewReadService.current(review, photos.references(List.of(review.getId())));
-        var latest =
-                source.getWindowId() == null
-                        ? reviews.latest(restaurant, owner)
-                        : reviews.windowLatest(source.getWindowId(), owner);
+        var latest = reviews.latest(restaurant, owner);
         content.setScoringStatus(
                 latest != null && latest.getId().equals(review.getId()) ? "current" : "history");
         result.setReview(content);

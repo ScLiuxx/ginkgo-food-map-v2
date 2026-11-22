@@ -11,7 +11,6 @@ import java.time.Instant;
 public class ReplyTargetVo {
     private String userId;
     private String restaurantId;
-    private String windowId;
     private String reviewId;
     private String replyId;
     private PublicAuthor reviewAuthor;

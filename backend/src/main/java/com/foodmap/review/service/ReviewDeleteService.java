@@ -3,7 +3,6 @@ package com.foodmap.review.service;
 import com.foodmap.common.exception.BusinessException;
 import com.foodmap.file.service.MediaFileService;
 import com.foodmap.restaurant.dto.RestaurantReviewDelta;
-import com.foodmap.restaurant.service.CanteenWindowService;
 import com.foodmap.restaurant.service.RestaurantReviewApplicationService;
 import com.foodmap.review.dto.ReviewRecommendation;
 import com.foodmap.review.entity.ReviewEntity;
@@ -33,7 +32,6 @@ import java.math.BigDecimal;
 @RequiredArgsConstructor
 public class ReviewDeleteService {
     private final ReviewDeleteMapper deletion;
-    private final CanteenWindowService windows;
     private final ReviewWriteMapper reviews;
     private final ReviewPhotoMapper photos;
     private final ReplyDeleteMapper replyReceipts;
@@ -85,11 +83,7 @@ public class ReviewDeleteService {
             return false;
         }
         // 父店锁先于子资源锁，和发评、回复、删店统一顺序。
-        if (row.getWindowId() == null) {
-            restaurants.lockVisible(row.getRestaurantId());
-        } else {
-            windows.lockVisible(row.getWindowId(), false);
-        }
+        restaurants.lockVisible(row.getRestaurantId());
         row = deletion.find(id);
         if (row == null) {
             requireDeletedOwner(id, owner);
@@ -100,10 +94,7 @@ public class ReviewDeleteService {
         if (owner != null && author != owner.longValue()) {
             throw new BusinessException(ReviewErrorCode.FORBIDDEN);
         }
-        var previous =
-                (row.getWindowId() == null
-                        ? reviews.latest(row.getRestaurantId(), author)
-                        : reviews.latestWindow(row.getWindowId(), author));
+        var previous = reviews.latest(row.getRestaurantId(), author);
         var fileIds = photos.ids(id);
         if (deletion.tombstone(id) != 1) {
             throw new IllegalStateException("Missing review request receipt");
@@ -116,15 +107,8 @@ public class ReviewDeleteService {
         if (deletion.review(id) != 1) {
             throw new IllegalStateException("Missing review during delete");
         }
-        var next =
-                (row.getWindowId() == null
-                        ? reviews.latest(row.getRestaurantId(), author)
-                        : reviews.latestWindow(row.getWindowId(), author));
-        if (row.getWindowId() == null) {
-            restaurants.applyDelta(row.getRestaurantId(), delta(previous, next));
-        } else {
-            windows.applyDelta(row.getWindowId(), delta(previous, next));
-        }
+        var next = reviews.latest(row.getRestaurantId(), author);
+        restaurants.applyDelta(row.getRestaurantId(), delta(previous, next));
         return true;
     }
 

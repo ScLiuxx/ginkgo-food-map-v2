@@ -36,7 +36,7 @@ src/
 | --- | --- |
 | auth | 登录、注册、密码重置、身份恢复及安全回跳；公开表单和登录状态 |
 | account | 个人中心、设置、公开主页壳、本人资料及成长展示；装配review和restaurant的本人内容组件 |
-| restaurant | 搜索目录、店铺／窗口详情、相册、收藏、投稿和本人申请；向admin提供资料编辑及只读预览组件 |
+| restaurant | 搜索目录、餐厅／食堂详情、相册、收藏、投稿和本人申请；向admin提供资料编辑及只读预览组件 |
 | review | 点评编辑、列表、历史、原文与回复详情、本人点评及消息定位；复用同一回复编辑器 |
 | community | 用户署名、关注／粉丝与互动入口；与account及review通过公开能力协作 |
 | message | 消息分类、收件箱、未读状态及实时变更；调用review或announcement读取来源内容 |
@@ -75,13 +75,13 @@ HTTP层对明确的公开读取省略Bearer，私有读取和写入使用凭证�
 
 ## 点评、消息定位与弹窗复用
 
-`ReviewEntry`、`ReviewHistory`和`ReviewNotificationDetail`共用`ReviewDiscussion`，后者复用`ReviewDetailOriginal`与`ReplyThread`，不同入口不复制回复编辑器。店铺、窗口与历史明确传递目标类型和原点评ID；个人列表不通过遍历公开店铺接口拼接。
+`ReviewEntry`、`ReviewHistory`和`ReviewNotificationDetail`共用`ReviewDiscussion`，后者复用`ReviewDetailOriginal`与`ReplyThread`，不同入口不复制回复编辑器。店铺与历史明确传递所属餐厅ID和原点评ID；个人列表不通过遍历公开店铺接口拼接。
 
 消息详情先验证通知来源，再读取原点评与目标回复。指定回复按ID定位，与后续游标页去重；仅滚动详情内部。消息已读可能替换列表节点，关闭后按稳定消息ID恢复入口。SSE只推动重新读取，不直接作为正文或权限来源。
 
 桌面点评详情为居中原生dialog，手机为全屏详情；背景滚动受控，正文内部滚动，回复输入保持可达。电脑历史与单条详情通过`reviewHistoryHost`提供宿主，再用Teleport移动同一份详情DOM，共用一个模态窗口。返回历史恢复列表滚动和焦点，跨断点移动不重建编辑器，保留回复草稿及失败UUID；手机沿用历史弹层与全屏详情。
 
-全站普通写评由`WriteReviewLink`在当前地址加入一次性writeReview意图，布局装配`ReviewComposer`，店铺／窗口详情使用自己的固定目标编辑器，避免同时出现两个编辑器。关闭或发布完成留在来源页，发布通知使已挂载列表重读；未登录回跳由auth校验白名单。投稿两步表单有自己的生命周期，不借用普通写评弹窗。
+全站普通写评由`WriteReviewLink`在当前地址加入一次性writeReview意图，布局装配`ReviewComposer`，餐厅／食堂详情使用自己的固定目标编辑器，避免同时出现两个编辑器。关闭或发布完成留在来源页，发布通知使已挂载列表重读；未登录回跳由auth校验白名单。投稿两步表单有自己的生命周期，不借用普通写评弹窗。
 
 公告阅读由`AnnouncementReader`提供独立dialog，message核对通知与公告ID的一致性后装配。公告撤回或SSE重连触发内容重新校验；业务详情及接口见[通知与公告](../api/notifications.md)。
 
@@ -97,7 +97,7 @@ HTTP层对明确的公开读取省略Bearer，私有读取和写入使用凭证�
 
 ## 图片与相册生命周期
 
-正式店铺相册由restaurant拥有，点评图片留在review，窗口照片使用窗口相册；不以点评图、未审核图或样例图填补正式相册。目录与地图消费接口返回的封面，不逐店拉点评寻找图片。头像由account设置入口裁剪和压缩，再通过独立头像协议上传。
+正式店铺相册由restaurant拥有，点评图片留在review；不以点评图、未审核图或样例图填补正式相册。目录与地图消费接口返回的封面，不逐店拉点评寻找图片。头像由account设置入口裁剪和压缩，再通过独立头像协议上传。
 
 `useRestaurantAlbum`按游标读取元数据，以有界工作池加载JPEG Blob，优先处理当前选择；分页、元数据空态及单图失败分开处理。切店、卸载释放ObjectURL，旧代次的结果不能创建失去归属的图片URL。
 

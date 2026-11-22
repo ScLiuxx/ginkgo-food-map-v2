@@ -42,15 +42,10 @@ public class ImageUploadService {
     /** 用途仅接受服务端白名单，路径由配置生成；商户与点评共用私有存储及临时回收流程。 */
     public ImageUploadVo upload(InputStream source, String purpose) {
         if (purpose == null
-                || !java.util.Set.of("REVIEW", "RESTAURANT", "WINDOW", "AVATAR")
-                        .contains(purpose)) {
+                || !java.util.Set.of("REVIEW", "RESTAURANT", "AVATAR").contains(purpose)) {
             throw new BusinessException(FileErrorCode.INVALID_IMAGE);
         }
         var actor = actors.requireActor();
-        // 窗口资料只由管理员维护，必须在处理图片和访问云存储之前拒绝普通账号。
-        if ("WINDOW".equals(purpose) && !actor.isAdministrator()) {
-            throw new org.springframework.security.access.AccessDeniedException("需要管理员权限");
-        }
         long owner = actor.getUserId();
         storage.requireAvailable();
         var image = policy.process(source);
@@ -67,7 +62,6 @@ public class ImageUploadService {
         String prefix =
                 switch (purpose) {
                     case "RESTAURANT" -> properties.getRestaurantPrefix();
-                    case "WINDOW" -> properties.getWindowPrefix();
                     case "AVATAR" -> properties.getAvatarPrefix();
                     default -> properties.getPrefix();
                 };

@@ -145,6 +145,23 @@ class ImageUploadIntegrationTest {
                         .header("Authorization", "Bearer " + token));
     }
 
+    @Test
+    void rejectsRetiredWindowPurposeBeforeWritingStorageOrMetadata() throws Exception {
+        mvc.perform(
+                        multipart("/api/files/images")
+                                .file(
+                                        new org.springframework.mock.web.MockMultipartFile(
+                                                "file",
+                                                "photo.jpg",
+                                                "image/jpeg",
+                                                JpegImageProcessorTest.jpeg(80, 60)))
+                                .param("purpose", "WINDOW")
+                                .header("Authorization", "Bearer " + owner))
+                .andExpect(status().isBadRequest());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM media_files", Long.class)).isZero();
+        org.mockito.Mockito.verifyNoInteractions(storage);
+    }
+
     private String uploadId() throws Exception {
         var response =
                 upload(owner)

@@ -31,7 +31,7 @@ const props = defineProps<{
   desktopList?: boolean
   /** 历史记录保留作者，折叠细分评分；正文可打开对应ID的详情。 */
   detailEntry?: boolean
-  /** 本人详情中的店铺摘要沿用当前分组，不另行拼接或猜测窗口父级。 */
+  /** 本人详情中的店铺摘要沿用当前分组，不另行猜测点评所属店铺。 */
   storeName?: string
   storeTo?: string
   authenticated: boolean

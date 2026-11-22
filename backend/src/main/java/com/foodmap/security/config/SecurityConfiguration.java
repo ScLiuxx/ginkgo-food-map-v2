@@ -94,9 +94,7 @@ public class SecurityConfiguration {
                                         .requestMatchers("/api/admin/**")
                                         .hasRole("ADMIN")
                                         // 直接维护正式资料统一收紧到管理员；投稿、纠错等嵌套接口仍按原认证规则执行。
-                                        .requestMatchers(
-                                                HttpMethod.POST,
-                                                "/api/restaurants")
+                                        .requestMatchers(HttpMethod.POST, "/api/restaurants")
                                         .hasRole("ADMIN")
                                         .requestMatchers(HttpMethod.PUT, "/api/restaurants/{id}")
                                         .hasRole("ADMIN")
@@ -105,15 +103,6 @@ public class SecurityConfiguration {
                                         .requestMatchers(
                                                 HttpMethod.GET, "/api/restaurants/{id}/management")
                                         .hasRole("ADMIN")
-                                        .requestMatchers(
-                                                HttpMethod.GET,
-                                                "/api/canteen-windows/{id}",
-                                                "/api/canteen-windows/{id}/photos",
-                                                "/api/canteen-windows/{id}/photos/{fileId}",
-                                                "/api/canteen-windows/{id}/reviews",
-                                                "/api/canteen-windows/{id}/reviews/authors/{author}/history",
-                                                "/api/restaurants/{id}/windows")
-                                        .permitAll()
                                         .requestMatchers(
                                                 HttpMethod.GET,
                                                 "/api/content-likes",

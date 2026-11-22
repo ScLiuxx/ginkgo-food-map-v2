@@ -214,8 +214,7 @@ onBeforeUnmount(() => {
     </div>
     <article v-for="group in records" :key="group.item.id" class="my-review-group">
       <header class="my-review-store">
-        <AppLink
-          :to="`/${group.restaurant.targetType === 'WINDOW' ? 'canteen-windows' : 'restaurants'}/${group.restaurant.id}`"
+        <AppLink :to="`/restaurants/${group.restaurant.id}`"
           ><h2>{{ group.restaurant.name }}</h2>
           <span aria-hidden="true">›</span></AppLink
         ><span v-if="group.restaurant.businessStatus === 'CLOSED'" class="closed-store"
@@ -229,7 +228,7 @@ onBeforeUnmount(() => {
         :list-card="cardLayout"
         :desktop-list="cardLayout && !publicUserId"
         :store-name="group.restaurant.name"
-        :store-to="`/${group.restaurant.targetType === 'WINDOW' ? 'canteen-windows' : 'restaurants'}/${group.restaurant.id}`"
+        :store-to="`/restaurants/${group.restaurant.id}`"
         :authenticated="auth.authenticated"
         :viewer-id="viewerId"
         :busy="busy"
@@ -242,7 +241,6 @@ onBeforeUnmount(() => {
         <template v-if="group.item.historyCount" #history="{ restoreFocus }">
           <ReviewHistory
             :restaurant-id="group.restaurant.id"
-            :window="group.restaurant.targetType === 'WINDOW'"
             :item="group.item"
             :store-name="group.restaurant.name"
             :viewer-id="viewerId"

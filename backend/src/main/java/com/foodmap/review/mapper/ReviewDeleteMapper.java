@@ -29,8 +29,8 @@ public interface ReviewDeleteMapper {
     /** 与点评插入同事务，任何冲突都回滚整次发布。 */
     @Insert(
             "INSERT INTO"
-                + " review_request_receipts(author_user_id,client_request_id,review_id,restaurant_id,window_id)"
-                + " VALUES(#{authorUserId},UUID_TO_BIN(#{clientRequestId}),#{id},#{restaurantId,jdbcType=BIGINT},#{windowId,jdbcType=BIGINT})")
+                + " review_request_receipts(author_user_id,client_request_id,review_id,restaurant_id)"
+                + " VALUES(#{authorUserId},UUID_TO_BIN(#{clientRequestId}),#{id},#{restaurantId,jdbcType=BIGINT})")
     int record(ReviewEntity row);
 
     /** 回执只保留删除授权与防重放所需逻辑ID，不保留内容。 */

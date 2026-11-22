@@ -110,19 +110,19 @@ class MyReviewApiIntegrationTest {
         for (long id : List.of(11L, 22L)) {
             jdbc.update(
                     "INSERT INTO users(id,username,email,password_hash,email_verified)"
-                        + " VALUES(?,?,?,?,TRUE)",
+                            + " VALUES(?,?,?,?,TRUE)",
                     id,
                     "my_reviewer_" + id,
                     "my" + id + "@example.test",
                     "private-password");
             jdbc.update(
                     "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE"
-                        + " code='ROLE_USER'",
+                            + " code='ROLE_USER'",
                     id);
         }
         jdbc.update(
                 "INSERT INTO restaurants(id,name,category_code,created_by)"
-                    + " VALUES(1,'第一家店','OTHER',11),(2,'第二家店','OTHER',11)");
+                        + " VALUES(1,'第一家店','OTHER',11),(2,'第二家店','OTHER',11)");
         when(sessions.isActive(anyString(), anyLong(), anyLong())).thenReturn(true);
         owner = token(11);
     }
@@ -211,7 +211,7 @@ class MyReviewApiIntegrationTest {
         for (int id = 3; id <= 11; id++) {
             jdbc.update(
                     "INSERT INTO restaurants(id,name,category_code,created_by)"
-                        + " VALUES(?,?,'OTHER',11)",
+                            + " VALUES(?,?,'OTHER',11)",
                     id,
                     "店铺" + id);
         }
@@ -221,7 +221,7 @@ class MyReviewApiIntegrationTest {
         review(999, 999, 11, 8, "2026-11-03 01:00:00");
         jdbc.update(
                 "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM'"
-                    + " WHERE id=11");
+                        + " WHERE id=11");
         jdbc.update("UPDATE restaurants SET business_status='CLOSED' WHERE id=10");
         mine(owner)
                 .andExpect(jsonPath("$.data.records.length()").value(8))
@@ -250,7 +250,7 @@ class MyReviewApiIntegrationTest {
                 .andExpect(jsonPath("$.data.totalPages").value(0))
                 .andExpect(jsonPath("$.data.pageSize").value(8));
         verifyNoInteractions(photos, targets);
-        verify(reads, never()).mixedCounts(anyLong(), anyList(), anyList());
+        verify(reads, never()).counts(anyLong(), anyList());
         review(101, 1, 11, 8, "2026-11-01 01:00:00");
         mvc.perform(
                         get("/api/me/reviews")
@@ -260,7 +260,7 @@ class MyReviewApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalGroups").value(1))
                 .andExpect(jsonPath("$.data.records").isEmpty());
-        verify(reads, never()).mixedPage(anyLong(), anyList(), anyList(), anyInt(), anyLong());
+        verify(reads, never()).page(anyLong(), anyList(), anyInt(), anyLong());
         verifyNoInteractions(photos);
         for (var pair :
                 List.of(
@@ -284,7 +284,7 @@ class MyReviewApiIntegrationTest {
         review(102, 1, 11, 9, "2026-11-02 01:00:00");
         jdbc.update(
                 "INSERT INTO review_photos(review_id,position,media_file_id)"
-                    + " VALUES(102,1,502),(102,0,501)");
+                        + " VALUES(102,1,502),(102,0,501)");
         var response =
                 mine(owner)
                         .andExpect(
@@ -398,14 +398,14 @@ class MyReviewApiIntegrationTest {
                 .andExpect(jsonPath("$.data.totalGroups").value(501))
                 .andExpect(jsonPath("$.data.records.length()").value(8));
         verify(targets, times(2)).visible(anyList());
-        verify(reads, times(1)).mixedPage(eq(11L), anyList(), anyList(), eq(8), eq(0L));
+        verify(reads, times(1)).page(eq(11L), anyList(), eq(8), eq(0L));
         verify(photos, times(1)).references(anyList());
         String columns =
                 jdbc.queryForObject(
                         "SELECT GROUP_CONCAT(column_name ORDER BY seq_in_index) FROM"
-                            + " information_schema.statistics WHERE table_schema=DATABASE() AND"
-                            + " table_name='reviews' AND"
-                            + " index_name='idx_reviews_author_restaurant_created_id'",
+                                + " information_schema.statistics WHERE table_schema=DATABASE() AND"
+                                + " table_name='reviews' AND"
+                                + " index_name='idx_reviews_author_restaurant_created_id'",
                         String.class);
         assertThat(columns).isEqualTo("author_user_id,restaurant_id,created_at,id");
     }

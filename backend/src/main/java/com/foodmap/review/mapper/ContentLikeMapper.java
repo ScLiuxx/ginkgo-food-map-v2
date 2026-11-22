@@ -22,11 +22,11 @@ public interface ContentLikeMapper {
     /** 批量读取点评或回复的最小来源事实；父店可见性由餐厅公开服务核验。 */
     @Select(
             "<script><choose><when test='type == &quot;REVIEW&quot;'>SELECT id,id"
-                + " review_id,restaurant_id,window_id,author_user_id,body,created_at FROM reviews"
-                + " WHERE id IN "
+                    + " review_id,restaurant_id,author_user_id,body,created_at FROM reviews"
+                    + " WHERE id IN "
                     + IDS
                     + "</when><otherwise>SELECT"
-                    + " p.id,p.review_id,r.restaurant_id,r.window_id,p.author_user_id,p.body,p.created_at"
+                    + " p.id,p.review_id,r.restaurant_id,p.author_user_id,p.body,p.created_at"
                     + " FROM review_replies p JOIN reviews r ON r.id=p.review_id WHERE p.id IN "
                     + IDS
                     + "</otherwise></choose></script>")

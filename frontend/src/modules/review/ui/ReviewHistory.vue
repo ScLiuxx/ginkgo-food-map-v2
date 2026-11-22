@@ -6,11 +6,9 @@ import { reviewGatewayKey, unavailableReviewGateway } from '../model/review'
 import { replyScopeVisibleKey } from '../model/replyEditor'
 import type { ReviewItem } from '../model/review'
 import ReviewEntry from './ReviewEntry.vue'
-import { windowReviewGateway } from '../api/reviewApi'
 
 /** 历史只在独立面板内展示；关闭保留记录和回复草稿，不把旧卡片嵌回主列表。 */
 const props = defineProps<{
-  window?: boolean
   restaurantId: string
   item: ReviewItem
   viewerId?: string
@@ -24,9 +22,7 @@ const emit = defineEmits<{
   refresh: []
   delete: [item: ReviewItem]
 }>()
-const gateway = props.window
-  ? windowReviewGateway
-  : inject(reviewGatewayKey, unavailableReviewGateway)
+const gateway = inject(reviewGatewayKey, unavailableReviewGateway)
 provide(reviewGatewayKey, gateway)
 const open = ref(false),
   loading = ref(false),
@@ -195,7 +191,7 @@ function refresh() {
             :key="record.id"
             :item="record"
             detail-entry
-            :store-to="`/${window ? 'canteen-windows' : 'restaurants'}/${restaurantId}`"
+            :store-to="`/restaurants/${restaurantId}`"
             :store-name="storeName || '查看店铺'"
             :star-scale="starScale"
             :authenticated="!!viewerId"

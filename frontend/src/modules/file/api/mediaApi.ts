@@ -6,7 +6,7 @@ import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 export async function uploadImage(
   file: File,
   token: string,
-  purpose: 'REVIEW' | 'RESTAURANT' | 'WINDOW' | 'AVATAR' = 'REVIEW',
+  purpose: 'REVIEW' | 'RESTAURANT' | 'AVATAR' = 'REVIEW',
 ): Promise<string> {
   const form = new FormData()
   form.append('file', file)

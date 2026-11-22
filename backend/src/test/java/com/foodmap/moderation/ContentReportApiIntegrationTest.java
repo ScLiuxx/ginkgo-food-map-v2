@@ -117,7 +117,7 @@ class ContentReportApiIntegrationTest {
         for (long id : List.of(11L, 22L, 33L, 44L)) {
             jdbc.update(
                     "INSERT INTO users(id,username,email,password_hash,email_verified)"
-                        + " VALUES(?,?,?,?,TRUE)",
+                            + " VALUES(?,?,?,?,TRUE)",
                     id,
                     "report_user_" + id,
                     "report" + id + "@example.test",
@@ -129,7 +129,7 @@ class ContentReportApiIntegrationTest {
         }
         jdbc.update(
                 "INSERT INTO restaurants(id,name,category_code,created_by)"
-                    + " VALUES(1,'举报测试店','OTHER',11)");
+                        + " VALUES(1,'举报测试店','OTHER',11)");
         review(100, 1, 22, "被举报点评正文内容");
         reply(200, 100, 22, "被举报回复正文");
         // 点评直接插入时未经过发布服务，这里补齐与之一致的累计值，保证删除差额不会变成负数。
@@ -343,7 +343,7 @@ class ContentReportApiIntegrationTest {
         assertThat(
                         jdbc.queryForObject(
                                 "SELECT deleted_at FROM review_request_receipts WHERE"
-                                    + " review_id=100",
+                                        + " review_id=100",
                                 java.sql.Timestamp.class))
                 .isNotNull();
         assertThat(
@@ -362,14 +362,14 @@ class ContentReportApiIntegrationTest {
         assertThat(
                         jdbc.queryForObject(
                                 "SELECT COUNT(DISTINCT recipient_user_id) FROM"
-                                    + " notification_messages WHERE"
-                                    + " notification_type='REPORT_RESULT'",
+                                        + " notification_messages WHERE"
+                                        + " notification_type='REPORT_RESULT'",
                                 Long.class))
                 .isEqualTo(2L);
         assertThat(
                         jdbc.queryForObject(
                                 "SELECT review_id FROM notification_messages WHERE"
-                                    + " notification_type='REPORT_RESULT' AND source_id=?",
+                                        + " notification_type='REPORT_RESULT' AND source_id=?",
                                 Long.class,
                                 Long.valueOf(first)))
                 .isEqualTo(100L);
@@ -567,7 +567,7 @@ class ContentReportApiIntegrationTest {
         // 删除服务要求发布回执存在并标记deleted_at，直接构造数据时必须同步回执。
         jdbc.update(
                 "INSERT INTO review_request_receipts(author_user_id,client_request_id,review_id,"
-                        + "restaurant_id,window_id) VALUES(?,UUID_TO_BIN(?),?,?,NULL)",
+                        + "restaurant_id) VALUES(?,UUID_TO_BIN(?),?,?)",
                 author,
                 requestId,
                 id,

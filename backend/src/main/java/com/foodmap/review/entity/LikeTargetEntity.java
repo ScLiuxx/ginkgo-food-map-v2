@@ -10,7 +10,6 @@ public class LikeTargetEntity {
     private long id;
     private long reviewId;
     private Long restaurantId;
-    private Long windowId;
     private long authorUserId;
     private String body;
     private Instant createdAt;

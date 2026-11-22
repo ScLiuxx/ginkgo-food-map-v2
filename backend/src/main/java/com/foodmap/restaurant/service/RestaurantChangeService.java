@@ -78,9 +78,10 @@ public class RestaurantChangeService {
         }
         validateSubmission(request, null);
         String uuid = request.getClientRequestId().toString();
-        // 食堂只能评价具体窗口，联合提交不能绕过这条现行规则；普通餐厅停业仍沿用可评规则。
+        // 附带点评仍只用于普通餐厅投稿；食堂收录后可直接评价。
         if (request.getReview() != null && !"REGULAR".equals(request.getRestaurantType())) {
-            throw new BusinessException(RestaurantErrorCode.INVALID_INPUT, "仅普通餐厅可以附带点评，食堂请评价具体窗口");
+            throw new BusinessException(
+                    RestaurantErrorCode.INVALID_INPUT, "仅普通餐厅可以附带点评，食堂收录后可直接评价");
         }
         String reviewHash =
                 request.getReview() == null

@@ -107,28 +107,6 @@ async function mount(source: string, signedIn = true) {
             }),
         },
       },
-      {
-        path: '/canteen-windows/:id',
-        component: {
-          render: () =>
-            h(ReviewComposer, {
-              restaurant: {
-                ...restaurantFixture,
-                dining: {
-                  kind: 'window',
-                  campus: null,
-                  parent: null,
-                  floor: null,
-                  description: null,
-                  dishes: [],
-                  windows: null,
-                },
-              },
-              fixedTarget: true,
-              onPublished: published,
-            }),
-        },
-      },
       { path: '/:pathMatch(.*)*', component: sourcePage },
     ],
   })
@@ -284,7 +262,7 @@ it('未登录写评在认证后回原页，保留安全展示参数并仅打开�
   expect(dialog().open).toBe(false)
 })
 
-it.each(['/restaurants/1', '/canteen-windows/1'])(
+it.each(['/restaurants/1', '/restaurants/1'])(
   '详情 %s 仅使用固定对象编辑器，不叠加全站弹窗',
   async (source) => {
     await mount(source)

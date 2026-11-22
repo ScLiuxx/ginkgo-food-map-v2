@@ -82,7 +82,7 @@ class OssLiveUploadIntegrationTest {
                             "access-key-id",
                             "access-key-secret",
                             "restaurant-prefix",
-                            "window-prefix")) {
+                            "avatar-prefix")) {
                 var key = "app.file.oss." + name;
                 var value = source.getProperty(key);
                 if (value != null) {
@@ -154,14 +154,9 @@ class OssLiveUploadIntegrationTest {
 
     /** 验证真实multipart、JWT、MySQL与私有OSS，包含本人取消和他人越权，不发布点评。 */
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {"REVIEW", "RESTAURANT", "WINDOW"})
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"REVIEW", "RESTAURANT"})
     void uploadsReadsAndImmediatelyCancelsRealImage(String purpose) throws Exception {
         // 窗口相册用途只授权隔离库的本次测试上传者，不改变开发或线上账号。
-        if ("WINDOW".equals(purpose)) {
-            jdbc.update(
-                    "INSERT INTO user_roles(user_id,role_id) SELECT 11,id FROM roles WHERE"
-                            + " code='ROLE_ADMIN'");
-        }
         var response =
                 mvc.perform(
                                 multipart("/api/files/images")
@@ -188,7 +183,6 @@ class OssLiveUploadIntegrationTest {
                 .startsWith(
                         switch (purpose) {
                             case "RESTAURANT" -> ossProperties.getRestaurantPrefix();
-                            case "WINDOW" -> ossProperties.getWindowPrefix();
                             default -> ossProperties.getPrefix();
                         });
         byte[] downloaded = storage.read(row.getBucketName(), row.getStorageKey());

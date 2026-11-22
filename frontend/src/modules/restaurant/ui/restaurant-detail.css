@@ -283,63 +283,10 @@ h1 {
   font-weight: 400;
   color: #9aa2ad;
 }
-.detail-dishes {
-  margin-top: 22px;
-  padding: 26px;
-  border: 1px solid #eceef1;
-  border-radius: 16px;
-  background: white;
-}
 h2 {
   font-size: 21px;
   font-weight: 750;
   margin: 0 0 18px;
-}
-.dish-list {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0 26px;
-}
-.dish-row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  padding: 16px 0;
-  border-bottom: 1px solid #f1f3f5;
-  min-width: 0;
-}
-.dish-row img {
-  width: 56px;
-  height: 56px;
-  object-fit: cover;
-  border-radius: 5px;
-}
-.dish-row > div {
-  flex: 1;
-  min-width: 0;
-}
-.dish-row h3 {
-  font-size: 14px;
-  font-weight: 500;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.dish-row p {
-  font-size: 12px;
-  color: #8e97a1;
-  margin: 4px 0 0;
-  overflow-wrap: anywhere;
-}
-.dish-row > strong {
-  color: #e4842b;
-  font-size: 16px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-.dining-empty {
-  color: #979fa8;
-  font-size: 13px;
-  padding: 18px 0;
 }
 .detail-reviews {
   margin-top: 22px;
@@ -405,9 +352,6 @@ h2 {
     grid-template-columns: 190px minmax(0, 1fr);
     gap: 22px;
   }
-  .dish-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 @media (max-width: 600px) {
   .restaurant-detail {
@@ -444,15 +388,9 @@ h2 {
     height: 128px;
     border-radius: 12px 12px 0 0;
   }
-  .dish-list {
-    grid-template-columns: 1fr;
-  }
   .detail-reviews {
     padding: 0 18px;
     border-radius: 12px;
-  }
-  .detail-dishes {
-    padding: 18px;
   }
 }
 @media (max-width: 360px) {

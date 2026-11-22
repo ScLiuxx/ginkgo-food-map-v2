@@ -640,13 +640,12 @@ class UserProfileApiIntegrationTest {
         avatarFile(501, 22, "AVATAR", "TEMPORARY");
         avatarFile(502, 11, "REVIEW", "TEMPORARY");
         avatarFile(503, 11, "RESTAURANT", "TEMPORARY");
-        avatarFile(504, 11, "WINDOW", "TEMPORARY");
         avatarFile(505, 11, "AVATAR", "TEMPORARY");
         jdbc.update(
                 "UPDATE media_files SET expires_at=TIMESTAMPADD(HOUR,-1,CURRENT_TIMESTAMP(6)) WHERE"
                         + " id=505");
         avatarFile(506, 11, "AVATAR", "BOUND");
-        for (String invalid : List.of("501", "502", "503", "504", "505", "506", "999")) {
+        for (String invalid : List.of("501", "502", "503", "505", "506", "999")) {
             avatar(invalid).andExpect(status().isConflict());
         }
         assertThat(account(11).get("avatar_file_id")).isNull();

@@ -2,6 +2,7 @@ package com.foodmap.restaurant.mapper;
 
 import com.foodmap.restaurant.entity.RestaurantCategoryEntity;
 import com.foodmap.restaurant.entity.RestaurantManagementEntity;
+
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -26,12 +27,14 @@ public interface RestaurantWriteMapper {
     int insert(RestaurantManagementEntity entity);
 
     /** 只替换可编辑字段，WHERE再次校验归属和删除状态，不修改created_by。 */
-    int updateCurrent(@Param("row") RestaurantManagementEntity row, @Param("actor") long actor,
-                      @Param("admin") boolean admin);
+    int updateCurrent(
+            @Param("row") RestaurantManagementEntity row,
+            @Param("actor") long actor,
+            @Param("admin") boolean admin);
 
     /** 软删除不删除标签；操作者、时间和原因在同一SQL中更新。 */
-    int softDeleteCurrent(@Param("id") long id,
-                          @Param("actor") long actor, @Param("admin") boolean admin);
+    int softDeleteCurrent(
+            @Param("id") long id, @Param("actor") long actor, @Param("admin") boolean admin);
 
     /** 必须位于主行锁和主表更新同一个事务内，失败时整组标签及主表一并回滚。 */
     int deleteTags(@Param("id") long id);
@@ -41,8 +44,4 @@ public interface RestaurantWriteMapper {
 
     /** 私有读取可保留删除餐厅的标签；公开查询仍使用原Mapper的父状态过滤。 */
     List<String> selectTags(@Param("id") long id);
-
-    /** 父食堂主行已加锁后检查所有窗口，避免类型切换破坏窗口外键，不排除软删除窗口。 */
-    @org.apache.ibatis.annotations.Select("SELECT EXISTS(SELECT 1 FROM canteen_windows WHERE canteen_id=#{id})")
-    boolean hasWindows(@Param("id") long id);
 }

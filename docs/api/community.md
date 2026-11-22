@@ -75,7 +75,7 @@
 
 **响应**
 
-先排除不可见店铺，再按被查看作者的restaurant_id归组，每家店选最新有效点评作为主卡片；按主卡片createdAt、数字ID倒序后分页。返回真实totalGroups/totalReviews、historyCount和nextHistoryCursor，空/越界页仍保留计数；停业可见；窗口点评按WINDOW类型和window_id独立归组，不与同号餐厅混合。历史展开沿用[同作者历史接口](reviews.md#review-history)，删除仍仅允许内容本人，不能凭主页参数取得他人删除权限。目标用户错误同[公开资料](#public-info)，分页非法返回400通用校验错误。
+先排除不可见店铺，再按被查看作者的restaurant_id归组，每家店选最新有效点评作为主卡片；按主卡片createdAt、数字ID倒序后分页。返回真实totalGroups/totalReviews、historyCount和nextHistoryCursor，空/越界页仍保留计数；停业可见；食堂与普通餐厅统一按restaurant_id归组。历史展开沿用[同作者历史接口](reviews.md#review-history)，删除仍仅允许内容本人，不能凭主页参数取得他人删除权限。目标用户错误同[公开资料](#public-info)，分页非法返回400通用校验错误。
 
 **错误码**
 
@@ -89,7 +89,7 @@
 
 ## 店铺收藏与隐私
 
-本节所有入口均需有效Bearer、可用账号及当前会话；匿名401，成功200且Cache-Control: no-store。收藏仅针对restaurants中的普通餐厅及食堂，不提供窗口或点评收藏。写入用户来自认证上下文，不接受客户端指定其他用户；不生成通知、经验或搜索同步任务，不返回店铺收藏人数或收藏者名单。
+本节所有入口均需有效Bearer、可用账号及当前会话；匿名401，成功200且Cache-Control: no-store。收藏仅针对restaurants中的普通餐厅及食堂，不提供点评收藏。写入用户来自认证上下文，不接受客户端指定其他用户；不生成通知、经验或搜索同步任务，不返回店铺收藏人数或收藏者名单。
 
 <a id="favorite-state"></a>
 

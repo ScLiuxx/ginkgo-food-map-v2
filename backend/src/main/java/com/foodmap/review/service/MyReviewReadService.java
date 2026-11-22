@@ -46,13 +46,11 @@ public class MyReviewReadService {
         result.setPage(query.getPage());
         result.setPageSize(query.getPageSize());
         var targets = restaurants.visible(mapper.targets(userId));
-        var windows = restaurants.visibleWindows(mapper.windowTargets(userId));
-        if (targets.isEmpty() && windows.isEmpty()) {
+        if (targets.isEmpty()) {
             return result;
         }
         var ids = List.copyOf(targets.keySet());
-        var windowIds = List.copyOf(windows.keySet());
-        var counts = mapper.mixedCounts(userId, ids, windowIds);
+        var counts = mapper.counts(userId, ids);
         result.setTotalGroups(counts.getTotalGroups());
         result.setTotalReviews(counts.getTotalReviews());
         result.setTotalPages(
@@ -61,7 +59,7 @@ public class MyReviewReadService {
         if (query.getOffset() >= counts.getTotalGroups()) {
             return result;
         }
-        var rows = mapper.mixedPage(userId, ids, windowIds, query.getPageSize(), query.getOffset());
+        var rows = mapper.page(userId, ids, query.getPageSize(), query.getOffset());
         if (rows.isEmpty()) {
             return result;
         }
@@ -73,17 +71,12 @@ public class MyReviewReadService {
                         .map(
                                 row -> {
                                     var group = new MyReviewPageVo.Group();
-                                    group.setRestaurant(
-                                            row.getWindowId() == null
-                                                    ? targets.get(row.getRestaurantId())
-                                                    : windows.get(row.getWindowId()));
+                                    group.setRestaurant(targets.get(row.getRestaurantId()));
                                     group.setHistoryCount(row.getHistoryCount());
                                     if (row.getHistoryCount() > 0) {
                                         group.setNextHistoryCursor(
                                                 ReviewHistoryCursorPolicy.encode(
-                                                        row.getWindowId() == null
-                                                                ? row.getRestaurantId()
-                                                                : -row.getWindowId(),
+                                                        row.getRestaurantId(),
                                                         userId,
                                                         row.getCreatedAt(),
                                                         row.getId()));

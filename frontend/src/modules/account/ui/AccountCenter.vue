@@ -93,7 +93,7 @@ const nextExperience = computed(() =>
 const growthRewards = [
   {
     title: '首次点评一家店',
-    description: '每人每家餐厅或窗口仅奖励一次',
+    description: '每人每家餐厅或食堂仅奖励一次',
     icon: 'review',
     experience: 5,
   },

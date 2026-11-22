@@ -12,7 +12,7 @@
 
 已建立V45的[待发布点评和图片关联表](../architecture/mysql-schema.md#review_submissions待发布点评与发布回执)。正式点评另通过V46接入三态态度，发布、读取、历史及个人点评和回复定位页面均已同步；旧推荐／不推荐逐条映射并保留原评分、请求摘要及时间。
 
-后端新店提交已接受可选点评，申请、两类图片和待发布内容同事务保存；沿用外层请求UUID，联合摘要覆盖点评及有序图片，原无点评摘要保持兼容。仅普通餐厅可附带点评，食堂仍需评价具体窗口；普通餐厅沿用停业可评规则。契约见[新店附带点评](../api/submissions.md#attached-review)。[本人详情](../api/submissions.md#my-detail)及[私有点评图片](../api/submissions.md#my-review-photos)已接通：申请归属、点评作者及文件上传者分层校验，管理员无越权例外。
+后端新店提交已接受可选点评，申请、两类图片和待发布内容同事务保存；沿用外层请求UUID，联合摘要覆盖点评及有序图片，原无点评摘要保持兼容。仅普通餐厅可附带点评，食堂收录后可直接评价；普通餐厅沿用停业可评规则。契约见[新店附带点评](../api/submissions.md#attached-review)。[本人详情](../api/submissions.md#my-detail)及[私有点评图片](../api/submissions.md#my-review-photos)已接通：申请归属、点评作者及文件上传者分层校验，管理员无越权例外。
 
 [审核通过自动发布](../api/submissions.md#approve-attached-review)已接通：管理员只提交店铺资料，保留原作者及独立发布UUID，发布点评与图片，更新评分和两类奖励；任一步失败回滚新店及整次审核。相同内容重试只返回首次回执，正式点评被删除后也不补发或恢复私有内容。[驳回](../api/submissions.md#reject)、[本人修改](../api/submissions.md#my-edit)、[撤回](../api/submissions.md#my-withdraw)及[重提](../api/submissions.md#my-resubmit)的后端联动已接通；新店联合表单、本人私有点评查看及修改／撤回／重提页面也已接入。
 

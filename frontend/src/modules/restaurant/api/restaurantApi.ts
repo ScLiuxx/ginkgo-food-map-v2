@@ -1,4 +1,3 @@
-import { fetchCanteenWindows } from './canteenWindowApi'
 import type { ApiResponse } from '@/shared/api/api.types'
 import { httpClient } from '@/shared/api/httpClient'
 import type { CatalogFilters, RestaurantReadModel } from '../model/restaurant.types'
@@ -11,8 +10,6 @@ export interface RestaurantResponse {
   restaurantType?: RestaurantReadModel['restaurantType']
   supportsDineIn?: boolean | null
   supportsDelivery?: boolean | null
-  /** 校园展示模型由正式餐厅与独立窗口接口组装。 */
-  dining?: RestaurantReadModel['dining']
   id: string
   name: string
   /** 食堂不适用美食分类，编码及名称均为null。 */
@@ -97,7 +94,6 @@ export function toRestaurantModel(value: RestaurantResponse): RestaurantReadMode
     restaurantType: value.restaurantType,
     supportsDineIn: value.supportsDineIn ?? null,
     supportsDelivery: value.supportsDelivery ?? null,
-    ...(value.dining ? { dining: value.dining } : {}),
     id: value.id,
     name: value.name,
     category: value.restaurantType === 'CANTEEN' ? '' : (value.categoryName ?? ''),
@@ -184,16 +180,6 @@ export async function fetchRestaurant(
     { signal },
   )
   const model = toRestaurantModel(response.data.data)
-  if (model.restaurantType === 'CANTEEN')
-    model.dining = {
-      kind: 'canteen',
-      campus: null,
-      parent: null,
-      floor: null,
-      description: null,
-      windows: await fetchCanteenWindows(id, signal),
-      dishes: [],
-    }
   return model
 }
 

@@ -5,16 +5,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { reviewDestination } from '@/shared/lib/reviewNavigation'
 import { useLoginStore } from '@/modules/auth/model/login.store'
 import { authToken } from '@/shared/api/authSession'
-import { fetchRestaurant } from '@/modules/restaurant/api/restaurantApi'
 import type { RestaurantReadModel } from '@/modules/restaurant/model/restaurant.types'
 import { ratingDimensions } from '@/modules/restaurant/model/catalog.logic'
 import HalfStarRating from './HalfStarRating.vue'
 import ReviewTargetSearch from './ReviewTargetSearch.vue'
-import {
-  canteenWindows,
-  diningDetails,
-  compareFloors,
-} from '@/modules/restaurant/model/campusDining'
 import { validBody, reviewGatewayKey, unavailableReviewGateway } from '../model/review'
 import { compressPhoto } from '../model/photos'
 import { useReviewPhotos } from '../model/useReviewPhotos'
@@ -59,39 +53,10 @@ const locked = computed(() => opened.value && owner !== authToken.value)
 const supportsPhotos = gateway.supportsPhotos !== false
 // 五星仅用于输入展示；提交保留旧接口的四维十分制，不改变后端计分。
 const total = computed(() => Object.values(scores.value).reduce((sum, score) => sum + score, 0) / 8)
-const floor = ref('')
-const windowId = ref('')
 const current = computed(() => restaurants.value.find((r) => r.id === selected.value))
-const dining = computed(() => (current.value ? diningDetails(current.value) : null))
-const isCanteen = computed(
-  () =>
-    dining.value?.kind !== 'window' &&
-    (current.value?.restaurantType === 'CANTEEN' || dining.value?.kind === 'canteen'),
-)
-const targetLocked = computed(
-  () => !!props.fixedTarget || props.restaurant?.dining?.kind === 'window',
-)
-const windows = computed(() =>
-  current.value
-    ? canteenWindows(current.value.id, dining.value?.windows ?? null).filter((w) => !w.closed)
-    : [],
-)
-// 缺失楼层也可访问，但不虚构楼层；窗口ID必须来自当前食堂的正式关联。
-const floors = computed(() =>
-  [...new Set(windows.value.map((w) => w.floor || '楼层待补充'))].sort(compareFloors),
-)
-const floorWindows = computed(() =>
-  windows.value.filter((w) => (w.floor || '楼层待补充') === floor.value),
-)
-const chosenWindow = computed(() => floorWindows.value.find((w) => w.id === windowId.value))
-const publishTarget = computed(() => (isCanteen.value ? chosenWindow.value?.id : current.value?.id))
-const targetName = computed(() =>
-  isCanteen.value ? chosenWindow.value?.name : current.value?.name,
-)
-// 窗口名始终是主标题，父食堂和楼层作为上下文，不裁剪或猜测正式店名。
-const lockedContext = computed(() =>
-  [dining.value?.parent?.name, dining.value?.floor].filter(Boolean).join(' · '),
-)
+const targetLocked = computed(() => !!props.fixedTarget)
+const publishTarget = computed(() => current.value?.id)
+const targetName = computed(() => current.value?.name)
 let previousOverflow: string | undefined
 let returnFocus: globalThis.HTMLElement | undefined
 /** 全屏编辑锁住背景，关闭和卸载时恢复；草稿仍由原有关闭流程清理。 */
@@ -127,42 +92,6 @@ watch(
     fitViewport()
   },
   { flush: 'post' },
-)
-// 同步清空级联，防止切换食堂或楼层后将旧窗口作为新对象提交。
-watch(
-  selected,
-  () => {
-    floor.value = ''
-    windowId.value = ''
-  },
-  { flush: 'sync' },
-)
-/** 全站选食堂后加载真实完整窗口；切换对象后拒绝旧响应。 */
-watch(selected, async (id) => {
-  const item = restaurants.value.find((row) => row.id === id)
-  if (
-    !opened.value ||
-    !item ||
-    item.restaurantType !== 'CANTEEN' ||
-    (item.dining?.windows !== undefined && item.dining.windows !== null)
-  )
-    return
-  const ticket = generation
-  try {
-    const fresh = await fetchRestaurant(id, controller?.signal)
-    if (ticket === generation && selected.value === id)
-      restaurants.value = restaurants.value.map((row) => (row.id === id ? fresh : row))
-  } catch {
-    if (ticket === generation && selected.value === id)
-      error.value = '窗口加载失败，请重新选择食堂重试。'
-  }
-})
-watch(
-  floor,
-  () => {
-    windowId.value = ''
-  },
-  { flush: 'sync' },
 )
 /** 原生dialog提供焦点圈定和Escape；关闭后释放草稿图片URL，旧异步请求不得回填。 */
 function close() {
@@ -222,8 +151,6 @@ async function open() {
   loading.value = true
   controller = new globalThis.AbortController()
   restaurants.value = props.restaurant ? [props.restaurant] : []
-  floor.value = ''
-  windowId.value = ''
   selected.value = props.restaurant?.id ?? ''
   // 全站选店由搜索组件按需分页读取，详情对象继续保持固定目标。
   loading.value = false
@@ -282,7 +209,7 @@ async function submit() {
     return
   }
   if (!publishTarget.value) {
-    error.value = isCanteen.value ? '请选择具体窗口后再评价。' : '请选择要评价的餐厅。'
+    error.value = '请选择要评价的餐厅。'
     return
   }
   if (recommendation.value === null) {
@@ -298,7 +225,6 @@ async function submit() {
   const ticket = generation
   // 相同内容重试复用请求号；改动正文、评分或图片后是新请求，避免后端幂等内容冲突。
   const content = JSON.stringify([
-    isCanteen.value || dining.value?.kind === 'window' ? 'WINDOW' : 'RESTAURANT',
     publishTarget.value,
     scores.value,
     recommendation.value,
@@ -310,9 +236,6 @@ async function submit() {
   try {
     const result = await gateway.publish({
       restaurantId: publishTarget.value,
-      ...(isCanteen.value || dining.value?.kind === 'window'
-        ? { windowId: publishTarget.value }
-        : {}),
       scores: { ...scores.value },
       recommendation: recommendation.value,
       body: body.value.trim(),
@@ -421,29 +344,7 @@ onUnmounted(close)
             />
             <div v-if="targetLocked" class="locked-target">
               <strong>{{ current?.name }}</strong>
-              <span v-if="lockedContext">{{ lockedContext }}</span>
             </div>
-            <div v-if="isCanteen" class="window-selectors">
-              <label class="window-select"
-                ><select v-model="floor" aria-label="楼层" :disabled="!windows.length">
-                  <option value="">请选择楼层</option>
-                  <option v-for="f in floors" :key="f" :value="f">{{ f }}</option></select
-                ><svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="m6 9 6 6 6-6" /></svg
-              ></label>
-              <label class="window-select"
-                ><select v-model="windowId" aria-label="窗口" :disabled="!floor">
-                  <option value="">请选择窗口</option>
-                  <option v-for="w in floorWindows" :key="w.id" :value="w.id">
-                    {{ w.name }}
-                  </option></select
-                ><svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="m6 9 6 6 6-6" /></svg
-              ></label>
-            </div>
-            <p v-if="isCanteen && !windows.length" class="target-empty">
-              该食堂暂无收录窗口，请先添加窗口后再评价。
-            </p>
           </section>
           <section class="ratings-section" aria-label="四维评分">
             <div class="section-heading">

@@ -13,7 +13,6 @@ import java.time.Instant;
 public class ReviewEntity {
     private Long id;
     private Long restaurantId;
-    private Long windowId;
     private long authorUserId;
     private BigDecimal tasteScore;
     private BigDecimal valueScore;

@@ -67,7 +67,7 @@ const mapPage = computed(() => route.path === '/map' || route.path === '/preview
     <main>
       <RouterView />
     </main>
-    <!-- 全站写评留在来源页；店铺和窗口详情继续使用自己的固定对象编辑器。 -->
+    <!-- 全站写评留在来源页；店铺详情继续使用自己的固定对象编辑器。 -->
     <ReviewComposer
       v-if="!hasDetailComposer(route.path)"
       hide-trigger

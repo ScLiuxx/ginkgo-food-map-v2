@@ -31,7 +31,10 @@ vi.mock('@/modules/review', async () => {
       },
     }),
     ReviewPanel: defineComponent({
-      props: { restaurantId: String, revision: Number },
+      props: {
+        restaurantId: { type: String, default: '' },
+        revision: { type: Number, default: 0 },
+      },
       setup(props) {
         return () =>
           h(
@@ -304,114 +307,36 @@ describe('restaurant detail API integration', () => {
     expect(host.querySelector('.hero-score')?.textContent).toContain('3.0')
   })
 
-  it('shows canteen windows without legacy overall reviews or redundant floor controls', async () => {
+  it('shows canteen reviews without floor or window controls', async () => {
     vi.mocked(fetchRestaurant).mockResolvedValueOnce({
       ...restaurantFixture,
       category: '食堂',
+      restaurantType: 'CANTEEN',
     })
     await mount()
     expect(host.querySelector('.detail-affiliation')?.textContent).toBe('校园食堂')
-    expect(host.querySelector('.canteen-windows')?.textContent).toContain('窗口资料尚未接入')
+    expect(host.querySelector('.canteen-windows')).toBeNull()
     expect(host.querySelector('.hero-score')?.textContent).toContain('待评级')
-    expect(host.querySelector('.test-review-panel')).toBeNull()
+    expect(host.querySelector('.test-review-panel')).not.toBeNull()
     expect(host.querySelectorAll('[aria-label="按楼层筛选窗口"] button')).toHaveLength(0)
     expect(host.textContent).not.toContain('历史食堂点评')
     expect(host.querySelector('.legacy-canteen-reviews')).toBeNull()
   })
 
-  it('keeps window reviews, publication and statistics on its own ID and only uses the parent for navigation', async () => {
-    const window = {
-      ...restaurantFixture,
-      id: '201',
-      name: '测试窗口详情',
-      score: 7.5,
-      participantCount: 1,
-      dining: {
-        kind: 'window' as const,
-        campus: '测试校区',
-        parent: { id: '100', name: '测试食堂' },
-        floor: '二楼',
-        description: null,
-        windows: null,
-        dishes: [{ id: 'd1', name: '测试菜品', price: 0 }],
-      },
-    }
-    currentId.value = '201'
-    vi.mocked(fetchRestaurant).mockResolvedValue(window)
-    await mount()
-    expect(await captureLinkTarget(app, host.querySelector('.detail-breadcrumb a'))).toContain(
-      '/restaurants/100?floor=',
-    )
-    expect(host.querySelector('.detail-affiliation')?.textContent).toContain('二楼')
-    expect(host.querySelector('.test-review-panel')?.textContent).toBe('201')
-    expect(host.querySelector('.detail-dishes')?.textContent).toContain('¥0')
-    expect(host.querySelector('.hero-score')?.textContent).toContain('3.8')
-    expect(host.textContent).not.toContain('样本较少')
-    host.querySelector<HTMLButtonElement>('.test-publish')!.click()
-    await settle()
-    expect(vi.mocked(fetchRestaurant).mock.calls.every(([id]) => id === '201')).toBe(true)
-    expect(host.querySelector('.test-review-panel')?.getAttribute('data-revision')).toBe('1')
-  })
-
-  it('uses the authoritative backend canteen aggregate', async () => {
+  it('uses direct canteen review statistics from the backend', async () => {
     vi.mocked(fetchRestaurant).mockResolvedValueOnce({
       ...restaurantFixture,
       id: '100',
       category: '食堂',
+      restaurantType: 'CANTEEN',
       score: 7,
-      dining: {
-        kind: 'canteen',
-        campus: null,
-        parent: null,
-        floor: null,
-        description: null,
-        dishes: [],
-        windows: [
-          {
-            id: '201',
-            canteenId: '100',
-            name: '窗口A',
-            floor: '一楼',
-
-            score: 8,
-            reviewCount: 100,
-            price: null,
-            closed: false,
-            specialties: [],
-          },
-          {
-            id: '202',
-            canteenId: '100',
-            name: '窗口B',
-            floor: '二楼',
-
-            score: 6,
-            reviewCount: 1,
-            price: null,
-            closed: false,
-            specialties: [],
-          },
-          {
-            id: '203',
-            canteenId: '100',
-            name: '暂停窗口',
-            floor: '二楼',
-
-            score: 10,
-            reviewCount: 9,
-            price: null,
-            closed: true,
-            specialties: [],
-          },
-        ],
-      },
     })
     await mount()
     expect(host.querySelector('.hero-score strong')?.textContent).toBe('3.5')
     expect(host.querySelector('.aggregate-source')).toBeNull()
     expect(host.textContent).not.toContain('汇总自')
-    expect(host.querySelectorAll('.window-row')).toHaveLength(3)
+    expect(host.querySelectorAll('.window-row')).toHaveLength(0)
     expect(host.querySelector('.restaurant-album')).not.toBeNull()
-    expect(host.querySelector('.score-summary')).toBeNull()
+    expect(host.querySelector('.score-summary')).not.toBeNull()
   })
 })

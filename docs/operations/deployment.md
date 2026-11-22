@@ -124,11 +124,10 @@ Invoke-WebRequest -Uri http://127.0.0.1:8080/actuator/prometheus -Headers @{ Aut
 Bucket/
 ├── review-images/{UUID}.jpg       餐厅和窗口的点评照片
 ├── restaurant-images/{UUID}.jpg   新店投稿、纠错附图和正式商家相册
-├── windows-images/{UUID}.jpg      管理员窗口相册，首张作为封面
 └── avatars/{UUID}.jpg             用户头像
 ```
 
-`app.file.oss.prefix`配置为`review-images/`，`app.file.oss.restaurant-prefix`配置为`restaurant-images/`，`app.file.oss.window-prefix`配置为`windows-images/`，`app.file.oss.avatar-prefix`配置为`avatars/`；本地配置与默认配置保持一致，不再使用`review-images/restaurants/`。文件名由服务端随机生成，用户、店铺和点评归属保存在数据库中，不继续分目录。图片绑定或审核通过时沿用原对象，不移动文件。
+`app.file.oss.prefix`配置为`review-images/`，`app.file.oss.restaurant-prefix`配置为`restaurant-images/`，`app.file.oss.avatar-prefix`配置为`avatars/`；本地配置与默认配置保持一致，不再使用`review-images/restaurants/`。文件名由服务端随机生成，用户、店铺和点评归属保存在数据库中，不继续分目录。图片绑定或审核通过时沿用原对象，不移动文件。
 
 四个目录及`app.file.oss.temporary-ttl`、`app.file.oss.cleanup-delay-ms`仍使用原有配置键，供COS和OSS共用。名称中保留`oss`用于兼容已有环境，并不表示COS需要OSS凭证。
 

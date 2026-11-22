@@ -28,7 +28,7 @@ public class ReviewDetailService {
     private final ReviewPhotoMapper photos;
     private final PublicAuthorService authors;
 
-    /** 同一只读快照核验点评、父店／窗口、最新代表及图片引用；不访问OSS或修改已读状态。 */
+    /** 同一只读快照核验点评、父店、最新代表及图片引用；不访问OSS或修改已读状态。 */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public ReviewDetailVo detail(String value) {
         long id = ReviewReadPolicy.restaurantId(value);
@@ -37,17 +37,11 @@ public class ReviewDetailService {
             throw new BusinessException(ReviewErrorCode.NOT_FOUND);
         }
         long owner = source.getAuthorUserId();
-        var row =
-                source.getWindowId() == null
-                        ? reviews.anchor(source.getRestaurantId(), owner, id)
-                        : reviews.windowAnchor(source.getWindowId(), owner, id);
+        var row = reviews.anchor(source.getRestaurantId(), owner, id);
         if (row == null) {
             throw new BusinessException(ReviewErrorCode.NOT_FOUND);
         }
-        var latest =
-                source.getWindowId() == null
-                        ? reviews.latest(source.getRestaurantId(), owner)
-                        : reviews.windowLatest(source.getWindowId(), owner);
+        var latest = reviews.latest(source.getRestaurantId(), owner);
         var content = ReviewReadService.current(row, photos.references(List.of(id)));
         content.setScoringStatus(
                 latest != null && latest.getId().equals(row.getId()) ? "current" : "history");
@@ -60,7 +54,6 @@ public class ReviewDetailService {
         var result = new ReviewDetailVo();
         result.setRestaurantId(
                 source.getRestaurantId() == null ? null : source.getRestaurantId().toString());
-        result.setWindowId(source.getWindowId() == null ? null : source.getWindowId().toString());
         result.setAuthor(author);
         result.setReview(content);
         return result;

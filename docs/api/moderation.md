@@ -52,7 +52,7 @@ reason必填，大小写精确，取值为SPAM、ABUSE、PORNOGRAPHY、ILLEGAL�
 
 **错误码**
 
-目标不存在或父店/窗口不可见统一404 `REPORT_TARGET_NOT_FOUND`；举报自己发布的内容403 `REPORT_SELF_NOT_ALLOWED`；原因非法、编号非法或说明超长400 `REPORT_INVALID_INPUT`；未登录401。举报不改变内容可见性、商户评分、点赞或成长经验。
+目标不存在或父店不可见统一404 `REPORT_TARGET_NOT_FOUND`；举报自己发布的内容403 `REPORT_SELF_NOT_ALLOWED`；原因非法、编号非法或说明超长400 `REPORT_INVALID_INPUT`；未登录401。举报不改变内容可见性、商户评分、点赞或成长经验。
 
 **副作用与限制**
 

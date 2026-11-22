@@ -42,8 +42,7 @@ public class RestaurantRequestReviewService {
     private final ReviewSubmissionLifecycleService reviewLifecycle;
     private final ReviewSubmissionPublicationService reviewPublication;
     private final com.foodmap.growth.service.GrowthRewardApplicationService growth;
-    private final com.foodmap.notification.service.NotificationPublicationService
-            notifications;
+    private final com.foodmap.notification.service.NotificationPublicationService notifications;
 
     /** 相同规范化内容重试返回首次回执，其他终态或不同通过内容返回409。 */
     public RestaurantDecisionVo approve(String id, RestaurantApproveRequest input) {
@@ -77,12 +76,6 @@ public class RestaurantRequestReviewService {
             // 先前已锁住主行；READ_COMMITTED下此处读取的是锁定后的最新业务值，不做页面过期检测。
             var current = restaurants.selectManagementById(row.getRestaurantId());
             if (current == null || current.getDeletedAt() != null) {
-                conflict();
-            }
-            // 窗口通过外键绑定食堂类型，包括已删除窗口；不能把有窗口的父食堂改为普通餐厅。
-            if ("CANTEEN".equals(current.getRestaurantType())
-                    && "REGULAR".equals(input.getRestaurantType())
-                    && restaurants.hasWindows(current.getId())) {
                 conflict();
             }
             row.setBeforeData(json.writeValueAsString(snapshot(current)));

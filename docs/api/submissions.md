@@ -89,7 +89,7 @@
 
 **请求参数**
 
-`POST /api/restaurant-submissions`，有效Bearer、普通用户可用、`Content-Type: application/json`。在上述店铺字段外，可提供可选的`review`对象。只允许普通餐厅REGULAR附带点评；食堂整体不接受点评，返回400 `RESTAURANT_INVALID_INPUT`，应在窗口存在后评价具体窗口。普通餐厅沿用停业可评规则，businessStatus=CLOSED不排除此能力。
+`POST /api/restaurant-submissions`，有效Bearer、普通用户可用、`Content-Type: application/json`。在上述店铺字段外，可提供可选的`review`对象。只允许普通餐厅REGULAR附带点评；食堂投稿暂不附带点评，返回400 `RESTAURANT_INVALID_INPUT`；收录后可在详情直接评价食堂。普通餐厅沿用停业可评规则，businessStatus=CLOSED不排除此能力。
 
 ```json
 {
@@ -144,7 +144,7 @@ id为新店申请ID，reviewSubmission.id为私有待发布点评ID，不是正�
 
 **副作用与限制**
 
-外层photoIds为店铺申请图，使用RESTAURANT用途；review.photoIds为点评图，使用REVIEW用途。两组各最多5张，不能交叉绑定或复用已绑定文件。嵌套对象不接受clientRequestId、作者、店铺/窗口ID、状态、正式发布UUID、照片URL或其他未知字段；scores也拒绝额外维度。点评提交请求UUID沿用外层clientRequestId，作者由认证身份确定，独立正式发布UUID由服务端首次生成并在重试时保留。
+外层photoIds为店铺申请图，使用RESTAURANT用途；review.photoIds为点评图，使用REVIEW用途。两组各最多5张，不能交叉绑定或复用已绑定文件。嵌套对象不接受clientRequestId、作者、店铺ID、状态、正式发布UUID、照片URL或其他未知字段；scores也拒绝额外维度。点评提交请求UUID沿用外层clientRequestId，作者由认证身份确定，独立正式发布UUID由服务端首次生成并在重试时保留。
 
 店铺申请、店铺图片绑定、待发布点评及其图片绑定在同一数据库事务中保存；任一校验、绑定或关联写入失败均整体回滚。提交期间不创建正式店铺或正式点评，不计分、不计奖、不发审核通知，也不生成搜索同步任务；不访问云存储或复制图片。点评正文独立保存，不写入申请的proposed资料快照。
 
@@ -549,7 +549,7 @@ id为无前导零、未溢出的正Long字符串申请ID，position严格为0–
 
 - 首次通过时，REGULAR必须提供可用的categoryCode；CANTEEN必须使用categoryCode=null或省略。类型与分类不匹配返回400 RESTAURANT_INVALID_INPUT，不自动将食堂归到“其他美食”。旧的已通过食堂按原完整内容重试仍返回首次回执，不重新写入历史分类。
 - CREATE创建正式餐厅和有序标签，created_by/updated_by均为实际审核管理员，新ID回填申请restaurant_id，request_type保持CREATE。投稿人保留在submitted_by，不因此获得直接维护权限。
-- UPDATE更新原ID及餐厅类型、堂食/外卖三态，保留既有创建者、来源及评分；before_data保存事务内更新前的业务字段及标签（含类型、用餐方式），approved_data保存规范化后的最终业务字段。新店before_data为空。存在任意窗口关联的食堂不能改为普通餐厅，返回409 RESTAURANT_STATE_CONFLICT，包括软删除窗口仍有外键引用的情况。
+- UPDATE更新原ID及餐厅类型、堂食/外卖三态，保留既有创建者、来源及评分；before_data保存事务内更新前的业务字段及标签（含类型、用餐方式），approved_data保存规范化后的最终业务字段。新店before_data为空。
 - 商户、标签、正式相册关联、审核状态和成长奖励在同一个事务提交或回滚。首次通过按原submitted_by计奖：CREATE默认+20，按申请去重；UPDATE默认+10，按用户和店铺去重，后续纠错可正常通过但不重复领奖。重复通过和历史已通过申请不补发经验，管理员直接维护与驳回不计奖；奖励写入失败整次审核返回500 COMMON_INTERNAL_SERVER_ERROR，不保留已通过结果。纠错统一先锁商户、再锁申请；新店先锁申请并创建正式商户；文件校验按文件ID升序加锁。审核人取当前认证，时间由数据库生成，不能回退终态。
 - 相同规范化完整内容再次通过，返回首次回执且replayed=true，不重复建店、更新商户或覆盖审核人/时间；分类后来被停用不妨碍已成功结果重放。已通过后提交不同内容、已驳回后通过均409。直接维护接口的后续修改不会被通过重试覆盖。
 - 不检测页面打开后商户资料是否变化，成功审核的完整业务资料覆盖当时正式值；已删除目标仍禁止通过，不隐式恢复。

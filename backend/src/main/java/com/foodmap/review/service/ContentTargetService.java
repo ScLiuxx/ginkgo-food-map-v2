@@ -1,6 +1,5 @@
 package com.foodmap.review.service;
 
-import com.foodmap.restaurant.service.CanteenWindowService;
 import com.foodmap.restaurant.service.RestaurantReviewTargetService;
 import com.foodmap.review.dto.ContentTargetSnapshot;
 import com.foodmap.review.mapper.ContentLikeMapper;
@@ -16,15 +15,13 @@ import java.util.List;
 /**
  * 跨模块公开的点评/回复目标读取服务。
  *
- * <p>复用点赞模块已有的目标查询SQL，避免重复维护点评与回复两套来源查询；可见性仍由餐厅和
- * 食堂窗口的公开服务逐次核验，不能因为目标行存在就假定用户可访问。
+ * <p>复用点赞模块已有的目标查询SQL，避免重复维护点评与回复两套来源查询；可见性仍由餐厅和 食堂的公开服务逐次核验，不能因为目标行存在就假定用户可访问。
  */
 @Service
 @RequiredArgsConstructor
 public class ContentTargetService {
     private final ContentLikeMapper targets;
     private final RestaurantReviewTargetService restaurants;
-    private final CanteenWindowService windows;
 
     /**
      * 返回当前可见目标的举报所需快照；目标不存在或父店不可见时返回 {@code null}。
@@ -41,12 +38,7 @@ public class ContentTargetService {
             return null;
         }
         var row = rows.getFirst();
-        boolean windowTarget = row.getWindowId() != null;
-        if (windowTarget) {
-            if (!windows.targets(List.of(row.getWindowId())).containsKey(row.getWindowId())) {
-                return null;
-            }
-        } else if (row.getRestaurantId() == null
+        if (row.getRestaurantId() == null
                 || restaurants.visible(List.of(row.getRestaurantId())).isEmpty()) {
             return null;
         }
@@ -56,7 +48,6 @@ public class ContentTargetService {
         result.setReviewId(row.getReviewId());
         result.setAuthorUserId(row.getAuthorUserId());
         result.setBody(row.getBody());
-        result.setWindowTarget(windowTarget);
         return result;
     }
 }

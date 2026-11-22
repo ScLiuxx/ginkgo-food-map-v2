@@ -145,18 +145,17 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
     @Test
     void latestPerUserUsesTimestampThenIdAndHardDeleteFallsBackOnlyWithinPeriod() {
         restaurant(1, false);
-        review(1L, null, 1, T.minusSeconds(100), "10");
-        long latest = review(1L, null, 1, T.minusSeconds(100), "8");
-        review(1L, null, 2, T.minusSeconds(200), "9");
-        review(1L, null, 3, T.minusSeconds(300), "9");
-        review(null, 1L, 1, T.minusSeconds(1), "0");
+        review(1L, 1, T.minusSeconds(100), "10");
+        long latest = review(1L, 1, T.minusSeconds(100), "8");
+        review(1L, 2, T.minusSeconds(200), "9");
+        review(1L, 3, T.minusSeconds(300), "9");
         var first = aggregate().getFirst();
         assertThat(first.getParticipantCount()).isEqualTo(3);
         assertThat(first.getTasteSum()).isEqualByComparingTo("26");
         jdbc.update("DELETE FROM reviews WHERE id=?", latest);
         assertThat(aggregate().getFirst().getTasteSum()).isEqualByComparingTo("28");
         jdbc.update("DELETE FROM reviews WHERE author_user_id=1 AND restaurant_id=1");
-        review(1L, null, 1, T.minus(Duration.ofDays(7)).minusNanos(1000), "10");
+        review(1L, 1, T.minus(Duration.ofDays(7)).minusNanos(1000), "10");
         assertThat(aggregate().getFirst().getParticipantCount()).isEqualTo(2);
         assertThat(items(calculation.calculate(T), "QINGSHUIHE", "WEEK")).isEmpty();
         assertThat(items(calculation.calculate(T), "QINGSHUIHE", "MONTH")).hasSize(1);
@@ -191,7 +190,7 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
         restaurant(2, false);
         threeReviews(1, T.minus(Duration.ofDays(10)), "10");
         threeReviews(1, T.minusSeconds(100), "8");
-        review(1L, null, 1, T.minusSeconds(50), "0");
+        review(1L, 1, T.minusSeconds(50), "0");
         threeReviews(2, T.minusSeconds(100), "9");
         var result = calculation.calculate(T);
         assertThat(ids(items(result, "QINGSHUIHE", "WEEK"))).containsExactly("2");
@@ -210,7 +209,7 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
         jdbc.update("UPDATE restaurants SET business_status='CLOSED' WHERE id=3");
         jdbc.update(
                 "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),delete_reason_code='SYSTEM'"
-                    + " WHERE id=4");
+                        + " WHERE id=4");
         jdbc.update(
                 "UPDATE restaurants SET needs_location=1,latitude=NULL,longitude=NULL WHERE id=5");
         jdbc.update("UPDATE restaurants SET latitude=31.7544 WHERE id=6");
@@ -349,7 +348,7 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
         var old =
                 jdbc.queryForList(
                         "SELECT * FROM restaurant_ranking_snapshots ORDER BY"
-                            + " campus_code,period_type");
+                                + " campus_code,period_type");
         jdbc.update("DELETE FROM reviews");
         probe.beforeAggregate =
                 () -> {
@@ -359,7 +358,7 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
         assertThat(
                         jdbc.queryForList(
                                 "SELECT * FROM restaurant_ranking_snapshots ORDER BY"
-                                    + " campus_code,period_type"))
+                                        + " campus_code,period_type"))
                 .isEqualTo(old);
         assertThat(rankingRead.read("QINGSHUIHE", "WEEK").getItems()).hasSize(1);
         assertThat(generation.generate()).isTrue();
@@ -394,20 +393,19 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
 
     private void threeReviews(long restaurant, Instant time, String score) {
         for (int user = 1; user <= 3; user++) {
-            review(restaurant, null, user, time, score);
+            review(restaurant, user, time, score);
         }
     }
 
-    private long review(Long restaurant, Long window, long author, Instant time, String score) {
+    private long review(Long restaurant, long author, Instant time, String score) {
         long id = REVIEW_IDS.incrementAndGet();
         var value = new BigDecimal(score);
         jdbc.update(
                 "INSERT INTO"
-                    + " reviews(id,restaurant_id,window_id,author_user_id,taste_score,value_score,service_score,ambience_score,recommendation,body,client_request_id,request_hash,created_at)"
-                    + " VALUES(?,?,?,?,?,?,?,?,'RECOMMENDED','仅用于计算的点评',UUID_TO_BIN(?),UNHEX(REPEAT('ab',32)),?)",
+                    + " reviews(id,restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,recommendation,body,client_request_id,request_hash,created_at)"
+                    + " VALUES(?,?,?,?,?,?,?,'RECOMMENDED','仅用于计算的点评',UUID_TO_BIN(?),UNHEX(REPEAT('ab',32)),?)",
                 id,
                 restaurant,
-                window,
                 author,
                 value,
                 value,

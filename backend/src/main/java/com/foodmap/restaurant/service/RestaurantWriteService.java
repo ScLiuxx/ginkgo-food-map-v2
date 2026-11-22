@@ -1,17 +1,19 @@
 package com.foodmap.restaurant.service;
 
-import com.foodmap.restaurant.support.RestaurantIdentifiers;
-
 import com.foodmap.common.exception.BusinessException;
 import com.foodmap.restaurant.dto.RestaurantSaveRequest;
 import com.foodmap.restaurant.entity.RestaurantManagementEntity;
 import com.foodmap.restaurant.exception.RestaurantErrorCode;
 import com.foodmap.restaurant.mapper.RestaurantWriteMapper;
+import com.foodmap.restaurant.support.RestaurantIdentifiers;
 import com.foodmap.restaurant.vo.RestaurantManagementVo;
 import com.foodmap.security.dto.AuthenticatedActor;
 import com.foodmap.security.service.CurrentActorService;
+
 import jakarta.validation.Validator;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -21,10 +23,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 
-/**
- * 餐厅写入应用服务。正式资料仅管理员可维护；普通投稿仅复用输入校验。
- * 主表与标签在同一事务更新；主行锁串行化同店写入，最后成功保存的完整内容生效。
- */
+/** 餐厅写入应用服务。正式资料仅管理员可维护；普通投稿仅复用输入校验。 主表与标签在同一事务更新；主行锁串行化同店写入，最后成功保存的完整内容生效。 */
 @Service
 @RequiredArgsConstructor
 @PreAuthorize("isAuthenticated()")
@@ -69,16 +68,16 @@ public class RestaurantWriteService {
         var replacement = normalize(request);
         var current = lockAccessible(RestaurantIdentifiers.id(id), actor);
         requireActive(current);
-        // 旧客户端省略类型则保持原值；显式类型切换须在父行锁内检查全部窗口关联。
-        if ("CANTEEN".equals(current.getRestaurantType()) && "REGULAR".equals(replacement.getRestaurantType())
-                && mapper.hasWindows(current.getId())) {
-            throw new BusinessException(RestaurantErrorCode.STATE_CONFLICT, "存在窗口关联的食堂不能改为普通餐厅");
-        }
-        requireCategory(replacement.getCategoryCode(), current.getCategoryCode(),
-                replacement.getRestaurantType() == null ? current.getRestaurantType() : replacement.getRestaurantType());
+        requireCategory(
+                replacement.getCategoryCode(),
+                current.getCategoryCode(),
+                replacement.getRestaurantType() == null
+                        ? current.getRestaurantType()
+                        : replacement.getRestaurantType());
         var tags = normalizeTags(request.getTags());
         replacement.setId(current.getId());
-        if (mapper.updateCurrent(replacement, actor.getUserId(), actor.isAdministrator()) != 1) conflict();
+        if (mapper.updateCurrent(replacement, actor.getUserId(), actor.isAdministrator()) != 1)
+            conflict();
         mapper.deleteTags(current.getId());
         if (!tags.isEmpty()) mapper.insertTags(current.getId(), tags);
         searchOutbox.record(current.getId());
@@ -91,7 +90,8 @@ public class RestaurantWriteService {
         var actor = requireAdministrator();
         var current = lockAccessible(RestaurantIdentifiers.id(id), actor);
         requireActive(current);
-        if (mapper.softDeleteCurrent(current.getId(), actor.getUserId(), actor.isAdministrator()) != 1) conflict();
+        if (mapper.softDeleteCurrent(current.getId(), actor.getUserId(), actor.isAdministrator())
+                != 1) conflict();
         searchOutbox.record(current.getId());
         return managementVo(mapper.selectManagementById(current.getId()));
     }
@@ -107,7 +107,10 @@ public class RestaurantWriteService {
         var row = normalize(request);
         request.setName(row.getName());
         request.setAddress(row.getAddress());
-        request.setPricePerPerson(row.getPricePerPerson() == null ? null : BigDecimal.valueOf(row.getPricePerPerson()));
+        request.setPricePerPerson(
+                row.getPricePerPerson() == null
+                        ? null
+                        : BigDecimal.valueOf(row.getPricePerPerson()));
         request.setTags(normalizeTags(request.getTags()));
     }
 
@@ -134,7 +137,8 @@ public class RestaurantWriteService {
     }
 
     private void requireActive(RestaurantManagementEntity row) {
-        if (row.getDeletedAt() != null) throw new BusinessException(RestaurantErrorCode.STATE_CONFLICT);
+        if (row.getDeletedAt() != null)
+            throw new BusinessException(RestaurantErrorCode.STATE_CONFLICT);
     }
 
     /** 食堂不设分类；普通餐厅可保留已停用旧类，新建/切换必须选启用分类。 */
@@ -174,7 +178,8 @@ public class RestaurantWriteService {
 
     /** Unicode按码点计数，首尾包含全角/不换行空格也规范化；数据库CHECK仅作最后防线。 */
     private RestaurantManagementEntity normalize(RestaurantSaveRequest request) {
-        if (request == null || !validator.validate(request).isEmpty()) invalid("请检查必填项、编码、位置确认和标签数量");
+        if (request == null || !validator.validate(request).isEmpty())
+            invalid("请检查必填项、编码、位置确认和标签数量");
         var row = new RestaurantManagementEntity();
         // 显式类型的直接维护与审核都完整写入三态；旧请求省略类型时由更新SQL保留已有值。
         if (request instanceof com.foodmap.restaurant.dto.RestaurantDirectSaveRequest direct) {
@@ -195,8 +200,10 @@ public class RestaurantWriteService {
         if ("UNKNOWN".equals(request.getPriceKind())) {
             if (price != null) invalid("未知人均必须使用null金额");
         } else {
-            if (price == null || price.stripTrailingZeros().scale() > 0
-                    || price.compareTo(BigDecimal.ONE) < 0 || price.compareTo(BigDecimal.valueOf(5000)) > 0) {
+            if (price == null
+                    || price.stripTrailingZeros().scale() > 0
+                    || price.compareTo(BigDecimal.ONE) < 0
+                    || price.compareTo(BigDecimal.valueOf(5000)) > 0) {
                 invalid("人均必须是1至5000的整数元");
             }
             row.setPricePerPerson(price.intValueExact());
@@ -211,8 +218,10 @@ public class RestaurantWriteService {
     }
 
     private void coordinate(BigDecimal coordinate, int min, int max) {
-        if (coordinate == null || coordinate.compareTo(BigDecimal.valueOf(min)) < 0
-                || coordinate.compareTo(BigDecimal.valueOf(max)) > 0 || coordinate.stripTrailingZeros().scale() > 6) {
+        if (coordinate == null
+                || coordinate.compareTo(BigDecimal.valueOf(min)) < 0
+                || coordinate.compareTo(BigDecimal.valueOf(max)) > 0
+                || coordinate.stripTrailingZeros().scale() > 6) {
             invalid("请确认范围内且最多6位小数的GCJ-02坐标");
         }
     }

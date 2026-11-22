@@ -17,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(propagation = Propagation.MANDATORY)
 public class RestaurantReviewApplicationService {
     private final RestaurantReviewStatisticsMapper mapper;
-    private final CanteenWindowService windows;
     private final RestaurantSearchOutboxService searchOutbox;
 
     /** 与既有餐厅编辑/删除共用父行锁，锁内核验状态，不能仅依赖表单打开时检查。 */
@@ -26,12 +25,9 @@ public class RestaurantReviewApplicationService {
         mapper.initialize(id);
     }
 
-    /** 普通餐厅发布入口；客户端绕过选窗口也不能直接新增食堂整体点评。 */
+    /** 餐厅和食堂共用直接点评入口。 */
     public void lockPublishable(long id) {
         lockVisible(id);
-        if (mapper.canteen(id) != 0) {
-            throw new BusinessException(RestaurantErrorCode.STATE_CONFLICT);
-        }
     }
 
     /** 回复只需要父内容互斥，不应为了回复创建或修改评分统计行。 */
@@ -43,10 +39,6 @@ public class RestaurantReviewApplicationService {
 
     /** 仅在当前事务持有该店锁时使用；更新异常交给外层整体回滚。 */
     public void applyDelta(long id, RestaurantReviewDelta delta) {
-        if (mapper.canteen(id) != 0) {
-            windows.refresh(id);
-            return;
-        }
         if (mapper.applyDelta(id, delta) != 1) {
             throw new IllegalStateException("Missing restaurant statistics");
         }

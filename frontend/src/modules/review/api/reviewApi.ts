@@ -32,7 +32,7 @@ export async function publishTextReview(draft: ReviewDraft): Promise<ReviewPubli
   if (!token) throw new Error('请先登录后再发布点评。')
   try {
     const response = await httpClient.post<ApiResponse<ReviewPublishReceipt>>(
-      `/api/${draft.windowId ? 'canteen-windows' : 'restaurants'}/${encodeURIComponent(draft.windowId ?? draft.restaurantId)}/reviews`,
+      `/api/restaurants/${encodeURIComponent(draft.restaurantId)}/reviews`,
       {
         clientRequestId: draft.clientRequestId,
         scores: { ...draft.scores },
@@ -48,9 +48,7 @@ export async function publishTextReview(draft: ReviewDraft): Promise<ReviewPubli
       !receipt ||
       typeof receipt.reviewId !== 'string' ||
       !/^[1-9]\d*$/.test(receipt.reviewId) ||
-      (draft.windowId
-        ? receipt.windowId !== draft.windowId || receipt.restaurantId !== null
-        : receipt.restaurantId !== draft.restaurantId || !!receipt.windowId) ||
+      receipt.restaurantId !== draft.restaurantId ||
       typeof receipt.replayed !== 'boolean'
     ) {
       throw new Error('发布结果无法确认，请保留当前内容重试，系统会校验同次提交编号。')
@@ -89,11 +87,10 @@ export async function fetchReviewPage(
   signal: AbortSignal,
   page = 1,
   sort: ReviewSort = 'DEFAULT',
-  window = false,
 ): Promise<ReviewPage> {
   try {
     const response = await httpClient.get<ApiResponse<GroupPageDto>>(
-      `/api/${window ? 'canteen-windows' : 'restaurants'}/${encodeURIComponent(restaurantId)}/reviews`,
+      `/api/restaurants/${encodeURIComponent(restaurantId)}/reviews`,
       { params: { page, pageSize: 8, sort }, signal },
     )
     const data = response.data.data
@@ -179,7 +176,6 @@ export async function fetchReviewHistory(
   authorId: string,
   signal: AbortSignal,
   cursor?: string,
-  window = false,
 ): Promise<ReviewHistoryPage> {
   const response = await httpClient.get<
     ApiResponse<{
@@ -190,7 +186,7 @@ export async function fetchReviewHistory(
       nextCursor: string | null
     }>
   >(
-    `/api/${window ? 'canteen-windows' : 'restaurants'}/${encodeURIComponent(restaurantId)}/reviews/authors/${encodeURIComponent(authorId)}/history`,
+    `/api/restaurants/${encodeURIComponent(restaurantId)}/reviews/authors/${encodeURIComponent(authorId)}/history`,
     { params: { pageSize: 5, ...(cursor ? { cursor } : {}) }, signal },
   )
   const data = response.data.data
@@ -379,11 +375,4 @@ export const textReviewGateway: ReviewGateway = {
   reply: publishReply,
   remove: deleteReview,
   removeReply: deleteReply,
-}
-
-/** 窗口读取独立路由；点评本身的回复、照片和删除继续使用全局点评ID。 */
-export const windowReviewGateway: ReviewGateway = {
-  ...textReviewGateway,
-  list: (id, signal, page, sort) => fetchReviewPage(id, signal, page, sort, true),
-  history: (id, author, signal, cursor) => fetchReviewHistory(id, author, signal, cursor, true),
 }

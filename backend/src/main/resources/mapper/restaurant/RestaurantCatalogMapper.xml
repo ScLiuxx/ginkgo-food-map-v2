@@ -36,10 +36,8 @@
         COALESCE(s.participant_count, 0) AS participant_count,
         <!-- 综合分按0–10的一位小数；好评率比例保留三位，即百分数的一位小数。原始累计值不变。 -->
         ROUND(CAST(s.overall_score_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0), 1) AS score,
-        <!-- 食堂继续使用窗口等权均分；普通餐厅使用生成列，零评价不填先验分。 -->
-        CASE WHEN r.restaurant_type='CANTEEN' THEN
-            ROUND(s.overall_score_sum / NULLIF(s.participant_count,0) / 2,8)
-            ELSE s.reputation_score END AS reputation_score,
+        <!-- 普通餐厅与食堂统一使用直接点评的口碑分，零评价不填先验分。 -->
+        s.reputation_score AS reputation_score,
         CAST(s.taste_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0) AS taste,
         CAST(s.value_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0) AS value,
         CAST(s.service_sum AS DECIMAL(40,20)) / NULLIF(s.participant_count, 0) AS service,

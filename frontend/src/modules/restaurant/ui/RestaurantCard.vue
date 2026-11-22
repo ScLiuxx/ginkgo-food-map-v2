@@ -73,32 +73,32 @@ const distanceLabel = computed(() =>
       </div>
       <div class="card-copy">
         <h3>{{ restaurant.name }}</h3>
-        <template v-if="!cafeteria">
-          <p
-            class="card-rating"
-            :class="{ unrated: restaurant.score === null }"
-            title="综合口碑分：口味70%、性价比15%、服务10%、环境5%，结合评价人数平滑计算"
+        <p
+          class="card-rating"
+          :class="{ unrated: restaurant.score === null }"
+          title="综合口碑分：口味70%、性价比15%、服务10%、环境5%，结合评价人数平滑计算"
+        >
+          <span v-if="restaurant.score !== null" class="score-value"
+            ><span aria-hidden="true">★</span> {{ formatRating(restaurant.score) }}</span
           >
-            <span v-if="restaurant.score !== null" class="score-value"
-              ><span aria-hidden="true">★</span> {{ formatRating(restaurant.score) }}</span
+          <span v-else>暂无评分</span>
+          <small class="review-count" :title="`${restaurant.participantCount}人参与评分`"
+            >{{ restaurant.reviewCount }}条点评</small
+          >
+          <span
+            class="card-price"
+            :class="{
+              unknown: restaurant.price === null || restaurant.price <= 0,
+            }"
+          >
+            <template v-if="restaurant.price !== null && restaurant.price > 0"
+              ><small>人均</small><b>{{ priceLabel(restaurant) }}</b
+              ><small v-if="restaurant.priceKind === 'estimate'">估值</small></template
             >
-            <span v-else>暂无评分</span>
-            <small class="review-count" :title="`${restaurant.participantCount}人参与评分`"
-              >{{ restaurant.reviewCount }}条点评</small
-            >
-            <span
-              class="card-price"
-              :class="{
-                unknown: restaurant.price === null || restaurant.price <= 0,
-              }"
-            >
-              <template v-if="restaurant.price !== null && restaurant.price > 0"
-                ><small>人均</small><b>{{ priceLabel(restaurant) }}</b
-                ><small v-if="restaurant.priceKind === 'estimate'">估值</small></template
-              >
-              <template v-else>人均待补</template>
-            </span>
-          </p>
+            <template v-else>人均待补</template>
+          </span>
+        </p>
+        <template v-if="!cafeteria">
           <p class="card-service">
             <span class="category-name" title="用餐方式待补充">{{
               restaurant.category || '类型待补充'
@@ -122,7 +122,7 @@ const distanceLabel = computed(() =>
         <template v-else>
           <p class="card-address">{{ restaurant.address || '位置资料待补充' }}</p>
           <p class="card-service">
-            食堂 · 窗口资料待补充
+            校园食堂
             <span v-if="restaurant.closed" class="closed-label">· 已停业</span>
           </p>
           <span class="cafeteria-entry">查看食堂 <span aria-hidden="true">→</span></span>

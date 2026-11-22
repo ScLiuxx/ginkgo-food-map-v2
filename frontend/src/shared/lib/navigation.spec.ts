@@ -34,7 +34,7 @@ it('接受带分页、筛选或锚点的真实列表及详情来路', () => {
     '/users/88?tab=favorites&page=2',
     '/users/88/followers?page=2',
     '/restaurants/19',
-    '/canteen-windows/20',
+    '/restaurants/20',
     '/map',
     '/?q=面#list',
   ])

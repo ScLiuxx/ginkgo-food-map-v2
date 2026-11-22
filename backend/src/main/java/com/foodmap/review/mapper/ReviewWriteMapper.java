@@ -12,7 +12,7 @@ import org.apache.ibatis.annotations.Select;
 @Mapper
 public interface ReviewWriteMapper {
     String COLUMNS =
-            "id,restaurant_id,window_id,author_user_id,taste_score,value_score,service_score,ambience_score,overall_score,recommendation,body,BIN_TO_UUID(client_request_id)"
+            "id,restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,overall_score,recommendation,body,BIN_TO_UUID(client_request_id)"
                 + " AS client_request_id,HEX(request_hash) AS request_hash,created_at";
 
     /** author+UUID是全店范围唯一，餐厅不同也不能复用同一次编号。 */
@@ -31,20 +31,12 @@ public interface ReviewWriteMapper {
                     + " ORDER BY created_at DESC,id DESC LIMIT 1")
     ReviewEntity latest(@Param("restaurant") long restaurant, @Param("author") long author);
 
-    /** 窗口使用独立字段，不能与数值相同的餐厅合并代表点评。 */
-    @Select(
-            "SELECT "
-                    + COLUMNS
-                    + " FROM reviews WHERE window_id=#{window} AND author_user_id=#{author} ORDER"
-                    + " BY created_at DESC,id DESC LIMIT 1")
-    ReviewEntity latestWindow(@Param("window") long window, @Param("author") long author);
-
     /** 新点评保留历史；服务端时间不早于上一代表，时钟回拨时仍由新ID正确定序。 */
     @Insert(
-            """
+"""
 <script>
-INSERT INTO reviews(restaurant_id,window_id,author_user_id,taste_score,value_score,service_score,ambience_score,recommendation,body,client_request_id,request_hash,created_at)
-VALUES(#{restaurantId,jdbcType=BIGINT},#{windowId,jdbcType=BIGINT},#{authorUserId},#{tasteScore},#{valueScore},#{serviceScore},#{ambienceScore},#{recommendation},#{body},UUID_TO_BIN(#{clientRequestId}),UNHEX(#{requestHash}),
+INSERT INTO reviews(restaurant_id,author_user_id,taste_score,value_score,service_score,ambience_score,recommendation,body,client_request_id,request_hash,created_at)
+VALUES(#{restaurantId,jdbcType=BIGINT},#{authorUserId},#{tasteScore},#{valueScore},#{serviceScore},#{ambienceScore},#{recommendation},#{body},UUID_TO_BIN(#{clientRequestId}),UNHEX(#{requestHash}),
 <choose><when test="createdAt != null">GREATEST(CURRENT_TIMESTAMP(6),#{createdAt})</when><otherwise>CURRENT_TIMESTAMP(6)</otherwise></choose>)
 </script>
 """)

@@ -8,9 +8,6 @@ export interface MyReviewGroup {
     id: string
     name: string
     businessStatus: 'OPERATING' | 'CLOSED'
-    targetType?: 'RESTAURANT' | 'WINDOW'
-    windowId?: string | null
-    canteenId?: string | null
   }
   item: ReviewItem
 }
@@ -87,9 +84,7 @@ export async function fetchMyReviews(
     if (
       !restaurant ||
       !validId(restaurant.id) ||
-      (restaurant.targetType === 'WINDOW' &&
-        (restaurant.windowId !== restaurant.id || !validId(restaurant.canteenId))) ||
-      groups.has(`${restaurant.targetType ?? 'RESTAURANT'}:${restaurant.id}`) ||
+      groups.has(restaurant.id) ||
       typeof restaurant.name !== 'string' ||
       !['OPERATING', 'CLOSED'].includes(restaurant.businessStatus) ||
       !review ||
@@ -123,7 +118,7 @@ export async function fetchMyReviews(
       )
     )
       throw invalid()
-    groups.add(`${restaurant.targetType ?? 'RESTAURANT'}:${restaurant.id}`)
+    groups.add(restaurant.id)
     reviewIds.add(review.id)
     return {
       restaurant,

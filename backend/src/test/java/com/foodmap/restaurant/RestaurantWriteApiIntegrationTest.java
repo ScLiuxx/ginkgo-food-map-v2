@@ -71,11 +71,9 @@ class RestaurantWriteApiIntegrationTest {
     @MockitoBean private com.foodmap.file.storage.ImageStorageClient storage;
     @MockitoSpyBean private RestaurantWriteMapper mapper;
 
-    @MockitoSpyBean
-    private com.foodmap.restaurant.mapper.RestaurantSearchOutboxMapper outboxMapper;
+    @MockitoSpyBean private com.foodmap.restaurant.mapper.RestaurantSearchOutboxMapper outboxMapper;
 
-    @Autowired
-    private com.foodmap.restaurant.service.RestaurantSearchOutboxService outboxService;
+    @Autowired private com.foodmap.restaurant.service.RestaurantSearchOutboxService outboxService;
 
     @MockitoSpyBean
     private com.foodmap.restaurant.mapper.RestaurantRequestReviewMapper reviewMapper;
@@ -133,17 +131,20 @@ class RestaurantWriteApiIntegrationTest {
         jdbc.update("UPDATE restaurant_categories SET enabled=TRUE");
         for (long id : List.of(11L, 22L, 33L)) {
             jdbc.update(
-                    "INSERT INTO users(id,username,email,password_hash,email_verified) VALUES (?,?,?,?,TRUE)",
+                    "INSERT INTO users(id,username,email,password_hash,email_verified) VALUES"
+                        + " (?,?,?,?,TRUE)",
                     id,
                     "fixture_" + id,
                     "fixture" + id + "@example.test",
                     "test-only-unused-hash");
             jdbc.update(
-                    "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code='ROLE_USER'",
+                    "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE"
+                        + " code='ROLE_USER'",
                     id);
         }
         jdbc.update(
-                "INSERT INTO user_roles(user_id,role_id) SELECT 33,id FROM roles WHERE code='ROLE_ADMIN'");
+                "INSERT INTO user_roles(user_id,role_id) SELECT 33,id FROM roles WHERE"
+                    + " code='ROLE_ADMIN'");
         when(sessions.isActive(anyString(), anyLong(), anyLong())).thenReturn(true);
         owner = token(11, 0, false);
         other = token(22, 0, true); // 故意在JWT中伪报管理员，真实权限只取数据库。
@@ -250,7 +251,8 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(projectionVersion(id)).isEqualTo(3);
         assertThat(
                         jdbc.queryForMap(
-                                        "SELECT deleted_at,deleted_by,delete_reason_code FROM restaurants WHERE id=?",
+                                        "SELECT deleted_at,deleted_by,delete_reason_code FROM"
+                                            + " restaurants WHERE id=?",
                                         id)
                                 .values())
                 .allMatch(Objects::nonNull);
@@ -284,7 +286,8 @@ class RestaurantWriteApiIntegrationTest {
                                 id))
                 .isEqualTo("ADMIN_REMOVAL");
         jdbc.update(
-                "DELETE FROM user_roles WHERE user_id=33 AND role_id=(SELECT id FROM roles WHERE code='ROLE_ADMIN')");
+                "DELETE FROM user_roles WHERE user_id=33 AND role_id=(SELECT id FROM roles WHERE"
+                    + " code='ROLE_ADMIN')");
         perform(get("/api/restaurants/" + id + "/management"), admin, null)
                 .andExpect(status().isForbidden());
     }
@@ -533,7 +536,8 @@ class RestaurantWriteApiIntegrationTest {
                 .isEqualTo("CRUD测试夹具");
         assertThat(
                         jdbc.queryForList(
-                                "SELECT tag FROM restaurant_tags WHERE restaurant_id=? ORDER BY position",
+                                "SELECT tag FROM restaurant_tags WHERE restaurant_id=? ORDER BY"
+                                    + " position",
                                 String.class,
                                 id))
                 .containsExactly("原标签");
@@ -580,7 +584,8 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(name).isIn("并发甲", "并发乙");
         assertThat(
                         jdbc.queryForList(
-                                "SELECT tag FROM restaurant_tags WHERE restaurant_id=? ORDER BY position",
+                                "SELECT tag FROM restaurant_tags WHERE restaurant_id=? ORDER BY"
+                                    + " position",
                                 String.class,
                                 id))
                 .containsExactly(
@@ -735,7 +740,8 @@ class RestaurantWriteApiIntegrationTest {
                 .isEqualTo(22);
         assertThat(
                         jdbc.queryForObject(
-                                "SELECT JSON_UNQUOTE(JSON_EXTRACT(proposed_data,'$.name')) FROM restaurant_change_requests WHERE id=?",
+                                "SELECT JSON_UNQUOTE(JSON_EXTRACT(proposed_data,'$.name')) FROM"
+                                    + " restaurant_change_requests WHERE id=?",
                                 String.class,
                                 application))
                 .isEqualTo("待审核新店名");
@@ -908,7 +914,9 @@ class RestaurantWriteApiIntegrationTest {
                 .isEqualTo("CREATE");
         jdbc.update("INSERT INTO restaurants(id,name,category_code) VALUES(101,'发布结果夹具','OTHER')");
         jdbc.update(
-                "UPDATE restaurant_change_requests SET status='APPROVED',restaurant_id=101,reviewed_by=33,reviewed_at=CURRENT_TIMESTAMP(6),approved_data=JSON_OBJECT('name','管理员修订') WHERE id=?",
+                "UPDATE restaurant_change_requests SET"
+                    + " status='APPROVED',restaurant_id=101,reviewed_by=33,reviewed_at=CURRENT_TIMESTAMP(6),approved_data=JSON_OBJECT('name','管理员修订')"
+                    + " WHERE id=?",
                 requestId);
         perform(post(endpoint), other, input)
                 .andExpect(status().isCreated())
@@ -1022,10 +1030,13 @@ class RestaurantWriteApiIntegrationTest {
                 .andExpect(jsonPath("$.data.application.requestHash").doesNotExist());
         // 历史快照中的旧字段不能导致当前DTO反序列化失败，也不能被输出为新的可编辑资料。
         jdbc.update(
-                "UPDATE restaurant_change_requests SET proposed_data=JSON_SET(proposed_data,'$.campusCode','OLD') WHERE id=?",
+                "UPDATE restaurant_change_requests SET"
+                    + " proposed_data=JSON_SET(proposed_data,'$.campusCode','OLD') WHERE id=?",
                 updateId);
         jdbc.update(
-                "UPDATE restaurants SET deleted_at=CURRENT_TIMESTAMP(6),deleted_by=33,delete_reason_code='ADMIN_REMOVAL' WHERE id=?",
+                "UPDATE restaurants SET"
+                    + " deleted_at=CURRENT_TIMESTAMP(6),deleted_by=33,delete_reason_code='ADMIN_REMOVAL'"
+                    + " WHERE id=?",
                 target);
         mvc.perform(get(endpoint + "/" + updateId).header("Authorization", "Bearer " + admin))
                 .andExpect(status().isOk())
@@ -1040,7 +1051,8 @@ class RestaurantWriteApiIntegrationTest {
                 .andExpect(status().isBadRequest());
         assertThat(
                         jdbc.queryForObject(
-                                "SELECT COUNT(*) FROM restaurant_change_requests WHERE status='PENDING'",
+                                "SELECT COUNT(*) FROM restaurant_change_requests WHERE"
+                                    + " status='PENDING'",
                                 Long.class))
                 .isEqualTo(3);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurants", Long.class))
@@ -1062,9 +1074,12 @@ class RestaurantWriteApiIntegrationTest {
                         .get("id")
                         .asString();
         jdbc.update(
-                "INSERT INTO media_files(id,uploader_user_id,bucket_name,storage_key,content_type,byte_size,width,height,sha256,status,purpose,bound_at) VALUES(901,22,'test-bucket','restaurant-images/private.jpg','image/jpeg',4,1,1,UNHEX(SHA2('photo',256)),'BOUND','RESTAURANT',CURRENT_TIMESTAMP(6))");
+                "INSERT INTO"
+                    + " media_files(id,uploader_user_id,bucket_name,storage_key,content_type,byte_size,width,height,sha256,status,purpose,bound_at)"
+                    + " VALUES(901,22,'test-bucket','restaurant-images/private.jpg','image/jpeg',4,1,1,UNHEX(SHA2('photo',256)),'BOUND','RESTAURANT',CURRENT_TIMESTAMP(6))");
         jdbc.update(
-                "INSERT INTO restaurant_change_photos(request_id,position,media_file_id) VALUES(?,0,901)",
+                "INSERT INTO restaurant_change_photos(request_id,position,media_file_id)"
+                    + " VALUES(?,0,901)",
                 id);
         String endpoint = "/api/admin/restaurant-requests/" + id + "/photos/0";
         mvc.perform(get(endpoint)).andExpect(status().isUnauthorized());
@@ -1090,12 +1105,15 @@ class RestaurantWriteApiIntegrationTest {
         mvc.perform(get(endpoint).header("Authorization", "Bearer " + admin))
                 .andExpect(status().isNotFound());
         jdbc.update(
-                "UPDATE media_files SET uploader_user_id=22,status='TEMPORARY',bound_at=NULL,expires_at=CURRENT_TIMESTAMP+INTERVAL 1 DAY WHERE id=901");
+                "UPDATE media_files SET"
+                    + " uploader_user_id=22,status='TEMPORARY',bound_at=NULL,expires_at=CURRENT_TIMESTAMP+INTERVAL"
+                    + " 1 DAY WHERE id=901");
         mvc.perform(get(endpoint).header("Authorization", "Bearer " + admin))
                 .andExpect(status().isNotFound());
         verifyNoInteractions(storage);
         jdbc.update(
-                "UPDATE media_files SET status='BOUND',expires_at=NULL,bound_at=CURRENT_TIMESTAMP(6) WHERE id=901");
+                "UPDATE media_files SET"
+                    + " status='BOUND',expires_at=NULL,bound_at=CURRENT_TIMESTAMP(6) WHERE id=901");
         when(storage.read(anyString(), anyString()))
                 .thenThrow(
                         new com.foodmap.common.exception.BusinessException(
@@ -1174,9 +1192,9 @@ class RestaurantWriteApiIntegrationTest {
                 .andExpect(jsonPath("$.data.supportsDelivery").value(true));
     }
 
-    /** 新建食堂也要写正式类型；有窗口的食堂不可切回普通餐厅，冲突不能误报审核成功。 */
+    /** 新建食堂写入正式类型；审核允许食堂转换为普通餐厅。 */
     @Test
-    void shouldCreateCanteenAndProtectExistingWindowReferences() throws Exception {
+    void shouldCreateCanteenAndApproveConversionToRegular() throws Exception {
         var submission = valid();
         submission.put("clientRequestId", UUID.randomUUID().toString());
         submission.put("restaurantType", "CANTEEN");
@@ -1204,21 +1222,6 @@ class RestaurantWriteApiIntegrationTest {
         submission.put("restaurantType", "REGULAR");
         submission.put("categoryCode", "OTHER");
         String nextId = submitted("/api/restaurants/" + target + "/change-requests", submission);
-        jdbc.update(
-                "INSERT INTO canteen_windows(canteen_id,name,floor_number,created_by) VALUES(?,'窗口夹具',1,33)",
-                target);
-        try {
-            perform(post("/api/admin/restaurant-requests/" + nextId + "/approve"), admin, valid())
-                    .andExpect(status().isConflict());
-            assertThat(
-                            jdbc.queryForObject(
-                                    "SELECT status FROM restaurant_change_requests WHERE id=?",
-                                    String.class,
-                                    nextId))
-                    .isEqualTo("PENDING");
-        } finally {
-            jdbc.update("DELETE FROM canteen_windows WHERE canteen_id=?", target);
-        }
         perform(post("/api/admin/restaurant-requests/" + nextId + "/approve"), admin, valid())
                 .andExpect(status().isOk());
         mvc.perform(get("/api/restaurants/" + target))
@@ -1299,7 +1302,9 @@ class RestaurantWriteApiIntegrationTest {
                 java.security.MessageDigest.getInstance("SHA-256")
                         .digest(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         jdbc.update(
-                "INSERT INTO restaurant_change_requests(request_type,submitted_by,client_request_id,request_hash,proposed_data) VALUES('CREATE',22,?,?,?)",
+                "INSERT INTO"
+                    + " restaurant_change_requests(request_type,submitted_by,client_request_id,request_hash,proposed_data)"
+                    + " VALUES('CREATE',22,?,?,?)",
                 dto.getClientRequestId().toString(),
                 hash,
                 payload);
@@ -1324,9 +1329,12 @@ class RestaurantWriteApiIntegrationTest {
         var approved = valid();
         approved.put("restaurantType", "CANTEEN");
         jdbc.update(
-                "INSERT INTO restaurants(id,name,category_code,restaurant_type) VALUES(12345,'旧已通过食堂',NULL,'CANTEEN')");
+                "INSERT INTO restaurants(id,name,category_code,restaurant_type)"
+                    + " VALUES(12345,'旧已通过食堂',NULL,'CANTEEN')");
         jdbc.update(
-                "UPDATE restaurant_change_requests SET status='APPROVED',restaurant_id=12345,reviewed_by=33,reviewed_at=CURRENT_TIMESTAMP(6),approved_data=? WHERE id=?",
+                "UPDATE restaurant_change_requests SET"
+                    + " status='APPROVED',restaurant_id=12345,reviewed_by=33,reviewed_at=CURRENT_TIMESTAMP(6),approved_data=?"
+                    + " WHERE id=?",
                 json.writeValueAsString(
                         json.readValue(
                                 json.writeValueAsString(approved),
@@ -1350,7 +1358,10 @@ class RestaurantWriteApiIntegrationTest {
         for (int index = 0; index < 2; index++) {
             long file = 901L + index;
             jdbc.update(
-                    "INSERT INTO media_files(id,uploader_user_id,bucket_name,storage_key,content_type,byte_size,width,height,sha256,status,purpose,expires_at) VALUES(?,22,'test-bucket',?,'image/jpeg',4,1,1,UNHEX(SHA2(?,256)),'TEMPORARY','RESTAURANT',CURRENT_TIMESTAMP+INTERVAL 1 DAY)",
+                    "INSERT INTO"
+                        + " media_files(id,uploader_user_id,bucket_name,storage_key,content_type,byte_size,width,height,sha256,status,purpose,expires_at)"
+                        + " VALUES(?,22,'test-bucket',?,'image/jpeg',4,1,1,UNHEX(SHA2(?,256)),'TEMPORARY','RESTAURANT',CURRENT_TIMESTAMP+INTERVAL"
+                        + " 1 DAY)",
                     file,
                     "restaurant-images/" + file + ".jpg",
                     "photo" + file);
@@ -1376,7 +1387,8 @@ class RestaurantWriteApiIntegrationTest {
                     .isEqualTo("BOUND");
             assertThat(
                             jdbc.queryForObject(
-                                    "SELECT media_file_id FROM restaurant_change_photos WHERE request_id=? AND position=0",
+                                    "SELECT media_file_id FROM restaurant_change_photos WHERE"
+                                        + " request_id=? AND position=0",
                                     Long.class,
                                     id))
                     .isEqualTo(file);
@@ -1470,7 +1482,8 @@ class RestaurantWriteApiIntegrationTest {
                 .isEqualTo(1);
         assertThat(
                         jdbc.queryForObject(
-                                "SELECT HEX(request_hash) FROM restaurant_change_requests WHERE id=?",
+                                "SELECT HEX(request_hash) FROM restaurant_change_requests WHERE"
+                                    + " id=?",
                                 String.class,
                                 id))
                 .isEqualTo(hash);
@@ -1602,7 +1615,8 @@ class RestaurantWriteApiIntegrationTest {
                 .containsExactly("原标签");
         assertThat(
                         jdbc.queryForObject(
-                                "SELECT COUNT(*) FROM restaurant_change_requests WHERE status='PENDING' AND reviewed_by IS NULL",
+                                "SELECT COUNT(*) FROM restaurant_change_requests WHERE"
+                                    + " status='PENDING' AND reviewed_by IS NULL",
                                 Long.class))
                 .isEqualTo(2);
     }
@@ -1611,7 +1625,8 @@ class RestaurantWriteApiIntegrationTest {
     @Test
     void shouldSerializeConcurrentDecisions() throws Exception {
         jdbc.update(
-                "INSERT INTO user_roles(user_id,role_id) SELECT 11,id FROM roles WHERE code='ROLE_ADMIN'");
+                "INSERT INTO user_roles(user_id,role_id) SELECT 11,id FROM roles WHERE"
+                    + " code='ROLE_ADMIN'");
         var submission = valid();
         submission.put("clientRequestId", UUID.randomUUID().toString());
         String id = submitted("/api/restaurant-submissions", submission);
@@ -1760,7 +1775,8 @@ class RestaurantWriteApiIntegrationTest {
         perform(delete("/api/files/images/" + file), other, null).andExpect(status().isConflict());
         assertThat(
                         jdbc.queryForObject(
-                                "SELECT HEX(request_hash) FROM restaurant_change_requests WHERE id=?",
+                                "SELECT HEX(request_hash) FROM restaurant_change_requests WHERE"
+                                    + " id=?",
                                 String.class,
                                 id))
                 .isEqualTo(originalHash);
@@ -1787,7 +1803,8 @@ class RestaurantWriteApiIntegrationTest {
         approveAlbum(empty, valid());
         assertThat(
                         jdbc.queryForList(
-                                "SELECT media_file_id FROM restaurant_photos WHERE restaurant_id=? ORDER BY position",
+                                "SELECT media_file_id FROM restaurant_photos WHERE restaurant_id=?"
+                                    + " ORDER BY position",
                                 Long.class,
                                 target))
                 .containsExactly(first, second, third);
@@ -1855,18 +1872,21 @@ class RestaurantWriteApiIntegrationTest {
         }
         var positions =
                 jdbc.queryForList(
-                        "SELECT position FROM restaurant_photos WHERE restaurant_id=? ORDER BY position",
+                        "SELECT position FROM restaurant_photos WHERE restaurant_id=? ORDER BY"
+                            + " position",
                         Integer.class,
                         target);
         assertThat(positions).containsExactly(0, 1, 2, 3);
         var aRows =
                 jdbc.queryForList(
-                        "SELECT media_file_id FROM restaurant_photos WHERE source_request_id=? ORDER BY position",
+                        "SELECT media_file_id FROM restaurant_photos WHERE source_request_id=?"
+                            + " ORDER BY position",
                         Long.class,
                         a);
         var bRows =
                 jdbc.queryForList(
-                        "SELECT media_file_id FROM restaurant_photos WHERE source_request_id=? ORDER BY position",
+                        "SELECT media_file_id FROM restaurant_photos WHERE source_request_id=?"
+                            + " ORDER BY position",
                         Long.class,
                         b);
         assertThat(aRows).containsExactly(a1, a2);
@@ -1874,7 +1894,8 @@ class RestaurantWriteApiIntegrationTest {
         for (String request : List.of(a, b)) {
             assertThat(
                             jdbc.queryForObject(
-                                    "SELECT MAX(position)-MIN(position) FROM restaurant_photos WHERE source_request_id=?",
+                                    "SELECT MAX(position)-MIN(position) FROM restaurant_photos"
+                                        + " WHERE source_request_id=?",
                                     Integer.class,
                                     request))
                     .isEqualTo(1);
@@ -1970,7 +1991,9 @@ class RestaurantWriteApiIntegrationTest {
                     jdbc.update("UPDATE media_files SET uploader_user_id=11 WHERE id=?", file);
             case "TEMPORARY" ->
                     jdbc.update(
-                            "UPDATE media_files SET status='TEMPORARY',bound_at=NULL,expires_at=CURRENT_TIMESTAMP+INTERVAL 1 DAY WHERE id=?",
+                            "UPDATE media_files SET"
+                                + " status='TEMPORARY',bound_at=NULL,expires_at=CURRENT_TIMESTAMP+INTERVAL"
+                                + " 1 DAY WHERE id=?",
                             file);
             case "MISSING" -> jdbc.update("DELETE FROM media_files WHERE id=?", file);
             default -> throw new IllegalArgumentException(corruption);
@@ -2009,7 +2032,9 @@ class RestaurantWriteApiIntegrationTest {
         long oldFile = albumFile();
         String legacy = albumRequest(target, oldFile);
         jdbc.update(
-                "UPDATE restaurant_change_requests SET status='APPROVED',reviewed_by=33,reviewed_at=CURRENT_TIMESTAMP(6),approved_data=?,before_data=JSON_OBJECT() WHERE id=?",
+                "UPDATE restaurant_change_requests SET"
+                    + " status='APPROVED',reviewed_by=33,reviewed_at=CURRENT_TIMESTAMP(6),approved_data=?,before_data=JSON_OBJECT()"
+                    + " WHERE id=?",
                 json.writeValueAsString(valid()),
                 legacy);
         assertThat(approveAlbum(legacy, valid()).get("publishedPhotos").isEmpty()).isTrue();
@@ -2045,8 +2070,11 @@ class RestaurantWriteApiIntegrationTest {
                 .andExpect(jsonPath("$.data.publishedPhotos.length()").value(1));
         perform(get("/api/admin/restaurant-requests/" + id + "/photos/0"), admin, null)
                 .andExpect(status().isOk());
-        assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM restaurant_photos WHERE restaurant_id=?", Long.class, target))
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT COUNT(*) FROM restaurant_photos WHERE restaurant_id=?",
+                                Long.class,
+                                target))
                 .isEqualTo(1);
     }
 
@@ -2074,7 +2102,9 @@ class RestaurantWriteApiIntegrationTest {
         mvc.perform(get(url)).andExpect(status().isNotFound());
         verifyNoInteractions(storage);
         jdbc.update(
-                "UPDATE media_files SET uploader_user_id=22,status='PENDING_DELETE',expires_at=CURRENT_TIMESTAMP(6) WHERE id=?",
+                "UPDATE media_files SET"
+                    + " uploader_user_id=22,status='PENDING_DELETE',expires_at=CURRENT_TIMESTAMP(6)"
+                    + " WHERE id=?",
                 file);
         mvc.perform(get(url)).andExpect(status().isNotFound());
         verifyNoInteractions(storage);
@@ -2150,7 +2180,10 @@ class RestaurantWriteApiIntegrationTest {
     private long albumFile() {
         long id = ++albumFileSequence;
         jdbc.update(
-                "INSERT INTO media_files(id,uploader_user_id,bucket_name,storage_key,content_type,byte_size,width,height,sha256,status,purpose,expires_at) VALUES(?,22,'album-test',?,'image/jpeg',4,1,1,UNHEX(SHA2(?,256)),'TEMPORARY','RESTAURANT',CURRENT_TIMESTAMP+INTERVAL 1 DAY)",
+                "INSERT INTO"
+                    + " media_files(id,uploader_user_id,bucket_name,storage_key,content_type,byte_size,width,height,sha256,status,purpose,expires_at)"
+                    + " VALUES(?,22,'album-test',?,'image/jpeg',4,1,1,UNHEX(SHA2(?,256)),'TEMPORARY','RESTAURANT',CURRENT_TIMESTAMP+INTERVAL"
+                    + " 1 DAY)",
                 id,
                 "restaurant-images/album-" + id + ".jpg",
                 "album-" + id);
@@ -2210,13 +2243,15 @@ class RestaurantWriteApiIntegrationTest {
                 .isEqualTo("REGULAR");
         assertThat(
                         jdbc.queryForList(
-                                "SELECT tag FROM restaurant_tags WHERE restaurant_id=? ORDER BY position",
+                                "SELECT tag FROM restaurant_tags WHERE restaurant_id=? ORDER BY"
+                                    + " position",
                                 String.class,
                                 target))
                 .containsExactly("原标签");
         assertThat(
                         jdbc.queryForObject(
-                                "SELECT COUNT(*) FROM restaurant_change_requests WHERE status='PENDING' AND reviewed_by IS NULL",
+                                "SELECT COUNT(*) FROM restaurant_change_requests WHERE"
+                                    + " status='PENDING' AND reviewed_by IS NULL",
                                 Long.class))
                 .isEqualTo(2);
     }
@@ -2247,7 +2282,8 @@ class RestaurantWriteApiIntegrationTest {
                 .isEqualTo(4);
         assertThat(
                         jdbc.queryForObject(
-                                "SELECT source_id FROM growth_rewards WHERE reward_type='CORRECTION_APPROVED' AND business_key=?",
+                                "SELECT source_id FROM growth_rewards WHERE"
+                                    + " reward_type='CORRECTION_APPROVED' AND business_key=?",
                                 Long.class,
                                 restaurant))
                 .isEqualTo(Long.parseLong(correction));
@@ -2456,7 +2492,8 @@ class RestaurantWriteApiIntegrationTest {
                 .isEqualTo(60);
         assertThat(
                         jdbc.queryForObject(
-                                "SELECT COUNT(*) FROM restaurant_change_requests WHERE status='APPROVED'",
+                                "SELECT COUNT(*) FROM restaurant_change_requests WHERE"
+                                    + " status='APPROVED'",
                                 Long.class))
                 .isEqualTo(3);
     }
@@ -2469,12 +2506,15 @@ class RestaurantWriteApiIntegrationTest {
                         invocation -> {
                             long through =
                                     jdbc.queryForObject(
-                                            "SELECT COALESCE(MAX(id),0) FROM notification_messages WHERE recipient_user_id=22",
+                                            "SELECT COALESCE(MAX(id),0) FROM notification_messages"
+                                                + " WHERE recipient_user_id=22",
                                             Long.class);
                             try (var connection = connect(database);
                                     var statement = connection.createStatement()) {
                                 statement.executeUpdate(
-                                        "INSERT INTO notification_messages(recipient_user_id,source_id,request_id,request_type,decision,restaurant_name) VALUES(22,999999,999999,'CREATE','APPROVED','稍后到达的通知')");
+                                        "INSERT INTO"
+                                            + " notification_messages(recipient_user_id,source_id,request_id,request_type,decision,restaurant_name)"
+                                            + " VALUES(22,999999,999999,'CREATE','APPROVED','稍后到达的通知')");
                             }
                             return through;
                         })
@@ -2486,7 +2526,8 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(notificationPage(other, "ALL").get("unreadCount").asLong()).isEqualTo(1);
         assertThat(
                         jdbc.queryForObject(
-                                "SELECT read_at IS NULL FROM notification_messages WHERE request_id=999999",
+                                "SELECT read_at IS NULL FROM notification_messages WHERE"
+                                    + " request_id=999999",
                                 Boolean.class))
                 .isTrue();
     }
@@ -2498,13 +2539,16 @@ class RestaurantWriteApiIntegrationTest {
                 var statement = connection.createStatement()) {
             connection.setAutoCommit(false);
             statement.executeUpdate(
-                    "INSERT INTO notification_messages(recipient_user_id,source_id,request_id,request_type,decision,restaurant_name) VALUES(22,999998,999998,'CREATE','APPROVED','较早分配但稍后提交')");
+                    "INSERT INTO"
+                        + " notification_messages(recipient_user_id,source_id,request_id,request_type,decision,restaurant_name)"
+                        + " VALUES(22,999998,999998,'CREATE','APPROVED','较早分配但稍后提交')");
             approveAlbum(albumRequest(null), valid());
             doAnswer(
                             invocation -> {
                                 long through =
                                         jdbc.queryForObject(
-                                                "SELECT MAX(id) FROM notification_messages WHERE recipient_user_id=22",
+                                                "SELECT MAX(id) FROM notification_messages WHERE"
+                                                    + " recipient_user_id=22",
                                                 Long.class);
                                 connection.commit();
                                 return through;
@@ -2517,7 +2561,8 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(notificationPage(other, "ALL").get("unreadCount").asLong()).isEqualTo(1);
         assertThat(
                         jdbc.queryForObject(
-                                "SELECT read_at IS NULL FROM notification_messages WHERE request_id=999998",
+                                "SELECT read_at IS NULL FROM notification_messages WHERE"
+                                    + " request_id=999998",
                                 Boolean.class))
                 .isTrue();
     }
@@ -2531,9 +2576,7 @@ class RestaurantWriteApiIntegrationTest {
         doAnswer(
                         invocation -> {
                             // Mapper是接口代理，不能callRealMethod；绕过Spy取得真实MyBatis代理后再注入提交前失败。
-                            sql.getMapper(
-                                            com.foodmap.notification.mapper
-                                                    .NotificationMapper.class)
+                            sql.getMapper(com.foodmap.notification.mapper.NotificationMapper.class)
                                     .insert(invocation.getArgument(0));
                             throw new IllegalStateException("injected notification failure");
                         })
@@ -2722,31 +2765,27 @@ class RestaurantWriteApiIntegrationTest {
         perform(put("/api/restaurants/" + id), other, legacy).andExpect(status().isForbidden());
     }
 
-    /** 包括软删除窗口在内的关联阻止类型转换，冲突不推进版本或替换标签。 */
+    /** 移除窗口后食堂可直接转换类型，仍需提供普通餐厅分类并推进版本。 */
     @Test
-    void shouldProtectWindowReferencesDuringDirectUpdate() throws Exception {
+    void shouldConvertCanteenToRegularDuringDirectUpdate() throws Exception {
         var input = valid();
         input.put("restaurantType", "CANTEEN");
         input.put("categoryCode", null);
         String id = create(input).at("/restaurant/id").asString();
-        jdbc.update(
-                "INSERT INTO canteen_windows(canteen_id,name,floor_number,created_by,deleted_at,deleted_by) VALUES(?,'direct-window',1,33,CURRENT_TIMESTAMP(6),33)",
-                id);
-        try {
-            var regular = valid();
-            regular.put("restaurantType", "REGULAR");
-            regular.put("tags", List.of("不能覆盖"));
-            perform(put("/api/restaurants/" + id), admin, regular).andExpect(status().isConflict());
-            assertThat(projectionVersion(id)).isEqualTo(1);
-            assertThat(
-                            jdbc.queryForList(
-                                    "SELECT tag FROM restaurant_tags WHERE restaurant_id=?",
-                                    String.class,
-                                    id))
-                    .containsExactly("原标签");
-        } finally {
-            jdbc.update("DELETE FROM canteen_windows WHERE canteen_id=?", id);
-        }
+        var regular = valid();
+        regular.put("restaurantType", "REGULAR");
+        regular.put("tags", List.of("更新标签"));
+        perform(put("/api/restaurants/" + id), admin, regular).andExpect(status().isOk());
+        assertThat(projectionVersion(id)).isEqualTo(2);
+        assertThat(
+                        jdbc.queryForList(
+                                "SELECT tag FROM restaurant_tags WHERE restaurant_id=?",
+                                String.class,
+                                id))
+                .containsExactly("更新标签");
+        mvc.perform(get("/api/restaurants/" + id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.restaurantType").value("REGULAR"));
     }
 
     /** 类型/三态已更新后标签失败，整份资料和投影版本都必须撤销。 */
@@ -2886,7 +2925,8 @@ class RestaurantWriteApiIntegrationTest {
 
     private List<Long> outboxVersions(String id) {
         return jdbc.queryForList(
-                "SELECT projection_version FROM restaurant_search_outbox WHERE restaurant_id=? ORDER BY projection_version",
+                "SELECT projection_version FROM restaurant_search_outbox WHERE restaurant_id=?"
+                    + " ORDER BY projection_version",
                 Long.class,
                 id);
     }

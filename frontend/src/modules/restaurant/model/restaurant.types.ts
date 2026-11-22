@@ -6,8 +6,6 @@ export interface RestaurantReadModel {
   restaurantType?: 'REGULAR' | 'CANTEEN'
   supportsDineIn?: boolean | null
   supportsDelivery?: boolean | null
-  /** 可选的前端校园详情扩展，旧接口缺省时保持兼容；不代表当前后端已实现。 */
-  dining?: import('./campusDining').CampusDining
   id: string
   name: string
   category: string

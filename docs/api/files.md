@@ -8,7 +8,7 @@
 
 | 方法 | 路径 | 权限 | 成功状态 | 详细协议 |
 | --- | --- | --- | --- | --- |
-| POST | `/api/files/images` | Bearer；WINDOW用途需管理员 | 201 | [临时图片](#temporary) |
+| POST | `/api/files/images` | Bearer | 201 | [临时图片](#temporary) |
 | DELETE | `/api/files/images/{fileId}` | 上传者 | 204 / 202 | [临时图片](#temporary) |
 | GET | `/api/reviews/{reviewId}/photos/{position}` | 公开 | 200 JPEG | [正式点评图与商户申请图](#review-photos) |
 
@@ -16,7 +16,7 @@
 
 ## 图片上传、绑定与读取
 
-图片上传、取消及按用途读取在本分册维护。餐厅正式相册、申请私图和窗口相册分别由对应业务接口校验可见性，见各分册链接。
+图片上传、取消及按用途读取在本分册维护。餐厅正式相册、申请私图分别由对应业务接口校验可见性，见各分册链接。
 
 <a id="temporary"></a>
 
@@ -26,12 +26,12 @@
 
 | 方法 | 路径 | 权限 | 成功状态 |
 | --- | --- | --- | --- |
-| POST | `/api/files/images` | Bearer；WINDOW用途需管理员 | 201 |
+| POST | `/api/files/images` | Bearer | 201 |
 | DELETE | `/api/files/images/{fileId}` | 上传者 | 204 / 202 |
 
 **请求参数**
 
-`POST /api/files/images?purpose=REVIEW|RESTAURANT|WINDOW|AVATAR`，Bearer、multipart/form-data、单文件字段`file`；省略purpose默认REVIEW，WINDOW用途额外要求管理员，普通账号403。AVATAR用途供用户本人头像使用。成功201、禁止缓存，data：
+`POST /api/files/images?purpose=REVIEW|RESTAURANT|AVATAR`，Bearer、multipart/form-data、单文件字段`file`；省略purpose默认REVIEW。AVATAR用途供用户本人头像使用。成功201、禁止缓存，data：
 
 只接受真实JPEG，单文件不超过300KiB、最长边1200px，multipart总大小不超过320KiB。服务端独立解码重编码，不信任文件名或Content-Type；PNG/WebP需由浏览器转换。前端原图限制20MiB/4000万像素。对象私有，不接收客户端Bucket、对象键或上传者，不返回云存储地址。
 
@@ -51,7 +51,7 @@ AVATAR额外要求正方形且边长不超过512px，否则400 `FILE_INVALID_AVA
 
 **副作用与限制**
 
-图片默认24小时临时有效。REVIEW点评、RESTAURANT商家申请、WINDOW窗口相册和AVATAR头像不可交叉绑定；相同Bucket下分别使用`review-images/{UUID}.jpg`、`restaurant-images/{UUID}.jpg`、`windows-images/{UUID}.jpg`和`avatars/{UUID}.jpg`，临时绑定或审核通过不移动对象。响应丢失后重传不保证同一fileId，未绑定文件由到期清理兜底。配置与权限要求见[图片存储目录](../operations/deployment.md#图片存储目录)。
+图片默认24小时临时有效。REVIEW点评、RESTAURANT商家申请和AVATAR头像不可交叉绑定；相同Bucket下分别使用`review-images/{UUID}.jpg`、`restaurant-images/{UUID}.jpg`和`avatars/{UUID}.jpg`，临时绑定或审核通过不移动对象。响应丢失后重传不保证同一fileId，未绑定文件由到期清理兜底。配置与权限要求见[图片存储目录](../operations/deployment.md#图片存储目录)。
 
 <a id="review-photos"></a>
 

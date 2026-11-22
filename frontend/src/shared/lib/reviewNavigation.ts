@@ -29,7 +29,6 @@ export function isReviewLoginDestination(value: string): boolean {
     status: /^(?:ALL|PENDING|APPROVED|REJECTED|WITHDRAWN|LINKED_EXISTING)$/,
     tab: /^(?:reviews|favorites)$/,
     from: /^(?:map|picker)$/,
-    floor: /^.{0,100}$/u,
     q: /^.{0,200}$/u,
     keyword: /^.{0,200}$/u,
     requestId: /^[1-9]\d{0,18}$/,
@@ -44,5 +43,5 @@ export function isReviewLoginDestination(value: string): boolean {
 
 /** 详情自带固定对象的编辑器，其余页面由布局中的全站编辑器处理，避免双弹窗。 */
 export function hasDetailComposer(path: string): boolean {
-  return /^\/(?:restaurants|canteen-windows)\/[1-9]\d*$/.test(path)
+  return /^\/restaurants\/[1-9]\d*$/.test(path)
 }

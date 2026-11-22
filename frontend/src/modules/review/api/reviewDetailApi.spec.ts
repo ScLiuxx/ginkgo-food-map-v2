@@ -4,7 +4,6 @@ import { fetchNotificationReview, fetchReviewDetail } from './reviewDetailApi'
 
 const original = () => ({
   restaurantId: '1',
-  windowId: null,
   author: { id: '42', username: '原作者', level: 2 },
   review: {
     id: '9007199254740993',
@@ -24,7 +23,6 @@ const like = (reply = false) => ({
   targetId: reply ? '301' : '9007199254740993',
   reviewId: '9007199254740993',
   restaurantId: '1',
-  windowId: null,
   author: { id: '42', username: '本人' },
   body: '获赞的原内容',
   createdAt: '2026-11-14T02:00:00Z',
@@ -67,7 +65,7 @@ describe('单条点评及通知目标读取', () => {
     async (kind) => {
       const data = original()
       if (kind === 'wrong-id') data.review.id = '2'
-      if (kind === 'wrong-parent') data.windowId = '2' as unknown as null
+      if (kind === 'wrong-parent') data.restaurantId = ''
       if (kind === 'bad-photo') data.review.photos[0]!.url = 'https://example.test/private'
       if (kind === 'null-photo')
         data.review.photos[0] = null as unknown as (typeof data.review.photos)[number]
@@ -79,30 +77,6 @@ describe('单条点评及通知目标读取', () => {
       ).rejects.toThrow('无法确认')
     },
   )
-  it('点评点赞先确认本人获赞源，保留原点评；窗口不伪装普通店', async () => {
-    const data = original(),
-      target = like()
-    data.restaurantId = null as unknown as string
-    data.windowId = '201' as unknown as null
-    target.restaurantId = null as unknown as string
-    target.windowId = '201' as unknown as null
-    const get = vi
-      .spyOn(httpClient, 'get')
-      .mockResolvedValueOnce(envelope(target))
-      .mockResolvedValueOnce(envelope(data))
-    const result = await fetchNotificationReview(
-      'REVIEW_LIKED',
-      '81',
-      data.review.id,
-      '42',
-      'token',
-      new AbortController().signal,
-    )
-    expect(result.restaurantId).toBeNull()
-    expect(result.windowId).toBe('201')
-    expect(result.focusedReply).toBeUndefined()
-    expect(get).toHaveBeenCalledTimes(2)
-  })
   it('回复获赞可定位本人在他人点评下的回复，不要求原点评属于本人', async () => {
     const data = original()
     data.author.id = '88'
@@ -130,7 +104,6 @@ describe('单条点评及通知目标读取', () => {
       target = {
         userId: '42',
         restaurantId: '1',
-        windowId: null,
         reviewId: data.review.id,
         replyId: '301',
         reviewAuthor: { id: '42', username: '本人' },

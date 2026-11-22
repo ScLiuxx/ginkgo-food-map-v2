@@ -48,7 +48,6 @@ const replyPage = (): NotificationPage => ({
 })
 const target = (): ReviewDetail => ({
   restaurantId: '1',
-  windowId: null,
   item: {
     id: '301',
     authorId: '42',

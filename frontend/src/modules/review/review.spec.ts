@@ -269,124 +269,21 @@ describe('review interactions matching the original site', () => {
       ...restaurantFixture,
       id,
       category: '食堂',
-      dining: {
-        kind: 'canteen',
-        campus: null,
-        parent: null,
-        floor: null,
-        description: null,
-        dishes: [],
-        windows: [1, 2].map((n) => ({
-          id: `${id}-w${n}`,
-          canteenId: id,
-          name: `测试窗口${n}`,
-          floor: `${n}楼`,
-          category: null,
-          score: null,
-          reviewCount: 0,
-          price: null,
-          closed: false,
-          specialties: [],
-        })),
-      },
+      restaurantType: 'CANTEEN',
     }
-  }
-  async function choose(label: string, value: string) {
-    if (label === '评价对象') {
-      host
-        .querySelector<HTMLInputElement>('.target-search-field input')!
-        .dispatchEvent(new Event('focus'))
-      await settle()
-      const rows = [...host.querySelectorAll<HTMLButtonElement>('.target-search-row')]
-      rows[value === 'second' ? 1 : 0]!.click()
-      await settle()
-      return
-    }
-    const select = host.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`)!
-    select.value = value
-    select.dispatchEvent(new Event('change'))
-    await settle()
   }
 
-  it('requires a canteen window, clears cascading selections and publishes only its stable ID', async () => {
+  it('publishes a canteen review directly without floor or window selection', async () => {
     login()
-    vi.mocked(fetchRestaurants).mockResolvedValue({
-      page: 1,
-      pageSize: 100,
-      total: 2,
-      totalPages: 1,
-      records: [canteen(), canteen('second')],
-    })
-    await mount(ReviewComposer)
+    await mount(ReviewComposer, { restaurant: canteen('501'), fixedTarget: true })
     await open()
-    await fill('好')
-    expect(host.querySelector<HTMLButtonElement>('[type=submit]')!.disabled).toBe(true)
+    expect(host.querySelector('select[aria-label="楼层"]')).toBeNull()
+    expect(host.querySelector('select[aria-label="窗口"]')).toBeNull()
+    await fill('食堂直接点评')
     await submit()
-    expect(gateway.publish).not.toHaveBeenCalled()
-    await choose('楼层', '1楼')
-    await choose('窗口', 'canteen-w1')
-    expect(host.querySelector<HTMLButtonElement>('[type=submit]')!.disabled).toBe(false)
-    await submit()
-    expect(vi.mocked(gateway.publish).mock.calls[0]![0].restaurantId).toBe('canteen-w1')
-    expect(vi.mocked(gateway.publish).mock.calls[0]![0].body).toBe('好')
-    await choose('楼层', '2楼')
-    expect(host.querySelector<HTMLSelectElement>('[aria-label="窗口"]')!.value).toBe('')
-    await choose('窗口', 'canteen-w2')
-    await choose('评价对象', 'second')
-    expect(host.querySelector<HTMLSelectElement>('[aria-label="楼层"]')!.value).toBe('')
-    expect(host.querySelector<HTMLSelectElement>('[aria-label="窗口"]')!.value).toBe('')
-    expect(host.querySelector<HTMLButtonElement>('[type=submit]')!.disabled).toBe(true)
-  })
-
-  it('blocks canteens without windows and excludes foreign or closed windows', async () => {
-    login()
-    const record = canteen()
-    record.dining!.windows = record.dining!.windows!.map((w, i) =>
-      i ? { ...w, canteenId: 'foreign' } : { ...w, closed: true },
+    expect(gateway.publish).toHaveBeenCalledWith(
+      expect.objectContaining({ restaurantId: '501', body: '食堂直接点评' }),
     )
-    await mount(ReviewComposer, { restaurant: record, fixedTarget: true })
-    await open()
-    expect(host.textContent).toContain('该食堂暂无收录窗口')
-    expect(host.querySelector<HTMLButtonElement>('[type=submit]')!.disabled).toBe(true)
-    await fill('食堂没有窗口时不得向父级发布')
-    await submit()
-    expect(gateway.publish).not.toHaveBeenCalled()
-  })
-
-  it('locks a window detail with its parent and floor and maps half stars to legacy scores', async () => {
-    login()
-    const record = {
-      ...restaurantFixture,
-      id: 'window-id',
-      name: '测试独立窗口',
-      dining: {
-        kind: 'window' as const,
-        campus: null,
-        parent: { id: 'canteen', name: '测试食堂' },
-        floor: '二楼',
-        description: null,
-        windows: null,
-        dishes: [],
-      },
-    }
-    await mount(ReviewComposer, { restaurant: record })
-    await open()
-    expect(fetchRestaurants).not.toHaveBeenCalled()
-    expect(host.querySelector('.locked-target strong')?.textContent).toBe('测试独立窗口')
-    expect(host.querySelector('.locked-target > span')?.textContent).toBe('测试食堂 · 二楼')
-    expect(host.querySelector('.locked-target')?.textContent).not.toContain('已锁定')
-    expect(host.querySelector('.locked-target [aria-hidden]')).toBeNull()
-    const star = host.querySelector<HTMLInputElement>('[type=range]')!
-    star.value = '4.5'
-    star.dispatchEvent(new Event('input'))
-    await settle()
-    expect(host.querySelector('output')?.textContent).toBe('4.5')
-    await fill('锁定窗口的半星评价测试')
-    await submit()
-    expect(vi.mocked(gateway.publish).mock.calls[0]![0]).toMatchObject({
-      restaurantId: 'window-id',
-      scores: { taste: 9, value: 7, service: 7, ambience: 7 },
-    })
   })
 
   it('rounds half up, distinguishes zero, and counts Unicode code points', () => {
@@ -572,17 +469,17 @@ describe('review interactions matching the original site', () => {
     await settle()
     expect(host.querySelector('dialog')!.open).toBe(false)
   })
-  it('locks detail publication to the window ID without fetching or selecting a parent restaurant', async () => {
+  it('locks detail publication to the canteen ID without fetching another restaurant', async () => {
     login()
     await mount(ReviewComposer, {
-      restaurant: { ...restaurantFixture, id: '201', name: '测试窗口' },
+      restaurant: { ...restaurantFixture, id: '201', name: '测试食堂' },
       fixedTarget: true,
     })
     await open()
     expect(fetchRestaurants).not.toHaveBeenCalled()
     expect(host.querySelector('.review-target-search')).toBeNull()
-    expect(host.querySelector('.locked-target')?.textContent).toContain('测试窗口')
-    await fill('测试窗口的独立评价正文')
+    expect(host.querySelector('.locked-target')?.textContent).toContain('测试食堂')
+    await fill('测试食堂的独立评价正文')
     await submit()
     expect(vi.mocked(gateway.publish).mock.calls[0]?.[0].restaurantId).toBe('201')
     expect(host.querySelector('.add-missing')).toBeNull()
