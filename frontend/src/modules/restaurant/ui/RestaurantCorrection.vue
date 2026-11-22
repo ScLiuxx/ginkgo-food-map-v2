@@ -334,7 +334,7 @@ function validateShop() {
     photoError.value = '请等待图片上传完成，失败的图片可重试或移除。'
     return false
   }
-  errors.value = validateRestaurantDraft(form, extra.restaurantType)
+  errors.value = validateRestaurantDraft(form, extra.restaurantType, !props.admin)
   const category = categories.value.find((c) => c.code === form.categoryCode)
   if (
     extra.restaurantType === 'REGULAR' &&
@@ -671,18 +671,20 @@ onBeforeUnmount(() => {
                 </select></label
               >
             </fieldset>
-            <fieldset :disabled="saving">
+            <fieldset v-if="!admin || !form.latitude || !form.longitude" :disabled="saving">
               <legend>商户位置</legend>
               <p v-if="selectedPlace" class="notice" role="status">
                 已选择：{{ selectedPlace }}，商户位置已自动更新。
               </p>
-              <label v-else-if="form.latitude && form.longitude" class="check"
+              <label v-else-if="!admin && form.latitude && form.longitude" class="check"
                 ><input
                   v-model="form.locationConfirmed"
                   type="checkbox"
                 />我已核对并确认商户位置</label
               >
-              <p v-else class="intro">这家商户还没有位置信息，请搜索并选择门店。</p>
+              <p v-else-if="!form.latitude || !form.longitude" class="intro">
+                这家商户还没有位置信息，请搜索并选择门店。
+              </p>
               <small class="error">{{
                 errors.latitude || errors.longitude
                   ? '请通过高德搜索并选择有效门店。'

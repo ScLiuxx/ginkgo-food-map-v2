@@ -167,7 +167,7 @@ async function submit(): Promise<void> {
     getAccessToken() !== boundToken
   )
     return
-  errors.value = validateRestaurantDraft(form, restaurantType.value)
+  errors.value = validateRestaurantDraft(form, restaurantType.value, !props.admin)
   const category = categories.value.find((c) => c.code === form.categoryCode)
   if (
     restaurantType.value === 'REGULAR' &&
@@ -391,7 +391,7 @@ onBeforeUnmount(() => {
             </p>
           </div>
         </div>
-        <label class="location-confirm" for="restaurant-location-confirmed"
+        <label v-if="!admin" class="location-confirm" for="restaurant-location-confirmed"
           ><input
             id="restaurant-location-confirmed"
             v-model="form.locationConfirmed"

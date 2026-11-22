@@ -132,19 +132,19 @@ class RestaurantWriteApiIntegrationTest {
         for (long id : List.of(11L, 22L, 33L)) {
             jdbc.update(
                     "INSERT INTO users(id,username,email,password_hash,email_verified) VALUES"
-                        + " (?,?,?,?,TRUE)",
+                            + " (?,?,?,?,TRUE)",
                     id,
                     "fixture_" + id,
                     "fixture" + id + "@example.test",
                     "test-only-unused-hash");
             jdbc.update(
                     "INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE"
-                        + " code='ROLE_USER'",
+                            + " code='ROLE_USER'",
                     id);
         }
         jdbc.update(
                 "INSERT INTO user_roles(user_id,role_id) SELECT 33,id FROM roles WHERE"
-                    + " code='ROLE_ADMIN'");
+                        + " code='ROLE_ADMIN'");
         when(sessions.isActive(anyString(), anyLong(), anyLong())).thenReturn(true);
         owner = token(11, 0, false);
         other = token(22, 0, true); // 故意在JWT中伪报管理员，真实权限只取数据库。
@@ -252,7 +252,7 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(
                         jdbc.queryForMap(
                                         "SELECT deleted_at,deleted_by,delete_reason_code FROM"
-                                            + " restaurants WHERE id=?",
+                                                + " restaurants WHERE id=?",
                                         id)
                                 .values())
                 .allMatch(Objects::nonNull);
@@ -287,7 +287,7 @@ class RestaurantWriteApiIntegrationTest {
                 .isEqualTo("ADMIN_REMOVAL");
         jdbc.update(
                 "DELETE FROM user_roles WHERE user_id=33 AND role_id=(SELECT id FROM roles WHERE"
-                    + " code='ROLE_ADMIN')");
+                        + " code='ROLE_ADMIN')");
         perform(get("/api/restaurants/" + id + "/management"), admin, null)
                 .andExpect(status().isForbidden());
     }
@@ -421,14 +421,7 @@ class RestaurantWriteApiIntegrationTest {
         input = valid();
         input.put("priceKind", "ESTIMATE");
         perform(post("/api/restaurants"), admin, input).andExpect(status().isBadRequest());
-        for (String field :
-                List.of(
-                        "latitude",
-                        "longitude",
-                        "locationConfirmed",
-                        "name",
-                        "categoryCode",
-                        "tags")) {
+        for (String field : List.of("latitude", "longitude", "name", "categoryCode", "tags")) {
             input = valid();
             input.put(field, null);
             perform(post("/api/restaurants"), admin, input).andExpect(status().isBadRequest());
@@ -443,10 +436,19 @@ class RestaurantWriteApiIntegrationTest {
             input.put("longitude", longitude);
             perform(post("/api/restaurants"), admin, input).andExpect(status().isBadRequest());
         }
-        input = valid();
-        input.put("locationConfirmed", false);
-        perform(post("/api/restaurants"), admin, input).andExpect(status().isBadRequest());
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurants", Long.class)).isZero();
+    }
+
+    /** 管理员直写免勾选，不放宽真实坐标；普通投稿仍由原测试验证必须确认。 */
+    @Test
+    void administratorMaySaveWithoutLocationCheckbox() throws Exception {
+        var input = valid();
+        input.remove("locationConfirmed");
+        String id = create(input).get("restaurant").get("id").asText();
+        input.put("locationConfirmed", false);
+        perform(put("/api/restaurants/" + id), admin, input).andExpect(status().isOk());
+        input.put("latitude", 2);
+        perform(put("/api/restaurants/" + id), admin, input).andExpect(status().isBadRequest());
     }
 
     /** 名称/地址按Unicode码点计数，emoji边界与中文一致；空白地址存NULL。 */
@@ -537,7 +539,7 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(
                         jdbc.queryForList(
                                 "SELECT tag FROM restaurant_tags WHERE restaurant_id=? ORDER BY"
-                                    + " position",
+                                        + " position",
                                 String.class,
                                 id))
                 .containsExactly("原标签");
@@ -585,7 +587,7 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(
                         jdbc.queryForList(
                                 "SELECT tag FROM restaurant_tags WHERE restaurant_id=? ORDER BY"
-                                    + " position",
+                                        + " position",
                                 String.class,
                                 id))
                 .containsExactly(
@@ -741,7 +743,7 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(
                         jdbc.queryForObject(
                                 "SELECT JSON_UNQUOTE(JSON_EXTRACT(proposed_data,'$.name')) FROM"
-                                    + " restaurant_change_requests WHERE id=?",
+                                        + " restaurant_change_requests WHERE id=?",
                                 String.class,
                                 application))
                 .isEqualTo("待审核新店名");
@@ -1031,7 +1033,7 @@ class RestaurantWriteApiIntegrationTest {
         // 历史快照中的旧字段不能导致当前DTO反序列化失败，也不能被输出为新的可编辑资料。
         jdbc.update(
                 "UPDATE restaurant_change_requests SET"
-                    + " proposed_data=JSON_SET(proposed_data,'$.campusCode','OLD') WHERE id=?",
+                        + " proposed_data=JSON_SET(proposed_data,'$.campusCode','OLD') WHERE id=?",
                 updateId);
         jdbc.update(
                 "UPDATE restaurants SET"
@@ -1052,7 +1054,7 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(
                         jdbc.queryForObject(
                                 "SELECT COUNT(*) FROM restaurant_change_requests WHERE"
-                                    + " status='PENDING'",
+                                        + " status='PENDING'",
                                 Long.class))
                 .isEqualTo(3);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurants", Long.class))
@@ -1079,7 +1081,7 @@ class RestaurantWriteApiIntegrationTest {
                     + " VALUES(901,22,'test-bucket','restaurant-images/private.jpg','image/jpeg',4,1,1,UNHEX(SHA2('photo',256)),'BOUND','RESTAURANT',CURRENT_TIMESTAMP(6))");
         jdbc.update(
                 "INSERT INTO restaurant_change_photos(request_id,position,media_file_id)"
-                    + " VALUES(?,0,901)",
+                        + " VALUES(?,0,901)",
                 id);
         String endpoint = "/api/admin/restaurant-requests/" + id + "/photos/0";
         mvc.perform(get(endpoint)).andExpect(status().isUnauthorized());
@@ -1330,7 +1332,7 @@ class RestaurantWriteApiIntegrationTest {
         approved.put("restaurantType", "CANTEEN");
         jdbc.update(
                 "INSERT INTO restaurants(id,name,category_code,restaurant_type)"
-                    + " VALUES(12345,'旧已通过食堂',NULL,'CANTEEN')");
+                        + " VALUES(12345,'旧已通过食堂',NULL,'CANTEEN')");
         jdbc.update(
                 "UPDATE restaurant_change_requests SET"
                     + " status='APPROVED',restaurant_id=12345,reviewed_by=33,reviewed_at=CURRENT_TIMESTAMP(6),approved_data=?"
@@ -1388,7 +1390,7 @@ class RestaurantWriteApiIntegrationTest {
             assertThat(
                             jdbc.queryForObject(
                                     "SELECT media_file_id FROM restaurant_change_photos WHERE"
-                                        + " request_id=? AND position=0",
+                                            + " request_id=? AND position=0",
                                     Long.class,
                                     id))
                     .isEqualTo(file);
@@ -1483,7 +1485,7 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(
                         jdbc.queryForObject(
                                 "SELECT HEX(request_hash) FROM restaurant_change_requests WHERE"
-                                    + " id=?",
+                                        + " id=?",
                                 String.class,
                                 id))
                 .isEqualTo(hash);
@@ -1616,7 +1618,7 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(
                         jdbc.queryForObject(
                                 "SELECT COUNT(*) FROM restaurant_change_requests WHERE"
-                                    + " status='PENDING' AND reviewed_by IS NULL",
+                                        + " status='PENDING' AND reviewed_by IS NULL",
                                 Long.class))
                 .isEqualTo(2);
     }
@@ -1626,7 +1628,7 @@ class RestaurantWriteApiIntegrationTest {
     void shouldSerializeConcurrentDecisions() throws Exception {
         jdbc.update(
                 "INSERT INTO user_roles(user_id,role_id) SELECT 11,id FROM roles WHERE"
-                    + " code='ROLE_ADMIN'");
+                        + " code='ROLE_ADMIN'");
         var submission = valid();
         submission.put("clientRequestId", UUID.randomUUID().toString());
         String id = submitted("/api/restaurant-submissions", submission);
@@ -1776,7 +1778,7 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(
                         jdbc.queryForObject(
                                 "SELECT HEX(request_hash) FROM restaurant_change_requests WHERE"
-                                    + " id=?",
+                                        + " id=?",
                                 String.class,
                                 id))
                 .isEqualTo(originalHash);
@@ -1804,7 +1806,7 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(
                         jdbc.queryForList(
                                 "SELECT media_file_id FROM restaurant_photos WHERE restaurant_id=?"
-                                    + " ORDER BY position",
+                                        + " ORDER BY position",
                                 Long.class,
                                 target))
                 .containsExactly(first, second, third);
@@ -1873,20 +1875,20 @@ class RestaurantWriteApiIntegrationTest {
         var positions =
                 jdbc.queryForList(
                         "SELECT position FROM restaurant_photos WHERE restaurant_id=? ORDER BY"
-                            + " position",
+                                + " position",
                         Integer.class,
                         target);
         assertThat(positions).containsExactly(0, 1, 2, 3);
         var aRows =
                 jdbc.queryForList(
                         "SELECT media_file_id FROM restaurant_photos WHERE source_request_id=?"
-                            + " ORDER BY position",
+                                + " ORDER BY position",
                         Long.class,
                         a);
         var bRows =
                 jdbc.queryForList(
                         "SELECT media_file_id FROM restaurant_photos WHERE source_request_id=?"
-                            + " ORDER BY position",
+                                + " ORDER BY position",
                         Long.class,
                         b);
         assertThat(aRows).containsExactly(a1, a2);
@@ -1895,7 +1897,7 @@ class RestaurantWriteApiIntegrationTest {
             assertThat(
                             jdbc.queryForObject(
                                     "SELECT MAX(position)-MIN(position) FROM restaurant_photos"
-                                        + " WHERE source_request_id=?",
+                                            + " WHERE source_request_id=?",
                                     Integer.class,
                                     request))
                     .isEqualTo(1);
@@ -2244,14 +2246,14 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(
                         jdbc.queryForList(
                                 "SELECT tag FROM restaurant_tags WHERE restaurant_id=? ORDER BY"
-                                    + " position",
+                                        + " position",
                                 String.class,
                                 target))
                 .containsExactly("原标签");
         assertThat(
                         jdbc.queryForObject(
                                 "SELECT COUNT(*) FROM restaurant_change_requests WHERE"
-                                    + " status='PENDING' AND reviewed_by IS NULL",
+                                        + " status='PENDING' AND reviewed_by IS NULL",
                                 Long.class))
                 .isEqualTo(2);
     }
@@ -2283,7 +2285,7 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(
                         jdbc.queryForObject(
                                 "SELECT source_id FROM growth_rewards WHERE"
-                                    + " reward_type='CORRECTION_APPROVED' AND business_key=?",
+                                        + " reward_type='CORRECTION_APPROVED' AND business_key=?",
                                 Long.class,
                                 restaurant))
                 .isEqualTo(Long.parseLong(correction));
@@ -2493,7 +2495,7 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(
                         jdbc.queryForObject(
                                 "SELECT COUNT(*) FROM restaurant_change_requests WHERE"
-                                    + " status='APPROVED'",
+                                        + " status='APPROVED'",
                                 Long.class))
                 .isEqualTo(3);
     }
@@ -2507,7 +2509,7 @@ class RestaurantWriteApiIntegrationTest {
                             long through =
                                     jdbc.queryForObject(
                                             "SELECT COALESCE(MAX(id),0) FROM notification_messages"
-                                                + " WHERE recipient_user_id=22",
+                                                    + " WHERE recipient_user_id=22",
                                             Long.class);
                             try (var connection = connect(database);
                                     var statement = connection.createStatement()) {
@@ -2527,7 +2529,7 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(
                         jdbc.queryForObject(
                                 "SELECT read_at IS NULL FROM notification_messages WHERE"
-                                    + " request_id=999999",
+                                        + " request_id=999999",
                                 Boolean.class))
                 .isTrue();
     }
@@ -2548,7 +2550,7 @@ class RestaurantWriteApiIntegrationTest {
                                 long through =
                                         jdbc.queryForObject(
                                                 "SELECT MAX(id) FROM notification_messages WHERE"
-                                                    + " recipient_user_id=22",
+                                                        + " recipient_user_id=22",
                                                 Long.class);
                                 connection.commit();
                                 return through;
@@ -2562,7 +2564,7 @@ class RestaurantWriteApiIntegrationTest {
         assertThat(
                         jdbc.queryForObject(
                                 "SELECT read_at IS NULL FROM notification_messages WHERE"
-                                    + " request_id=999998",
+                                        + " request_id=999998",
                                 Boolean.class))
                 .isTrue();
     }
@@ -2926,7 +2928,7 @@ class RestaurantWriteApiIntegrationTest {
     private List<Long> outboxVersions(String id) {
         return jdbc.queryForList(
                 "SELECT projection_version FROM restaurant_search_outbox WHERE restaurant_id=?"
-                    + " ORDER BY projection_version",
+                        + " ORDER BY projection_version",
                 Long.class,
                 id);
     }

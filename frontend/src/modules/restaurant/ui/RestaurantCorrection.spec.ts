@@ -561,7 +561,7 @@ describe('商户资料补充与纠错', () => {
     vi.mocked(updateRestaurant).mockResolvedValue({ restaurant: responseFixture, deleted: false })
     const router = await mount('/admin/restaurants/19/edit')
     expect(fetchCorrectionSource).not.toHaveBeenCalled()
-    await field('我已核对', true)
+    expect(host.textContent).not.toContain('我已核对并确认商户位置')
     await submit()
     expect(updateRestaurant).toHaveBeenCalledWith(
       '19',

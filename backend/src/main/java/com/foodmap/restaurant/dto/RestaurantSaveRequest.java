@@ -1,21 +1,21 @@
 package com.foodmap.restaurant.dto;
 
 import com.fasterxml.jackson.annotation.JsonAnySetter;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+
 import lombok.Data;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * 餐厅完整保存输入。金额先接收BigDecimal再校验整数，禁止把小数静默截断为整数元。
- * Unicode长度、价格组合与标签总长由服务统一校验；身份、来源、评分等字段不允许提交。
- */
+/** 餐厅完整保存输入。金额先接收BigDecimal再校验整数，禁止把小数静默截断为整数元。 Unicode长度、价格组合与标签总长由服务统一校验；身份、来源、评分等字段不允许提交。 */
 @Data
 public class RestaurantSaveRequest {
     @NotBlank(message = "请输入餐厅名称")
@@ -40,9 +40,15 @@ public class RestaurantSaveRequest {
     @NotNull(message = "请确认餐厅经度")
     private BigDecimal longitude;
 
-    @NotNull
-    @AssertTrue(message = "请明确确认餐厅位置")
+    /** 管理员直接维护无需勾选，普通投稿和审核仍要求明确确认。 */
     private Boolean locationConfirmed;
+
+    @JsonIgnore
+    @AssertTrue(message = "请明确确认餐厅位置")
+    public boolean isLocationConfirmationValid() {
+        return this instanceof RestaurantDirectSaveRequest
+                || Boolean.TRUE.equals(locationConfirmed);
+    }
 
     @NotNull
     @Pattern(regexp = "OPERATING|CLOSED", message = "经营状态错误")

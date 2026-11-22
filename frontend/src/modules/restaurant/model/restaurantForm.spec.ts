@@ -94,6 +94,14 @@ describe('restaurant editor input rules', () => {
       'tags',
     )
   })
+  it('管理员可跳过位置勾选，但坐标范围和精度仍受校验', () => {
+    const form = { ...valid(), locationConfirmed: false }
+    expect(validateRestaurantDraft(form)).toHaveProperty('locationConfirmed')
+    expect(validateRestaurantDraft(form, 'REGULAR', false)).not.toHaveProperty('locationConfirmed')
+    expect(validateRestaurantDraft({ ...form, latitude: '2' }, 'REGULAR', false)).toHaveProperty(
+      'latitude',
+    )
+  })
   it('loads complete editable fields while requiring position reconfirmation', () => {
     const form = restaurantDraft({
       ...responseFixture,

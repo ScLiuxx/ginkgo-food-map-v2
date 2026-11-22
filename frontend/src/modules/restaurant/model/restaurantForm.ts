@@ -51,6 +51,7 @@ function coordinate(value: string, min: number, max: number): boolean {
 export function validateRestaurantDraft(
   form: RestaurantDraft,
   type: 'REGULAR' | 'CANTEEN' = 'REGULAR',
+  requireLocationConfirmation = true,
 ): RestaurantErrors {
   const errors: RestaurantErrors = {}
   if (!form.name.trim() || characterCount(form.name.trim()) > 40)
@@ -65,7 +66,8 @@ export function validateRestaurantDraft(
   }
   if (!coordinate(form.latitude, 3, 54)) errors.latitude = '纬度需为3–54，最多6位小数。'
   if (!coordinate(form.longitude, 73, 136)) errors.longitude = '经度需为73–136，最多6位小数。'
-  if (!form.locationConfirmed) errors.locationConfirmed = '请核对坐标后确认餐厅位置。'
+  if (requireLocationConfirmation && !form.locationConfirmed)
+    errors.locationConfirmed = '请核对坐标后确认餐厅位置。'
   const tags = draftTags(form.tags)
   if (tags.length > 8 || tags.reduce((sum, tag) => sum + characterCount(tag), 0) > 80) {
     errors.tags = '最多8个标签，输入总字符数最多80。'

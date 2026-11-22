@@ -110,7 +110,8 @@ describe('restaurant maintenance form', () => {
     await field('category', 'HOT_POT')
     await field('latitude', '30.7544')
     await field('longitude', '103.9312')
-    await field('location-confirmed', true)
+    if (host.querySelector('#restaurant-location-confirmed'))
+      await field('location-confirmed', true)
   }
   async function submit() {
     host
