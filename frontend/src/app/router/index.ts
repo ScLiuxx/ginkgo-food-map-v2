@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { nextTick } from 'vue'
 import { waitForPageLayout } from '@/shared/lib/restorePageScroll'
+import { useWindowManagementBrowsing } from '@/modules/admin/model/windowManagementBrowsing'
 
 let scrollGeneration = 0
 
@@ -57,6 +58,18 @@ const router = createRouter({
       component: () => import('@/pages/admin/AdminWindowPage.vue'),
       props: true,
       meta: { title: '窗口管理 · 管理工作台', layout: 'admin' },
+    },
+    {
+      path: '/admin/restaurants/:id/windows/new',
+      component: () => import('@/pages/admin/AdminWindowPage.vue'),
+      props: (route) => ({ id: route.params.id, editing: true }),
+      meta: { title: '新增窗口 · 管理工作台', layout: 'admin' },
+    },
+    {
+      path: '/admin/restaurants/:id/windows/:windowId/edit',
+      component: () => import('@/pages/admin/AdminWindowPage.vue'),
+      props: (route) => ({ id: route.params.id, windowId: route.params.windowId, editing: true }),
+      meta: { title: '编辑窗口 · 管理工作台', layout: 'admin' },
     },
     {
       path: '/admin/restaurants/new',
@@ -198,6 +211,18 @@ const router = createRouter({
   // 浏览器前进/后退恢复列表阅读位置，普通跳转仍从新页面顶部开始。
   scrollBehavior: async (to, from, savedPosition) => {
     const ticket = ++scrollGeneration
+    // 窗口列表会异步重读；普通“返回”与历史返回都等待表格就绪，避免路由默认归零覆盖现场。
+    if (/^\/admin\/restaurants\/[1-9]\d*\/windows$/.test(to.path)) {
+      await nextTick()
+      if (!(await waitForPageLayout(() => ticket === scrollGeneration, '.window-management')))
+        return false
+      const context = useWindowManagementBrowsing().context
+      return ticket === scrollGeneration
+        ? context.canteenId === to.params.id
+          ? { left: 0, top: context.scrollTop }
+          : (savedPosition ?? { top: 0 })
+        : false
+    }
     // 替换分页或筛选参数不重置阅读位置；真正的历史回退等待列表读取后再恢复。
     if (!savedPosition) return to.path === from.path && to.hash === from.hash ? false : { top: 0 }
     // 首页返回同样等待目录挂载/首批读取；手机缓存已有全部卡片时可直接恢复原位置。

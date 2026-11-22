@@ -2,7 +2,8 @@
 import { useLoginStore } from '@/modules/auth'
 import { AdminRestaurantWorkspace } from '@/modules/admin'
 import WindowManagement from '@/modules/admin/ui/WindowManagement.vue'
-defineProps<{ id: string }>()
+import WindowEditor from '@/modules/admin/ui/WindowEditor.vue'
+defineProps<{ id: string; editing?: boolean; windowId?: string }>()
 const auth = useLoginStore()
 </script>
 <template>
@@ -13,6 +14,12 @@ const auth = useLoginStore()
     :session-error="auth.error"
     @logout="auth.signOut"
   >
-    <WindowManagement :id="id" :key="id" />
+    <WindowEditor
+      v-if="editing"
+      :id="id"
+      :key="`${id}:${windowId ?? 'new'}`"
+      :window-id="windowId"
+    />
+    <WindowManagement v-else :id="id" :key="id" />
   </AdminRestaurantWorkspace>
 </template>

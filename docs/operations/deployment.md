@@ -6,6 +6,8 @@
 
 ## 当前状态
 
+域名HTTPS：`nidianfoodmap.cn`及`www.nidianfoodmap.cn`已解析到腾讯云服务器，用户已安装证书并重载Nginx，正式回环443验证通过；安全组补充IPv4放行后的公网访问待独立复验。安装、443检查、回退及续期见[HTTPS说明](https.md)。后续应用发布不会覆盖该独立Nginx配置。
+
 使用统计：2026-11-20用户授权开启，已以ubuntu执行单次配置操作，核对MySQL V49统计表、Redis AOF／everysec、noeviction及内存限额，备份服务器`/etc/foodmap/backend.env`后将`ACTIVITY_STATISTICS_ENABLED`设为`true`。本轮应用自动发布重启后才生效，统计从实际首次启用时刻开始，不回补历史。该开关与`AUTO_DEPLOY_ENABLED`、Actuator指标采集独立；初始化模板继续默认关闭，不会覆盖服务器现有配置。修改私有配置需要管理员权限，部署账号仍仅允许重启／停止后端。
 
 项目迁入独立仓库 [kanno111/foodmap](https://github.com/kanno111/foodmap)，默认分支为 `develop`。新历史从原 develop 的 V2 重构基线开始，随后保存登录、注册及 CI/CD 修改，不包含基线之前的旧系统提交。
