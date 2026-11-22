@@ -157,7 +157,7 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
         jdbc.update("DELETE FROM reviews WHERE author_user_id=1 AND restaurant_id=1");
         review(1L, 1, T.minus(Duration.ofDays(7)).minusNanos(1000), "10");
         assertThat(aggregate().getFirst().getParticipantCount()).isEqualTo(2);
-        assertThat(items(calculation.calculate(T), "QINGSHUIHE", "WEEK")).isEmpty();
+        assertThat(items(calculation.calculate(T), "QINGSHUIHE", "WEEK")).hasSize(1);
         assertThat(items(calculation.calculate(T), "QINGSHUIHE", "MONTH")).hasSize(1);
     }
 
