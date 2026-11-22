@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ReviewPhotoSelection } from '../model/review'
 import AppLink from '@/shared/ui/AppLink.vue'
 import { UserIdentity, ContentActions } from '@/modules/community'
 import StarScore from '@/shared/ui/StarScore.vue'
@@ -16,7 +17,7 @@ defineProps<{
   storeName?: string
   storeTo?: string
 }>()
-defineEmits<{ photo: [url: string]; reply: [] }>()
+defineEmits<{ photo: [selection: ReviewPhotoSelection]; reply: [] }>()
 </script>
 <template>
   <article class="detail-original">
@@ -58,10 +59,10 @@ defineEmits<{ photo: [url: string]; reply: [] }>()
     <p class="detail-original-body">{{ item.body }}</p>
     <div v-if="item.photos.length" class="detail-original-photos">
       <button
-        v-for="photo in item.photos"
+        v-for="(photo, index) in item.photos"
         :key="photo.id"
         type="button"
-        @click="$emit('photo', photo.url)"
+        @click="$emit('photo', { photos: item.photos, index })"
       >
         <img :src="photo.url" alt="评价照片" loading="lazy" />
       </button>

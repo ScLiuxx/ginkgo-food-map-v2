@@ -340,6 +340,30 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
         }
     }
 
+    /** 空榜必须能被单人合格候选替换，贯穿计算、四榜发布及读取，不只验证排序函数。 */
+    @Test
+    void singleReviewerAndLowTasteWeightedCandidateCanReplaceOldEmptyBoards() {
+        assertThat(generation.generate()).isTrue();
+        restaurant(1, false);
+        restaurant(2, true);
+        review(1L, 1, T.minusSeconds(100), "10");
+        long lowTaste = review(2L, 2, T.minusSeconds(100), "10");
+        jdbc.update("UPDATE reviews SET taste_score=7 WHERE id=?", lowTaste);
+        // 第二家原始加权3.95、口味3.5，平滑分3.575；仍应参与并成功发布。
+        assertThat(generation.generate()).isTrue();
+        for (var key : RestaurantRankingKey.ALL) {
+            var view = rankingRead.read(key.campusCode(), key.periodType());
+            assertThat(view.getStatus()).isEqualTo("READY");
+            assertThat(view.getItems()).hasSize(1);
+            var item = view.getItems().getFirst();
+            assertThat(item.getParticipantCount()).isEqualTo(1);
+            if ("SHAHE".equals(key.campusCode())) {
+                assertThat(item.getTasteScore()).isEqualByComparingTo("3.5");
+                assertThat(item.getRecommendationScore()).isEqualByComparingTo("3.6");
+            }
+        }
+    }
+
     @Test
     void failedGenerationKeepsAllPreviouslyCommittedBoardsAndCanRecover() {
         restaurant(1, false);

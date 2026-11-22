@@ -1,4 +1,5 @@
 import type { InjectionKey } from 'vue'
+import type { PhotoSelection } from '@/shared/ui/photoViewer'
 import type { RatingDimension } from '@/modules/restaurant/model/restaurant.types'
 export type ReviewSort = 'DEFAULT' | 'TIME'
 export type Scores = Record<RatingDimension, number>
@@ -20,6 +21,8 @@ export interface ReviewPhoto {
   id: string
   url: string
 }
+/** 点击时保留整条点评的照片及起点，不能把当前页其他点评混入左右切换。 */
+export type ReviewPhotoSelection = PhotoSelection
 export interface ReviewItem {
   id: string
   authorId?: string

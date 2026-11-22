@@ -238,32 +238,8 @@
   border-color: #e99432;
   color: #fff;
 }
-.my-review-confirm::backdrop,
-.my-review-lightbox::backdrop {
+.my-review-confirm::backdrop {
   background: #18212c66;
-}
-.my-review-lightbox {
-  max-width: min(1000px, 94vw);
-  max-height: 90vh;
-  padding: 12px;
-  border: 0;
-  border-radius: 8px;
-  background: #fff;
-}
-.my-review-lightbox img {
-  display: block;
-  max-width: 100%;
-  max-height: 78vh;
-  object-fit: contain;
-}
-.my-review-lightbox button {
-  display: block;
-  margin: 0 0 12px auto;
-  padding: 8px;
-  border: 0;
-  background: white;
-  color: #67727c;
-  cursor: pointer;
 }
 .my-reviews :is(a, button):focus-visible,
 .my-review-confirm button:focus-visible {

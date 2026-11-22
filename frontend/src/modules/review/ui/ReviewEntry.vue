@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ReviewPhotoSelection } from '../model/review'
 import { formatRating } from '@/shared/lib/formatRating'
 import { computed, inject, ref } from 'vue'
 import ReplyThread from './ReplyThread.vue'
@@ -56,7 +57,7 @@ const hasDetail = computed(
 
 defineEmits<{
   delete: [item: ReviewItem, restoreFocus?: () => void]
-  photo: [url: string]
+  photo: [selection: ReviewPhotoSelection]
   reply: [item: ReviewItem]
   text: [id: string, text: string]
 }>()
@@ -149,7 +150,12 @@ defineEmits<{
     </p>
 
     <div class="photos">
-      <button v-for="p in item.photos" :key="p.id" type="button" @click="$emit('photo', p.url)">
+      <button
+        v-for="(p, index) in item.photos"
+        :key="p.id"
+        type="button"
+        @click="$emit('photo', { photos: item.photos, index })"
+      >
         <img :src="p.url" alt="评价照片" loading="lazy" />
       </button>
     </div>

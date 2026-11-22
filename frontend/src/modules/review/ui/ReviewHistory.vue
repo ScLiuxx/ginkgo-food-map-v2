@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ReviewPhotoSelection } from '../model/review'
 import { computed, inject, onUnmounted, provide, ref, shallowRef, useId } from 'vue'
 import { useMediaQuery } from '@/shared/lib/useMediaQuery'
 import { reviewHistoryHostKey } from '../model/reviewHistoryHost'
@@ -18,7 +19,7 @@ const props = defineProps<{
   restoreFocus?: () => void
 }>()
 const emit = defineEmits<{
-  photo: [url: string]
+  photo: [selection: ReviewPhotoSelection]
   refresh: []
   delete: [item: ReviewItem]
 }>()

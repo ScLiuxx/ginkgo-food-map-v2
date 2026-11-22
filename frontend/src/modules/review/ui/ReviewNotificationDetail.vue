@@ -11,6 +11,8 @@ import {
 } from '../api/reviewDetailApi'
 import ReviewDiscussion from './ReviewDiscussion.vue'
 import ReviewDetailOriginal from './ReviewDetailOriginal.vue'
+import PhotoViewer from '@/shared/ui/PhotoViewer.vue'
+import type { ReviewPhotoSelection } from '../model/review'
 
 /** 消息和个人点评共用同一详情与回复编辑器；关闭留在来源列表，不为消息跳转店铺。 */
 const props = defineProps<{
@@ -24,8 +26,7 @@ const auth = useLoginStore()
 const detail = ref<ReviewDetail | null>(null),
   loading = ref(false),
   error = ref('')
-const photo = ref(''),
-  lightbox = ref<globalThis.HTMLDialogElement>()
+const lightbox = ref<InstanceType<typeof PhotoViewer>>()
 const returnFocus =
   globalThis.document.activeElement instanceof globalThis.HTMLElement
     ? globalThis.document.activeElement
@@ -36,6 +37,7 @@ const storeTo = computed(() =>
 let generation = 0,
   controller: globalThis.AbortController | undefined
 async function load() {
+  lightbox.value?.close()
   controller?.abort()
   const ticket = ++generation,
     token = authToken.value
@@ -69,10 +71,8 @@ async function load() {
     if (ticket === generation) loading.value = false
   }
 }
-async function viewPhoto(url: string) {
-  photo.value = url
-  await nextTick()
-  lightbox.value?.showModal()
+function viewPhoto(selection: ReviewPhotoSelection) {
+  void lightbox.value?.open(selection)
 }
 watch(
   () => [props.reviewId, props.sourceId, props.type],
@@ -130,11 +130,7 @@ onUnmounted(() => {
       />
     </template>
   </ReviewDiscussion>
-  <Teleport to="body"
-    ><dialog ref="lightbox" class="notification-review-photo" aria-label="点评照片大图">
-      <button type="button" aria-label="关闭大图" @click="lightbox?.close()">关闭 ×</button>
-      <img v-if="photo" :src="photo" alt="点评照片大图" /></dialog
-  ></Teleport>
+  <PhotoViewer ref="lightbox" />
 </template>
 <style scoped>
 .notification-detail-state {
@@ -151,32 +147,5 @@ onUnmounted(() => {
   background: none;
   color: #a7783d;
   cursor: pointer;
-}
-.notification-review-photo {
-  max-width: min(96vw, 920px);
-  max-height: 95vh;
-  max-height: 95dvh;
-  border: 0;
-  border-radius: 12px;
-  padding: 14px;
-}
-.notification-review-photo::backdrop {
-  background: #17212b99;
-}
-.notification-review-photo button {
-  display: block;
-  margin-left: auto;
-  min-height: 44px;
-  border: 0;
-  background: transparent;
-  color: #6c7785;
-  cursor: pointer;
-}
-.notification-review-photo img {
-  display: block;
-  max-width: 100%;
-  max-height: 78vh;
-  max-height: 78dvh;
-  object-fit: contain;
 }
 </style>

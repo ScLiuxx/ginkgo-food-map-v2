@@ -89,13 +89,13 @@ export const fetchRestaurantRanking: RankingLoader = async (campusCode, periodTy
       typeof item.name !== 'string' ||
       !item.name.trim() ||
       !Number.isFinite(item.tasteScore) ||
-      item.tasteScore < 4 ||
+      item.tasteScore < 0 ||
       item.tasteScore > 5 ||
       !Number.isFinite(item.recommendationScore) ||
       item.recommendationScore < 0 ||
       item.recommendationScore > 5 ||
       !Number.isSafeInteger(item.participantCount) ||
-      item.participantCount < 3
+      item.participantCount < 1
     )
       throw new Error('榜单内容格式不正确')
     ids.add(item.restaurantId)

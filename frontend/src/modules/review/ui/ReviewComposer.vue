@@ -349,8 +349,8 @@ onUnmounted(close)
           <section class="ratings-section" aria-label="四维评分">
             <div class="section-heading">
               <h3>四维评分</h3>
-              <span class="review-average" :aria-label="`本条均分 ${total.toFixed(2)} 分`"
-                ><b>{{ total.toFixed(2).replace(/0$/, '') }}</b> 分</span
+              <span class="review-average" :aria-label="`本条均分 ${total.toFixed(1)} 分`"
+                ><b>{{ total.toFixed(1) }}</b> 分</span
               >
             </div>
             <div v-for="d in ratingDimensions" :key="d.key" class="slider-row">

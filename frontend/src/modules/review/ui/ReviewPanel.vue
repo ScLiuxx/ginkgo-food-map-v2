@@ -6,9 +6,10 @@ import { useRouter, useRoute } from 'vue-router'
 import { authToken } from '@/shared/api/authSession'
 import { useLoginStore } from '@/modules/auth/model/login.store'
 import ReviewEntry from './ReviewEntry.vue'
+import PhotoViewer from '@/shared/ui/PhotoViewer.vue'
 import ReviewHistory from './ReviewHistory.vue'
 import { reviewGatewayKey, unavailableReviewGateway, validBody } from '../model/review'
-import type { ReviewItem, ReviewSort } from '../model/review'
+import type { ReviewItem, ReviewSort, ReviewPhotoSelection } from '../model/review'
 import { detailPhotos, type DetailPhotoUpdate } from '../model/detailPhotos'
 const props = defineProps<{
     restaurantId: string
@@ -28,8 +29,7 @@ const records = ref<ReviewItem[]>([]),
   error = ref(''),
   texts = ref<Record<string, string>>({}),
   busy = ref(false),
-  photo = ref(''),
-  lightbox = ref<globalThis.HTMLDialogElement>(),
+  lightbox = ref<InstanceType<typeof PhotoViewer>>(),
   deleting = ref<ReviewItem | null>(null),
   confirm = ref<globalThis.HTMLDialogElement>()
 let controller: globalThis.AbortController | undefined,
@@ -64,6 +64,7 @@ const wall = computed(() =>
 )
 /** 真实传输由适配器提供；未接通时显示失败状态，绝不使用模拟评价回填。 */
 async function load(targetPage = page.value) {
+  lightbox.value?.close()
   const ticket = ++generation
   const restaurantId = props.restaurantId
   controller?.abort()
@@ -196,9 +197,12 @@ async function remove() {
     busy.value = false
   }
 }
-function view(url: string) {
-  photo.value = url
-  lightbox.value?.showModal()
+function view(selection: ReviewPhotoSelection) {
+  void lightbox.value?.open(selection)
+}
+function viewWall(id: string) {
+  const item = records.value.find((record) => record.photos.some((photo) => photo.id === id))
+  if (item) view({ photos: item.photos, index: item.photos.findIndex((photo) => photo.id === id) })
 }
 </script>
 <template>
@@ -262,7 +266,7 @@ function view(url: string) {
       <p>下方各条点评保留作者和照片对应关系，点击照片可查看大图。</p>
     </details>
     <div v-if="preview" class="photos">
-      <button v-for="p in wall" :key="p.id" type="button" @click="view(p.url)">
+      <button v-for="p in wall" :key="p.id" type="button" @click="viewWall(p.id)">
         <img :src="p.url" alt="餐厅评价照片" loading="lazy" />
       </button>
     </div>
@@ -334,10 +338,7 @@ function view(url: string) {
         </div>
       </dialog>
     </Teleport>
-    <dialog ref="lightbox" class="lightbox">
-      <button type="button" aria-label="关闭大图" @click="lightbox?.close()">关闭 ×</button
-      ><img :src="photo || undefined" alt="评价照片大图" />
-    </dialog>
+    <PhotoViewer ref="lightbox" />
   </section>
 </template>
 <style scoped>
@@ -564,13 +565,6 @@ dialog {
 .delete-dialog-actions .confirm-delete:hover:not(:disabled) {
   background: #ed7d1a;
   border-color: #ed7d1a;
-}
-.lightbox img {
-  display: block;
-  max-width: 85vw;
-  max-height: 75vh;
-  max-height: 75dvh;
-  margin-top: 10px;
 }
 dialog::backdrop {
   background: #242018bb;

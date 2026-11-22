@@ -149,6 +149,34 @@ afterEach(() => {
   }
 })
 describe('店铺与窗口统一点评交互', () => {
+  it('点击第二张从第二张打开，只切换同一点评的照片，刷新来源后关闭', async () => {
+    list.mockResolvedValue({
+      ...page(),
+      records: [
+        {
+          ...item,
+          photos: [
+            { id: 'a', url: '/review-10-a' },
+            { id: 'b', url: '/review-10-b' },
+          ],
+        },
+        { ...item, id: '11', authorId: '43', photos: [{ id: 'c', url: '/other-review' }] },
+      ],
+    })
+    await mount()
+    await click('.photos button:nth-child(2)')
+    const viewer = document.querySelector<HTMLDialogElement>('.photo-viewer')!
+    expect(viewer.open).toBe(true)
+    expect(viewer.querySelector('img')!.getAttribute('src')).toBe('/review-10-b')
+    expect(viewer.querySelector('.photo-counter')!.textContent).toContain('2 / 2')
+    expect(viewer.querySelector<HTMLButtonElement>('[aria-label="下一张"]')!.disabled).toBe(true)
+    await click('[aria-label="上一张"]', viewer)
+    expect(viewer.querySelector('img')!.getAttribute('src')).toBe('/review-10-a')
+    props.restaurantId = '502'
+    await settle()
+    expect(viewer.open).toBe(false)
+    expect(document.documentElement.style.overflow).toBe('')
+  })
   it('保留作者，折叠四维评分并仅预览两条回复，正文和回复打开同一原点评', async () => {
     await mount()
     expect(host.querySelector('.entry-author')?.textContent).toContain('原作者')

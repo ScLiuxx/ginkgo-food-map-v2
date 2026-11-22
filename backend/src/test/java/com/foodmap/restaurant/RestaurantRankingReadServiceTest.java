@@ -9,19 +9,21 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.foodmap.common.exception.BusinessException;
-import com.foodmap.restaurant.config.RestaurantRankingProperties;
 import com.foodmap.restaurant.cache.RestaurantRankingCache;
 import com.foodmap.restaurant.cache.RestaurantRankingLocalCache;
+import com.foodmap.restaurant.config.RestaurantRankingProperties;
 import com.foodmap.restaurant.entity.RestaurantRankingSnapshotEntity;
 import com.foodmap.restaurant.exception.RestaurantErrorCode;
 import com.foodmap.restaurant.mapper.RestaurantRankingSnapshotMapper;
 import com.foodmap.restaurant.service.RestaurantRankingReadService;
 import com.foodmap.restaurant.support.RestaurantRankingSnapshotCodec;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.dao.DataAccessResourceFailureException;
+
 import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Clock;
@@ -43,10 +45,15 @@ class RestaurantRankingReadServiceTest {
         var properties = new RestaurantRankingProperties();
         properties.setCaffeineEnabled(false);
         var clock = Clock.fixed(NOW, ZoneOffset.UTC);
-        service = new RestaurantRankingReadService(mapper,
-                new RestaurantRankingCache(Optional.empty(),
-                        new RestaurantRankingSnapshotCodec(JsonMapper.builder().build()),
-                        properties, clock, new RestaurantRankingLocalCache(properties, clock)));
+        service =
+                new RestaurantRankingReadService(
+                        mapper,
+                        new RestaurantRankingCache(
+                                Optional.empty(),
+                                new RestaurantRankingSnapshotCodec(JsonMapper.builder().build()),
+                                properties,
+                                clock,
+                                new RestaurantRankingLocalCache(properties, clock)));
         row = new RestaurantRankingSnapshotEntity();
         row.setCampusCode("QINGSHUIHE");
         row.setPeriodType("WEEK");
@@ -78,7 +85,8 @@ class RestaurantRankingReadServiceTest {
 
     @Test
     void projectsOnlyPublicFieldsWithoutDoubleConvertingScoresOrLosingLargeIds() {
-        row.setItems("""
+        row.setItems(
+                """
                 [{"rank":1,"restaurantId":"9007199254740993","name":"中文餐厅🍜",
                   "coverUrl":"/api/restaurants/9007199254740993/photos/1",
                   "tasteScore":4.26,"participantCount":8,"sortingScore":3.999,"secret":"hidden"}]
@@ -104,6 +112,36 @@ class RestaurantRankingReadServiceTest {
     }
 
     @Test
+    void v2ReadsSingleReviewerWithoutReapplyingOldTasteOrSmoothedScoreThresholds() {
+        row.setRulesSnapshot(
+                "{\"formatVersion\":1,\"scoreScale\":5,\"algorithmVersion\":\"RECENT_REPUTATION_V2\"}");
+        row.setItems(
+                """
+                [{"rank":1,"restaurantId":"1","name":"低口味高综合候选",
+                  "tasteScore":3.5,"participantCount":1,"sortingScore":3.575}]
+                """);
+        var item = service.read("QINGSHUIHE", "WEEK").getItems().getFirst();
+        assertThat(item.getParticipantCount()).isEqualTo(1);
+        assertThat(item.getTasteScore()).isEqualByComparingTo("3.5");
+        assertThat(item.getRecommendationScore()).isEqualByComparingTo("3.6");
+    }
+
+    @Test
+    void v2StillRejectsZeroParticipantsAndOutOfRangeTasteScores() {
+        row.setRulesSnapshot(
+                "{\"formatVersion\":1,\"scoreScale\":5,\"algorithmVersion\":\"RECENT_REPUTATION_V2\"}");
+        for (String item :
+                new String[] {
+                    "{\"rank\":1,\"restaurantId\":\"1\",\"name\":\"店\",\"tasteScore\":3.5,\"participantCount\":0}",
+                    "{\"rank\":1,\"restaurantId\":\"1\",\"name\":\"店\",\"tasteScore\":-0.1,\"participantCount\":1}",
+                    "{\"rank\":1,\"restaurantId\":\"1\",\"name\":\"店\",\"tasteScore\":5.1,\"participantCount\":1}"
+                }) {
+            row.setItems("[" + item + "]");
+            unavailable();
+        }
+    }
+
+    @Test
     void exactlyTwentyFourHoursIsStillWithinTheConfirmedMaximum() {
         row.setWindowEndAt(NOW.minus(Duration.ofHours(24)));
         row.setWindowStartAt(row.getWindowEndAt().minus(Duration.ofHours(168)));
@@ -115,15 +153,19 @@ class RestaurantRankingReadServiceTest {
     @ValueSource(strings = {"QINGSHUIHE ", "qingshuihe", "OTHER", "", "QINGSHUIHE' OR 1=1"})
     void rejectsUnknownCampusBeforeDatabase(String campus) {
         assertThatThrownBy(() -> service.read(campus, "WEEK"))
-                .isInstanceOfSatisfying(BusinessException.class,
-                        error -> assertThat(error.getErrorCode()).isEqualTo(RestaurantErrorCode.INVALID_INPUT));
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        error ->
+                                assertThat(error.getErrorCode())
+                                        .isEqualTo(RestaurantErrorCode.INVALID_INPUT));
         verifyNoInteractions(mapper);
     }
 
     @Test
     void rejectsMissingOrInvalidPeriodBeforeDatabase() {
         for (String period : new String[] {null, "week", "DAY", "MONTH "}) {
-            assertThatThrownBy(() -> service.read("QINGSHUIHE", period)).isInstanceOf(BusinessException.class);
+            assertThatThrownBy(() -> service.read("QINGSHUIHE", period))
+                    .isInstanceOf(BusinessException.class);
         }
         assertThatThrownBy(() -> service.read(null, "WEEK")).isInstanceOf(BusinessException.class);
         verifyNoInteractions(mapper);
@@ -137,26 +179,41 @@ class RestaurantRankingReadServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"{}", "[]", "null", "broken", "{\"formatVersion\":2,\"scoreScale\":5}",
-            "{\"formatVersion\":1,\"scoreScale\":10}", "{\"formatVersion\":1.0,\"scoreScale\":5}"})
+    @ValueSource(
+            strings = {
+                "{}",
+                "[]",
+                "null",
+                "broken",
+                "{\"formatVersion\":2,\"scoreScale\":5}",
+                "{\"formatVersion\":1,\"scoreScale\":10}",
+                "{\"formatVersion\":1.0,\"scoreScale\":5}"
+            })
     void rejectsUnsupportedOrMalformedRuleFormat(String rules) {
         row.setRulesSnapshot(rules);
         unavailable();
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"{}", "null", "broken", "[null]",
-            "[{\"rank\":2,\"restaurantId\":\"1\",\"name\":\"店\",\"tasteScore\":4,\"participantCount\":3}]",
-            "[{\"rank\":1,\"restaurantId\":1,\"name\":\"店\",\"tasteScore\":4,\"participantCount\":3}]",
-            "[{\"rank\":1,\"restaurantId\":\"01\",\"name\":\"店\",\"tasteScore\":4,\"participantCount\":3}]",
-            "[{\"rank\":1,\"restaurantId\":\"9223372036854775808\",\"name\":\"店\",\"tasteScore\":4,\"participantCount\":3}]",
-            "[{\"rank\":1,\"restaurantId\":\"1\",\"name\":\" \",\"tasteScore\":4,\"participantCount\":3}]",
-            "[{\"rank\":1,\"restaurantId\":\"1\",\"name\":\"店\",\"tasteScore\":8,\"participantCount\":3}]",
-            "[{\"rank\":1,\"restaurantId\":\"1\",\"name\":\"店\",\"tasteScore\":3.99,\"participantCount\":3}]",
-            "[{\"rank\":1,\"restaurantId\":\"1\",\"name\":\"店\",\"tasteScore\":\"4\",\"participantCount\":3}]",
-            "[{\"rank\":1,\"restaurantId\":\"1\",\"name\":\"店\",\"tasteScore\":4,\"participantCount\":2}]",
-            "[{\"rank\":1,\"restaurantId\":\"1\",\"name\":\"店\",\"tasteScore\":4,\"participantCount\":3,\"coverUrl\":\"https://example.test/private\"}]",
-            "[{\"rank\":1,\"restaurantId\":\"1\",\"name\":\"店\",\"tasteScore\":4,\"participantCount\":3,\"coverUrl\":\"/api/restaurants/2/photos/1\"}]"})
+    @ValueSource(
+            strings = {
+                "{}",
+                "null",
+                "broken",
+                "[null]",
+                "[{\"rank\":2,\"restaurantId\":\"1\",\"name\":\"店\",\"tasteScore\":4,\"participantCount\":3}]",
+                "[{\"rank\":1,\"restaurantId\":1,\"name\":\"店\",\"tasteScore\":4,\"participantCount\":3}]",
+                "[{\"rank\":1,\"restaurantId\":\"01\",\"name\":\"店\",\"tasteScore\":4,\"participantCount\":3}]",
+                "[{\"rank\":1,\"restaurantId\":\"9223372036854775808\",\"name\":\"店\",\"tasteScore\":4,\"participantCount\":3}]",
+                "[{\"rank\":1,\"restaurantId\":\"1\",\"name\":\""
+                    + " \",\"tasteScore\":4,\"participantCount\":3}]",
+                "[{\"rank\":1,\"restaurantId\":\"1\",\"name\":\"店\",\"tasteScore\":8,\"participantCount\":3}]",
+                "[{\"rank\":1,\"restaurantId\":\"1\",\"name\":\"店\",\"tasteScore\":3.99,\"participantCount\":3}]",
+                "[{\"rank\":1,\"restaurantId\":\"1\",\"name\":\"店\",\"tasteScore\":\"4\",\"participantCount\":3}]",
+                "[{\"rank\":1,\"restaurantId\":\"1\",\"name\":\"店\",\"tasteScore\":4,\"participantCount\":2}]",
+                "[{\"rank\":1,\"restaurantId\":\"1\",\"name\":\"店\",\"tasteScore\":4,\"participantCount\":3,\"coverUrl\":\"https://example.test/private\"}]",
+                "[{\"rank\":1,\"restaurantId\":\"1\",\"name\":\"店\",\"tasteScore\":4,\"participantCount\":3,\"coverUrl\":\"/api/restaurants/2/photos/1\"}]"
+            })
     void rejectsInvalidItemsAsAWhole(String items) {
         row.setItems(items);
         unavailable();
@@ -164,7 +221,8 @@ class RestaurantRankingReadServiceTest {
 
     @Test
     void rejectsDuplicateRestaurantIds() {
-        row.setItems("""
+        row.setItems(
+                """
                 [{"rank":1,"restaurantId":"1","name":"店","tasteScore":4,"participantCount":3},
                  {"rank":2,"restaurantId":"1","name":"店","tasteScore":4,"participantCount":3}]
                 """);
@@ -182,9 +240,12 @@ class RestaurantRankingReadServiceTest {
 
     private void unavailable() {
         assertThatThrownBy(() -> service.read("QINGSHUIHE", "WEEK"))
-                .isInstanceOfSatisfying(BusinessException.class, error -> {
-                    assertThat(error.getErrorCode()).isEqualTo(RestaurantErrorCode.RANKING_UNAVAILABLE);
-                    assertThat(error.getMessage()).isEqualTo("榜单暂时不可用，请稍后重试");
-                });
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        error -> {
+                            assertThat(error.getErrorCode())
+                                    .isEqualTo(RestaurantErrorCode.RANKING_UNAVAILABLE);
+                            assertThat(error.getMessage()).isEqualTo("榜单暂时不可用，请稍后重试");
+                        });
     }
 }

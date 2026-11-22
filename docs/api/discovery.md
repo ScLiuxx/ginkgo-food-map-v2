@@ -125,7 +125,7 @@
 - `PREPARING`：尚无快照；`items=[]`，三个时间字段均为null。新版服务就绪后异步生成首轮结果，首轮完成前或关闭自动生成且没有快照时返回此状态。
 - `UNAVAILABLE`：已有快照的数据年龄超过`app.ranking.max-snapshot-age`（默认24小时）；保留三个时间字段，`items=[]`，不展示过期条目。数据年龄以`windowEndAt`计算，刚好24小时仍可用，超过才失效；不因生成较晚或读取而续期。
 
-`tasteScore`是五分制口味均分，读取时HALF_UP保留一位，**不得再次除以2**；recommendationScore为对应周期平滑推荐分，HALF_UP一位，用于推荐榜主分展示，与快照排序依据一致；它不是首页长期reputationScore。原始分子分母、规则及用户明细不输出。封面为本站稳定照片路径`/api/restaurants/{restaurantId}/photos/{photoId}`或null，访问图片时仍走既有公开可见性校验。ID为正Long字符串，人数为整数。
+`tasteScore`是五分制口味均分，读取时HALF_UP保留一位，**不得再次除以2**；recommendationScore为对应周期平滑推荐分，HALF_UP一位，用于推荐榜主分展示，与快照排序依据一致；它不是首页长期reputationScore。原始分子分母、规则及用户明细不输出。封面为本站稳定照片路径`/api/restaurants/{restaurantId}/photos/{photoId}`或null，访问图片时仍走既有公开可见性校验。ID为正Long字符串，人数为至少1的整数；客户端只校验分数在0～5，不以口味单项或平滑分是否达到3.8重新筛选服务端已经排好的榜单。
 
 **错误码**
 

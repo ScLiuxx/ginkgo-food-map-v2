@@ -2,18 +2,21 @@ package com.foodmap.restaurant.support;
 
 import com.foodmap.restaurant.entity.RestaurantRankingSnapshotEntity;
 import com.foodmap.restaurant.vo.RestaurantRankingVo;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Component;
+
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.time.Duration;
-import java.time.Instant;
 
 /** 解析格式v1并显式复制公开字段；结构非法时拒绝整榜，不展示半份结果或泄露内部JSON。 */
 @Component
@@ -22,8 +25,11 @@ public class RestaurantRankingSnapshotCodec {
     private final ObjectMapper json;
 
     /** MySQL与Redis使用相同投影和年龄规则，每次命中也检查截止时间。 */
-    public RestaurantRankingVo view(RestaurantRankingSnapshotEntity row, RestaurantRankingKey key,
-            Instant now, Duration maxAge) {
+    public RestaurantRankingVo view(
+            RestaurantRankingSnapshotEntity row,
+            RestaurantRankingKey key,
+            Instant now,
+            Duration maxAge) {
         var result = new RestaurantRankingVo();
         result.setCampusCode(key.campusCode());
         result.setPeriodType(key.periodType());
@@ -31,10 +37,20 @@ public class RestaurantRankingSnapshotCodec {
             result.setStatus("PREPARING");
             return result;
         }
-        require(key.campusCode().equals(row.getCampusCode()) && key.periodType().equals(row.getPeriodType()));
-        require(row.getWindowStartAt() != null && row.getWindowEndAt() != null && row.getGeneratedAt() != null);
-        require(row.getWindowStartAt().plus(Duration.ofHours(key.windowHours())).equals(row.getWindowEndAt()));
-        require(!row.getGeneratedAt().isBefore(row.getWindowEndAt()) && !row.getGeneratedAt().isAfter(now));
+        require(
+                key.campusCode().equals(row.getCampusCode())
+                        && key.periodType().equals(row.getPeriodType()));
+        require(
+                row.getWindowStartAt() != null
+                        && row.getWindowEndAt() != null
+                        && row.getGeneratedAt() != null);
+        require(
+                row.getWindowStartAt()
+                        .plus(Duration.ofHours(key.windowHours()))
+                        .equals(row.getWindowEndAt()));
+        require(
+                !row.getGeneratedAt().isBefore(row.getWindowEndAt())
+                        && !row.getGeneratedAt().isAfter(now));
         result.setWindowStartAt(row.getWindowStartAt());
         result.setWindowEndAt(row.getWindowEndAt());
         result.setGeneratedAt(row.getGeneratedAt());
@@ -48,7 +64,8 @@ public class RestaurantRankingSnapshotCodec {
     }
 
     /** 保存完整元数据、规则对象和原始榜单数组，不把舍入后的HTTP对象当作计算快照。 */
-    public String encodeCache(RestaurantRankingSnapshotEntity row, RestaurantRankingKey key, Instant now) {
+    public String encodeCache(
+            RestaurantRankingSnapshotEntity row, RestaurantRankingKey key, Instant now) {
         var root = json.createObjectNode();
         root.put("formatVersion", 1);
         root.put("campusCode", key.campusCode());
@@ -68,12 +85,13 @@ public class RestaurantRankingSnapshotCodec {
     }
 
     /** 损坏、跨榜、未来时间或超龄的准备中标记均由调用方回源修复。 */
-    public CachedSnapshot decodeCache(String value, RestaurantRankingKey key,
-            Instant now, Duration preparingTtl) {
+    public CachedSnapshot decodeCache(
+            String value, RestaurantRankingKey key, Instant now, Duration preparingTtl) {
         var root = json.readTree(value);
         require(root != null && root.isObject() && integer(root.get("formatVersion")) == 1);
-        require(key.campusCode().equals(text(root.get("campusCode")))
-                && key.periodType().equals(text(root.get("periodType"))));
+        require(
+                key.campusCode().equals(text(root.get("campusCode")))
+                        && key.periodType().equals(text(root.get("periodType"))));
         String status = text(root.get("status"));
         if ("PREPARING".equals(status)) {
             var cachedAt = Instant.parse(text(root.get("cachedAt")));
@@ -94,8 +112,7 @@ public class RestaurantRankingSnapshotCodec {
     }
 
     /** 额外携带准备中原过期时间，跨层回填不能把其短TTL重新起算。 */
-    public record CachedSnapshot(RestaurantRankingSnapshotEntity row, Instant preparingExpiresAt) {
-    }
+    public record CachedSnapshot(RestaurantRankingSnapshotEntity row, Instant preparingExpiresAt) {}
 
     /** 对已有快照的内部格式做读取保护；这不代替后续生成服务对计分和排序的完整校验。 */
     public List<RestaurantRankingVo.Item> decodeItems(RestaurantRankingSnapshotEntity row) {
@@ -103,6 +120,9 @@ public class RestaurantRankingSnapshotCodec {
         require(rules != null && rules.isObject());
         require(integer(rules.get("formatVersion")) == 1);
         require(integer(rules.get("scoreScale")) == 5);
+        // V2改为原始四维加权资格，口味单项可能低于4且只有1人；旧快照沿用原资格。
+        boolean weightedEligibility =
+                "RECENT_REPUTATION_V2".equals(rules.path("algorithmVersion").asText(""));
         var items = json.readTree(row.getItems());
         require(items != null && items.isArray() && items.size() <= 20);
         var result = new ArrayList<RestaurantRankingVo.Item>();
@@ -124,8 +144,10 @@ public class RestaurantRankingSnapshotCodec {
             var score = node.get("tasteScore");
             require(score != null && score.isNumber());
             BigDecimal taste = score.decimalValue();
-            require(taste.compareTo(BigDecimal.valueOf(4)) >= 0
-                    && taste.compareTo(BigDecimal.valueOf(5)) <= 0);
+            require(
+                    taste.compareTo(weightedEligibility ? BigDecimal.ZERO : BigDecimal.valueOf(4))
+                                    >= 0
+                            && taste.compareTo(BigDecimal.valueOf(5)) <= 0);
             item.setTasteScore(taste.setScale(1, RoundingMode.HALF_UP));
             // 旧计算快照已经保留sortingScore；公开推荐分只投影该值，不重算历史规则。
             var recommendation = node.get("sortingScore");
@@ -135,7 +157,7 @@ public class RestaurantRankingSnapshotCodec {
                 item.setRecommendationScore(value.setScale(1, RoundingMode.HALF_UP));
             }
             long participants = integer(node.get("participantCount"));
-            require(participants >= 3);
+            require(participants >= (weightedEligibility ? 1 : 3));
             item.setParticipantCount(participants);
             var cover = node.get("coverUrl");
             if (cover != null && !cover.isNull()) {

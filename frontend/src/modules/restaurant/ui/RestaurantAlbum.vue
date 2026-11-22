@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, useTemplateRef, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import PhotoViewer from '@/shared/ui/PhotoViewer.vue'
 import { useRestaurantAlbum } from '../model/useRestaurantAlbum'
 
 /** 商户/食堂正式相册，不读取点评页照片；图片错误和分页错误均保留可重试的独立状态。 */
@@ -24,7 +25,31 @@ const {
   loadPhoto,
   failPhoto,
 } = useRestaurantAlbum(() => props.restaurantId)
-const dialog = useTemplateRef('dialog')
+const dialog = ref<InstanceType<typeof PhotoViewer>>()
+const viewerOpen = ref(false)
+const viewerPhotos = computed(() =>
+  photos.value.map((photo) => ({
+    id: photo.id,
+    url: photo.src,
+    loading: photo.loading,
+    error: photo.error,
+    alt: `${props.name}的商户照片 ${photo.position + 1}`,
+  })),
+)
+function openViewer() {
+  if (!selected.value) return
+  viewerOpen.value = true
+  void dialog.value?.open({
+    photos: viewerPhotos.value,
+    index: photos.value.findIndex((photo) => photo.id === selected.value?.id),
+  })
+}
+watch(viewerPhotos, (entries) => {
+  if (viewerOpen.value) dialog.value?.update(entries)
+})
+watch(loading, (value) => {
+  if (value) dialog.value?.close()
+})
 // 加载和故障仍保留入口；不能因暂时没有数据隐藏重试，更不能将首批数量冒充相册总数。
 const visible = computed(
   () => !props.compact || loading.value || !!error.value || photos.value.length > 0,
@@ -32,9 +57,9 @@ const visible = computed(
 watch(visible, (value) => emit('visibility', value), { immediate: true })
 watch(
   () => props.restaurantId,
-  () => dialog.value?.close?.(),
+  () => dialog.value?.close(),
 )
-onBeforeUnmount(() => dialog.value?.close?.())
+onBeforeUnmount(() => dialog.value?.close())
 </script>
 
 <template>
@@ -57,7 +82,7 @@ onBeforeUnmount(() => dialog.value?.close?.())
         class="gallery-main"
         type="button"
         :aria-label="`查看${name}的商户相册大图`"
-        @click="dialog?.showModal()"
+        @click="openViewer"
       >
         <img
           :src="selected.src"
@@ -80,7 +105,7 @@ onBeforeUnmount(() => dialog.value?.close?.())
         <button v-if="!selected.loading" type="button" @click="loadPhoto(selected.id)">
           重试图片
         </button>
-        <button v-if="compact && photos.length > 1" type="button" @click="dialog?.showModal()">
+        <button v-if="compact && photos.length > 1" type="button" @click="openViewer">
           查看其他照片
         </button>
       </div>
@@ -112,49 +137,19 @@ onBeforeUnmount(() => dialog.value?.close?.())
         <path d="m17 57 17-16 10 9 9-11 10 13" /></svg
       ><strong>暂无商户照片</strong>
     </div>
-    <Teleport to="body"
-      ><dialog ref="dialog" class="album-lightbox" aria-label="商户相册大图">
-        <button type="button" autofocus @click="dialog?.close()">关闭 ×</button
-        ><template v-if="selected?.src"
-          ><img
-            :src="selected.src"
-            :alt="`${name}的商户照片 ${selected.position + 1}`"
-            @error="failPhoto(selected.id)"
-          />
-          <p>商户相册 · 第 {{ selected.position + 1 }} 张</p></template
-        >
-        <template v-else-if="compact && selected">
-          <p v-if="selected.loading" role="status">照片加载中…</p>
-          <p v-else role="alert">{{ selected.error || '图片暂时无法显示。' }}</p>
-          <button type="button" :disabled="selected.loading" @click="loadPhoto(selected.id)">
-            重试图片
-          </button>
-        </template>
-        <p v-else>图片暂时无法显示，请关闭后重试。</p>
-        <template v-if="compact">
-          <div class="gallery-thumbnails" aria-label="选择商户照片">
-            <button
-              v-for="entry in photos"
-              :key="entry.id"
-              type="button"
-              :aria-label="`选择商户照片 ${entry.position + 1}`"
-              :aria-pressed="selected?.id === entry.id"
-              @click="selectPhoto(entry.id)"
-            >
-              <img v-if="entry.src" :src="entry.src" alt="" @error="failPhoto(entry.id)" />
-              <span v-else>{{ entry.error ? '重试' : '…' }}</span>
-            </button>
-          </div>
-          <div class="album-pagination">
-            <span>已加载 {{ photos.length }} 张</span>
-            <button v-if="nextCursor" type="button" :disabled="loadingMore" @click="loadMore">
-              {{ loadingMore ? '加载中…' : moreError ? '重试加载更多' : '加载更多照片' }}
-            </button>
-          </div>
-          <p v-if="moreError" class="album-error" role="alert">{{ moreError }}</p>
-        </template>
-      </dialog></Teleport
-    >
+    <PhotoViewer
+      ref="dialog"
+      label="商户相册大图"
+      gallery-label="商户相册照片"
+      :has-more="!!nextCursor"
+      :loading-more="loadingMore"
+      :more-error="moreError"
+      @select="selectPhoto"
+      @retry="loadPhoto"
+      @image-error="failPhoto"
+      @more="loadMore"
+      @close="viewerOpen = false"
+    />
   </section>
 </template>
 

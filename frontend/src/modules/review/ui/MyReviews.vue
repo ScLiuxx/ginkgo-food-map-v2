@@ -5,9 +5,15 @@ import { useLoginStore } from '@/modules/auth'
 import { authToken } from '@/shared/api/authSession'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 import { fetchMyReviews, type MyReviewGroup } from '../api/myReviewApi'
-import { reviewGatewayKey, unavailableReviewGateway, type ReviewItem } from '../model/review'
+import {
+  reviewGatewayKey,
+  unavailableReviewGateway,
+  type ReviewItem,
+  type ReviewPhotoSelection,
+} from '../model/review'
 import { activeReplyEditorKey } from '../model/replyEditor'
 import ReviewEntry from './ReviewEntry.vue'
+import PhotoViewer from '@/shared/ui/PhotoViewer.vue'
 import ReviewHistory from './ReviewHistory.vue'
 import { useRoute } from 'vue-router'
 import { useListRouteState } from '@/shared/lib/useListRouteState'
@@ -44,8 +50,7 @@ const error = ref(''),
   notice = ref('')
 const deleting = ref<ReviewItem | null>(null)
 const confirm = ref<globalThis.HTMLDialogElement>()
-const lightbox = ref<globalThis.HTMLDialogElement>()
-const photo = ref('')
+const lightbox = ref<InstanceType<typeof PhotoViewer>>()
 // 折叠菜单中的删除按钮会隐藏，取消确认后需要回到可见的更多入口。
 let restoreDeleteFocus: (() => void) | undefined
 const viewerId = computed(() =>
@@ -58,6 +63,7 @@ let generation = 0,
 
 /** 一个请求只展示当前页；晚到响应不能覆盖换号、翻页或卸载后的状态。 */
 async function load(target = page.value) {
+  lightbox.value?.close()
   const userId = viewerId.value,
     token = authToken.value
   if (!userId || !token) return
@@ -132,9 +138,8 @@ async function remove() {
     if (owner === context) busy.value = false
   }
 }
-function viewPhoto(url: string) {
-  photo.value = url
-  lightbox.value?.showModal()
+function viewPhoto(selection: ReviewPhotoSelection) {
+  void lightbox.value?.open(selection)
 }
 /** 切换会话立即清除私有正文及模态窗口，旧DELETE回执不得更改新账号的页面。 */
 watch(
@@ -148,7 +153,7 @@ watch(
     records.value = []
     deleting.value = null
     restoreDeleteFocus = undefined
-    photo.value = error.value = deleteError.value = notice.value = ''
+    error.value = deleteError.value = notice.value = ''
     loading.value = loaded.value = busy.value = false
     totalGroups.value = totalReviews.value = totalPages.value = 0
     page.value = 1
@@ -281,11 +286,8 @@ onBeforeUnmount(() => {
           </button>
         </footer>
       </dialog>
-      <dialog ref="lightbox" class="my-review-lightbox" aria-label="点评照片大图">
-        <button type="button" aria-label="关闭大图" @click="lightbox?.close()">关闭 ×</button
-        ><img :src="photo || undefined" alt="点评照片大图" />
-      </dialog>
     </Teleport>
+    <PhotoViewer ref="lightbox" />
   </section>
 </template>
 

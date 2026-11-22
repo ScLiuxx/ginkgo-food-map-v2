@@ -48,6 +48,17 @@ afterEach(() => {
 })
 
 describe('近期榜单HTTP契约', () => {
+  it('接收单人合格候选，口味和平滑分低于旧门槛也不拒绝整榜', async () => {
+    const data = fixture()
+    Object.assign(data.items[0]!, {
+      participantCount: 1,
+      tasteScore: 3.5,
+      recommendationScore: 3.6,
+    })
+    respond(data)
+    const result = await fetchRestaurantRanking('QINGSHUIHE', 'WEEK', new AbortController().signal)
+    expect(result.items).toEqual(data.items)
+  })
   it('只匿名请求一份榜单，保留五分制与大ID，不输出内部证据', async () => {
     setAccessToken('expired-session')
     const sent: InternalAxiosRequestConfig[] = []
@@ -121,6 +132,12 @@ describe('近期榜单HTTP契约', () => {
       },
       (data: RestaurantRanking) => {
         data.items[0]!.tasteScore = 9.4
+      },
+      (data: RestaurantRanking) => {
+        data.items[0]!.tasteScore = -0.1
+      },
+      (data: RestaurantRanking) => {
+        data.items[0]!.participantCount = 0
       },
       (data: RestaurantRanking) => {
         data.items[0]!.restaurantId = '9223372036854775808'

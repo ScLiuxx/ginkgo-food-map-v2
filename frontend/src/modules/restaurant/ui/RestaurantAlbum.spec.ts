@@ -27,7 +27,7 @@ let app: App | undefined, host: HTMLDivElement
 const visibility = vi.fn()
 const showDescriptor = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal')
 const closeDescriptor = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close')
-const dialog = () => document.querySelector<HTMLDialogElement>('.album-lightbox')!
+const dialog = () => document.querySelector<HTMLDialogElement>('.photo-viewer')!
 const click = async (name: string, root: ParentNode = document) => {
   ;[...root.querySelectorAll<HTMLButtonElement>('button')]
     .find((b) => b.getAttribute('aria-label') === name || b.textContent?.trim() === name)!
@@ -90,6 +90,35 @@ async function mount(compact = true) {
   await settle()
 }
 describe('紧凑商户相册', () => {
+  it('商户相册沿用同一深色看图组件，箭头和方向键同步当前选择，单张隐藏控件', async () => {
+    await mount()
+    await click('查看测试店铺的商户相册大图', host)
+    await click('下一张', dialog())
+    expect(dialog().querySelector('.photo-counter')?.textContent).toContain('2 / 2')
+    expect(host.querySelector('.gallery-main img')?.getAttribute('src')).toBe('blob:album-2')
+    dialog().dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true }),
+    )
+    await settle()
+    expect(dialog().querySelector('.viewer-image')?.getAttribute('src')).toBe('blob:album-1')
+    await click('关闭大图', dialog())
+    app?.unmount()
+    vi.mocked(fetchRestaurantAlbum).mockResolvedValue(page(['11']))
+    await mount()
+    await click('查看测试店铺的商户相册大图', host)
+    expect(dialog().querySelector('.photo-counter,.photo-arrow,.photo-filmstrip')).toBeNull()
+  })
+  it('大图解码失败沿用相册图片重试，不保留已回收的Blob', async () => {
+    await mount()
+    await click('查看测试店铺的商户相册大图', host)
+    dialog().querySelector('.viewer-image')!.dispatchEvent(new Event('error'))
+    await settle()
+    expect(dialog().textContent).toContain('照片暂时无法显示')
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:album-1')
+    await click('重新加载', dialog())
+    expect(fetchRestaurantAlbumImage).toHaveBeenLastCalledWith('501', '11', expect.any(AbortSignal))
+    expect(dialog().querySelector('.viewer-image')?.getAttribute('src')).toBe('blob:album-3')
+  })
   it('完整模式仍保留页内选图和分页，兼容纠错表单的既有相册', async () => {
     vi.mocked(fetchRestaurantAlbum).mockResolvedValueOnce(page(['11', '12'], '12'))
     await mount(false)
@@ -127,22 +156,24 @@ describe('紧凑商户相册', () => {
     expect(host.querySelector('.gallery-thumbnails')).toBeNull()
     await click('查看测试店铺的商户相册大图', host)
     expect(dialog().open).toBe(true)
-    await click('选择商户照片 2', dialog())
+    await click('查看第2张', dialog())
     expect(host.querySelector('.gallery-main img')?.getAttribute('src')).toBe('blob:album-2')
     vi.mocked(fetchRestaurantAlbum).mockRejectedValueOnce(new Error('分页中断'))
     await click('加载更多照片', dialog())
     expect(dialog().textContent).toContain('分页中断')
-    expect(dialog().querySelectorAll('.gallery-thumbnails button')).toHaveLength(2)
+    expect(dialog().querySelectorAll('.photo-thumb')).toHaveLength(2)
     vi.mocked(fetchRestaurantAlbum).mockResolvedValueOnce({
       records: [{ id: '13', position: 2, cover: false, url: '/unused/13' }],
       nextCursor: null,
     })
+    dialog().querySelector<HTMLButtonElement>('[aria-label="重试加载更多"]')!.focus()
     await click('重试加载更多', dialog())
     expect(fetchRestaurantAlbum).toHaveBeenLastCalledWith('501', '12', expect.any(AbortSignal))
     expect(host.textContent).toContain('3 张照片')
-    expect(dialog().querySelectorAll('.gallery-thumbnails button')).toHaveLength(3)
+    expect(dialog().querySelectorAll('.photo-thumb')).toHaveLength(3)
+    expect(document.activeElement).toBe(dialog().querySelector('.photo-thumb[aria-current="true"]'))
     expect(host.querySelector('.gallery-main img')?.getAttribute('src')).toBe('blob:album-2')
-    await click('关闭 ×', dialog())
+    await click('关闭大图', dialog())
     expect(dialog().open).toBe(false)
     expect(URL.revokeObjectURL).not.toHaveBeenCalled()
   })
@@ -153,7 +184,7 @@ describe('紧凑商户相册', () => {
     expect(host.textContent).toContain('图片无法显示')
     expect(visibility).not.toHaveBeenCalledWith(false)
     await click('查看其他照片', host)
-    await click('选择商户照片 2', dialog())
+    await click('查看第2张', dialog())
     expect(host.querySelector('.gallery-main img')?.getAttribute('src')).toBe('blob:album-2')
     expect(fetchRestaurantAlbum).toHaveBeenCalledTimes(1)
   })
