@@ -182,12 +182,6 @@ h3 {
   clip-path: inset(50%);
   white-space: nowrap;
 }
-.cafeteria-entry {
-  display: inline-block;
-  margin-top: 3px;
-  color: #196cce;
-  font-size: 14px;
-}
 .closed-label {
   color: #974e40;
 }
@@ -256,9 +250,6 @@ h3 {
   }
   .card-provenance {
     font-size: 9px;
-  }
-  .cafeteria-entry {
-    font-size: 13px;
   }
 }
 

@@ -1211,12 +1211,7 @@ onBeforeUnmount(() => {
     padding: 18px;
   }
   .submission-page .actions {
-    position: sticky;
-    bottom: 58px;
-    background: #fffffff7;
-    backdrop-filter: blur(8px);
     gap: 12px;
-    z-index: 2;
   }
   .submission-summary {
     flex-basis: 100%;

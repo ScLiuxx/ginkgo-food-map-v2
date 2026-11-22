@@ -87,7 +87,8 @@ describe('商户行的真实资料边界', () => {
   })
   it('明确类型为食堂时，不以其他美食品类覆盖真实类型', async () => {
     await mount({ ...restaurantFixture, restaurantType: 'CANTEEN', category: '其他' })
-    expect(host.textContent).toContain('查看食堂')
+    expect(host.querySelector('.category-name')?.textContent).toBe('校园食堂')
+    expect(host.textContent).not.toContain('查看食堂')
     expect(host.querySelector('.card-rating')?.textContent).toContain('暂无评分')
   })
 })

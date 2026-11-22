@@ -119,12 +119,11 @@ const distanceLabel = computed(() =>
           <span v-else class="card-accessible-note">位置待补充</span>
         </template>
         <template v-else>
-          <p class="card-address">{{ restaurant.address || '位置资料待补充' }}</p>
           <p class="card-service">
-            校园食堂
-            <span v-if="restaurant.closed" class="closed-label">· 已停业</span>
+            <span class="category-name">校园食堂</span>
+            <span v-if="restaurant.closed" class="closed-label">已停业</span>
           </p>
-          <span class="cafeteria-entry">查看食堂 <span aria-hidden="true">→</span></span>
+          <p class="card-address">{{ restaurant.address || '位置资料待补充' }}</p>
         </template>
       </div>
     </article>
