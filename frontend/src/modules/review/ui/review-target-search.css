@@ -31,6 +31,23 @@
 .target-search-field input::placeholder {
   color: #626e7b;
 }
+.target-chosen-field + .target-search-field {
+  margin-top: 8px;
+}
+.target-chosen-field input {
+  font-weight: 550;
+  text-overflow: ellipsis;
+}
+.target-chosen-mark {
+  display: grid;
+  flex: 0 0 18px;
+  height: 18px;
+  place-items: center;
+  border-radius: 50%;
+  background: #f4e8d8;
+  color: #94501a;
+  font-size: 12px;
+}
 .target-search-submit {
   position: absolute;
   width: 1px;
@@ -60,23 +77,23 @@
   border-radius: 10px;
   scrollbar-width: thin;
 }
-.target-search-row {
+.target-result {
   display: flex;
-  width: 100%;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  text-align: left;
-  background: #fff;
-  border: 0;
+  gap: 8px;
   border-bottom: 1px solid #edf0f3;
-  padding: 12px 15px;
-  color: #a0a9b5;
+  padding: 0 10px 0 0;
+}
+.target-search-row {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  padding: 11px 0 11px 12px;
   font: inherit;
   cursor: pointer;
-}
-.target-search-row > span:first-child {
-  min-width: 0;
 }
 .target-search-row strong {
   display: block;
@@ -92,9 +109,32 @@
   margin-top: 4px;
   overflow-wrap: anywhere;
 }
-.target-search-row:hover,
+.target-result:hover,
 .target-search-row[aria-pressed='true'] {
   background: #fff9f1;
+}
+.target-locate,
+.target-change {
+  flex: none;
+  min-height: 40px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 6px;
+  color: #925116;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.target-locate:not(:disabled):hover {
+  background: #faeddc;
+}
+.target-location-missing {
+  flex: none;
+  padding: 0 5px;
+  color: #6e7b87;
+  font-size: 11px;
 }
 .target-search-state {
   margin: 0;
@@ -115,7 +155,6 @@
 }
 .target-search-missing button,
 .target-search-state button,
-.target-search-selected button,
 .target-load-more {
   border: 0;
   background: transparent;
@@ -131,23 +170,9 @@
   font-size: 12px;
   padding: 10px;
 }
-.target-search-selected {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-top: 10px;
-  font-size: 12px;
-  color: #8a95a3;
-}
-.target-search-selected strong {
-  color: #53606e;
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
 .review-target-search :is(button, input):focus-visible {
   outline: 2px solid #a2a8af;
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 .review-target-search input:focus-visible {
   outline: none;

@@ -1,8 +1,13 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchRestaurants } from '@/modules/restaurant/api/restaurantApi'
 import type { RestaurantReadModel } from '@/modules/restaurant/model/restaurant.types'
+import RestaurantLocationPreview from '@/modules/map/ui/RestaurantLocationPreview.vue'
+import {
+  toRestaurantMapLocation,
+  type RestaurantMapLocation,
+} from '@/modules/map/model/restaurantLocation'
 
 /** 全站点评按服务端搜索选店；分页结果与已选对象分离，不因搜索或失败偷偷更换评价对象。 */
 const props = defineProps<{ selected?: RestaurantReadModel; disabled?: boolean }>()
@@ -17,6 +22,12 @@ const page = ref(0),
   searched = ref(false),
   expanded = ref(!props.selected)
 const resultList = ref<globalThis.HTMLDivElement>()
+const searchInput = ref<globalThis.HTMLInputElement>()
+const changeButton = ref<globalThis.HTMLButtonElement>()
+const preview = shallowRef<{ location: RestaurantMapLocation; opener: globalThis.HTMLElement }>()
+const candidates = computed(() =>
+  records.value.map((item) => ({ item, location: toRestaurantMapLocation(item) })),
+)
 let revision = 0,
   controller: globalThis.AbortController | undefined,
   timer: ReturnType<typeof globalThis.setTimeout> | undefined
@@ -91,10 +102,23 @@ watch(
     if (disabled) cancel()
   },
 )
-function choose(item: RestaurantReadModel) {
+async function choose(item: RestaurantReadModel) {
   if (props.disabled) return
   emit('select', item)
   expanded.value = false
+  await nextTick()
+  changeButton.value?.focus({ preventScroll: true })
+}
+async function change() {
+  expanded.value = !expanded.value
+  if (!expanded.value) return
+  await nextTick()
+  searchInput.value?.focus({ preventScroll: true })
+}
+function showLocation(location: RestaurantMapLocation | null, event: globalThis.MouseEvent) {
+  if (!location || props.disabled) return
+  const opener = event.currentTarget as globalThis.HTMLElement
+  preview.value = { location, opener }
 }
 function addStore() {
   if (props.disabled) return
@@ -107,12 +131,34 @@ onBeforeUnmount(cancel)
 </script>
 <template>
   <section class="review-target-search" aria-label="搜索评价对象">
-    <div class="target-search-field" role="search">
+    <div v-if="selected" class="target-search-field target-chosen-field">
+      <span class="target-chosen-mark" aria-hidden="true">✓</span>
+      <input
+        type="text"
+        readonly
+        :value="selected.name"
+        aria-label="已选评价店铺"
+        :title="selected.name"
+        @keydown.enter.prevent
+      />
+      <button
+        ref="changeButton"
+        type="button"
+        class="target-change"
+        :disabled="disabled"
+        :aria-expanded="expanded"
+        @click="change"
+      >
+        {{ expanded ? '取消更换' : '更换' }}
+      </button>
+    </div>
+    <div v-show="!selected || expanded" class="target-search-field" role="search">
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.6" />
         <path d="m16 16 4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
       </svg>
       <input
+        ref="searchInput"
         v-model="keyword"
         type="search"
         maxlength="100"
@@ -131,23 +177,32 @@ onBeforeUnmount(cancel)
       class="target-search-results"
       aria-label="可评价店铺"
     >
-      <button
-        v-for="item in records"
-        :key="item.id"
-        type="button"
-        class="target-search-row"
-        :aria-pressed="selected?.id === item.id"
-        :disabled="disabled"
-        @click="choose(item)"
-      >
-        <span
-          ><strong>{{ item.name }}</strong
-          ><small
+      <div v-for="{ item, location } in candidates" :key="item.id" class="target-result">
+        <button
+          type="button"
+          class="target-search-row"
+          :aria-pressed="selected?.id === item.id"
+          :disabled="disabled"
+          @click="choose(item)"
+        >
+          <strong>{{ item.name }}</strong>
+          <small
             >{{ item.address || '地址待补充'
             }}<template v-if="item.closed"> · 暂停营业</template></small
-          ></span
-        ><span aria-hidden="true">{{ selected?.id === item.id ? '✓' : '›' }}</span>
-      </button>
+          >
+        </button>
+        <button
+          v-if="location"
+          type="button"
+          class="target-locate"
+          :aria-label="'在地图上查看' + item.name"
+          :disabled="disabled"
+          @click="showLocation(location, $event)"
+        >
+          在地图上查看 <span aria-hidden="true">›</span>
+        </button>
+        <span v-else class="target-location-missing">位置待补充</span>
+      </div>
       <p v-if="loading" role="status" class="target-search-state">正在搜索店铺…</p>
       <div v-if="error" role="alert" class="target-search-state">
         {{ error }}
@@ -171,13 +226,13 @@ onBeforeUnmount(cancel)
         </div>
       </template>
     </div>
-    <div v-if="selected" class="target-search-selected">
-      <span
-        >已选择 <strong>{{ selected.name }}</strong></span
-      ><button v-if="!expanded" type="button" :disabled="disabled" @click="expanded = true">
-        更换
-      </button>
-    </div>
+    <RestaurantLocationPreview
+      v-if="preview"
+      :location="preview.location"
+      :opener="preview.opener"
+      back-label="返回选店"
+      @close="preview = undefined"
+    />
   </section>
 </template>
 <style scoped src="./review-target-search.css"></style>
