@@ -146,7 +146,7 @@ jobs:
     # 测试、打包和SSH客户端均在GitHub托管机器执行。
     runs-on: ubuntu-24.04
     environment: production
-    timeout-minutes: 20
+    timeout-minutes: 35
     # 不取消正在切换版本的部署，避免进程被中断后留下半完成状态。
     concurrency:
       group: foodmap-server-deployment
@@ -189,6 +189,16 @@ jobs:
         with:
           name: checked-frontend
           path: release/frontend
+      - uses: actions/setup-java@v4
+        if: steps.latest.outputs.current == 'true'
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/download-artifact@v4
+        if: steps.latest.outputs.current == 'true'
+        with:
+          name: checked-uploader
+          path: release-tools
       - name: Package the exact artifacts that passed checks
         if: steps.latest.outputs.current == 'true'
         shell: bash
@@ -200,8 +210,10 @@ jobs:
           mv "${jars[0]}" release/backend.jar
           printf '%s\n' "$GITHUB_SHA" > release/commit.txt
           printf '%s\n' "$GITHUB_SHA" > release/frontend/version.txt
-          tar -czf release.tar.gz -C release backend.jar frontend commit.txt
-          sha256sum release.tar.gz > SHA256SUMS
+          # 同一轮检查产物重打包需保持相同字节，才能按整包 SHA-256 续传。
+          tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner --format=gnu \
+            -cf - -C release backend.jar frontend commit.txt | gzip -n > release.tar.gz
+          sha256sum --binary release.tar.gz > SHA256SUMS
       - name: Upload and activate checked release over SSH
         if: steps.latest.outputs.current == 'true'
         env:
@@ -211,7 +223,7 @@ jobs:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         shell: bash
-        run: bash deploy/ssh-publish.sh
+        run: exec java -jar release-tools/foodmap-uploader.jar publish .
 
   deployment-checks:
     name: Deployment checks
@@ -224,6 +236,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: deploy/uploader/pom.xml
+      - name: Verify and package Java uploader
+        working-directory: deploy/uploader
+        run: mvn --batch-mode --no-transfer-progress verify
+      - name: Save checked uploader
+        uses: actions/upload-artifact@v4
+        with:
+          name: checked-uploader
+          path: deploy/uploader/target/foodmap-uploader.jar
+          retention-days: 7
+          if-no-files-found: error
       - name: Check script syntax and release failure handling
         run: |
           bash -n deploy/deploy.sh

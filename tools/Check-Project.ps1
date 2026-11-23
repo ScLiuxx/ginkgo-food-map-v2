@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('BackendTest', 'BackendVerify', 'FrontendTest', 'FrontendBuild', 'FrontendCheck', 'DeploymentTest')]
+    [ValidateSet('BackendTest', 'BackendVerify', 'FrontendTest', 'FrontendBuild', 'FrontendCheck', 'DeploymentTest', 'UploaderVerify')]
     [string]$Task,
     [string[]]$Tests = @(),
     [string[]]$MavenArguments = @()
@@ -60,6 +60,14 @@ try {
         # Preserve those logs and judge the child by its exit code instead of treating warnings as crashes.
         $ErrorActionPreference = 'Continue'
         & mvn @maven
+        $result = $LASTEXITCODE
+        $ErrorActionPreference = 'Stop'
+    } elseif ($Task -eq 'UploaderVerify') {
+        Push-Location (Join-Path $repoRoot 'deploy/uploader')
+        $locationChanged = $true
+        Get-Command mvn -ErrorAction Stop | Out-Null
+        $ErrorActionPreference = 'Continue'
+        & mvn --batch-mode --no-transfer-progress verify
         $result = $LASTEXITCODE
         $ErrorActionPreference = 'Stop'
     } elseif ($Task -eq 'DeploymentTest') {
