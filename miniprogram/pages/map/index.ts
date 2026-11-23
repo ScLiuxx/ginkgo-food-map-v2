@@ -1,5 +1,7 @@
 import { toErrorMessage } from '../../shared/api/request'
 import { fetchMapPoints, type MapPoint } from '../../modules/map/api'
+import { fetchRestaurants } from '../../modules/restaurant/api'
+import { toRestaurantView, type RestaurantView } from '../../modules/restaurant/types'
 
 interface MapMarker {
   id: number
@@ -34,10 +36,21 @@ interface MapData {
   showLocation: boolean
   locationHint: string
   errorMessage: string
+  keyword: string
+  searchOpen: boolean
+  searchLoading: boolean
+  searchMoreLoading: boolean
+  searchError: string
+  searchResults: RestaurantView[]
+  searchTotal: number
+  searchPage: number
+  searchTotalPages: number
+  searchHasMore: boolean
 }
 
 interface MapCustom {
   requestSequence: number
+  searchSequence: number
   regionTimer: number
   lastRegion: WxMapRegion | null
   mapContext?: WxMapContext
@@ -47,6 +60,12 @@ interface MapCustom {
   fallbackToCampus(hint: string): void
   fetchRegion(region: WxMapRegion): Promise<void>
   retry(): void
+  onKeywordInput(event: WxInputEvent): void
+  onSearchConfirm(): void
+  search(page: number, reset: boolean): Promise<void>
+  loadMoreSearch(): void
+  clearSearch(): void
+  openSearchResult(event: WxTapEvent): void
 }
 
 interface WxMapRegionChangeEvent {
@@ -112,9 +131,20 @@ Page<MapData, MapCustom>({
     showLocation: false,
     locationHint: '',
     errorMessage: '',
+    keyword: '',
+    searchOpen: false,
+    searchLoading: false,
+    searchMoreLoading: false,
+    searchError: '',
+    searchResults: [],
+    searchTotal: 0,
+    searchPage: 1,
+    searchTotalPages: 0,
+    searchHasMore: false,
   },
 
   requestSequence: 0,
+  searchSequence: 0,
   regionTimer: 0,
   lastRegion: null,
 
@@ -137,6 +167,7 @@ Page<MapData, MapCustom>({
   onUnload() {
     clearTimeout(this.regionTimer)
     this.requestSequence++
+    this.searchSequence++
   },
 
   /** 定位成功使用真实视野；失败时退回校园中心，并明确提示不是用户当前位置。 */
@@ -251,6 +282,85 @@ Page<MapData, MapCustom>({
     if (!point) return
     wx.navigateTo({
       url: `/pages/restaurant/detail/index?id=${encodeURIComponent(point.id)}`,
+    })
+  },
+
+  onKeywordInput(event: WxInputEvent) {
+    this.setData({ keyword: event.detail.value })
+  },
+
+  /** 关键词搜索本站餐厅，不受当前地图视野限制；结果以列表展示，避免把远处点位画在一起。 */
+  onSearchConfirm() {
+    if (!this.data.keyword.trim()) {
+      this.clearSearch()
+      return
+    }
+    void this.search(1, true)
+  },
+
+  async search(page: number, reset: boolean) {
+    const keyword = this.data.keyword.trim()
+    if (!keyword) {
+      this.clearSearch()
+      return
+    }
+    const sequence = ++this.searchSequence
+    this.setData({
+      searchOpen: true,
+      searchLoading: reset,
+      searchMoreLoading: !reset,
+      searchError: '',
+      ...(reset ? { searchResults: [], searchTotal: 0 } : {}),
+    })
+    try {
+      const result = await fetchRestaurants({ keyword, page, pageSize: 8, sort: 'auto' })
+      if (sequence !== this.searchSequence) return
+      const records = result.records.map(toRestaurantView)
+      this.setData({
+        searchResults: reset ? records : this.data.searchResults.concat(records),
+        searchTotal: result.total,
+        searchPage: result.page,
+        searchTotalPages: result.totalPages,
+        searchHasMore: result.page < result.totalPages,
+        searchLoading: false,
+        searchMoreLoading: false,
+      })
+    } catch (reason) {
+      if (sequence !== this.searchSequence) return
+      this.setData({
+        searchLoading: false,
+        searchMoreLoading: false,
+        searchError: toErrorMessage(reason),
+      })
+    }
+  },
+
+  loadMoreSearch() {
+    if (this.data.searchLoading || this.data.searchMoreLoading || !this.data.searchHasMore) return
+    void this.search(this.data.searchPage + 1, false)
+  },
+
+  clearSearch() {
+    this.searchSequence++
+    this.setData({
+      keyword: '',
+      searchOpen: false,
+      searchLoading: false,
+      searchMoreLoading: false,
+      searchError: '',
+      searchResults: [],
+      searchTotal: 0,
+      searchPage: 1,
+      searchTotalPages: 0,
+      searchHasMore: false,
+    })
+  },
+
+  openSearchResult(event: WxTapEvent) {
+    const id = String(event.currentTarget.dataset.id ?? '')
+    if (!/^[1-9]\d*$/.test(id)) return
+    wx.navigateTo({
+      url: `/pages/restaurant/detail/index?id=${encodeURIComponent(id)}`,
     })
   },
 

@@ -284,6 +284,15 @@ export function deleteReply(replyId: string): Promise<void> {
   })
 }
 
+/** 删除本人点评；后端同时移除图片、回复并重算评分，成功返回 204。 */
+export function deleteReview(reviewId: string): Promise<void> {
+  return request<void>({
+    path: `/api/reviews/${encodeURIComponent(reviewId)}`,
+    method: 'DELETE',
+    auth: 'required',
+  })
+}
+
 /** 提交内容举报；重复举报返回原记录，同样按已提交处理。 */
 export async function submitContentReport(
   type: LikeTargetType,

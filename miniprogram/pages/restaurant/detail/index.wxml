@@ -97,7 +97,12 @@
         <text wx:for="{{restaurant.tags}}" wx:key="*this" class="tag">{{item}}</text>
       </view>
 
-      <view class="map-tip">{{isWindow ? '窗口位于所属食堂内，可按食堂地址前往。' : '地图定位与导航将在后续步骤接入，当前可先通过地址前往。'}}</view>
+      <view class="map-tip">{{isWindow ? '窗口位于所属食堂内，可按食堂地址前往。' : restaurant.latitude !== null && restaurant.longitude !== null ? '定位与路线由高德地图处理。' : '该店位置待确认，当前可先通过地址前往。'}}</view>
+      <view
+        wx:if="{{!isWindow && restaurant.latitude !== null && restaurant.longitude !== null}}"
+        class="navigate-button"
+        bindtap="openNavigation"
+      >在高德中打开</view>
     </view>
 
     <view wx:if="{{isCanteen}}" class="section">
@@ -142,6 +147,22 @@
         </picker>
       </view>
       <view class="section-meta">{{reviewTotalReviews}} 条点评 · {{reviewTotalGroups}} 位作者</view>
+
+      <view wx:if="{{reviewPhotoUrls.length}}" class="card photo-wall">
+        <view class="photo-wall-title">同学上传的照片（{{reviewPhotoUrls.length}}）</view>
+        <scroll-view class="photo-wall-scroll" scroll-x enable-flex>
+          <image
+            wx:for="{{reviewPhotoUrls}}"
+            wx:key="*this"
+            class="photo-wall-item"
+            src="{{item}}"
+            mode="aspectFill"
+            lazy-load
+            data-url="{{item}}"
+            bindtap="previewWallPhoto"
+          />
+        </scroll-view>
+      </view>
 
       <view wx:if="{{reviewLoading && !reviews.length}}" class="card empty-state">正在加载点评…</view>
       <view wx:elif="{{reviewError}}" class="card empty-state">
@@ -202,6 +223,12 @@
               data-review-index="{{index}}"
               bindtap="openReport"
             >举报</view>
+            <view
+              wx:if="{{item.canDelete}}"
+              class="review-action danger {{item.deleteBusy ? 'disabled' : ''}}"
+              data-index="{{index}}"
+              bindtap="deleteReview"
+            >{{item.deleteBusy ? '删除中…' : '删除'}}</view>
           </view>
 
           <view wx:if="{{item.repliesOpen}}" class="reply-block">

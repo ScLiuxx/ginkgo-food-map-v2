@@ -57,6 +57,12 @@ export interface CatalogQuery {
   category?: string
   sort?: RestaurantSort
   hideClosed?: boolean
+  /** 餐厅类型；空串表示不限，与后端 restaurantType 参数一致。 */
+  restaurantType?: '' | 'REGULAR' | 'CANTEEN'
+  /** 用餐方式；空串表示不限，只匹配明确支持对应方式的商户。 */
+  diningMode?: '' | 'dineIn' | 'delivery'
+  /** 人均上限；null/undefined 表示不限，未知价格不会被算作符合条件。 */
+  maxPrice?: number | null
   page?: number
   pageSize?: number
 }
@@ -79,6 +85,8 @@ export interface RestaurantView {
   closed: boolean
   tags: string[]
   coverUrl: string
+  latitude: number | null
+  longitude: number | null
   dimensions: Array<{ key: string; label: string; value: string }>
 }
 
@@ -117,6 +125,8 @@ export function toRestaurantView(row: RestaurantResponse): RestaurantView {
     closed: row.businessStatus === 'CLOSED',
     tags: Array.isArray(row.tags) ? row.tags : [],
     coverUrl: row.coverPhoto?.url ? absoluteUrl(row.coverPhoto.url) : '',
+    latitude: typeof row.latitude === 'number' && Number.isFinite(row.latitude) ? row.latitude : null,
+    longitude: typeof row.longitude === 'number' && Number.isFinite(row.longitude) ? row.longitude : null,
     dimensions: dimensionLabels.map((dimension) => ({
       key: dimension.key,
       label: dimension.label,

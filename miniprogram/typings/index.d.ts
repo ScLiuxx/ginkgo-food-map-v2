@@ -85,6 +85,15 @@ interface WxLocationOptions {
   fail?: (error: { errMsg: string }) => void
 }
 
+/** 打开系统地图查看位置；scale 越大视野越近，取值为 5–18。 */
+interface WxOpenLocationOptions {
+  latitude: number
+  longitude: number
+  name?: string
+  address?: string
+  scale?: number
+}
+
 interface WxChooseLocationResult {
   name?: string
   address?: string
@@ -138,6 +147,7 @@ interface Wx {
   setNavigationBarTitle(options: { title: string }): void
   createMapContext(id: string, component?: unknown): WxMapContext
   getLocation(options: WxLocationOptions): void
+  openLocation(options: WxOpenLocationOptions): void
   getSetting(options: { success?: (result: WxSettingResult) => void }): void
   openSetting(options?: { success?: (result: WxSettingResult) => void }): void
   chooseMedia(options: WxChooseMediaOptions): void

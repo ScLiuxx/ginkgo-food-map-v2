@@ -19,6 +19,7 @@ import {
   REPORT_REASONS,
   createReply,
   deleteReply,
+  deleteReview as removeReview,
   fetchLikeStates,
   fetchReplyPage,
   setContentLike,
@@ -60,6 +61,8 @@ type ReplyCardView = ReplyView & {
 type ReviewCardView = ReviewView & {
   canLike: boolean
   canReport: boolean
+  canDelete: boolean
+  deleteBusy: boolean
   likeCount: number
   likeKnown: boolean
   likeAvailable: boolean
@@ -108,6 +111,8 @@ function toReviewCard(review: ReviewView, currentUserId: string, loggedIn: boole
     ...review,
     canLike: !isSelf,
     canReport: loggedIn && !isSelf,
+    canDelete: isSelf,
+    deleteBusy: false,
     likeCount: 0,
     likeKnown: false,
     likeAvailable: false,
@@ -154,6 +159,7 @@ type DetailData = {
   reviewError: string
   hasMoreReviews: boolean
   reviewLoaded: boolean
+  reviewPhotoUrls: string[]
   loading: boolean
   errorMessage: string
   loggedIn: boolean
@@ -200,6 +206,8 @@ type DetailCustom = {
   commitReviewLike(review: ReviewCardView): Promise<void>
   commitReplyLike(review: ReviewCardView, reply: ReplyCardView): Promise<void>
   confirmDeleteReply(reviewId: string, replyId: string): Promise<void>
+  deleteReview(event: WxTapEvent): void
+  confirmDeleteReview(reviewId: string): Promise<void>
   toggleReviewLike(event: WxTapEvent): void
   toggleReplies(event: WxTapEvent): void
   retryReplies(event: WxTapEvent): void
@@ -219,6 +227,9 @@ type DetailCustom = {
   openWindow(event: WxTapEvent): void
   /** 点击点评作者进入公开主页，本人作者同样可查看自己的公开资料。 */
   openAuthor(event: WxTapEvent): void
+  /** 使用系统地图打开店铺位置；坐标由后端 GCJ-02 坐标直接提供。 */
+  openNavigation(): void
+  previewWallPhoto(event: WxTapEvent): void
 }
 
 /**
@@ -253,6 +264,7 @@ Page<DetailData, DetailCustom>({
     reviewError: '',
     hasMoreReviews: false,
     reviewLoaded: false,
+    reviewPhotoUrls: [],
     loading: true,
     errorMessage: '',
     loggedIn: false,
@@ -466,8 +478,15 @@ Page<DetailData, DetailCustom>({
         toReviewCard(review, this.data.currentUserId, this.data.loggedIn),
       )
       const reviews = reset ? records : this.data.reviews.concat(records)
+      // 照片墙汇总当前已加载点评的图片；点评删除或翻页后随列表一起重算。
+      const reviewPhotoUrls = Array.from(
+        new Set(
+          reviews.reduce<string[]>((urls, review) => urls.concat(review.photoUrls), []),
+        ),
+      )
       this.setData({
         reviews,
+        reviewPhotoUrls,
         reviewPage: result.page,
         reviewTotalGroups: result.totalGroups,
         reviewTotalReviews: result.totalReviews,
@@ -931,6 +950,40 @@ Page<DetailData, DetailCustom>({
     }
   },
 
+  /** 删除本人点评；删除最新点评会改变店铺评分，因此成功后重读资料与点评。 */
+  deleteReview(event: WxTapEvent): void {
+    const index = Number(event.currentTarget.dataset.index)
+    const review = this.data.reviews[index]
+    if (!review || !review.canDelete || review.deleteBusy) return
+    if (!this.data.loggedIn) {
+      this.login()
+      return
+    }
+    wx.showModal({
+      title: '删除点评',
+      content: '删除后不能恢复，相关照片和回复也会一并移除，确定继续吗？',
+      confirmText: '删除',
+      confirmColor: '#b83a34',
+      success: (result) => {
+        if (result.confirm) void this.confirmDeleteReview(review.id)
+      },
+    })
+  },
+
+  async confirmDeleteReview(reviewId: string): Promise<void> {
+    this.patchReviewById(reviewId, { deleteBusy: true })
+    try {
+      await removeReview(reviewId)
+      wx.showToast({ title: '点评已删除', icon: 'success' })
+      // 评分统计与当前点评列表都可能变化，整页重读避免留下过期分数或历史锚点。
+      void this.load()
+    } catch (reason) {
+      this.patchReviewById(reviewId, { deleteBusy: false })
+      if (this.handleAuthFailure(reason)) return
+      this.setData({ interactionHint: toErrorMessage(reason) })
+    }
+  },
+
   /**
    * 打开举报面板。
    *
@@ -1093,6 +1146,30 @@ Page<DetailData, DetailCustom>({
     wx.navigateTo({
       url: `/pages/user/profile/index?id=${encodeURIComponent(review.authorId)}`,
     })
+  },
+
+  /**
+   * 打开系统地图交给高德展示位置与路线。
+   *
+   * 仅在资料带有完整GCJ-02坐标时可用；窗口没有独立坐标，按钮不会出现。
+   */
+  openNavigation() {
+    const restaurant = this.data.restaurant
+    if (!restaurant || restaurant.latitude === null || restaurant.longitude === null) return
+    wx.openLocation({
+      latitude: restaurant.latitude,
+      longitude: restaurant.longitude,
+      name: restaurant.name,
+      address: restaurant.addressText,
+      scale: 18,
+    })
+  },
+
+  /** 点评照片墙汇总当前已加载点评的图片，预览集合与展示顺序保持一致。 */
+  previewWallPhoto(event: WxTapEvent) {
+    const url = String(event.currentTarget.dataset.url ?? '')
+    if (!url) return
+    wx.previewImage({ current: url, urls: this.data.reviewPhotoUrls })
   },
 
   onShareAppMessage() {

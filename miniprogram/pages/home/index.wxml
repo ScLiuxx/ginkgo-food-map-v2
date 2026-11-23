@@ -47,6 +47,29 @@
     >{{item.name}}</view>
   </scroll-view>
 
+  <view class="filter-bar">
+    <view class="filter-toggle {{filterOpen ? 'active' : ''}}" bindtap="toggleFilters">
+      筛选{{activeFilterCount ? ' · ' + activeFilterCount : ''}} ▾
+    </view>
+    <view class="filter-closed {{hideClosed ? 'active' : ''}}" bindtap="toggleHideClosed">
+      隐藏停业
+    </view>
+    <view class="random-entry" bindtap="openRandom">帮我选一家</view>
+  </view>
+
+  <view wx:if="{{filterOpen}}" class="filter-panel">
+    <picker mode="selector" range="{{maxPriceLabels}}" value="{{maxPriceIndex}}" bindchange="onPriceChange">
+      <view class="filter-select">人均：{{maxPriceLabels[maxPriceIndex]}} ▾</view>
+    </picker>
+    <picker mode="selector" range="{{typeLabels}}" value="{{typeIndex}}" bindchange="onTypeChange">
+      <view class="filter-select">类型：{{typeLabels[typeIndex]}} ▾</view>
+    </picker>
+    <picker mode="selector" range="{{diningLabels}}" value="{{diningIndex}}" bindchange="onDiningChange">
+      <view class="filter-select">方式：{{diningLabels[diningIndex]}} ▾</view>
+    </picker>
+    <view class="filter-reset" bindtap="resetFilters">重置</view>
+  </view>
+
   <view class="result-bar">
     <view class="result-count">共 {{total}} 家</view>
     <view class="result-actions">
@@ -115,4 +138,42 @@
   </view>
 
   <view class="home-footer">泥电美食地图 · 校园美食评价社区</view>
+
+  <view wx:if="{{randomVisible}}" class="random-mask" bindtap="closeRandom">
+    <view class="random-card" catchtap="stopPropagation">
+      <view class="random-head">
+        <view class="random-title">今天吃什么</view>
+        <view class="random-close" bindtap="closeRandom">×</view>
+      </view>
+      <picker
+        mode="selector"
+        range="{{randomBudgetLabels}}"
+        value="{{randomBudgetIndex}}"
+        bindchange="onRandomBudgetChange"
+      >
+        <view class="random-budget">人均预算：{{randomBudgetLabels[randomBudgetIndex]}} ▾</view>
+      </picker>
+      <view class="random-note">沿用当前搜索、分类、筛选和营业状态，不会自动放宽条件。</view>
+      <view wx:if="{{randomLoading}}" class="random-status">正在从符合条件的店铺中选择…</view>
+      <view wx:elif="{{randomError}}" class="random-status error-text">{{randomError}}</view>
+      <view wx:elif="{{randomResult}}" class="random-result">
+        <view class="random-count">从符合当前条件的 {{randomCandidateCount}} 家店中随机选出</view>
+        <view class="random-name">{{randomResult.name}}</view>
+        <view class="random-meta">
+          {{randomResult.categoryLabel}} · {{randomResult.priceText}} · {{randomResult.scoreText}}
+        </view>
+        <view class="random-address">{{randomResult.addressText}}</view>
+        <view class="random-actions">
+          <view class="random-primary" bindtap="openRandomResult">查看详情</view>
+          <view class="random-secondary" bindtap="rerollRandom">换一家</view>
+        </view>
+      </view>
+      <view wx:else class="random-status">没有符合条件的店铺，请调整预算或首页筛选。</view>
+      <view
+        wx:if="{{!randomLoading && (randomError || !randomResult)}}"
+        class="random-retry"
+        bindtap="rerollRandom"
+      >{{randomError ? '重试' : '再试一次'}}</view>
+    </view>
+  </view>
 </view>

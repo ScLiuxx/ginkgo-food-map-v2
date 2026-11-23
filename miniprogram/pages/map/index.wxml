@@ -20,6 +20,46 @@
       <view wx:if="{{loading}}" class="map-loading">读取中…</view>
     </view>
     <view wx:if="{{locationHint}}" class="map-warn">{{locationHint}}</view>
+    <view class="map-search-row">
+      <input
+        class="map-search-input"
+        value="{{keyword}}"
+        placeholder="搜索本站餐厅"
+        placeholder-class="map-search-placeholder"
+        confirm-type="search"
+        bindinput="onKeywordInput"
+        bindconfirm="onSearchConfirm"
+      />
+      <view class="map-search-submit" bindtap="onSearchConfirm">搜索</view>
+      <view wx:if="{{searchOpen}}" class="map-search-cancel" bindtap="clearSearch">取消</view>
+    </view>
+  </view>
+
+  <view wx:if="{{searchOpen}}" class="search-panel">
+    <view class="search-panel-head">
+      <view class="search-panel-title">站内搜索结果</view>
+      <view class="search-panel-count">{{searchTotal}} 家</view>
+    </view>
+    <view class="search-tip">仅搜索本站店铺；高德外部地点搜索仍仅在网页端提供。</view>
+    <scroll-view class="search-results" scroll-y>
+      <view wx:if="{{searchLoading}}" class="search-status">正在搜索…</view>
+      <view wx:elif="{{searchError}}" class="search-status error-text">{{searchError}}</view>
+      <view wx:elif="{{!searchResults.length}}" class="search-status">没有找到匹配的店铺。</view>
+      <view
+        wx:for="{{searchResults}}"
+        wx:key="id"
+        class="search-item"
+        data-id="{{item.id}}"
+        bindtap="openSearchResult"
+      >
+        <view class="search-name">{{item.name}}</view>
+        <view class="search-meta">{{item.categoryLabel}} · {{item.priceText}} · {{item.scoreText}}</view>
+        <view class="search-address">{{item.addressText}}</view>
+      </view>
+      <view wx:if="{{searchHasMore}}" class="search-more" bindtap="loadMoreSearch">
+        {{searchMoreLoading ? '加载中…' : '加载更多'}}
+      </view>
+    </scroll-view>
   </view>
 
   <view class="map-sheet">

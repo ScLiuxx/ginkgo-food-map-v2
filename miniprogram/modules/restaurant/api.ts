@@ -36,6 +36,9 @@ function catalogPath(query: CatalogQuery): string {
   append('category', query.category)
   append('sort', query.sort)
   append('hideClosed', query.hideClosed)
+  append('restaurantType', query.restaurantType)
+  append('diningMode', query.diningMode)
+  append('maxPrice', query.maxPrice === null || query.maxPrice === undefined ? '' : query.maxPrice)
   append('page', query.page)
   append('pageSize', query.pageSize)
   return params.length ? `/api/restaurants?${params.join('&')}` : '/api/restaurants'
@@ -264,6 +267,8 @@ export async function fetchCanteenWindowDetail(
       closed: row.businessStatus === 'CLOSED',
       tags: [],
       coverUrl: '',
+      latitude: null,
+      longitude: null,
       dimensions: [
         { key: 'taste', label: '味道', value: formatRating(row.taste) },
         { key: 'value', label: '性价比', value: formatRating(row.value) },

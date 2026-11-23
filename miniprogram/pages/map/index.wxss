@@ -126,3 +126,122 @@
 .map-action + .map-action {
   margin-left: 16rpx;
 }
+
+.map-search-row {
+  display: flex;
+  align-items: center;
+  margin-top: 18rpx;
+}
+
+.map-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 68rpx;
+  padding: 0 24rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.85);
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--ink);
+  font-size: 25rpx;
+}
+
+.map-search-placeholder {
+  color: #9aaab9;
+}
+
+.map-search-submit {
+  margin-left: 12rpx;
+  padding: 16rpx 24rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, #37a9ff, #0a84ff 58%, #0066cc);
+  color: #ffffff;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.map-search-cancel {
+  margin-left: 12rpx;
+  color: var(--ink-soft);
+  font-size: 24rpx;
+}
+
+.search-panel {
+  position: absolute;
+  top: 250rpx;
+  right: 24rpx;
+  left: 24rpx;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  max-height: 70vh;
+  padding: 22rpx 24rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.82);
+  border-radius: 30rpx;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 24rpx 56rpx rgba(27, 63, 104, 0.2);
+}
+
+.search-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.search-panel-title {
+  font-size: 30rpx;
+  font-weight: 800;
+}
+
+.search-panel-count {
+  color: var(--accent-deep);
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.search-tip {
+  margin: 8rpx 0 12rpx;
+  color: var(--ink-muted);
+  font-size: 21rpx;
+  line-height: 1.6;
+}
+
+.search-results {
+  max-height: 52vh;
+}
+
+.search-status {
+  padding: 30rpx 0;
+  color: var(--ink-muted);
+  font-size: 24rpx;
+  text-align: center;
+}
+
+.search-item {
+  padding: 18rpx 0;
+  border-top: 1rpx solid rgba(8, 25, 43, 0.07);
+}
+
+.search-name {
+  font-size: 28rpx;
+  font-weight: 750;
+}
+
+.search-meta {
+  margin-top: 4rpx;
+  color: #c4680a;
+  font-size: 22rpx;
+}
+
+.search-address {
+  margin-top: 4rpx;
+  color: var(--ink-muted);
+  font-size: 22rpx;
+}
+
+.search-more {
+  padding: 18rpx 0 6rpx;
+  color: var(--accent-deep);
+  font-size: 24rpx;
+  font-weight: 650;
+  text-align: center;
+}
