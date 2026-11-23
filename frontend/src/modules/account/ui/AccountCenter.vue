@@ -358,9 +358,13 @@ const pending = computed(() => pendingSections[props.section ?? ''])
         <section class="account-block">
           <h2>个人资料</h2>
           <AvatarSetting />
-          <div class="setting-row username-setting">
-            <span>用户名</span><strong>{{ auth.user?.username }}</strong>
-          </div>
+          <AppLink class="setting-row username-setting" to="/account/settings/username">
+            <span>用户名</span>
+            <span class="username-value">
+              <strong>{{ ownDetails?.username ?? auth.user?.username }}</strong
+              ><span aria-hidden="true">›</span>
+            </span>
+          </AppLink>
           <button
             class="setting-row bio-entry"
             :disabled="!ownDetails || profileLoading || bioSaving"

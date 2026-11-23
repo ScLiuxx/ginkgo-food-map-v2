@@ -74,7 +74,7 @@ const mapPage = computed(() => route.path === '/map' || route.path === '/preview
       @published="notifyReviewPublished"
     />
     <BottomNavigation
-      v-if="!detailPage"
+      v-if="!detailPage && !route.meta.hideBottomNavigation"
       :has-unread-notifications="hasUnreadNotifications"
       :discovery="route.path === '/' || !!route.meta.ranking"
       :authenticated="auth.authenticated"

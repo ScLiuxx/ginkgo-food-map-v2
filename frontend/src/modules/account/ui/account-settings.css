@@ -30,9 +30,26 @@
   font-weight: 500;
   color: #53606e;
 }
-/* 用户名说明移除后，分隔线直接跟随该设置行，个人简介预览保留。 */
 .account-settings .username-setting {
   border-bottom: 1px solid #edf0f3;
+  color: inherit;
+  flex-wrap: nowrap;
+}
+.username-setting > span:first-child,
+.username-value > span {
+  flex-shrink: 0;
+}
+.username-value {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 11px;
+  color: #8c97a3;
+}
+.username-value strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .account-settings .pending-tag,
 .account-settings .masked-email {

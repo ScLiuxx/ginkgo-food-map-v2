@@ -68,6 +68,24 @@ describe('login store', () => {
     expect(getAccessToken()).toBeNull()
   })
 
+  it('keeps the saved username through a late identity read and rejects stale rename receipts', async () => {
+    const store = useLoginStore()
+    store.acceptSession(result)
+    let resolveRead!: (value: CurrentUser) => void
+    vi.mocked(fetchCurrentUser).mockReturnValue(
+      new Promise((resolve) => {
+        resolveRead = resolve
+      }),
+    )
+    const restoring = store.restore()
+    expect(store.acceptUsername('42', 'old-session', '旧回执')).toBe(false)
+    expect(store.acceptUsername('42', 'test-session', '中')).toBe(true)
+    resolveRead(user)
+    await restoring
+    expect(store.user).toEqual({ ...user, username: '中' })
+    expect(getAccessToken()).toBe('test-session')
+  })
+
   it('verifies a stored session with the server before marking it authenticated', async () => {
     setAccessToken('test-session')
     vi.mocked(fetchCurrentUser).mockResolvedValue(user)

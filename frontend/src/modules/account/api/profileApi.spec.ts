@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { httpClient } from '@/shared/api/httpClient'
-import { fetchOwnProfile, updateOwnBio } from './profileApi'
+import { fetchOwnProfile, updateOwnBio, updateOwnUsername } from './profileApi'
 
 const profile = {
   userId: '42',
@@ -12,11 +12,9 @@ afterEach(() => vi.restoreAllMocks())
 /** 私有资料传输固定身份，拒绝原始邮箱或不一致回执，不让未知响应字段进入页面状态。 */
 describe('本人资料传输', () => {
   it('查询不发送可伪造的账号参数，仅保留白名单字段', async () => {
-    const get = vi
-      .spyOn(httpClient, 'get')
-      .mockResolvedValue({
-        data: { success: true, data: { ...profile, privateField: '不应复制' } },
-      })
+    const get = vi.spyOn(httpClient, 'get').mockResolvedValue({
+      data: { success: true, data: { ...profile, privateField: '不应复制' } },
+    })
     const signal = new AbortController().signal
     expect(await fetchOwnProfile('42', 'fixed-token', signal)).toEqual(profile)
     expect(get).toHaveBeenCalledExactlyOnceWith('/api/me/profile', {
@@ -56,5 +54,22 @@ describe('本人资料传输', () => {
     await expect(
       updateOwnBio('42', 'fixed-token', '新简介', new AbortController().signal),
     ).rejects.toThrow('网络失败')
+  })
+  it('只提交新用户名并确认原账号的保存回执', async () => {
+    const saved = { ...profile, username: '中' }
+    const patch = vi
+      .spyOn(httpClient, 'patch')
+      .mockResolvedValueOnce({ data: { success: true, data: saved } })
+      .mockResolvedValueOnce({ data: { success: true, data: { ...saved, userId: '99' } } })
+      .mockResolvedValueOnce({ data: { success: true, data: profile } })
+    const signal = new AbortController().signal
+    expect(await updateOwnUsername('42', 'fixed-token', '中', signal)).toEqual(saved)
+    expect(patch).toHaveBeenCalledExactlyOnceWith(
+      '/api/me/profile/username',
+      { username: '中' },
+      { signal, headers: { Authorization: 'Bearer fixed-token' } },
+    )
+    await expect(updateOwnUsername('42', 'fixed-token', '中', signal)).rejects.toThrow('无法确认')
+    await expect(updateOwnUsername('42', 'fixed-token', '中', signal)).rejects.toThrow('无法确认')
   })
 })

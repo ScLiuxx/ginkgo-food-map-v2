@@ -19,6 +19,7 @@
 | GET | `/api/admin/me` | 管理员 | 200 | [工作台身份校验](#admin-session) |
 | GET | `/api/me/profile` | Bearer | 200 | [本人资料与简介](#profile) |
 | PATCH | `/api/me/profile` | Bearer | 200 | [本人资料与简介](#profile) |
+| PATCH | `/api/me/profile/username` | Bearer | 200 | [修改用户名](#username) |
 | PUT | `/api/me/avatar` | Bearer | 204 | [用户头像](#avatar) |
 | GET | `/api/users/{userId}/avatar` | 公开 | 200 JPEG / 204 | [用户头像](#avatar) |
 | GET | `/api/me/growth` | Bearer | 200 | [本人成长摘要](#growth) |
@@ -258,7 +259,7 @@ fileId为正Long十进制字符串，只接受本人上传、未过期且可绑�
 
 **请求参数**
 
-`GET /api/me/profile`、`PATCH /api/me/profile`均需Bearer，用户归属只取当前认证身份。GET无业务参数；额外userId查询参数不改变查询/修改对象。没有任意用户资料查询、改名、头像上传、换绑邮箱接口；收藏及关注名单隐私使用[收藏设置](community.md#favorite-visibility)和[关注设置](community.md#follow-privacy)。
+`GET /api/me/profile`、`PATCH /api/me/profile`均需Bearer，用户归属只取当前认证身份。GET无业务参数。额外userId查询参数不改变查询或修改对象。改名和头像分别使用[修改用户名](#username)和[用户头像](#avatar)接口。收藏及关注名单隐私使用[收藏设置](community.md#favorite-visibility)和[关注设置](community.md#follow-privacy)。
 
 PATCH只接受必填字符串bio，空字符串可清空；未知JSON字段（含userId、username、email、roles）返回400 `COMMON_MALFORMED_REQUEST`，数字、布尔值、数组或对象不能自动转为字符串；缺少或null返回400 `COMMON_VALIDATION_FAILED`。请求示例：
 
@@ -281,7 +282,7 @@ PATCH只接受必填字符串bio，空字符串可清空；未知JSON字段（�
 | 字段 | 含义 |
 | --- | --- |
 | userId | 当前用户ID，字符串。 |
-| username | 当前用户名，只读。 |
+| username | 当前用户名。 |
 | maskedEmail | 脱敏绑定邮箱，不返回完整邮箱；本地部分超过两个Unicode码点时保留首个码点，否则完全隐藏；保留域名，例如student@example.edu.cn为s***@example.edu.cn，ab@example.edu.cn为***@example.edu.cn，异常格式为***。 |
 | bio | 已保存的纯文本简介；空字符串表示尚未填写或已清空。 |
 
@@ -302,6 +303,20 @@ PATCH只接受必填字符串bio，空字符串可清空；未知JSON字段（�
 **副作用与限制**
 
 仅修改bio及既有row_version、updated_at，不改变邮箱、用户名、密码、角色、账号状态或credential_version，原有效登录凭证可继续使用。规范化后与现值相同则不写入、不递增版本或修改更新时间。更新使用用户行锁；多标签页并发修改按最后提交的完整简介生效，不提供客户端版本/ETag冲突协议。超时或取消不能证明服务器未保存，同值重试安全；客户端必须等待成功回执或重新查询确认。
+
+<a id="username"></a>
+
+## 修改用户名
+
+`PATCH /api/me/profile/username` 需要有效 Bearer 会话，只更新当前账号。请求仅接受必填字符串 `username`，沿用[注册用户名规则](#register)，去首尾空白后允许 1–24 个汉字、英文字母、数字或下划线，区分大小写。
+
+```json
+{"username":"清河食客"}
+```
+
+成功返回 200 和 `Cache-Control: no-store`，data 与[本人资料](#profile)相同。同值重试成功且不会重复写入。改名后按新用户名登录，原会话和学号登录继续有效，已有内容仍关联同一用户 ID。
+
+缺失或空白用户名返回 400 `COMMON_VALIDATION_FAILED`，字符或长度不合规则返回 400 `USER_USERNAME_INVALID`，非字符串或额外 JSON 字段返回 400 `COMMON_MALFORMED_REQUEST`。用户名已被其他账号占用返回 409 `USER_USERNAME_ALREADY_REGISTERED`，由数据库唯一约束处理并发抢占。会话或账号不可用时沿用[本人资料](#profile)的 401。
 
 <a id="growth"></a>
 

@@ -8,6 +8,7 @@ export function loginRedirect(value: unknown): string {
     /^\/\?writeReview=1$/,
     /^\/restaurants\/(?:new|submit|[1-9]\d*(?:\/(?:edit|correction))?)(?:\?writeReview=1)?$/,
     /^\/account(?:\/(?:reviews|favorites|contributions|settings|growth|following|followers))?$/,
+    /^\/account\/settings\/username$/,
     /^\/account\/contributions\/[1-9]\d{0,18}\/edit$/,
     /^\/messages(?:\/(?:likes|comments|followers|system))?$/,
     /^\/users\/[1-9]\d*$/,
