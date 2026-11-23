@@ -3,11 +3,13 @@ import AppLink from '@/shared/ui/AppLink.vue'
 import { formatRating } from '@/shared/lib/formatRating'
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { loadAMap } from '../sdk/amap'
+import { createMyLocationMarker } from '../sdk/myLocationMarker'
 import { clusterMapPoints, type MarkerCluster } from '../model/markerClusters'
 import type { AMapSDK, SDKMap, SDKMarker, SDKBounds } from '../sdk/types'
 import type { MapBounds, MapPoint, MapFocus, MapCamera } from '../api/mapApi'
 import { storeToRefs } from 'pinia'
 import { useUserLocation } from '../model/userLocation.store'
+import MapControls from './MapControls.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -114,17 +116,7 @@ watch([location, () => props.points], ([position]) => {
   // 点位刷新时仅恢复蓝点，不反复拉回视野。
   const shouldCenter = !lastLocated || lastLocated !== position.timestamp
   lastLocated = position.timestamp
-  const dot = globalThis.document.createElement('span')
-  dot.className = 'amap-my-location'
-  dot.setAttribute('role', 'img')
-  dot.setAttribute('aria-label', '我的位置（点击定位时获取）')
-  dot.title = '我的位置（单次定位，不持续跟踪）'
-  myMarker = new sdk.Marker({
-    position: position.center,
-    content: dot,
-    anchor: 'center',
-    zIndex: 200,
-  })
+  myMarker = createMyLocationMarker(sdk, position.center)
   map.add([myMarker])
   // 使用现有moveend/zoomend -> 防抖视口查询，继续只展示本站数据库里的餐厅。
   if (shouldCenter) map.setZoomAndCenter(16, position.center)
@@ -318,33 +310,18 @@ onUnmounted(() => {
       <p>地图恢复后会按实际范围加载店铺，也可返回首页浏览餐厅和点评。</p>
       <button v-if="error" @click="start">重试加载</button><AppLink to="/">返回首页找店 →</AppLink>
     </div>
-    <div v-if="!error && map" class="amap-controls">
-      <button aria-label="放大地图" @click="map?.zoomIn()">＋</button
-      ><button aria-label="缩小地图" @click="map?.zoomOut()">−</button
-      ><button class="reset" @click="map?.setZoomAndCenter(11, [104.02, 30.67])">
+    <MapControls
+      v-if="!error && map"
+      :locating="locating"
+      :message="locationMessage"
+      @locate="locate"
+    >
+      <button type="button" aria-label="放大地图" @click="map?.zoomIn()">＋</button>
+      <button type="button" aria-label="缩小地图" @click="map?.zoomOut()">−</button>
+      <button type="button" class="reset" @click="map?.setZoomAndCenter(11, [104.02, 30.67])">
         ⌖<small>总览</small>
       </button>
-      <button
-        class="reset locate"
-        :disabled="locating"
-        aria-describedby="location-notice"
-        @click="locate"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.6" />
-          <circle cx="12" cy="12" r="2.5" fill="currentColor" />
-          <path d="M12 1v4m0 14v4M1 12h4m14 0h4" stroke="currentColor" stroke-width="1.6" />
-        </svg>
-        <small>{{ locating ? '定位中…' : '我的位置' }}</small>
-      </button>
-    </div>
-    <details v-if="!error && map" class="location-notice">
-      <summary>定位与隐私</summary>
-      <p id="location-notice">点击后申请一次定位，位置交由高德转换坐标；本站不绑定账号保存。</p>
-    </details>
-    <p v-if="!error && locationMessage" class="location-status" role="status" aria-live="polite">
-      {{ locationMessage }}
-    </p>
+    </MapControls>
   </div>
 </template>
 <style scoped>
@@ -388,102 +365,6 @@ onUnmounted(() => {
   font-size: 12px;
   color: #7e5b27;
   margin-top: 15px;
-}
-.amap-controls {
-  position: absolute;
-  right: 16px;
-  top: 16px;
-  display: grid;
-  gap: 0;
-  z-index: 2;
-  border-radius: 7px;
-  overflow: hidden;
-  box-shadow: 0 1px 6px #1e2c2c1c;
-}
-.amap-controls button {
-  border: 0;
-  min-width: 42px;
-  min-height: 42px;
-  background: white;
-  font-size: 21px;
-  cursor: pointer;
-  color: #485353;
-}
-.amap-controls button:hover:enabled {
-  background: #f4f6f6;
-}
-.amap-controls button:focus-visible,
-.location-notice summary:focus-visible {
-  outline: 2px solid #9b713b;
-  outline-offset: -3px;
-}
-.amap-controls .reset {
-  display: grid;
-  font-size: 20px;
-  padding: 8px 5px;
-  min-height: 52px;
-  border-top: 1px solid #eff1f1;
-}
-.reset small {
-  font-size: 10px;
-}
-.amap-controls .locate {
-  justify-items: center;
-  align-content: center;
-  gap: 3px;
-  color: #2876d9;
-}
-.locate:disabled {
-  cursor: wait;
-  opacity: 0.6;
-}
-.location-notice,
-.location-status {
-  position: absolute;
-  top: 16px;
-  right: 70px;
-  z-index: 2;
-  max-width: min(230px, calc(100% - 90px));
-  margin: 0;
-  padding: 7px 10px;
-  border-radius: 6px;
-  background: #fffffff0;
-  color: #606a6a;
-  font-size: 11px;
-  line-height: 1.6;
-}
-.location-notice summary {
-  cursor: pointer;
-  font-size: 10px;
-}
-.location-notice[open] {
-  z-index: 5;
-  box-shadow: 0 2px 12px #25353512;
-}
-.location-notice[open] summary {
-  margin-bottom: 8px;
-}
-.location-status {
-  top: 56px;
-  pointer-events: none;
-}
-.location-notice p {
-  margin: 0;
-}
-.location-notice p + p {
-  margin-top: 5px;
-}
-/* 固定的装饰光晕只突出蓝点，不代表按米绘制的定位精度范围。 */
-:deep(.amap-my-location) {
-  display: block;
-  width: 18px;
-  height: 18px;
-  border: 3px solid white;
-  border-radius: 50%;
-  background: #2876ed;
-  box-shadow:
-    0 0 0 7px #2876ed30,
-    0 2px 6px #1237;
 }
 :deep(.amap-score-pin) {
   position: relative;

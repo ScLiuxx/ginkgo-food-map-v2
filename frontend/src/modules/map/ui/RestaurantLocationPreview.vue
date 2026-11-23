@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, useId } from 'vue'
+import { onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
+import { useMyLocation } from '../model/location'
 import type { RestaurantMapLocation } from '../model/restaurantLocation'
 import { loadAMap } from '../sdk/amap'
-import type { SDKMap } from '../sdk/types'
+import { createMyLocationMarker } from '../sdk/myLocationMarker'
+import type { AMapSDK, SDKMap, SDKMarker } from '../sdk/types'
+import MapControls from './MapControls.vue'
 
 const props = defineProps<{
   location: RestaurantMapLocation
@@ -14,16 +17,36 @@ const titleId = useId()
 const dialog = ref<globalThis.HTMLDialogElement>()
 const host = ref<globalThis.HTMLDivElement>()
 const state = ref<'loading' | 'ready' | 'failed'>('loading')
+let sdk: AMapSDK | undefined
 let map: SDKMap | undefined
+let myMarker: SDKMarker | undefined
 let timer: ReturnType<typeof globalThis.setTimeout> | undefined
 let generation = 0
 let previousOverflow: string | undefined
+
+const {
+  locating,
+  location: myLocation,
+  message: locationMessage,
+  locate,
+} = useMyLocation(() => sdk)
+watch(myLocation, (position) => {
+  if (!map || !sdk) return
+  if (myMarker) map.remove([myMarker])
+  myMarker = undefined
+  if (!position) return
+  myMarker = createMyLocationMarker(sdk, position.center)
+  map.add([myMarker])
+  map.setZoomAndCenter(16, position.center)
+})
 
 function disposeMap() {
   generation++
   globalThis.clearTimeout(timer)
   map?.destroy()
   map = undefined
+  sdk = undefined
+  myMarker = undefined
 }
 
 async function start() {
@@ -38,8 +61,9 @@ async function start() {
   // 同一时限覆盖 SDK 请求和底图初始化。关闭与重试都会丢弃之前的回调。
   timer = globalThis.setTimeout(fail, 15000)
   try {
-    const sdk = await loadAMap()
+    const loadedSDK = await loadAMap()
     if (ticket !== generation || !host.value) return
+    sdk = loadedSDK
     const center = props.location.center
     map = new sdk.Map(host.value, {
       center,
@@ -100,10 +124,18 @@ onBeforeUnmount(() => {
       </header>
       <div class="location-map">
         <div ref="host" class="location-map-host" aria-label="店铺位置地图" />
-        <div v-if="state === 'ready'" class="location-map-zoom">
+        <MapControls
+          v-if="state === 'ready'"
+          :locating="locating"
+          :message="locationMessage"
+          @locate="locate"
+        >
           <button type="button" aria-label="放大地图" @click="map?.zoomIn()">＋</button>
           <button type="button" aria-label="缩小地图" @click="map?.zoomOut()">−</button>
-        </div>
+          <button type="button" class="reset" @click="map?.setZoomAndCenter(17, location.center)">
+            <span aria-hidden="true">⌖</span><small>回到店铺</small>
+          </button>
+        </MapControls>
         <div v-else class="location-map-state" :role="state === 'failed' ? 'alert' : 'status'">
           <template v-if="state === 'failed'">
             <p>地图暂时无法加载。</p>
@@ -151,7 +183,8 @@ h2 {
   margin: 0;
   font-size: 16px;
 }
-button {
+header button,
+.location-map-state button {
   flex: none;
   min-height: 42px;
   padding: 0 6px;
@@ -162,7 +195,8 @@ button {
   font: inherit;
   cursor: pointer;
 }
-button:focus-visible {
+header button:focus-visible,
+.location-map-state button:focus-visible {
   outline: 2px solid #a2a8af;
   outline-offset: -2px;
 }
@@ -191,20 +225,6 @@ button:focus-visible {
 }
 .location-map-state button {
   padding: 0 14px;
-}
-.location-map-zoom {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 2;
-  display: grid;
-  border-radius: 6px;
-  background: white;
-  box-shadow: 0 2px 8px #26332824;
-}
-.location-map-zoom button {
-  width: 42px;
-  color: #37444b;
 }
 footer {
   padding: 12px 16px max(12px, env(safe-area-inset-bottom));
