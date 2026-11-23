@@ -4,6 +4,7 @@ import {
   categoryLabel,
   deleteNotification,
   fetchAnnouncement,
+  fetchLikeTarget,
   fetchNotifications,
   fetchReplyTarget,
   markAllNotificationsRead,
@@ -390,17 +391,43 @@ Page<MessagesData, MessagesCustom>({
       return
     }
     if (item.category === 'LIKES') {
-      this.setData({
-        detailBlocks: [
-          {
-            label: '提醒',
-            text: `${item.actorUsername ?? '用户'} 赞了你的${
-              item.notificationType === 'REPLY_LIKED' ? '回复' : '点评'
-            }。`,
-          },
-          { label: '说明', text: '获赞原文的跳转暂未在小程序开放，可在网页端查看。' },
-        ],
-      })
+      const reviewId = item.reviewId
+      const likeType = item.notificationType
+      if (!reviewId) {
+        this.setData({ detailError: '获赞点评编号无法确认。' })
+        return
+      }
+      if (likeType !== 'REVIEW_LIKED' && likeType !== 'REPLY_LIKED') {
+        this.setData({ detailError: '获赞类型无法确认。' })
+        return
+      }
+      this.setData({ detailLoading: true })
+      try {
+        const target = await fetchLikeTarget(item.sourceId, likeType, reviewId)
+        this.setData({
+          detailLoading: false,
+          detailBlocks: [
+            {
+              label: target.targetType === 'REPLY' ? '获赞回复' : '获赞点评',
+              text: target.body,
+            },
+            {
+              label: '提醒',
+              text: `${item.actorUsername ?? '用户'} 赞了这条${
+                target.targetType === 'REPLY' ? '回复' : '点评'
+              }。`,
+            },
+            {
+              label: '说明',
+              text: '获赞原文已按当前权限重新读取；可进入所在店铺查看完整点评与回复。',
+            },
+          ],
+          detailTargetId: target.restaurantId ?? target.windowId ?? '',
+          detailIsWindow: target.restaurantId === null && target.windowId !== null,
+        })
+      } catch (reason) {
+        this.setData({ detailLoading: false, detailError: messageErrorText(reason) })
+      }
       return
     }
     this.setData({

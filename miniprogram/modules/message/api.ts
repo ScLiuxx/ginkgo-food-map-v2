@@ -499,6 +499,84 @@ export async function fetchReplyTarget(
   }
 }
 
+export interface LikeTarget {
+  likeId: string
+  targetType: 'REVIEW' | 'REPLY'
+  targetId: string
+  reviewId: string
+  restaurantId: string | null
+  windowId: string | null
+  author: string
+  body: string
+  createdAt: string
+}
+
+/**
+ * 按获赞关系编号重新读取被赞原文。
+ *
+ * 获赞通知只保存关系编号，不保存正文，也不能用通知字段自行拼跳转地址；
+ * 服务端要求当前用户必须是被赞内容作者，取消点赞后仍可读取，
+ * 源内容删除或父店不可见时统一返回404，由页面提示内容已失效。
+ */
+export async function fetchLikeTarget(
+  likeId: string,
+  notificationType: 'REVIEW_LIKED' | 'REPLY_LIKED',
+  reviewId: string,
+): Promise<LikeTarget> {
+  const { userId } = currentUserScope()
+  if (!isId(likeId) || !isId(reviewId)) throw new Error('获赞编号无法确认。')
+  const expectedType = notificationType === 'REPLY_LIKED' ? 'REPLY' : 'REVIEW'
+  const raw = await request<{
+    userId: string
+    likeId: string
+    targetType: string
+    targetId: string
+    reviewId: string
+    restaurantId: string | null
+    windowId?: string | null
+    author: { id: string; username: string }
+    body: string
+    createdAt: string
+  }>({
+    path: `/api/me/received-likes/${encodeURIComponent(likeId)}/target`,
+    auth: 'required',
+  })
+  const restaurantId = raw?.restaurantId ?? null
+  const windowId = raw?.windowId ?? null
+  if (
+    !raw ||
+    raw.userId !== userId ||
+    raw.likeId !== likeId ||
+    raw.targetType !== expectedType ||
+    !isId(raw.targetId) ||
+    raw.reviewId !== reviewId ||
+    (expectedType === 'REVIEW' && raw.targetId !== reviewId) ||
+    !(
+      (isId(restaurantId) && windowId === null) ||
+      (restaurantId === null && isId(windowId))
+    ) ||
+    !raw.author ||
+    raw.author.id !== userId ||
+    typeof raw.author.username !== 'string' ||
+    !raw.author.username.trim() ||
+    typeof raw.body !== 'string' ||
+    !isDate(raw.createdAt)
+  ) {
+    throw invalidResponse()
+  }
+  return {
+    likeId,
+    targetType: expectedType,
+    targetId: raw.targetId,
+    reviewId,
+    restaurantId,
+    windowId,
+    author: raw.author.username,
+    body: raw.body,
+    createdAt: raw.createdAt,
+  }
+}
+
 /** 统一把接口异常转成可展示文案；内容失效单独提示，不暴露内部错误。 */
 export function messageErrorText(reason: unknown): string {
   if (reason instanceof ApiError && reason.status === 404) {
