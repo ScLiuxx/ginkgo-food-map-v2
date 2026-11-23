@@ -1,3 +1,4 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
 import { createApp, nextTick } from 'vue'
 import type { App } from 'vue'
 import { createPinia, disposePinia, setActivePinia } from 'pinia'
@@ -78,13 +79,15 @@ describe('login form', () => {
 
   it('rejects empty input without sending a request', async () => {
     await fillAndSubmit('', '')
-    expect(host.querySelector('#login-username-error')?.textContent).toContain('请输入用户名或邮箱')
+    expect(host.querySelector('#login-username-error')?.textContent).toContain('请输入用户名')
     expect(host.querySelector('#login-password-error')?.textContent).toContain('请输入密码')
     expect(login).not.toHaveBeenCalled()
   })
 
-  it('provides a password reset entry without a remember-me checkbox', () => {
-    expect(host.querySelector('.recovery-link a')?.getAttribute('href')).toBe('/password-reset')
+  it('provides a password reset entry without a remember-me checkbox', async () => {
+    expect(await captureLinkTarget(app, host.querySelector('.recovery-link a'))).toBe(
+      '/password-reset',
+    )
     expect(host.querySelector('input[type="checkbox"]')).toBeNull()
   })
 
@@ -101,7 +104,7 @@ describe('login form', () => {
 
   it('shows a server error and clears the password after failure', async () => {
     vi.mocked(login).mockRejectedValue(new Error('用户名或密码错误'))
-    await fillAndSubmit('ginkgo_user', 'wrong-password')
+    await fillAndSubmit('foodmap_user', 'wrong-password')
     await vi.waitFor(() => {
       expect(host.querySelector('[role="alert"]')?.textContent).toContain('用户名或密码错误')
       expect(host.querySelector<HTMLInputElement>('#login-password')?.value).toBe('')
@@ -114,28 +117,110 @@ describe('login form', () => {
       accessToken: 'test-session',
       tokenType: 'Bearer',
       expiresAt: '2099-01-01T00:00:00Z',
-      user: { id: 42, username: 'ginkgo_user', roles: ['ROLE_USER'] },
+      user: { id: 42, username: 'foodmap_user', roles: ['ROLE_USER'] },
     })
-    await fillAndSubmit(' ginkgo_user ', ' Ginkgo2026 ')
+    await fillAndSubmit(' foodmap_user ', ' Foodmap2026 ')
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/'))
-    expect(login).toHaveBeenCalledWith({ username: 'ginkgo_user', password: ' Ginkgo2026 ' })
+    expect(login).toHaveBeenCalledWith({ username: 'foodmap_user', password: ' Foodmap2026 ' })
     expect(host.querySelector<HTMLInputElement>('#login-password')?.value).toBe('')
   })
 
-  it('accepts a registered email in the same login field without changing password spaces', async () => {
+  async function switchMode(mode: 'username' | 'student') {
+    host.querySelector<HTMLButtonElement>(`#login-tab-${mode}`)!.click()
+    await nextTick()
+  }
+
+  it('uses the selected student number as a campus email without changing password spaces', async () => {
     vi.mocked(login).mockResolvedValue({
       accessToken: 'email-session',
       tokenType: 'Bearer',
       expiresAt: '2099-01-01T00:00:00Z',
-      user: { id: 42, username: 'ginkgo_user', roles: ['ROLE_USER'] },
+      user: { id: 42, username: 'foodmap_user', roles: ['ROLE_USER'] },
     })
-    await fillAndSubmit(' student@std.uestc.edu.cn ', ' secret ')
+    await switchMode('student')
+    await fillAndSubmit(' 001234567890 ', ' secret ')
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/'))
     expect(login).toHaveBeenCalledWith({
-      username: 'student@std.uestc.edu.cn',
+      username: '001234567890@std.uestc.edu.cn',
       password: ' secret ',
     })
-    expect(host.querySelector<HTMLInputElement>('#login-username')?.maxLength).toBe(254)
+    expect(host.querySelector<HTMLInputElement>('#login-username')?.inputMode).toBe('numeric')
+    expect(host.querySelector('#login-email-suffix')?.textContent).toBe('@std.uestc.edu.cn')
+  })
+
+  it('keeps a numeric username as a username instead of guessing the login method', async () => {
+    vi.mocked(login).mockRejectedValue(new Error('用户名或密码错误'))
+    await fillAndSubmit('001234567890', 'secret')
+    expect(login).toHaveBeenCalledWith({ username: '001234567890', password: 'secret' })
+    expect(host.querySelector('#login-email-suffix')).toBeNull()
+  })
+
+  it.each(['', 'student', '123 456', '１２３４５', '123@std.uestc.edu.cn', '1e12'])(
+    'rejects invalid student number %j before login',
+    async (value) => {
+      await switchMode('student')
+      await fillAndSubmit(value, 'secret')
+      expect(host.querySelector('#login-username-error')?.textContent).toBeTruthy()
+      expect(login).not.toHaveBeenCalled()
+    },
+  )
+
+  it('rejects email input in username mode rather than selecting an email account silently', async () => {
+    await fillAndSubmit('student@std.uestc.edu.cn', 'secret')
+    expect(host.querySelector('#login-username-error')?.textContent).toContain('切换至学号登录')
+    expect(login).not.toHaveBeenCalled()
+  })
+
+  it('preserves independent account drafts and clears password and errors when switching', async () => {
+    await fillAndSubmit('', 'secret')
+    expect(host.querySelector('#login-username-error')).not.toBeNull()
+    const account = host.querySelector<HTMLInputElement>('#login-username')!
+    account.value = 'my_username'
+    account.dispatchEvent(new Event('input', { bubbles: true }))
+    await switchMode('student')
+    expect(account.value).toBe('')
+    expect(host.querySelector<HTMLInputElement>('#login-password')?.value).toBe('')
+    expect(host.querySelector('#login-username-error')).toBeNull()
+    account.value = '001234567890'
+    account.dispatchEvent(new Event('input', { bubbles: true }))
+    await switchMode('username')
+    expect(account.value).toBe('my_username')
+    await switchMode('student')
+    expect(account.value).toBe('001234567890')
+  })
+
+  it('supports keyboard tab navigation without submitting the form', async () => {
+    const username = host.querySelector<HTMLButtonElement>('#login-tab-username')!
+    username.focus()
+    username.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    await nextTick()
+    await nextTick()
+    const student = host.querySelector<HTMLButtonElement>('#login-tab-student')!
+    expect(student.getAttribute('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(student)
+    student.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
+    await nextTick()
+    expect(username.getAttribute('aria-selected')).toBe('true')
+    expect(login).not.toHaveBeenCalled()
+  })
+
+  it('locks mode switching while the submitted identity is pending', async () => {
+    let fail!: (reason: Error) => void
+    vi.mocked(login).mockReturnValue(
+      new Promise((_resolve, reject) => {
+        fail = reject
+      }),
+    )
+    await switchMode('student')
+    await fillAndSubmit('001234567890', 'secret')
+    const username = host.querySelector<HTMLButtonElement>('#login-tab-username')!
+    expect(username.disabled).toBe(true)
+    username.click()
+    expect(host.querySelector('#login-tab-student')?.getAttribute('aria-selected')).toBe('true')
+    fail(new Error('密码错误'))
+    await vi.waitFor(() => expect(username.disabled).toBe(false))
+    expect(login).toHaveBeenCalledTimes(1)
+    expect(host.querySelector<HTMLInputElement>('#login-password')?.value).toBe('')
   })
 
   it.each([
@@ -148,9 +233,9 @@ describe('login form', () => {
       accessToken: 'test-return-session',
       tokenType: 'Bearer',
       expiresAt: '2099-01-01T00:00:00Z',
-      user: { id: 42, username: 'ginkgo_user', roles: ['ROLE_USER'] },
+      user: { id: 42, username: 'foodmap_user', roles: ['ROLE_USER'] },
     })
-    await fillAndSubmit('ginkgo_user', 'Ginkgo2026')
+    await fillAndSubmit('foodmap_user', 'Foodmap2026')
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe(expected))
   })
 })

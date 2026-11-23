@@ -24,7 +24,7 @@ def check(backend, frontend, commit, timeout):
         ('frontend version', frontend + '/version.txt', 200, lambda body: body.decode().strip() == commit),
         ('frontend page', frontend + '/login', 200, lambda body: b'<div id="app"></div>' in body),
         ('API proxy', frontend + '/api/public/status', 200,
-         lambda body: json.loads(body).get('data', {}).get('application') == 'ginkgo-food-map-v2'),
+         lambda body: json.loads(body).get('data', {}).get('application') == 'foodmap'),
         ('authentication proxy', frontend + '/auth/me', 401,
          lambda body: json.loads(body).get('code') == 'AUTH_UNAUTHENTICATED'),
     ]

@@ -1,13 +1,28 @@
 import type { InjectionKey } from 'vue'
+import type { PhotoSelection } from '@/shared/ui/photoViewer'
 import type { RatingDimension } from '@/modules/restaurant/model/restaurant.types'
 export type ReviewSort = 'DEFAULT' | 'TIME'
 export type Scores = Record<RatingDimension, number>
+/** 与正式及待发布点评共用的态度编码；不从分数推断，也没有默认选项。 */
+export const reviewRecommendations = ['RECOMMENDED', 'NEUTRAL', 'NOT_RECOMMENDED'] as const
+export type ReviewRecommendation = (typeof reviewRecommendations)[number]
+export const recommendationLabels: Record<ReviewRecommendation, string> = {
+  RECOMMENDED: '推荐',
+  NEUTRAL: '一般',
+  NOT_RECOMMENDED: '不推荐',
+}
+/** 读取响应也严格校验，拒绝把旧布尔值、缺失值或未知编码当作不推荐。 */
+export function isReviewRecommendation(value: unknown): value is ReviewRecommendation {
+  return typeof value === 'string' && reviewRecommendations.some((item) => item === value)
+}
 /** 与后端发布校验及数据库位置范围同步。 */
 export const MAX_REVIEW_PHOTOS = 5
 export interface ReviewPhoto {
   id: string
   url: string
 }
+/** 点击时保留整条点评的照片及起点，不能把当前页其他点评混入左右切换。 */
+export type ReviewPhotoSelection = PhotoSelection
 export interface ReviewItem {
   id: string
   authorId?: string
@@ -23,7 +38,7 @@ export interface ReviewItem {
   username: string
   createdAt: string
   scores: Scores
-  recommended: boolean
+  recommendation: ReviewRecommendation
   body: string
   photos: ReviewPhoto[]
   /** 独立预览的演示开关；正式入口比较已认证账号ID与作者ID，授权仍由后端完成。 */
@@ -31,11 +46,9 @@ export interface ReviewItem {
   replies: { id: string; username: string; body: string; createdAt: string }[]
 }
 export interface ReviewDraft {
-  /** 窗口提交显式携带windowId，restaurantId仅作旧组件的显示键。 */
-  windowId?: string
   restaurantId: string
   scores: Scores
-  recommended: boolean
+  recommendation: ReviewRecommendation
   body: string
   photos: File[]
   /** 正式传输使用已上传文件ID；预览传输仍可以使用本地File。 */
@@ -44,8 +57,7 @@ export interface ReviewDraft {
 }
 export interface ReviewPublishReceipt {
   reviewId: string
-  windowId?: string | null
-  restaurantId: string | null
+  restaurantId: string
   replayed: boolean
 }
 /** 单层回复独立分页，始终归属于请求路径中的具体点评。 */

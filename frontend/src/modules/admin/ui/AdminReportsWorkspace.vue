@@ -9,12 +9,14 @@ import {
   type ContentReportStatus,
 } from '@/modules/moderation'
 import AdminSidebar from './AdminSidebar.vue'
+import AdminHeader from './AdminHeader.vue'
 
 /** 管理页只负责协议展示与确认交互；权限校验和处置事务全部由服务端完成。 */
 defineProps<{ username: string; loggingOut: boolean; sessionError: string | null }>()
 defineEmits<{ logout: [] }>()
 const state = useAdminContentReports()
-const { status, page, result, detail, loading, inspecting, busy, error, actionError, notice } = state
+const { status, page, result, detail, loading, inspecting, busy, error, actionError, notice } =
+  state
 const statuses: ContentReportStatus[] = ['PENDING', 'RESOLVED', 'DISMISSED']
 const detailDialog = useTemplateRef('detailDialog'),
   confirmDialog = useTemplateRef('confirmDialog')
@@ -88,26 +90,18 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="report-workspace">
-    <header class="report-topbar">
-      <RouterLink class="brand" to="/admin/reviews"
-        ><em>泥电</em><span>美食地图</span><small>管理工作台</small></RouterLink
-      >
-      <div class="admin-identity">
-        <span class="admin-avatar" aria-hidden="true">管</span
-        ><span :title="username">{{ username }}</span
-        ><button :disabled="loggingOut || busy" @click="$emit('logout')">
-          {{ loggingOut ? '正在退出…' : '退出登录' }}
-        </button>
-      </div>
-    </header>
+  <div class="report-workspace admin-theme">
+    <AdminHeader
+      :username="username"
+      :logging-out="loggingOut"
+      :disabled="busy"
+      @logout="$emit('logout')"
+    />
     <p v-if="sessionError" role="alert" class="report-error">{{ sessionError }}</p>
     <div class="report-shell">
       <AdminSidebar />
       <main>
-        <div class="report-breadcrumb">管理工作台 / 举报处理</div>
         <h1>举报处理</h1>
-        <p class="report-intro">核查同学提交的举报，驳回误报或永久删除违规内容。</p>
 
         <div class="report-tabs" aria-label="举报状态筛选">
           <button
@@ -224,19 +218,13 @@ onBeforeUnmount(() => {
             :disabled="busy"
             :aria-invalid="noteLength > 200"
           />
-          <p class="report-count" :class="{ invalid: noteLength > 200 }">
-            {{ noteLength }} / 200
-          </p>
+          <p class="report-count" :class="{ invalid: noteLength > 200 }">{{ noteLength }} / 200</p>
           <p v-if="actionError" role="alert" class="report-error">{{ actionError }}</p>
           <footer class="report-decisions">
             <button :disabled="busy || noteLength > 200" @click="dismissReport">
               {{ busy ? '处理中…' : '驳回举报' }}
             </button>
-            <button
-              class="danger"
-              :disabled="busy || noteLength > 200"
-              @click="askRemove"
-            >
+            <button class="danger" :disabled="busy || noteLength > 200" @click="askRemove">
               确认违规并删除
             </button>
           </footer>
@@ -257,9 +245,9 @@ onBeforeUnmount(() => {
     >
       <h2 id="report-confirm-title">确认永久删除内容？</h2>
       <p v-if="pendingRemoval" class="report-confirm-target">
-        {{ reportTargetLabel(pendingRemoval.targetType) }} #{{
-          pendingRemoval.targetId
-        }}：{{ pendingRemoval.contentSnapshot }}
+        {{ reportTargetLabel(pendingRemoval.targetType) }} #{{ pendingRemoval.targetId }}：{{
+          pendingRemoval.contentSnapshot
+        }}
       </p>
       <p>删除后无法恢复，并将同一内容下的待处理举报一并结案。</p>
       <p v-if="actionError" role="alert" class="report-error">{{ actionError }}</p>

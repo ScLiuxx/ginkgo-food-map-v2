@@ -3,7 +3,7 @@ import { nextTick } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fetchRestaurantCategories, fetchRestaurants } from '../api/restaurantApi'
 import type { RestaurantPage } from '../api/restaurantApi'
-import { categoryFixtures, pageFixture } from '../api/restaurant.test-data'
+import { categoryFixtures, pageFixture, restaurantFixture } from '../api/restaurant.test-data'
 import { useRestaurantCatalog } from './catalog.store'
 
 vi.mock('../api/restaurantApi', () => ({
@@ -130,5 +130,229 @@ describe('server restaurant catalog state', () => {
     store.cancelPending()
     await vi.advanceTimersByTimeAsync(300)
     expect(fetchRestaurants).not.toHaveBeenCalled()
+  })
+
+  /** 连续加载仍使用服务端页码；用真实批次区间验证追加、重试和返回，而非重复的首批夹具。 */
+  function mobilePages(total = 45): void {
+    vi.mocked(fetchRestaurants).mockImplementation(async (_filters, page, size) =>
+      pageFixture({
+        page,
+        pageSize: size,
+        total,
+        totalPages: Math.ceil(total / size),
+        records: Array.from(
+          { length: Math.max(0, Math.min(size, total - (page - 1) * size)) },
+          (_, index) => ({
+            ...restaurantFixture,
+            id: String((page - 1) * size + index + 1),
+          }),
+        ),
+      }),
+    )
+  }
+
+  it('appends mobile batches in server order, deduplicates IDs and stops at the actual end', async () => {
+    mobilePages()
+    const store = useRestaurantCatalog()
+    store.activate(true)
+    await settle()
+    expect(store.visibleRestaurants).toHaveLength(20)
+    expect(store.pageSize).toBe(20)
+    expect(store.hasMore).toBe(true)
+    await store.loadMore()
+    expect(store.visibleRestaurants.map((row) => row.id)).toEqual(
+      Array.from({ length: 40 }, (_, index) => String(index + 1)),
+    )
+    vi.mocked(fetchRestaurants).mockResolvedValueOnce(
+      pageFixture({
+        total: 45,
+        totalPages: 3,
+        records: [
+          { ...restaurantFixture, id: '40' },
+          { ...restaurantFixture, id: '41' },
+          { ...restaurantFixture, id: '41' },
+        ],
+      }),
+    )
+    await store.loadMore()
+    expect(store.visibleRestaurants).toHaveLength(41)
+    expect(store.visibleRestaurants.at(-1)?.id).toBe('41')
+    expect(store.hasMore).toBe(false)
+    expect(store.atEnd).toBe(true)
+    await store.loadMore()
+    expect(fetchRestaurants).toHaveBeenCalledTimes(3)
+  })
+
+  it('keeps cards on append failure and retries the same page without concurrent duplicates', async () => {
+    mobilePages()
+    const store = useRestaurantCatalog()
+    store.activate(true)
+    await settle()
+    let reject!: (reason: Error) => void
+    vi.mocked(fetchRestaurants).mockImplementationOnce(
+      () =>
+        new Promise((_resolve, fail) => {
+          reject = fail
+        }),
+    )
+    const pending = store.loadMore()
+    await store.loadMore()
+    expect(fetchRestaurants).toHaveBeenCalledTimes(2)
+    reject(new Error('网络中断'))
+    await pending
+    expect(store.visibleRestaurants).toHaveLength(20)
+    expect(store.error).toBeNull()
+    expect(store.moreError).toBe('网络中断')
+    await store.loadMore()
+    expect(fetchRestaurants).toHaveBeenLastCalledWith(
+      expect.anything(),
+      2,
+      20,
+      expect.any(AbortSignal),
+    )
+    expect(store.visibleRestaurants).toHaveLength(40)
+    expect(store.moreError).toBeNull()
+  })
+
+  it('invalidates an append immediately on filter change even if cancellation is ignored', async () => {
+    mobilePages()
+    const store = useRestaurantCatalog()
+    store.activate(true)
+    await settle()
+    let resolve!: (result: RestaurantPage) => void
+    vi.mocked(fetchRestaurants).mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done
+        }),
+    )
+    const pending = store.loadMore()
+    const signal = vi.mocked(fetchRestaurants).mock.calls.at(-1)![3]!
+    store.filters.category = 'HOT_POT'
+    expect(signal.aborted).toBe(true)
+    resolve(pageFixture({ records: [{ ...restaurantFixture, id: 'stale' }] }))
+    await pending
+    await settle()
+    expect(store.visibleRestaurants).toHaveLength(20)
+    expect(store.visibleRestaurants.some((row) => row.id === 'stale')).toBe(false)
+    expect(fetchRestaurants).toHaveBeenLastCalledWith(
+      expect.objectContaining({ category: 'HOT_POT' }),
+      1,
+      20,
+      expect.any(AbortSignal),
+    )
+  })
+
+  it('restores successful mobile batches on return and resumes an interrupted batch', async () => {
+    mobilePages()
+    const store = useRestaurantCatalog()
+    store.activate(true)
+    await settle()
+    await store.loadMore()
+    let resolve!: (result: RestaurantPage) => void
+    vi.mocked(fetchRestaurants).mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done
+        }),
+    )
+    const pending = store.loadMore()
+    store.pause()
+    resolve(pageFixture({ records: [{ ...restaurantFixture, id: 'stale' }] }))
+    await pending
+    const calls = vi.mocked(fetchRestaurants).mock.calls.length
+    store.activate(true)
+    await settle()
+    expect(fetchRestaurants).toHaveBeenCalledTimes(calls)
+    expect(store.visibleRestaurants).toHaveLength(40)
+    await store.loadMore()
+    expect(fetchRestaurants).toHaveBeenLastCalledWith(
+      expect.anything(),
+      3,
+      20,
+      expect.any(AbortSignal),
+    )
+    expect(store.visibleRestaurants).toHaveLength(45)
+  })
+
+  it('starts fresh after writes or filters changed while another page owned the catalog', async () => {
+    mobilePages()
+    const store = useRestaurantCatalog()
+    store.activate(true)
+    await settle()
+    await store.loadMore()
+    store.pause()
+    store.invalidate()
+    store.activate(true)
+    await settle()
+    expect(store.visibleRestaurants).toHaveLength(20)
+    store.pause()
+    store.filters.category = 'HOT_POT'
+    await settle()
+    const calls = vi.mocked(fetchRestaurants).mock.calls.length
+    store.activate(true)
+    await settle()
+    expect(fetchRestaurants).toHaveBeenCalledTimes(calls + 1)
+    expect(fetchRestaurants).toHaveBeenLastCalledWith(
+      expect.objectContaining({ category: 'HOT_POT' }),
+      1,
+      20,
+      expect.any(AbortSignal),
+    )
+  })
+
+  it('switches responsive modes with one request and never mixes page sizes', async () => {
+    mobilePages()
+    const store = useRestaurantCatalog()
+    store.activate(true)
+    await settle()
+    await store.loadMore()
+    store.activate(false)
+    await settle()
+    expect(store.visibleRestaurants).toHaveLength(8)
+    store.goToPage(3)
+    await settle()
+    const calls = vi.mocked(fetchRestaurants).mock.calls.length
+    store.activate(true)
+    await settle()
+    expect(fetchRestaurants).toHaveBeenCalledTimes(calls + 1)
+    expect(fetchRestaurants).toHaveBeenLastCalledWith(
+      expect.anything(),
+      1,
+      20,
+      expect.any(AbortSignal),
+    )
+    expect(store.visibleRestaurants).toHaveLength(20)
+  })
+
+  it('does not treat the ES result window as the end of all matches', async () => {
+    vi.mocked(fetchRestaurants).mockResolvedValue(
+      pageFixture({ total: 10001, totalPages: 501, accessiblePages: 1 }),
+    )
+    const store = useRestaurantCatalog()
+    store.activate(true)
+    await settle()
+    expect(store.hasMore).toBe(false)
+    expect(store.atEnd).toBe(false)
+    expect(store.searchNotice).toContain('请缩小筛选范围')
+  })
+
+  it('stops automatic progress on an unexpected empty batch but finishes when the total shrinks', async () => {
+    mobilePages()
+    const store = useRestaurantCatalog()
+    store.activate(true)
+    await settle()
+    vi.mocked(fetchRestaurants).mockResolvedValueOnce(
+      pageFixture({ records: [], total: 45, totalPages: 3 }),
+    )
+    await store.loadMore()
+    expect(store.moreError).toContain('本批餐厅')
+    expect(store.visibleRestaurants).toHaveLength(20)
+    vi.mocked(fetchRestaurants).mockResolvedValueOnce(
+      pageFixture({ records: [], total: 20, totalPages: 1 }),
+    )
+    await store.loadMore()
+    expect(store.hasMore).toBe(false)
+    expect(store.atEnd).toBe(true)
   })
 })

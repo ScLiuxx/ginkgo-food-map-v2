@@ -1,0 +1,48 @@
+package com.foodmap.restaurant.mapper;
+
+import com.foodmap.restaurant.entity.RestaurantChangeEntity;
+import com.foodmap.restaurant.entity.RestaurantEntity;
+import org.apache.ibatis.annotations.*;
+
+/** 商户申请与正式商户同属restaurant模块；锁定目标防止与删除交错。 */
+@Mapper
+public interface RestaurantChangeMapper {
+    /** 按展示顺序保存商户模块自身关联；禁止直接操作file表。 */
+    @Insert("INSERT INTO restaurant_change_photos(request_id,position,media_file_id) VALUES(#{request},#{position},#{file})")
+    int insertPhoto(@Param("request") long request, @Param("position") int position, @Param("file") long file);
+
+    /** 幂等重试必须先核对已有照片顺序，不能再次绑定BOUND文件。 */
+    @Select("SELECT media_file_id FROM restaurant_change_photos WHERE request_id=#{request} ORDER BY position")
+    java.util.List<Long> photoIds(long request);
+
+    /** 驳回后重提先锁定本人原申请，防止同一驳回记录被并发重复重提；其他人的申请按不存在处理。 */
+    @Select("SELECT * FROM restaurant_change_requests WHERE id=#{id} AND submitted_by=#{owner} FOR UPDATE")
+    RestaurantChangeEntity lockOwn(@Param("id") long id, @Param("owner") long owner);
+
+    /** 只在本人范围预读不可变类型和目标，便于纠错重提与管理员审核统一先锁餐厅、再锁申请。 */
+    @Select("SELECT id,restaurant_id,request_type FROM restaurant_change_requests WHERE id=#{id} AND submitted_by=#{owner}")
+    RestaurantChangeEntity ownHint(@Param("id") long id, @Param("owner") long owner);
+
+    /** 先锁原申请，再锁其后续申请，最后才锁点评；重放不得反向等待正在编辑或审核的子申请。 */
+    @Select("SELECT * FROM restaurant_change_requests WHERE previous_request_id=#{id} AND submitted_by=#{owner} ORDER BY id LIMIT 1 FOR UPDATE")
+    RestaurantChangeEntity successor(@Param("id") long id, @Param("owner") long owner);
+
+    @Select("SELECT id,category_code FROM restaurants WHERE id=#{id} AND deleted_at IS NULL FOR UPDATE")
+    RestaurantEntity lockTarget(@Param("id") long id);
+
+    /** 锁定读确保并发重试看到已提交回执，不使用普通快照读判断是否重复。 */
+    @Select("SELECT * FROM restaurant_change_requests WHERE submitted_by=#{actor} AND client_request_id=#{request} FOR UPDATE")
+    RestaurantChangeEntity findRequest(@Param("actor") long actor, @Param("request") String request);
+
+    /** 仅提示旧协议回执是否存在；最终仍由插入唯一键及锁定读核验摘要，避免新请求先锁空隙。 */
+    @Select("SELECT * FROM restaurant_change_requests WHERE submitted_by=#{actor} AND client_request_id=#{request}")
+    RestaurantChangeEntity existingRequest(@Param("actor") long actor, @Param("request") String request);
+
+    @Insert("""
+        INSERT INTO restaurant_change_requests(restaurant_id,previous_request_id,request_type,submitted_by,client_request_id,request_hash,proposed_data)
+        VALUES(#{restaurantId},#{previousRequestId},#{requestType},#{submittedBy},#{clientRequestId},#{requestHash},#{proposedData})
+        ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)
+        """)
+    @Options(useGeneratedKeys = true, keyProperty = "id")
+    int insert(RestaurantChangeEntity row);
+}

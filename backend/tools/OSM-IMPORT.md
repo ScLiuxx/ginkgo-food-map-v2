@@ -1,6 +1,6 @@
 # 沙河校区餐厅测试数据
 
-工具仅用于本机`ginkgo_food_map`，读取被Git忽略的`backend/config/application-local.yml`。数据源为OpenStreetMap Overpass JSON；不抓取高德或点评平台，不操作生产，不创建账号或点评。
+工具仅用于本机`foodmap`或改名前的本机`ginkgo_food_map`，读取被Git忽略的`backend/config/application-local.yml`；改名不迁移数据库。数据源为OpenStreetMap Overpass JSON；不抓取高德或点评平台，不操作生产，不创建账号或点评。
 
 ```powershell
 python -m pip install -r backend/tools/requirements-osm.txt

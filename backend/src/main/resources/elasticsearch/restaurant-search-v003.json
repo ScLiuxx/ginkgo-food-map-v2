@@ -42,7 +42,7 @@
   "mappings": {
     "dynamic": "strict",
     "_meta": {
-      "schema": "ginkgo.restaurant-search",
+      "schema": "foodmap.restaurant-search",
       "schema_version": "003",
       "description": "商户搜索投影：保留IK与21字段正文，四个单字子字段支持包含检索",
       "coordinate_system": "GCJ02",

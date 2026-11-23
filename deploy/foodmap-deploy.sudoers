@@ -1,0 +1,2 @@
+# 发布账号仅可重启或停止项目后端；不授予通用sudo、Docker或配置编辑权限。
+foodmap-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart foodmap-backend.service, /usr/bin/systemctl stop foodmap-backend.service

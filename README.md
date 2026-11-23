@@ -1,12 +1,12 @@
-# Ginkgo 美食地图 V2
+# 泥电美食地图 V2
 
-V2 是对旧版 Ginkgo 美食地图的渐进式重构。第一阶段采用模块化单体：业务代码按领域分开，运行时仍是一个 Spring Boot 进程，数据使用 MySQL，缓存与会话基础设施使用 Redis。
+V2 是对旧版泥电美食地图的渐进式重构。第一阶段采用模块化单体：业务代码按领域分开，运行时仍是一个 Spring Boot 进程，数据使用 MySQL，缓存与会话基础设施使用 Redis。
 
-独立仓库：[kanno111/ginkgo-food-map-v2](https://github.com/kanno111/ginkgo-food-map-v2)。默认分支为 `develop`，历史从原 develop 的 V2 重构基线开始保留。推送 develop 后由 GitHub 检查构建，服务器自托管 Runner 主动下载已检查产物并在本地发布，无需对 GitHub 开放入站 SSH。结果见[GitHub Actions](https://github.com/kanno111/ginkgo-food-map-v2/actions)。
+独立仓库：[kanno111/foodmap](https://github.com/kanno111/foodmap)。项目目录、英文标识和远程仓库统一为 `foodmap`，显示名称为“泥电美食地图”。默认分支为 `develop`，历史从原 develop 的 V2 重构基线开始保留。用户已完成远程仓库更名，本地 `origin` 已同步；CI/CD 按用户要求暂不处理，部署条件和服务器命名尚待后续核对。工作流原设计为检查通过后由服务器自托管 Runner 主动下载产物并在本地发布，无需对 GitHub 开放入站 SSH；结果入口见[GitHub Actions](https://github.com/kanno111/foodmap/actions)。
 
 ## 当前阶段
 
-当前功能与未完成范围统一见[功能说明](docs/features.md)，接口与调用规则见[API文档](docs/api.md)。ES搜索的实现进度见[搜索计划](docs/plans/elasticsearch-search.md)，当前版本准确度与接口耗时见[最终评测](docs/history/elasticsearch-final-benchmark-2026-11-05.md)。线上可用能力以实际部署版本为准。
+当前功能与未完成范围统一见[功能说明](docs/features.md)，接口与调用规则见[API文档](docs/api.md)。ES搜索的实现进度见[搜索计划](docs/plans/elasticsearch-search.md)，v003历史版本准确度与接口耗时见[最终评测](docs/history/elasticsearch-final-benchmark-2026-11-05.md)。线上可用能力以实际部署版本为准。
 
 ## 项目文档
 
@@ -18,7 +18,7 @@ V2 是对旧版 Ginkgo 美食地图的渐进式重构。第一阶段采用模块
 ## 目录
 
 ```text
-ginkgo-food-map-v2/
+foodmap/
 ├── backend/                 Spring Boot 模块化单体
 ├── frontend/                Vue 3 前端与 Nginx 部署配置
 ├── deploy/                  服务器发布、健康检查、systemd 与 Nginx 配置
@@ -48,8 +48,7 @@ mvn spring-boot:run "-Dspring-boot.run.profiles=local"
 ```powershell
 cd frontend
 npm install
-npm run build
-npm test
+../tools/Check-Project.ps1 -Task FrontendBuild
 npm run dev
 ```
 
@@ -62,7 +61,7 @@ python backend/tools/seed_restaurants.py          # 只预览数量
 python backend/tools/seed_restaurants.py --apply  # 明确写入本地开发库
 ```
 
-工具只读取被忽略的local配置，只接受本机 `ginkgo_food_map`；整批事务写入，跳过已有同名店（包含已删除店），不覆盖或恢复已有资料。模拟数据不是生产种子或正式历史迁移，不创建用户、管理员、评价或评分。旧坐标不作为已确认的GCJ-02位置，统一待定位；普通用户不能认领未知归属的导入店。
+工具只读取被忽略的local配置，只接受本机 `foodmap` 或改名前的本机 `ginkgo_food_map`；整批事务写入，跳过已有同名店（包含已删除店），不覆盖或恢复已有资料。项目改名不会创建或重命名现有数据库，已有连接继续使用原库名。模拟数据不是生产种子或正式历史迁移，不创建用户、管理员、评价或评分。旧坐标不作为已确认的GCJ-02位置，统一待定位；普通用户不能认领未知归属的导入店。
 
 健康检查：
 
@@ -78,16 +77,19 @@ GET http://localhost:8080/api/public/status
 运行测试：
 
 ```powershell
-cd backend
-mvn test
+# 仓库根目录；按改动选择用例，前后端检查串行执行。
+./tools/Check-Project.ps1 -Task BackendTest -Tests UserRegistrationServiceTest
+./tools/Check-Project.ps1 -Task FrontendTest -Tests src/modules/auth/model/useActivityReporting.spec.ts
 ```
+
+统一入口会限制并发、检查系统可提交内存，后端输出与正在运行的JAR分开；前后端内存及测试配置已固化，无需逐次设置环境变量。构建及集成测试用法见[本地检查](docs/operations/local-checks.md)。
 
 ## 配置
 
 开发环境默认连接：
 
 ```text
-jdbc:mysql://localhost:3306/ginkgo_food_map
+jdbc:mysql://localhost:3306/foodmap
 redis://localhost:6379
 ```
 

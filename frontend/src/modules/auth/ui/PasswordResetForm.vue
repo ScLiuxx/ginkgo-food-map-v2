@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { clearAccessToken, getAccessToken } from '@/shared/api/authSession'
@@ -8,6 +9,10 @@ import { passwordError, emailError, codeError, accountErrorField } from '../mode
 import PasswordInput from './PasswordInput.vue'
 import './auth-inputs.css'
 import { prepareResetLogin } from '../model/loginPrefill'
+import { campusEmail, CAMPUS_EMAIL_SUFFIX } from '../model/campusEmail'
+
+// 取消入口由页面按会话选择；这里只影响返回链接，重置成功仍清理旧凭证并转往登录页。
+withDefaults(defineProps<{ returnTo?: '/account/settings' | '/login' }>(), { returnTo: '/login' })
 
 const form = reactive({ email: '', verificationCode: '', newPassword: '', confirmPassword: '' })
 const router = useRouter()
@@ -22,7 +27,7 @@ function fieldError(field: string) {
   return errors[field] || (remoteField.value === field ? error.value : null)
 }
 function checkField(field: string) {
-  if (field === 'email') errors.email = emailError(form.email)
+  if (field === 'email') errors.email = emailError(campusEmail(form.email))
   if (field === 'code') errors.code = codeError(form.verificationCode)
   if (field === 'password') errors.password = passwordError(form.newPassword)
   if (field === 'confirm')
@@ -59,7 +64,7 @@ async function handleSendCode() {
   if (busy.value || completed.value || cooldown.value > 0) return
   error.value = null
   codeAccepted.value = false
-  const email = form.email.trim().toLowerCase()
+  const email = campusEmail(form.email)
   checkField('email')
   if (errors.email) return
   sendingCode.value = true
@@ -86,7 +91,7 @@ async function handleSubmit() {
   const previousToken = getAccessToken()
   try {
     const result = await resetPassword({
-      email: form.email.trim().toLowerCase(),
+      email: campusEmail(form.email),
       verificationCode: form.verificationCode,
       newPassword: form.newPassword,
     })
@@ -134,17 +139,24 @@ onBeforeUnmount(() => {
       <div class="form-field">
         <label for="reset-email">学生邮箱</label>
         <div class="field-with-action">
-          <input
-            id="reset-email"
-            v-model="form.email"
-            name="email"
-            type="email"
-            autocomplete="email"
-            :aria-invalid="!!fieldError('email')"
-            :aria-describedby="fieldError('email') ? 'reset-email-error' : undefined"
-            @blur="checkField('email')"
-            @input="clearField('email')"
-          />
+          <div class="email-input">
+            <input
+              id="reset-email"
+              v-model="form.email"
+              name="email"
+              type="text"
+              autocomplete="off"
+              autocapitalize="none"
+              :spellcheck="false"
+              :aria-invalid="!!fieldError('email')"
+              :aria-describedby="
+                fieldError('email') ? 'reset-email-suffix reset-email-error' : 'reset-email-suffix'
+              "
+              @blur="checkField('email')"
+              @input="clearField('email')"
+            />
+            <span id="reset-email-suffix">{{ CAMPUS_EMAIL_SUFFIX }}</span>
+          </div>
           <button
             class="code-button"
             type="button"
@@ -230,7 +242,11 @@ onBeforeUnmount(() => {
       <strong>密码重置成功</strong>
       <p>请使用新密码重新登录。</p>
     </div>
-    <p class="form-footnote"><RouterLink to="/login">返回登录</RouterLink></p>
+    <p class="form-footnote">
+      <AppLink :to="returnTo">
+        {{ returnTo === '/account/settings' ? '返回个人设置' : '返回登录' }}
+      </AppLink>
+    </p>
   </form>
 </template>
 

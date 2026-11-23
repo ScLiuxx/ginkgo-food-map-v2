@@ -1,43 +1,68 @@
 <script setup lang="ts">
+import ResourceLink from '@/shared/ui/ResourceLink.vue'
+import AppLink from '@/shared/ui/AppLink.vue'
 import axios from 'axios'
 import { ReviewComposer, ReviewPanel } from '@/modules/review'
 import RestaurantAlbum from './RestaurantAlbum.vue'
-import WindowAlbum from './WindowAlbum.vue'
 import FavoriteButton from './FavoriteButton.vue'
 import { navigationUrl } from '@/modules/map'
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 import { fetchRestaurant } from '../api/restaurantApi'
-import { fetchWindow } from '../api/canteenWindowApi'
 import type { RestaurantReadModel } from '../model/restaurant.types'
 import { priceLabel, ratingDimensions } from '../model/catalog.logic'
-import StarScore from '@/shared/ui/StarScore.vue'
-import { useRoute } from 'vue-router'
-import { diningDetails } from '../model/campusDining'
-import CanteenWindows from './CanteenWindows.vue'
+import { formatRating } from '@/shared/lib/formatRating'
+import { useRoute, useRouter } from 'vue-router'
+import { useRestaurantPicker } from '../model/picker.store'
 import RestaurantManagementActions from './RestaurantManagementActions.vue'
 import { useRestaurantCatalog } from '../model/catalog.store'
 import { isProvenanceTag } from './restaurantPresentation'
+import { useReturnNavigation } from '@/shared/lib/useReturnNavigation'
 
-const props = defineProps<{ id: string; window?: boolean }>()
+const props = defineProps<{ id: string }>()
 const restaurant = ref<RestaurantReadModel | null>(null)
-const dining = computed(() => (restaurant.value ? diningDetails(restaurant.value) : null))
-const isCanteen = computed(() => dining.value?.kind === 'canteen')
-const isWindow = computed(() => dining.value?.kind === 'window')
+const isCanteen = computed(() => restaurant.value?.restaurantType === 'CANTEEN')
 const navigation = computed(() => (restaurant.value ? navigationUrl(restaurant.value) : null))
-const failedDishes = ref<string[]>([])
+const diningMethods = computed(() =>
+  [
+    restaurant.value?.supportsDineIn === true ? '堂食' : '',
+    restaurant.value?.supportsDelivery === true ? '外卖' : '',
+  ]
+    .filter(Boolean)
+    .join(' / '),
+)
+// 相册自行判断空态与故障；只有成功读到空列表才收起媒体列，不把读取失败当作无图。
+const albumVisible = ref(true)
 const route = useRoute()
-const displayScore = computed(() => restaurant.value?.score ?? null)
-/** 返回链接只使用真实父食堂ID；筛选来自窗口入口快照，直达窗口时回到其所属楼层。 */
-const parentLink = computed(() => ({
-  path: `/restaurants/${encodeURIComponent(dining.value?.parent?.id ?? '')}`,
-  query: {
-    floor:
-      typeof route.query.fromFloor === 'string'
-        ? route.query.fromFloor
-        : (dining.value?.floor ?? ''),
-  },
-}))
+const router = useRouter()
+const fromMap = computed(() => route.query.from === 'map')
+const fromPicker = computed(() => route.query.from === 'picker')
+const picker = useRestaurantPicker()
+const { returnTarget, returnToPrevious } = useReturnNavigation(() => '/')
+const backTarget = computed(() =>
+  fromMap.value ? '/map' : fromPicker.value ? '/?picker=return' : returnTarget.value,
+)
+/** 地图/选店入口显式标记来源；普通点击回到原历史条目，直达或新标签页回到固定站内入口。
+ * 保留修饰键和新标签页打开链接的行为，不把用户提供的任意地址作为返回目标。
+ */
+function returnToSource(event: globalThis.MouseEvent) {
+  if (!fromMap.value && !fromPicker.value) {
+    returnToPrevious(event)
+    return
+  }
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+  event.preventDefault()
+  const previous = router.options.history.state.back
+  if (fromPicker.value) {
+    picker.pendingReturn = true
+    if (previous === picker.originRoute && picker.confirmed) router.back()
+    else void router.replace('/?picker=return')
+  } else if (previous === '/map') router.back()
+  else void router.replace('/map')
+}
+const displayScore = computed(() => formatRating(restaurant.value?.score))
+const dimensionsExpanded = ref(false)
+const dimensionsId = computed(() => `detail-dimensions-${props.id}`)
 const loading = ref(true)
 const error = ref<string | null>(null)
 let controller: globalThis.AbortController | undefined
@@ -64,7 +89,7 @@ async function refreshStatistics(): Promise<void> {
   statisticsLoading.value = true
   statisticsError.value = ''
   try {
-    const fresh = await (props.window ? fetchWindow(id, signal) : fetchRestaurant(id, signal))
+    const fresh = await fetchRestaurant(id, signal)
     if (ticket === statisticsGeneration && props.id === id) restaurant.value = fresh
   } catch (reason) {
     if (ticket !== statisticsGeneration || signal.aborted || props.id !== id) return
@@ -96,11 +121,9 @@ async function loadDetail(): Promise<void> {
   restaurant.value = null
   loading.value = true
   error.value = null
-  failedDishes.value = []
+  dimensionsExpanded.value = false
   try {
-    const result = await (props.window
-      ? fetchWindow(props.id, signal)
-      : fetchRestaurant(props.id, signal))
+    const result = await fetchRestaurant(props.id, signal)
     if (requestGeneration === generation) restaurant.value = result
   } catch (reason) {
     if (requestGeneration !== generation || signal.aborted) return
@@ -113,7 +136,7 @@ async function loadDetail(): Promise<void> {
   }
 }
 watch(
-  () => [props.id, props.window],
+  () => props.id,
   () => {
     void loadDetail()
   },
@@ -128,64 +151,71 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="detail-page">
+  <div class="detail-page" :aria-busy="loading">
     <section v-if="loading" class="missing-restaurant" role="status">正在加载餐厅资料…</section>
     <section v-else-if="error" class="missing-restaurant" role="alert">
       <h1>餐厅资料暂时无法加载。</h1>
       <p>{{ error }}</p>
       <button type="button" class="primary-action" @click="loadDetail">重新加载</button>
-      <RouterLink to="/">返回首页</RouterLink>
+      <AppLink :to="backTarget" @click.capture="returnToSource">返回</AppLink>
     </section>
     <article
-      v-else-if="restaurant && dining"
+      v-else-if="restaurant"
       class="restaurant-detail"
-      :class="`detail-${dining.kind}`"
+      :class="isCanteen ? 'detail-canteen' : 'detail-restaurant'"
       aria-labelledby="restaurant-title"
     >
       <nav class="detail-breadcrumb" aria-label="详情导航">
-        <RouterLink v-if="isWindow && dining.parent" :to="parentLink"
-          >← 返回 {{ dining.parent.name
-          }}<template v-if="dining.floor">（{{ dining.floor }}）</template></RouterLink
-        >
-        <RouterLink v-else to="/">← 返回首页</RouterLink>
+        <AppLink :to="backTarget" aria-label="返回" @click.capture="returnToSource"
+          ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg
+        ></AppLink>
       </nav>
 
-      <header class="detail-hero" :class="{ 'canteen-hero': isCanteen }">
-        <WindowAlbum
-          v-if="isWindow"
-          :id="restaurant.id"
-          :key="`window-${restaurant.id}`"
-          :name="restaurant.name"
-        />
+      <header class="detail-hero" :class="{ 'canteen-hero': isCanteen, 'has-album': albumVisible }">
         <RestaurantAlbum
-          v-if="!isWindow"
           :key="restaurant.id"
           :restaurant-id="restaurant.id"
           :name="restaurant.name"
+          compact
+          @visibility="albumVisible = $event"
         />
         <div class="detail-heading">
           <div class="hero-topline">
             <h1 id="restaurant-title">{{ restaurant.name }}</h1>
+            <FavoriteButton :restaurant-id="restaurant.id" icon-only />
           </div>
-          <p v-if="isWindow" class="detail-affiliation">
-            <RouterLink v-if="dining.parent" :to="parentLink">{{ dining.parent.name }}</RouterLink
-            ><span v-else>所属食堂待补充</span> · {{ dining.floor || '楼层待补充' }}
-          </p>
-          <p v-if="isWindow && dining.description" class="detail-affiliation">
-            {{ dining.description }}
-          </p>
-          <div class="detail-subtitle">
-            <StarScore class="hero-score" :score="displayScore" />
-            <span v-if="!isCanteen">{{ restaurant.reviewCount }} 条点评</span>
-            <span v-if="!isCanteen" class="hero-price"
-              >{{ priceLabel(restaurant)
-              }}<small v-if="restaurant.price !== null"> / 人</small></span
+          <div
+            v-if="
+              restaurant.category ||
+              diningMethods ||
+              (restaurant.price !== null && restaurant.price > 0)
+            "
+            class="detail-service-tags"
+          >
+            <span v-if="restaurant.category" class="category-tag">{{ restaurant.category }}</span>
+            <span v-if="diningMethods" class="service-tag">{{ diningMethods }}</span>
+            <span v-if="restaurant.price !== null && restaurant.price > 0" class="hero-price"
+              >{{ priceLabel(restaurant) }} / 人</span
             >
-            <span v-if="isCanteen" class="detail-affiliation">{{
-              dining.campus || '校园食堂'
-            }}</span>
           </div>
-          <div v-if="!isCanteen" class="score-summary">
+          <div class="detail-subtitle">
+            <span class="hero-score" :class="{ unrated: displayScore === '—' }">
+              <strong v-if="displayScore !== '—'">{{ displayScore }}</strong>
+              <span v-else>待评级</span>
+            </span>
+            <span class="hero-review-count">{{ restaurant.reviewCount }} 条点评</span>
+            <span v-if="isCanteen" class="detail-affiliation">校园食堂</span>
+            <button
+              type="button"
+              class="score-toggle"
+              :aria-expanded="dimensionsExpanded"
+              :aria-controls="dimensionsId"
+              @click="dimensionsExpanded = !dimensionsExpanded"
+            >
+              四维评分<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+            </button>
+          </div>
+          <div v-show="dimensionsExpanded" :id="dimensionsId" class="score-summary">
             <div class="score-dimensions">
               <span v-for="d in ratingDimensions" :key="d.key"
                 >{{ d.label }}
@@ -198,15 +228,23 @@ onUnmounted(() => {
             </div>
           </div>
           <div class="detail-location-actions">
-            <span v-if="!isWindow && restaurant.supportsDineIn === true" class="service-tag"
-              >支持堂食</span
-            ><span v-if="!isWindow && restaurant.supportsDelivery === true" class="service-tag"
-              >支持外卖</span
-            >
-            <span v-if="!isWindow && !isCanteen" class="category-tag">{{
-              restaurant.category
-            }}</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 0 1 14 0Z" />
+              <circle cx="12" cy="10" r="2.3" />
+            </svg>
             <span class="detail-location">{{ restaurant.address || '地址待补充' }}</span>
+            <ResourceLink
+              v-if="navigation"
+              class="detail-navigation"
+              :href="navigation"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="在高德中打开导航"
+            >
+              导航<svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m3 10 18-7-7 18-3-8Z" />
+              </svg>
+            </ResourceLink>
           </div>
           <!-- 主操作与次要入口统一排列，收藏回执仍保留在原控件内。 -->
           <div class="detail-primary-actions">
@@ -214,15 +252,14 @@ onUnmounted(() => {
               v-if="!restaurant.closed"
               :restaurant="restaurant"
               fixed-target
-              :trigger-label="isCanteen ? '＋ 评窗口' : isWindow ? '＋ 评此窗口' : '＋ 写点评'"
+              trigger-label="＋ 写点评"
               @published="published"
             />
-            <FavoriteButton v-if="!isWindow" :restaurant-id="restaurant.id" />
-            <RouterLink
-              v-if="!isWindow"
+            <AppLink
+              v-if="!isCanteen"
               class="correction-entry"
               :to="`/restaurants/${encodeURIComponent(restaurant.id)}/correction`"
-              >补充 / 纠错</RouterLink
+              >补充 / 纠错</AppLink
             >
           </div>
           <div v-if="!isCanteen && publicTags.length" class="detail-tags">
@@ -237,69 +274,26 @@ onUnmounted(() => {
         </div>
       </header>
 
-      <CanteenWindows
-        v-if="isCanteen"
-        :key="restaurant.id"
-        :canteen-id="restaurant.id"
-        :windows="dining.windows"
-      />
-
-      <section
-        v-if="!isCanteen && dining.dishes.length"
-        class="detail-dishes"
-        aria-labelledby="dishes-title"
-      >
-        <h2 id="dishes-title">{{ isWindow ? '窗口菜品与价格' : '菜品信息' }}</h2>
-        <div v-if="dining.dishes.length" class="dish-list">
-          <article v-for="dish in dining.dishes" :key="dish.id" class="dish-row">
-            <img
-              v-if="dish.imageUrl && !failedDishes.includes(dish.id)"
-              :src="dish.imageUrl"
-              :alt="dish.name"
-              loading="lazy"
-              @error="failedDishes.push(dish.id)"
-            />
-            <div>
-              <h3>{{ dish.name }}</h3>
-              <p v-if="dish.description">{{ dish.description }}</p>
-            </div>
-            <strong v-if="dish.price !== null && dish.price !== undefined"
-              >¥{{ dish.price }}</strong
-            >
-          </article>
-        </div>
-        <p v-else class="dining-empty">暂无菜品信息</p>
-      </section>
-
-      <section
-        v-if="!isCanteen"
-        id="student-reviews"
-        class="detail-reviews"
-        :aria-label="isWindow ? '窗口点评' : '餐厅点评'"
-      >
+      <section id="student-reviews" class="detail-reviews" aria-label="店铺点评">
         <ReviewPanel
           :key="restaurant.id"
           :restaurant-id="restaurant.id"
-          :window="isWindow"
           :revision="reviewRevision"
           star-scale
-          :title="isWindow ? '本窗口点评' : '同学点评'"
+          title="同学点评"
           @changed="refreshStatistics"
         />
       </section>
       <footer class="detail-extra">
-        <div class="location-links">
-          <a v-if="navigation" :href="navigation" target="_blank" rel="noopener noreferrer"
-            >在高德中打开 ↗</a
-          >
-        </div>
-        <RestaurantManagementActions v-if="!isWindow" :id="restaurant.id" :key="restaurant.id" />
+        <RestaurantManagementActions :id="restaurant.id" :key="restaurant.id" />
       </footer>
     </article>
     <section v-else class="missing-restaurant" aria-labelledby="missing-title">
       <h1 id="missing-title">没有找到这家店。</h1>
       <p>餐厅可能已删除或链接有误，回去看看其他好味道吧。</p>
-      <RouterLink class="primary-action" to="/">返回餐厅目录</RouterLink>
+      <AppLink class="primary-action" :to="backTarget" @click.capture="returnToSource"
+        >返回</AppLink
+      >
     </section>
   </div>
 </template>

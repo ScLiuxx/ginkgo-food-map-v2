@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { DetailPhotoUpdate } from '../model/detailPhotos'
+import PhotoViewer from '@/shared/ui/PhotoViewer.vue'
 
 const props = defineProps<{
   update: DetailPhotoUpdate
@@ -10,7 +11,7 @@ const props = defineProps<{
 }>()
 const selectedId = ref('')
 const failed = ref<string[]>([])
-const dialog = ref<globalThis.HTMLDialogElement>()
+const dialog = ref<InstanceType<typeof PhotoViewer>>()
 const usable = computed(() =>
   props.update.photos
     .filter((photo) => !failed.value.includes(photo.id))
@@ -24,16 +25,29 @@ watch(
   () => {
     selectedId.value = ''
     failed.value = []
-    dialog.value?.close?.()
+    dialog.value?.close()
   },
 )
 watch(
   () => props.update.photos,
   () => {
     failed.value = []
-    dialog.value?.close?.()
+    dialog.value?.close()
   },
 )
+function openSelected() {
+  const photo = selected.value
+  if (!photo) return
+  const group = usable.value.filter((item) => item.reviewId === photo.reviewId)
+  void dialog.value?.open({
+    photos: group.map((item) => ({
+      ...item,
+      alt: item.example ? '示意配图，非本店实拍' : `${item.username}的点评配图`,
+      caption: item.example ? '示意配图 · 非本店实拍' : undefined,
+    })),
+    index: group.findIndex((item) => item.id === photo.id),
+  })
+}
 // 页面不另发图片请求；复用点评列表当前页的响应，发布、翻页和删除后同步更新。
 </script>
 
@@ -51,7 +65,7 @@ watch(
         class="gallery-main"
         type="button"
         :aria-label="`查看${selected.username}的点评配图大图`"
-        @click="dialog?.showModal()"
+        @click="openSelected"
       >
         <img
           :src="selected.url"
@@ -97,20 +111,7 @@ watch(
                 : '暂无实拍照片'
       }}</strong>
     </div>
-    <Teleport to="body"
-      ><dialog ref="dialog" class="gallery-lightbox" aria-label="点评配图大图">
-        <button type="button" autofocus @click="dialog?.close()">关闭 ×</button
-        ><template v-if="selected"
-          ><img
-            :src="selected.url"
-            :alt="selected.example ? '示意配图，非本店实拍' : `${selected.username}的点评配图`"
-          />
-          <p>
-            {{ selected.example ? '示意配图 · 非本店实拍' : `来自 ${selected.username} 的点评` }}
-          </p></template
-        >
-      </dialog></Teleport
-    >
+    <PhotoViewer ref="dialog" />
   </section>
 </template>
 
@@ -246,34 +247,6 @@ watch(
   margin: 6px 0 0;
   font-size: 12px;
   line-height: 1.8;
-}
-.gallery-lightbox {
-  border: 0;
-  border-radius: 8px;
-  padding: 16px;
-  max-width: calc(100vw - 24px);
-  background: #fff;
-}
-.gallery-lightbox::backdrop {
-  background: #151d27cc;
-}
-.gallery-lightbox img {
-  display: block;
-  max-width: 85vw;
-  max-height: 72dvh;
-  margin-top: 12px;
-}
-.gallery-lightbox p {
-  font-size: 13px;
-  color: #626e7b;
-}
-.gallery-lightbox button {
-  background: none;
-  border: 1px solid #dde1e5;
-  border-radius: 5px;
-  padding: 10px 16px;
-  font: inherit;
-  cursor: pointer;
 }
 button:focus-visible,
 a:focus-visible {

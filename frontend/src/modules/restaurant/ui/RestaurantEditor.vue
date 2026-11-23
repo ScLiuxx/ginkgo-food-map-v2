@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import ResourceLink from '@/shared/ui/ResourceLink.vue'
+import AppLink from '@/shared/ui/AppLink.vue'
+import LeaveConfirmation from '@/shared/ui/LeaveConfirmation.vue'
 import axios from 'axios'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRouter } from 'vue-router'
@@ -70,25 +73,6 @@ const tagCount = computed(() =>
 let controller: globalThis.AbortController | undefined
 let generation = 0
 let disposed = false
-
-// 快捷档位只辅助填写估值；用户仍能调整具体整数金额，不能误标为平台核实消费。
-const shortcuts = [
-  ['15内', 15],
-  ['15–30', 25],
-  ['30–50', 40],
-  ['50–80', 65],
-  ['80–120', 100],
-  ['120–200', 160],
-  ['200–500', 350],
-  ['500–1000', 750],
-  ['1000+', 1200],
-] as const
-
-/** 快捷选择始终明确为估值，实际金额仍可在输入框内修改。 */
-function setEstimate(value: number): void {
-  form.priceKind = 'ESTIMATE'
-  form.price = String(value)
-}
 
 /** 分类与授权快照均从服务端读取，缺失/删除/无权限时不能退回空白编辑表单。 */
 async function load(): Promise<void> {
@@ -183,7 +167,7 @@ async function submit(): Promise<void> {
     getAccessToken() !== boundToken
   )
     return
-  errors.value = validateRestaurantDraft(form, restaurantType.value)
+  errors.value = validateRestaurantDraft(form, restaurantType.value, !props.admin)
   const category = categories.value.find((c) => c.code === form.categoryCode)
   if (
     restaurantType.value === 'REGULAR' &&
@@ -242,11 +226,9 @@ function beforeUnload(event: globalThis.BeforeUnloadEvent): void {
 }
 onMounted(() => globalThis.addEventListener('beforeunload', beforeUnload))
 /** 同一路由切换餐厅ID也会销毁草稿，需与离开编辑页使用相同保护。 */
-function canLeave(): boolean {
-  return (
-    saved.value ||
-    (!saving.value && (!dirty.value || globalThis.confirm('尚有未保存的餐厅资料，确定离开吗？')))
-  )
+const leaveConfirmation = ref<InstanceType<typeof LeaveConfirmation> | null>(null)
+function canLeave() {
+  return saved.value || (!saving.value && (!dirty.value || leaveConfirmation.value?.ask()))
 }
 onBeforeRouteLeave(canLeave)
 onBeforeRouteUpdate((to, from) => to.params.id === from.params.id || canLeave())
@@ -260,8 +242,9 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="restaurant-editor" aria-labelledby="editor-title">
-    <RouterLink :to="returnPath"
-      >← {{ admin ? '返回商户管理' : id ? '返回餐厅详情' : '返回餐厅目录' }}</RouterLink
+    <LeaveConfirmation ref="leaveConfirmation" message="餐厅资料尚未保存，确定离开？" />
+    <AppLink :to="returnPath"
+      >← {{ admin ? '返回商户管理' : id ? '返回餐厅详情' : '返回餐厅目录' }}</AppLink
     >
     <p class="eyebrow">{{ admin ? '商户管理 · 直接维护' : 'SHARE A PLACE' }}</p>
     <h1 id="editor-title">{{ id ? '编辑餐厅' : '新增餐厅' }}</h1>
@@ -273,8 +256,8 @@ onBeforeUnmount(() => {
             : '登录后才能新增或维护餐厅。'
         }}
       </p>
-      <RouterLink v-if="!authToken" :to="loginTarget">前往登录</RouterLink>
-      <a v-else :href="path">重新打开此页</a>
+      <AppLink v-if="!authToken" :to="loginTarget">前往登录</AppLink>
+      <ResourceLink v-else :href="path">重新打开此页</ResourceLink>
     </section>
     <p v-else-if="loading" role="status">正在读取餐厅资料与分类…</p>
     <section v-else-if="loadError" class="editor-notice" role="alert">
@@ -332,20 +315,11 @@ onBeforeUnmount(() => {
             </p>
           </div>
           <div class="editor-field">
-            <label for="restaurant-price-kind">人均类型</label>
-            <select id="restaurant-price-kind" v-model="form.priceKind">
-              <option value="UNKNOWN">未知</option>
-              <option value="EXACT">填报具体金额</option>
-              <option value="ESTIMATE">估值</option>
-            </select>
-          </div>
-          <div class="editor-field">
-            <label for="restaurant-price">人均消费（元）</label>
+            <label for="restaurant-price">人均消费（元，选填）</label>
             <input
               id="restaurant-price"
               v-model="form.price"
               inputmode="numeric"
-              :disabled="form.priceKind === 'UNKNOWN'"
               :aria-invalid="!!errors.price"
               aria-describedby="error-price"
               placeholder="1–5000，整数元"
@@ -355,17 +329,6 @@ onBeforeUnmount(() => {
             </p>
           </div>
         </div>
-        <div class="price-shortcuts" aria-label="快捷填写人均估值">
-          <button
-            v-for="[label, value] in shortcuts"
-            :key="label"
-            type="button"
-            @click="setEstimate(value)"
-          >
-            {{ label }}
-          </button>
-        </div>
-        <p class="field-hint">快捷档位填写估值，可继续调整；填报金额不表示平台已核实消费。</p>
         <div class="editor-field">
           <label for="restaurant-address"
             >地址 <span>可留空 · {{ characterCount(form.address.trim()) }}/80</span></label
@@ -428,7 +391,7 @@ onBeforeUnmount(() => {
             </p>
           </div>
         </div>
-        <label class="location-confirm" for="restaurant-location-confirmed"
+        <label v-if="!admin" class="location-confirm" for="restaurant-location-confirmed"
           ><input
             id="restaurant-location-confirmed"
             v-model="form.locationConfirmed"
@@ -466,15 +429,15 @@ onBeforeUnmount(() => {
       </fieldset>
       <div v-if="saveError || Object.keys(errors).length" class="editor-notice" role="alert">
         <p>{{ saveError || '请修改上方标记的内容后再保存。' }}</p>
-        <RouterLink v-if="saveError" :to="admin ? '/admin/restaurants' : '/'"
-          >到目录核对保存结果</RouterLink
+        <AppLink v-if="saveError" :to="admin ? '/admin/restaurants' : '/'"
+          >到目录核对保存结果</AppLink
         >
       </div>
       <div class="editor-actions">
         <button type="submit" class="primary-action" :disabled="saving">
           {{ saving ? '正在保存…' : id ? '保存修改' : '创建餐厅' }}
         </button>
-        <RouterLink :to="returnPath" :aria-disabled="saving">取消</RouterLink>
+        <AppLink :to="returnPath" :aria-disabled="saving">取消</AppLink>
       </div>
     </form>
   </section>

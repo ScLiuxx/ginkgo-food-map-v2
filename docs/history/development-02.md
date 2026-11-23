@@ -22,7 +22,7 @@
 
 ### 首次正式发布验收
 
-- 提交 `a8df8ff62f578220d626682147fd7cf1b4f80069` 已合并并推送 develop，[Actions 40528088040](https://github.com/kanno111/ginkgo-food-map-v2/actions/runs/40528088040) 完成且全部成功。
+- 提交 `a8df8ff62f578220d626682147fd7cf1b4f80069` 已合并并推送 develop，[Actions 40528088040](https://github.com/kanno111/foodmap/actions/runs/40528088040) 完成且全部成功。
 - 前后端及部署检查由 GitHub 托管 Runner 完成，后端检查启用真实 MySQL、Redis；发布任务由 `ginkgo-production` 执行，成功下载同次构建产物、切换版本并启动正式服务。
 - 外部访问首页、`/login`、`/register`、`/api/public/status`、`/version.txt` 均为200；匿名 `/auth/me` 返回统一401响应。站点版本与服务器 `commit.txt` 均匹配上述提交，服务器健康状态为 UP。
 - Runner 在线空闲，Runner 与后端服务均已启用开机启动。确认部署用户没有应用环境配置、JWT 私钥的读取权限。
@@ -272,7 +272,7 @@
 | [RestaurantManagementActions.vue](../../frontend/src/modules/restaurant/ui/RestaurantManagementActions.vue)、[RestaurantManagementActions.spec.ts](../../frontend/src/modules/restaurant/ui/RestaurantManagementActions.spec.ts) | 服务端权限确认、维护入口和软删除模态框 |
 | [RestaurantCatalog.vue](../../frontend/src/modules/restaurant/ui/RestaurantCatalog.vue)、[RestaurantDetail.vue](../../frontend/src/modules/restaurant/ui/RestaurantDetail.vue)、[catalog.store.ts](../../frontend/src/modules/restaurant/model/catalog.store.ts) | 目录新增/详情维护入口及成功写入后的缓存失效 |
 | [LoginForm.vue](../../frontend/src/modules/auth/ui/LoginForm.vue)、[LoginForm.spec.ts](../../frontend/src/modules/auth/ui/LoginForm.spec.ts) | 安全回跳原餐厅页面及外部跳转拒绝验证 |
-| [RegistrationApiIntegrationTest.java](../../backend/src/test/java/com/ginkgo/foodmap/user/controller/RegistrationApiIntegrationTest.java) | 认证测试连接独立回环实例，支持完整测试组合 |
+| [RegistrationApiIntegrationTest.java](../../backend/src/test/java/com/foodmap/user/controller/RegistrationApiIntegrationTest.java) | 认证测试连接独立回环实例，支持完整测试组合 |
 | [README](../../README.md)、需求（原文档已移除）、[功能](../features.md)、[接口](../api.md)、[表结构/测试说明](../architecture/mysql-schema.md#restaurant-schema)、本日志 | 同步实际范围、使用方式、协议边界与验证结果 |
 
 ## 2026-10-28：餐厅阶段提交整理
@@ -284,7 +284,7 @@
 ## 2026-10-28：餐厅合并、清理分支与评价开发规划
 
 - 按用户要求将全部餐厅阶段成果提交为 `13060def2128021294df0bc81f670a3851fcfd7a`（`feat: complete restaurant catalog and CRUD integration`），推送原功能分支后快进合并到develop并推送，远程develop已包含相同提交。确认已合并后删除本地与远程 `feat/restaurant-backend`，从develop新建 `feat/reviews` 并建立远程跟踪；原成果均进入提交，没有重置或丢弃。
-- 推送触发[工作流40689321021](https://github.com/kanno111/ginkgo-food-map-v2/actions/runs/40689321021)，最终状态success；后端、前端、部署脚本检查及自动发布均成功。只读核对生产 `/version.txt` 匹配 `13060de`，公开状态、餐厅列表和分类均200，13类、0家餐厅，未自动导入本地25家模拟店。没有发送真实邮件或执行生产业务写入，不将自动检查/发布成功等同于用户逐项业务验收。
+- 推送触发[工作流40689321021](https://github.com/kanno111/foodmap/actions/runs/40689321021)，最终状态success；后端、前端、部署脚本检查及自动发布均成功。只读核对生产 `/version.txt` 匹配 `13060de`，公开状态、餐厅列表和分类均200，13类、0家餐厅，未自动导入本地25家模拟店。没有发送真实邮件或执行生产业务写入，不将自动检查/发布成功等同于用户逐项业务验收。
 - 新增评价开发规划（原文档已移除），按用户优先级跳过回收站页面前置，建议先实现文本发布、分页阅读、真实统计、我的评价及最小删除/恢复。明确沿用四维半分、单条HALF_UP两位与原始均分判杯型；提出review自有表、restaurant自有统计读模型、公开应用服务/同事务同步、稳定请求UUID防重及Redis限流方案，不跨模块直连Mapper。
 - 评价公开范围、先发后审、多次评价、停业店新评、已有他人评价后的删店、停用账号历史及限流数值均列为待确认，不将建立分支或用户调整优先级视为规则获批。图片、回复、修改评价、完整审核/回收站页面均不混入首期。
 - README、需求与功能说明同步新增计划入口及实施优先级；接口文档仍仅描述已实现协议，没有将规划路由伪装为可调用API。本轮未开始评价代码或V4迁移，不访问数据库、不发送邮件；计划文档留在新分支工作区待评审，未自动提交规划。

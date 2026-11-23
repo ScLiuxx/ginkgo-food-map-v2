@@ -117,7 +117,6 @@ onBeforeUnmount(cancel)
         type="search"
         maxlength="100"
         aria-label="搜索评价店铺"
-        placeholder="搜索餐厅、食堂或窗口…"
         :disabled="disabled"
         @focus="expanded = true"
         @keydown.enter.prevent="!$event.isComposing && search()"

@@ -2,6 +2,9 @@
 import { formatRating } from '@/shared/lib/formatRating'
 import { useUserLocation } from '@/modules/map/model/userLocation.store'
 const userLocation = useUserLocation()
+import { useRestaurantCatalog } from '../model/catalog.store'
+import { distanceOriginLabel } from '../model/distanceOrigin'
+const catalog = useRestaurantCatalog()
 import { computed } from 'vue'
 import type { RestaurantReadModel } from '../model/restaurant.types'
 import { campusDistance, priceLabel } from '../model/catalog.logic'
@@ -9,7 +12,15 @@ import MapRestaurantPhoto from './MapRestaurantPhoto.vue'
 import { displayRestaurantTags } from './restaurantPresentation'
 /** 同一商户在列表及浮层共用明确的评分/消费分栏；缺失数据使用文字状态，不补造数值。 */
 const props = defineProps<{ restaurant: RestaurantReadModel; selected: boolean }>()
-const distance = computed(() => campusDistance(props.restaurant, userLocation.location?.center))
+// 地图点位详情可能没有查询距离；回退计算时仍使用当前参照点，不能把校区距离写成距我。
+const origin = computed<[number, number] | undefined>(() =>
+  catalog.filters.longitude != null && catalog.filters.latitude != null
+    ? [catalog.filters.longitude, catalog.filters.latitude]
+    : userLocation.location?.center,
+)
+const distance = computed(
+  () => props.restaurant.distanceKm ?? campusDistance(props.restaurant, origin.value),
+)
 const businessTags = computed(() =>
   displayRestaurantTags(props.restaurant.tags, props.restaurant.category),
 )
@@ -23,7 +34,7 @@ const categoryLabel = computed(() =>
 const distanceLabel = computed(() =>
   distance.value === null
     ? '位置待确认'
-    : `距你 ${distance.value < 1 ? Math.round(distance.value * 1000) + '米' : distance.value.toFixed(1) + '公里'}`,
+    : `距${distanceOriginLabel(catalog.filters.distanceOrigin)} ${distance.value < 1 ? Math.round(distance.value * 1000) + '米' : distance.value.toFixed(1) + '公里'}`,
 )
 defineEmits<{ select: [] }>()
 </script>
@@ -70,15 +81,6 @@ defineEmits<{ select: [] }>()
             >暂无消费信息</span
           >
           <b v-else class="map-price-value">{{ priceLabel(restaurant) }}</b>
-          <small
-            v-if="
-              restaurant.priceKind === 'estimate' &&
-              restaurant.price !== null &&
-              restaurant.price > 0
-            "
-            class="map-price-kind"
-            >价格估值</small
-          >
         </span>
       </span>
       <span class="map-location">
@@ -91,7 +93,9 @@ defineEmits<{ select: [] }>()
           <circle cx="12" cy="10" r="2.2" stroke="currentColor" stroke-width="1.4" />
         </svg>
         <span
-          ><small class="map-distance" title="距用户当前位置的直线距离，不是距您的位置"
+          ><small
+            class="map-distance"
+            :title="`距${distanceOriginLabel(catalog.filters.distanceOrigin)}的直线距离，不是步行距离`"
             >{{ distanceLabel }}<span v-if="distance !== null"> · 直线</span></small
           >
           <small v-if="restaurant.address" class="map-address">{{

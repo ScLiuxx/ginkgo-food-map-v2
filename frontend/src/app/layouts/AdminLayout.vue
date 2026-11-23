@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { onBeforeUnmount, ref, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLoginStore } from '@/modules/auth'
@@ -81,7 +82,7 @@ watchEffect(() => {
       <p>「{{ auth.user?.username }}」可继续使用前台功能，或更换管理员账号登录。</p>
       <button class="access-primary" :disabled="auth.loggingOut" @click="auth.signOut">
         退出并更换账号</button
-      ><RouterLink v-if="!auth.isAdministrator" to="/">返回前台</RouterLink>
+      ><AppLink v-if="!auth.isAdministrator" to="/">返回前台</AppLink>
     </section>
     <section v-else>
       <h1>暂时无法验证登录状态</h1>

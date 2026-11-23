@@ -8,6 +8,7 @@ import {
   fetchReviewCategories,
   approveRequest,
   rejectRequest,
+  linkExistingRequest,
   type RequestItem,
   type RequestDetail,
   type RequestPage,
@@ -21,6 +22,7 @@ vi.mock('../api/restaurantRequestsApi', () => ({
   fetchReviewCategories: vi.fn(),
   approveRequest: vi.fn(),
   rejectRequest: vi.fn(),
+  linkExistingRequest: vi.fn(),
 }))
 const item = (id: string): RequestItem => ({
   id,
@@ -46,7 +48,7 @@ const detail = (id: string): RequestDetail => ({
   proposed: {
     name: '真实申请' + id,
     supportsDineIn: false,
-    pricePerPerson: 0,
+    pricePerPerson: null,
     categoryCode: 'OTHER',
     priceKind: 'UNKNOWN',
     latitude: 30.7544,
@@ -99,6 +101,56 @@ describe('真实申请查询状态', () => {
     state = scope.run(() => useRestaurantRequests())!
   }
 
+  it('已收录只提交目标ID，草稿无效仍可关联，成功后保留处理方式', async () => {
+    start()
+    await vi.runAllTimersAsync()
+    await flush()
+    state.continuous.value = false
+    state.editField('name', '')
+    const confirmed = detail('11')
+    confirmed.application.status = 'APPROVED'
+    confirmed.application.restaurantId = '991'
+    confirmed.application.approvalMode = 'LINKED_EXISTING'
+    confirmed.approved = { ...confirmed.proposed, name: '已有餐厅' }
+    vi.mocked(linkExistingRequest).mockResolvedValue({
+      id: '11',
+      status: 'APPROVED',
+      restaurantId: '991',
+      approvalMode: 'LINKED_EXISTING',
+      reviewedBy: '33',
+      reviewedAt: '2026-11-14T00:00:00Z',
+      rejectReason: null,
+      replayed: false,
+    })
+    vi.mocked(fetchRequestDetail).mockResolvedValue(confirmed)
+    await state.decide('link-existing', '991')
+    expect(linkExistingRequest).toHaveBeenCalledWith('11', '991', 'request-reader')
+    expect(approveRequest).not.toHaveBeenCalled()
+    expect(state.detail.value?.application.approvalMode).toBe('LINKED_EXISTING')
+    expect(state.notice.value).toContain('已关联到已收录店铺')
+    expect(state.comparison.value.find((row) => row.key === 'name')).toMatchObject({
+      before: '真实申请11',
+      after: '已有餐厅',
+    })
+    await state.decide('link-existing', '992')
+    expect(linkExistingRequest).toHaveBeenCalledTimes(1)
+  })
+
+  it('已收录拒绝空目标和纠错申请，网络失败保留待审以便同目标重试', async () => {
+    start()
+    await vi.runAllTimersAsync()
+    await flush()
+    await state.decide('link-existing', '')
+    expect(linkExistingRequest).not.toHaveBeenCalled()
+    vi.mocked(linkExistingRequest).mockRejectedValue(new Error('网络失败'))
+    await state.decide('link-existing', '991')
+    expect(state.detail.value?.application.status).toBe('PENDING')
+    expect(state.decisionError.value).toBe('网络失败')
+    state.detail.value!.application.requestType = 'UPDATE'
+    await state.decide('link-existing', '991')
+    expect(linkExistingRequest).toHaveBeenCalledTimes(1)
+  })
+
   it('待审食堂清空旧分类，切回普通餐厅后必须选择分类才可通过', async () => {
     const old = detail('11')
     old.proposed.restaurantType = 'CANTEEN'
@@ -138,7 +190,7 @@ describe('真实申请查询状态', () => {
     expect(state.items.value.map((entry) => entry.id)).toEqual(['11', '12'])
     expect(state.selected.value?.id).toBe('11')
     expect(state.comparison.value.find((row) => row.label === '堂食情况')?.after).toBe('不支持')
-    expect(state.comparison.value.find((row) => row.label === '人均消费')?.after).toBe('¥0')
+    expect(state.comparison.value.find((row) => row.label === '人均消费')?.after).toBe('未知')
     expect(fetchRequestPage).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'PENDING', page: 1, pageSize: 20 }),
       'request-reader',

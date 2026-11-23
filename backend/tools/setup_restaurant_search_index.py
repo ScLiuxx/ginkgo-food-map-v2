@@ -2,15 +2,16 @@
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 import json
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import ProxyHandler, Request, build_opener
 
-INDEX = "restaurant-search-v003"
+INDEX = "restaurant-search-v004"
 ALIAS = "restaurant-search"
-SPEC_PATH = Path(__file__).resolve().parents[1] / "src/main/resources/elasticsearch/restaurant-search-v003.json"
+SPEC_PATH = Path(__file__).resolve().parents[1] / "src/main/resources/elasticsearch/restaurant-search-v004.json"
 
 
 class ElasticsearchRequestError(RuntimeError):
@@ -65,30 +66,39 @@ class LocalElasticsearch:
             raise
 
 
-def load_spec(version: str = "003") -> dict:
-    """当前默认v003；历史实验显式读取旧版本，不因正式升级悄悄改变A/B基线。"""
-    if version not in ("001", "002", "003"):
+def load_spec(version: str = "004") -> dict:
+    """当前默认v004；历史实验显式读取旧版本，不因正式升级悄悄改变A/B基线。"""
+    if version not in ("001", "002", "003", "004"):
         raise ValueError("Unsupported explicit search schema version")
     path = SPEC_PATH.with_name("restaurant-search-v" + version + ".json")
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def verify_definition(client: LocalElasticsearch, spec: dict) -> None:
+def mappings_match(actual: dict, expected: dict) -> bool:
+    """仅兼容项目改名前的schema品牌标识；版本、字段、分词和其余元数据仍必须严格一致。"""
+    normalized = deepcopy(actual)
+    metadata = normalized.get('_meta', {})
+    if metadata.get('schema') == 'ginkgo.restaurant-search':
+        metadata['schema'] = 'foodmap.restaurant-search'
+    return normalized == expected
+
+
+def verify_definition(client: LocalElasticsearch, spec: dict, index: str = INDEX) -> None:
     """重复执行只核对结构，发现漂移直接失败，不覆盖已有文档或偷偷修改mapping。"""
-    actual = client.request("GET", "/" + INDEX)
-    if set(actual) != {INDEX}:
+    actual = client.request("GET", "/" + index)
+    if set(actual) != {index}:
         raise RuntimeError("物理索引名称已被其他资源占用")
-    index = actual[INDEX]
-    if index["mappings"] != spec["mappings"]:
+    current = actual[index]
+    if not mappings_match(current["mappings"], spec["mappings"]):
         raise RuntimeError("已有mapping与版本定义不一致；请设计新版本索引，不要覆盖")
-    settings = index["settings"]["index"]
+    settings = current["settings"]["index"]
     for key in ("number_of_shards", "number_of_replicas", "refresh_interval"):
         if str(settings.get(key)) != str(spec["settings"][key]):
             raise RuntimeError("已有索引设置与版本定义不一致：" + key)
     if settings.get("analysis") != spec["settings"]["analysis"]:
         raise RuntimeError("已有分词/规范化配置与版本定义不一致")
     aliases = client.request("GET", "/_alias/" + ALIAS)
-    if set(aliases) != {INDEX} or aliases[INDEX]["aliases"].get(ALIAS) != spec["aliases"][ALIAS]:
+    if set(aliases) != {index} or aliases[index]["aliases"].get(ALIAS) != spec["aliases"][ALIAS]:
         raise RuntimeError("别名指向或写索引标记与版本定义不一致")
 
 

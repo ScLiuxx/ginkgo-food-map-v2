@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { LoginForm } from '@/modules/auth'
 </script>
 
 <template>
   <div class="login-page">
-    <RouterLink class="back-link" to="/">← 返回首页</RouterLink>
+    <AppLink class="back-link" to="/">← 返回首页</AppLink>
     <LoginForm />
   </div>
 </template>

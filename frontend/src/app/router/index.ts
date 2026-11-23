@@ -1,8 +1,22 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { nextTick } from 'vue'
+import { waitForPageLayout } from '@/shared/lib/restorePageScroll'
+
+let scrollGeneration = 0
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    // 示例数据仅在开发环境单独预览，生产构建不提供该路由或导入示例资源。
+    ...(import.meta.env.DEV
+      ? [
+          {
+            path: '/previews/restaurant-rankings',
+            component: () => import('@/pages/restaurant/RestaurantRankingPreviewPage.vue'),
+            meta: { title: '榜单界面预览', ranking: true },
+          },
+        ]
+      : []),
     // 管理端共用独立布局，身份验证通过后才挂载页面；审核使用真实申请及服务端处理结果。
     {
       path: '/admin/login',
@@ -19,6 +33,11 @@ const router = createRouter({
       meta: { title: '商户审核 · 管理工作台', layout: 'admin' },
     },
     {
+      path: '/admin/activity',
+      component: () => import('@/pages/admin/AdminActivityPage.vue'),
+      meta: { title: '使用统计 · 管理工作台', layout: 'admin' },
+    },
+    {
       path: '/admin/announcements',
       component: () => import('@/pages/admin/AdminAnnouncementPage.vue'),
       meta: { title: '公告管理 · 管理工作台', layout: 'admin' },
@@ -32,12 +51,6 @@ const router = createRouter({
       path: '/admin/restaurants',
       component: () => import('@/pages/admin/AdminRestaurantPage.vue'),
       meta: { title: '商户管理 · 管理工作台', layout: 'admin' },
-    },
-    {
-      path: '/admin/restaurants/:id/windows',
-      component: () => import('@/pages/admin/AdminWindowPage.vue'),
-      props: true,
-      meta: { title: '窗口管理 · 管理工作台', layout: 'admin' },
     },
     {
       path: '/admin/restaurants/new',
@@ -97,6 +110,18 @@ const router = createRouter({
       meta: { title: '个人主页' },
     },
     {
+      path: '/restaurant-rankings',
+      name: 'restaurant-rankings',
+      component: () => import('@/pages/restaurant/RestaurantRankingPage.vue'),
+      meta: { title: '近期推荐榜', ranking: true },
+    },
+    {
+      path: '/account/contributions/:requestId/edit',
+      component: () => import('@/modules/restaurant/ui/RestaurantCorrection.vue'),
+      props: (route) => ({ requestId: route.params.requestId, submission: true }),
+      meta: { title: '修改申请' },
+    },
+    {
       path: '/restaurants/submit',
       name: 'restaurant-submit',
       component: () => import('@/modules/restaurant/ui/RestaurantCorrection.vue'),
@@ -122,12 +147,6 @@ const router = createRouter({
       component: () => import('@/modules/restaurant/ui/RestaurantCorrection.vue'),
       props: true,
       meta: { title: '补充 / 纠错' },
-    },
-    {
-      path: '/canteen-windows/:id',
-      component: () => import('@/pages/restaurant/RestaurantPage.vue'),
-      props: (route) => ({ id: route.params.id, window: true }),
-      meta: { title: '窗口详情' },
     },
     {
       path: '/restaurants/:id',
@@ -165,7 +184,25 @@ const router = createRouter({
     },
   ],
   // 浏览器前进/后退恢复列表阅读位置，普通跳转仍从新页面顶部开始。
-  scrollBehavior: (_to, _from, savedPosition) => savedPosition ?? { top: 0 },
+  scrollBehavior: async (to, from, savedPosition) => {
+    const ticket = ++scrollGeneration
+    // 替换分页或筛选参数不重置阅读位置；真正的历史回退等待列表读取后再恢复。
+    if (!savedPosition) return to.path === from.path && to.hash === from.hash ? false : { top: 0 }
+    // 首页返回同样等待目录挂载/首批读取；手机缓存已有全部卡片时可直接恢复原位置。
+    const selector =
+      to.path === '/'
+        ? '.restaurant-directory'
+        : /^\/(?:account|users)(?:\/|$)/.test(to.path)
+          ? '.account-center'
+          : /^\/restaurants\/[1-9]\d*$/.test(to.path)
+            ? '.detail-page'
+            : undefined
+    if (selector) {
+      await nextTick()
+      if (!(await waitForPageLayout(() => ticket === scrollGeneration, selector))) return false
+    }
+    return ticket === scrollGeneration ? savedPosition : false
+  },
 })
 
 // 单页应用切换路由时同步浏览器标题，便于用户识别当前页面。

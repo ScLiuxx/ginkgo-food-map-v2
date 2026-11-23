@@ -18,6 +18,7 @@ describe('地图界面预览隔离与选店', () => {
     app?.unmount()
     host?.remove()
     vi.clearAllMocks()
+    vi.unstubAllGlobals()
   })
   async function mount() {
     const router = createRouter({
@@ -55,6 +56,36 @@ describe('地图界面预览隔离与选店', () => {
     await nextTick()
     expect(host.querySelectorAll('.map-card-list .map-restaurant')).toHaveLength(1)
     expect(host.querySelector('.map-selection')?.textContent).toContain('示例川菜馆')
+    expect(fetchRestaurants).not.toHaveBeenCalled()
+  })
+  it('跨手机断点往返时保留同一列表节点和选择，不丢失Teleport内容', async () => {
+    let changed = () => {}
+    const media = {
+      matches: false,
+      addEventListener: (_event: string, listener: () => void) => {
+        changed = listener
+      },
+      removeEventListener: vi.fn(),
+    }
+    vi.stubGlobal('matchMedia', () => media)
+    await mount()
+    const list = host.querySelector('.map-result-panel')!
+    const selection = host.querySelector('.map-selection')!
+    media.matches = true
+    changed()
+    await nextTick()
+    await nextTick()
+    expect(host.querySelector('.mobile-sheet-results .map-result-panel')).toBe(list)
+    expect(host.querySelector('.mobile-sheet-selection .map-selection')).toBe(selection)
+    media.matches = false
+    changed()
+    await nextTick()
+    expect(host.querySelector('.map-layout > .map-result-panel')).toBe(list)
+    media.matches = true
+    changed()
+    await nextTick()
+    expect(host.querySelector('.mobile-sheet-results .map-result-panel')).toBe(list)
+    expect(host.querySelectorAll('.map-result-panel')).toHaveLength(1)
     expect(fetchRestaurants).not.toHaveBeenCalled()
   })
 })

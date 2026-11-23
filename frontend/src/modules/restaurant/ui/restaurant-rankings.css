@@ -1,0 +1,342 @@
+/* 按已确认示意图保留白底与连续列表，宽度独立于首页，只有图片和校区切换具有容器。 */
+.ranking-page {
+  max-width: 900px;
+  width: calc(100% - 96px);
+  margin: 0 auto;
+  padding: 29px 0 104px;
+  color: #252c34;
+}
+.ranking-page a {
+  text-decoration: none;
+}
+.ranking-page button {
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+.ranking-page svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ranking-page button:focus-visible,
+.ranking-page a:focus-visible {
+  outline: 2px solid #b47c3b;
+  outline-offset: 4px;
+}
+.ranking-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #747d88;
+  font-size: 13px;
+}
+.ranking-back svg {
+  width: 15px;
+  height: 15px;
+}
+.ranking-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 24px 0 21px;
+}
+.ranking-heading h1 {
+  font-size: 31px;
+  letter-spacing: -0.9px;
+  line-height: 1.4;
+  margin: 0;
+  font-weight: 750;
+}
+.ranking-campuses {
+  display: flex;
+  border: 1px solid #e4e7eb;
+  border-radius: 8px;
+  padding: 3px;
+  gap: 3px;
+}
+.ranking-campuses button {
+  height: 33px;
+  min-width: 73px;
+  padding: 0 16px;
+  color: #7a818b;
+  font-size: 13px;
+  border-radius: 5px;
+}
+.ranking-campuses button[aria-pressed='true'] {
+  background: #f4f5f6;
+  color: #29313b;
+  font-weight: 650;
+}
+.ranking-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e8ebef;
+}
+.ranking-periods {
+  display: flex;
+  gap: 28px;
+}
+.ranking-periods button {
+  height: 53px;
+  padding: 0 0 14px;
+  font-size: 16px;
+  color: #7b838d;
+  position: relative;
+}
+.ranking-periods button[aria-pressed='true'] {
+  color: #b2651b;
+  font-weight: 650;
+}
+.ranking-periods button[aria-pressed='true']::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #e49b32;
+  border-radius: 3px;
+}
+.ranking-updated {
+  font-size: 11px;
+  color: #9299a2;
+  padding-bottom: 12px;
+  white-space: nowrap;
+}
+.ranking-list {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.ranking-row {
+  display: flex;
+  align-items: center;
+  gap: 21px;
+  border-bottom: 1px solid #edf0f2;
+  padding: 20px 0;
+  min-height: 130px;
+}
+.ranking-number {
+  width: 28px;
+  text-align: center;
+  flex: none;
+  font-size: 26px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #a1a8b0;
+}
+.ranking-number.top {
+  color: #b7782e;
+}
+.ranking-number.first {
+  color: #bf711c;
+  font-size: 32px;
+  font-weight: 700;
+}
+.ranking-cover {
+  width: 120px;
+  height: 88px;
+  border-radius: 7px;
+  overflow: hidden;
+  flex: none;
+  background: #f3f4f5;
+}
+.ranking-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.ranking-placeholder {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #9aa3ac;
+}
+.ranking-placeholder svg {
+  width: 32px;
+  height: 32px;
+  stroke-width: 1.1;
+}
+.ranking-placeholder small {
+  font-size: 9px;
+}
+.ranking-info {
+  min-width: 0;
+  flex: 1;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.ranking-name {
+  margin: 0 0 12px;
+  font-size: 19px;
+  font-weight: 650;
+  line-height: 1.5;
+  letter-spacing: -0.3px;
+  overflow-wrap: anywhere;
+}
+.ranking-count {
+  font-size: 12px;
+  color: #8b939d;
+}
+.ranking-score {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  margin-left: auto;
+  flex: none;
+}
+.ranking-score strong,
+.ranking-mobile-score strong {
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  color: #b6651b;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.8px;
+  font-variant-numeric: tabular-nums;
+}
+.ranking-chevron {
+  width: 16px;
+  height: 16px;
+  margin-left: 10px;
+  color: #b7bdc4;
+  flex: none;
+}
+.ranking-end {
+  text-align: center;
+  color: #a0a7af;
+  font-size: 11px;
+  margin: 25px 0 0;
+}
+.ranking-row:hover .ranking-name {
+  color: #a75d12;
+}
+.ranking-mobile-score {
+  display: none;
+}
+.ranking-state {
+  padding: 80px 16px;
+  text-align: center;
+  color: #8b939d;
+  font-size: 13px;
+}
+.ranking-state h2 {
+  margin: 0 0 12px;
+  color: #454f5c;
+  font-size: 19px;
+  font-weight: 600;
+}
+.ranking-state p {
+  margin: 0 0 20px;
+}
+.ranking-state button,
+.ranking-state a {
+  display: inline-block;
+  margin-top: 9px;
+  color: #a76d29;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: #f7f3ed;
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  .ranking-page {
+    width: calc(100% - 36px);
+    padding-top: 20px;
+  }
+  .ranking-back {
+    font-size: 12px;
+  }
+  .ranking-heading {
+    display: block;
+    margin: 20px 0 12px;
+  }
+  .ranking-heading h1 {
+    font-size: 27px;
+    letter-spacing: -0.6px;
+  }
+  .ranking-campuses {
+    display: inline-flex;
+    margin-top: 17px;
+  }
+  .ranking-campuses button {
+    height: 30px;
+    min-width: 75px;
+    padding: 0 17px;
+    font-size: 12px;
+  }
+  .ranking-periods {
+    gap: 27px;
+  }
+  .ranking-periods button {
+    font-size: 15px;
+    height: 55px;
+    padding-bottom: 13px;
+  }
+  .ranking-updated {
+    font-size: 10px;
+    max-width: 130px;
+    white-space: normal;
+    text-align: right;
+    line-height: 1.6;
+    padding-bottom: 9px;
+  }
+  .ranking-row {
+    gap: 12px;
+    min-height: 114px;
+    padding: 18px 0;
+  }
+  .ranking-number {
+    width: 21px;
+    font-size: 23px;
+  }
+  .ranking-number.first {
+    font-size: 27px;
+  }
+  .ranking-cover {
+    width: 76px;
+    height: 76px;
+    border-radius: 6px;
+  }
+  .ranking-name {
+    font-size: 15px;
+    line-height: 1.55;
+    margin: 0 0 8px;
+    letter-spacing: -0.2px;
+  }
+  .ranking-count {
+    font-size: 10px;
+  }
+  .ranking-score,
+  .ranking-chevron {
+    display: none;
+  }
+  .ranking-mobile-score {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+  }
+  .ranking-mobile-score strong {
+    font-size: 23px;
+    letter-spacing: -0.5px;
+  }
+  .ranking-mobile-score + .ranking-count {
+    margin-top: 5px;
+  }
+  .ranking-end {
+    font-size: 10px;
+    margin-top: 22px;
+  }
+}

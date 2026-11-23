@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useLoginStore } from '@/modules/auth'
@@ -16,22 +17,22 @@ import { MyReviews } from '@/modules/review'
 import { MyContributions } from '@/modules/restaurant'
 import { useOwnProfile } from '../model/useOwnProfile'
 import { bioValidationError, normalizeBio } from '../model/profileValidation'
+import { useReturnNavigation } from '@/shared/lib/useReturnNavigation'
+import WriteReviewLink from '@/shared/ui/WriteReviewLink.vue'
+import UserAvatar from './UserAvatar.vue'
+import AvatarSetting from './AvatarSetting.vue'
 
 /** 个人中心只接入已存在的身份与成长接口；未开放能力不保存本地假资料或虚构统计。 */
 const props = defineProps<{ section?: string; publicUserId?: string }>()
 const auth = useLoginStore()
 const route = useRoute()
+const { returnTarget, returnToPrevious } = useReturnNavigation('/account')
 const bioDialog = ref<globalThis.HTMLDialogElement>()
 const bioDraft = ref('')
 const bioNotice = ref('')
 const profileTab = ref<'reviews' | 'favorites'>('reviews')
-// 独立内容页复用主页列表的紧凑展示；数量与刷新状态仍由实际列表读取结果提供。
+// 独立内容页复用主页列表的紧凑展示，数量由列表读取结果提供。
 const listTotal = ref<number | null>(null)
-const ownReviews = ref<InstanceType<typeof MyReviews>>()
-const ownFavorites = ref<InstanceType<typeof RestaurantFavorites>>()
-const activeAccountList = computed(() =>
-  props.section === 'reviews' ? ownReviews.value : ownFavorites.value,
-)
 // 草稿只留在当前弹窗；退出、切页或切换查看对象均清除，不写入浏览器存储。
 watch(
   () => [route.path, authToken.value],
@@ -64,10 +65,6 @@ const ownProfile = computed(
   () => !publicProfile.value || props.publicUserId === String(auth.user?.id),
 )
 const home = computed(() => !props.section)
-// 首字头像只取公开用户名，不提供上传或额外保存用户资料。
-const avatarInitial = computed(() =>
-  Array.from(auth.user?.username.trim() || '?')[0]!.toUpperCase(),
-)
 const profileState = useOwnProfile(
   () => ownProfile.value && (home.value || props.section === 'settings'),
 )
@@ -96,7 +93,7 @@ const nextExperience = computed(() =>
 const growthRewards = [
   {
     title: '首次点评一家店',
-    description: '每人每家餐厅或窗口仅奖励一次',
+    description: '每人每家餐厅或食堂仅奖励一次',
     icon: 'review',
     experience: 5,
   },
@@ -136,15 +133,48 @@ const pending = computed(() => pendingSections[props.section ?? ''])
       'account-home': home && !publicProfile,
       'account-growth': section === 'growth' && !publicProfile,
       'account-settings': section === 'settings' && !publicProfile,
-      'account-list-page': (section === 'reviews' || section === 'favorites') && !publicProfile,
+      'account-list-page':
+        ['reviews', 'favorites', 'contributions'].includes(section ?? '') && !publicProfile,
+      'account-contributions': section === 'contributions' && !publicProfile,
+      'account-reviews': section === 'reviews' && !publicProfile,
+      'account-follow-page': ['following', 'followers'].includes(section ?? '') && !publicProfile,
     }"
-    aria-labelledby="account-title"
+    :aria-labelledby="section || publicProfile ? 'account-title' : undefined"
+    :aria-label="!section && !publicProfile ? '个人中心' : undefined"
   >
-    <header class="account-topline">
-      <RouterLink v-if="section || publicProfile" class="account-back" to="/account"
-        >‹ <span>我的</span></RouterLink
-      >
+    <!-- 首页省去重复标题；子页只显示返回箭头，保留读屏可识别的操作名称。 -->
+    <header v-if="section || publicProfile" class="account-topline">
+      <AppLink
+        class="account-back"
+        :to="returnTarget"
+        aria-label="返回"
+        @click.capture="returnToPrevious"
+        ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7" /></svg
+      ></AppLink>
       <h1 id="account-title">{{ title }}</h1>
+      <span
+        v-if="
+          ['following', 'followers'].includes(section ?? '') &&
+          listTotal !== null &&
+          auth.authenticated
+        "
+        class="follow-page-total"
+        :aria-label="`${listTotal}人`"
+        >{{ listTotal }}</span
+      >
+      <template v-if="section === 'reviews' && !publicProfile && auth.authenticated">
+        <span v-if="listTotal !== null" class="account-review-total">{{ listTotal }}条</span>
+        <WriteReviewLink class="account-write-review"
+          ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg
+          >写点评</WriteReviewLink
+        >
+      </template>
+      <AppLink
+        v-if="section === 'contributions' && !publicProfile && auth.authenticated"
+        class="contribution-submit"
+        to="/restaurants/submit"
+        >提交新店 ›</AppLink
+      >
     </header>
 
     <div v-if="!auth.authenticated" class="account-guest">
@@ -156,15 +186,19 @@ const pending = computed(() => pendingSections[props.section ?? ''])
             : '把用餐体验、喜欢的店铺和每一次贡献留在这里。'
         }}
       </p>
-      <RouterLink class="account-primary" :to="loginTarget"
-        >登录账号 <span aria-hidden="true">→</span></RouterLink
+      <AppLink class="account-primary" :to="loginTarget"
+        >登录账号 <span aria-hidden="true">→</span></AppLink
       >
     </div>
 
     <template v-if="auth.authenticated && home">
       <div v-if="ownProfile" class="account-profile">
         <div class="profile-identity">
-          <span class="profile-avatar" aria-hidden="true">{{ avatarInitial }}</span>
+          <UserAvatar
+            class="profile-avatar"
+            :user-id="String(auth.user?.id ?? '')"
+            :username="auth.user?.username"
+          />
           <div class="profile-info">
             <div class="profile-heading">
               <h2>{{ auth.user?.username }}</h2>
@@ -179,9 +213,6 @@ const pending = computed(() => pendingSections[props.section ?? ''])
               <button class="inline-link" @click="profileState.refresh">重新加载资料</button>
             </div>
           </div>
-          <RouterLink v-if="!publicProfile" class="public-link" :to="`/users/${auth.user?.id}`"
-            >个人主页 <span aria-hidden="true">›</span></RouterLink
-          >
         </div>
         <div class="profile-statistics" aria-label="互动统计">
           <FollowSummary v-if="auth.user" :user-id="String(auth.user.id)" />
@@ -193,7 +224,7 @@ const pending = computed(() => pendingSections[props.section ?? ''])
             <strong class="growth-compact-title"
               >成长等级 <span v-if="summary">Lv.{{ summary.level }}</span></strong
             >
-            <RouterLink to="/account/growth" class="growth-entry" aria-label="查看成长规则">
+            <AppLink to="/account/growth" class="growth-entry" aria-label="查看成长规则">
               <span v-if="summary"
                 >{{ summary.experience
                 }}<template v-if="summary.nextLevelThreshold !== null">
@@ -203,7 +234,7 @@ const pending = computed(() => pendingSections[props.section ?? ''])
               >
               <span v-else>成长规则</span>
               <span aria-hidden="true">›</span>
-            </RouterLink>
+            </AppLink>
           </div>
           <progress v-if="summary" :value="progress" max="100" aria-label="当前等级升级进度" />
           <p v-if="summary && nextExperience === null">已达到当前最高等级</p>
@@ -222,7 +253,7 @@ const pending = computed(() => pendingSections[props.section ?? ''])
     </template>
 
     <nav v-if="home && !publicProfile" class="account-tools" aria-label="我的功能">
-      <RouterLink
+      <AppLink
         v-for="item in accountSections"
         :key="item.id"
         :to="
@@ -235,7 +266,7 @@ const pending = computed(() => pendingSections[props.section ?? ''])
         ><strong>{{ item.title }}</strong
         ><span class="tool-detail">{{ item.detail }}</span
         ><span class="tool-arrow" aria-hidden="true">›</span>
-      </RouterLink>
+      </AppLink>
     </nav>
     <template v-if="auth.authenticated && publicProfile">
       <nav class="profile-tabs" aria-label="个人主页内容">
@@ -272,14 +303,6 @@ const pending = computed(() => pendingSections[props.section ?? ''])
         <div class="growth-card growth-level-card" :aria-busy="loading">
           <div class="growth-level-heading">
             <span>当前等级</span>
-            <button
-              v-if="summary"
-              class="growth-refresh"
-              :disabled="loading"
-              @click="growth.refresh"
-            >
-              <span aria-hidden="true">⟳</span> 刷新
-            </button>
           </div>
           <template v-if="summary"
             ><div class="growth-numbers">
@@ -334,10 +357,10 @@ const pending = computed(() => pendingSections[props.section ?? ''])
       <template v-else-if="section === 'settings'">
         <section class="account-block">
           <h2>个人资料</h2>
+          <AvatarSetting />
           <div class="setting-row username-setting">
             <span>用户名</span><strong>{{ auth.user?.username }}</strong>
           </div>
-          <p class="fine-print">用于登录和公开展示，暂不支持修改。</p>
           <button
             class="setting-row bio-entry"
             :disabled="!ownDetails || profileLoading || bioSaving"
@@ -359,7 +382,6 @@ const pending = computed(() => pendingSections[props.section ?? ''])
           <h2>隐私设置</h2>
           <FavoriteVisibilitySetting />
           <FollowPrivacySetting />
-          <p class="settings-privacy-note">关闭后仅自己可见，关注和粉丝数仍公开。</p>
         </section>
         <section class="account-block">
           <h2>账号安全</h2>
@@ -369,8 +391,8 @@ const pending = computed(() => pendingSections[props.section ?? ''])
               ownDetails?.maskedEmail || (profileLoading ? '正在加载…' : '暂时无法读取')
             }}</span>
           </div>
-          <RouterLink class="setting-row setting-link" to="/password-reset"
-            ><span>找回 / 重置密码</span><span aria-hidden="true">›</span></RouterLink
+          <AppLink class="setting-row setting-link" to="/password-reset"
+            ><span>找回 / 重置密码</span><span aria-hidden="true">›</span></AppLink
           >
         </section>
         <button class="sign-out" :disabled="auth.loggingOut" @click="auth.signOut">
@@ -420,37 +442,26 @@ const pending = computed(() => pendingSections[props.section ?? ''])
 
       <section
         v-else-if="section === 'reviews' || section === 'favorites'"
-        class="account-list-card"
+        :class="section === 'reviews' ? 'account-review-content' : 'account-list-card'"
         :aria-label="title"
       >
-        <header class="account-list-toolbar">
+        <header v-if="section === 'favorites'" class="account-list-toolbar">
           <span v-if="listTotal !== null" class="account-list-total"
-            >共 {{ listTotal }} {{ section === 'reviews' ? '条点评' : '家店铺' }}</span
+            >共 {{ listTotal }} 家店铺</span
           >
-          <div class="account-list-actions">
-            <button
-              type="button"
-              :disabled="!activeAccountList || activeAccountList.refreshing"
-              @click="activeAccountList?.refresh()"
-            >
-              <span aria-hidden="true">⟳</span> 刷新
-            </button>
-            <RouterLink v-if="section === 'reviews'" to="/?writeReview=1"
-              >写点评 <span aria-hidden="true">›</span></RouterLink
-            >
-          </div>
         </header>
         <MyReviews
           v-if="section === 'reviews'"
-          ref="ownReviews"
           profile-layout
+          card-layout
           @total="listTotal = $event"
         />
-        <RestaurantFavorites v-else ref="ownFavorites" profile-layout @total="listTotal = $event" />
+        <RestaurantFavorites v-else profile-layout @total="listTotal = $event" />
       </section>
       <FollowList
         v-else-if="section === 'following' || section === 'followers'"
         :kind="section === 'following' ? 'FOLLOWING' : 'FOLLOWERS'"
+        @total="listTotal = $event"
       />
       <MyContributions v-else-if="section === 'contributions'" />
       <template v-else-if="pending">
@@ -458,11 +469,11 @@ const pending = computed(() => pendingSections[props.section ?? ''])
           <AccountIcon :name="pending[0] ?? 'review'" />
           <h2>{{ pending[1] }}</h2>
           <p>{{ pending[2] }}</p>
-          <RouterLink
+          <AppLink
             v-if="section === 'reviews' || section === 'favorites'"
             class="account-secondary"
             to="/"
-            >去发现美食 →</RouterLink
+            >去发现美食 →</AppLink
           >
         </div>
         <p v-if="section === 'favorites'" class="fine-print section-note">

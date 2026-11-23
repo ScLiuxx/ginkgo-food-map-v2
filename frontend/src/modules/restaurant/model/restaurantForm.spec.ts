@@ -18,6 +18,15 @@ const valid = () => ({
 
 /** 校验真实业务边界，防止空值、小数金额和未经确认的位置被错误转换后提交。 */
 describe('restaurant editor input rules', () => {
+  it('金额可直接选填，清空旧金额后提交null，来源编码由金额自动确定', () => {
+    expect(restaurantInput({ ...valid(), price: '25' })).toMatchObject({
+      priceKind: 'EXACT',
+      pricePerPerson: 25,
+    })
+    const cleared = { ...valid(), priceKind: 'ESTIMATE' as const, price: '  ' }
+    expect(validateRestaurantDraft(cleared)).toEqual({})
+    expect(restaurantInput(cleared)).toMatchObject({ priceKind: 'UNKNOWN', pricePerPerson: null })
+  })
   it('食堂无分类也可提交，普通餐厅仍须选分类，食堂请求不携带旧草稿分类', () => {
     const form = { ...valid(), categoryCode: '' }
     expect(validateRestaurantDraft(form, 'CANTEEN')).toEqual({})
@@ -41,7 +50,7 @@ describe('restaurant editor input rules', () => {
       'address',
     )
   })
-  it.each(['', '0', '5001', '20.5', '1e2', '-3', 'NaN'])(
+  it.each(['0', '5001', '20.5', '1e2', '-3', 'NaN'])(
     'rejects invalid exact integer amount %s',
     (price) => {
       expect(validateRestaurantDraft({ ...valid(), priceKind: 'EXACT', price })).toHaveProperty(
@@ -52,7 +61,7 @@ describe('restaurant editor input rules', () => {
   it('preserves price nulls and the explicit full replacement fields', () => {
     const input = restaurantInput({
       ...valid(),
-      price: '999',
+      price: '',
       address: '  ',
       tags: ' 第一个 \n\n 第二个 ',
     })
@@ -83,6 +92,14 @@ describe('restaurant editor input rules', () => {
     expect(validateRestaurantDraft({ ...valid(), tags: '😀'.repeat(81) })).toHaveProperty('tags')
     expect(validateRestaurantDraft({ ...valid(), tags: '😀'.repeat(80) })).not.toHaveProperty(
       'tags',
+    )
+  })
+  it('管理员可跳过位置勾选，但坐标范围和精度仍受校验', () => {
+    const form = { ...valid(), locationConfirmed: false }
+    expect(validateRestaurantDraft(form)).toHaveProperty('locationConfirmed')
+    expect(validateRestaurantDraft(form, 'REGULAR', false)).not.toHaveProperty('locationConfirmed')
+    expect(validateRestaurantDraft({ ...form, latitude: '2' }, 'REGULAR', false)).toHaveProperty(
+      'latitude',
     )
   })
   it('loads complete editable fields while requiring position reconfirmation', () => {

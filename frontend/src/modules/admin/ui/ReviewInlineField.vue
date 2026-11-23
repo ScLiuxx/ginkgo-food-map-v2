@@ -60,7 +60,6 @@ function cancel() {
     v-else-if="
       [
         'categoryCode',
-        'priceKind',
         'businessStatus',
         'locationConfirmed',
         'restaurantType',
@@ -90,11 +89,6 @@ function cancel() {
         {{ category.name }}
       </option>
     </template>
-    <template v-else-if="field === 'priceKind'"
-      ><option value="UNKNOWN">未知</option>
-      <option value="EXACT">填报金额</option>
-      <option value="ESTIMATE">估值</option></template
-    >
     <template v-else-if="field === 'businessStatus'"
       ><option value="OPERATING">正常经营</option>
       <option value="CLOSED">停业</option></template
@@ -132,7 +126,8 @@ function cancel() {
 <style scoped>
 .editable-value {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
   width: 100%;
   text-align: left;
@@ -148,8 +143,9 @@ function cancel() {
   cursor: default;
 }
 .edit-pencil {
-  opacity: 0;
-  color: #c3a784;
+  flex: none;
+  opacity: 0.7;
+  color: var(--admin-muted);
   transition: opacity 0.16s ease;
 }
 .editable-value:hover .edit-pencil,
@@ -159,12 +155,24 @@ function cancel() {
 .inline-input {
   width: 100%;
   min-width: 0;
-  border: 1px solid #dfa04d;
+  border: 1px solid var(--admin-border);
   border-radius: 4px;
-  padding: 6px;
+  padding: 6px 8px;
   font: inherit;
   color: inherit;
-  background: #fffdf8;
+  background: var(--admin-surface-muted);
+  outline: none;
+  box-shadow: none;
+}
+/* 鼠标编辑只保留光标；键盘仍能识别尚未打开的编辑入口。 */
+.editable-value:focus-visible {
+  outline: 2px solid var(--admin-focus);
+  outline-offset: 3px;
+}
+.inline-input:focus {
+  border-color: var(--admin-border);
+  outline: none;
+  box-shadow: none;
 }
 @media (hover: none) {
   .edit-pencil {

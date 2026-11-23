@@ -11,11 +11,11 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.ginkgo</groupId>
-    <artifactId>ginkgo-food-map-backend</artifactId>
+    <groupId>com.foodmap</groupId>
+    <artifactId>foodmap-backend</artifactId>
     <version>0.1.0-SNAPSHOT</version>
-    <name>ginkgo-food-map-backend</name>
-    <description>Ginkgo 美食地图 V2 模块化单体后端</description>
+    <name>foodmap-backend</name>
+    <description>泥电美食地图 V2 模块化单体后端</description>
 
     <properties>
         <java.version>21</java.version>
@@ -33,6 +33,12 @@
             <groupId>com.aliyun.oss</groupId>
             <artifactId>aliyun-sdk-oss</artifactId>
             <version>3.18.4</version>
+        </dependency>
+        <!-- COS仅在后端使用；保留OSS适配供既有桶记录显式路由，不迁移历史文件。 -->
+        <dependency>
+            <groupId>com.qcloud</groupId>
+            <artifactId>cos_api</artifactId>
+            <version>5.6.283</version>
         </dependency>
         <!-- Java21不再自带javax JAXB，OSS V1需要独立提供运行时。 -->
         <dependency>
@@ -96,6 +102,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-cache</artifactId>
+        </dependency>
+        <!-- 榜单在JVM内保存已解析结果；版本由Boot BOM管理，不新增服务。 -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -172,9 +183,34 @@
                 </configuration>
             </plugin>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- 启动时加载Mockito，避免Java21在测试中动态附加失败；路径随依赖版本与本机仓库解析。 -->
+                    <argLine>-Xms64m -Xmx384m -XX:ActiveProcessorCount=2 -XX:+ExitOnOutOfMemoryError -XX:ErrorFile=${project.build.directory}/hs_err_pid%p.log -javaagent:"${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar"</argLine>
+                    <forkCount>1</forkCount>
+                    <reuseForks>true</reuseForks>
+                    <systemPropertyVariables>
+                        <junit.jupiter.execution.parallel.enabled>false</junit.jupiter.execution.parallel.enabled>
+                        <!-- 每个上下文可持有连接池与客户端，限制缓存数量避免全量检查不断积累。 -->
+                        <spring.test.context.cache.maxSize>2</spring.test.context.cache.maxSize>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- 本地检查独立输出，避免Windows正在运行target中的JAR时打包重命名失败。 -->
+        <profile>
+            <id>local-check</id>
+            <build>
+                <directory>${project.basedir}/target/local-check</directory>
+            </build>
+        </profile>
+    </profiles>
 </project>

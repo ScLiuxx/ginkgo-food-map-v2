@@ -1,10 +1,10 @@
+import { isReviewRecommendation, type ReviewRecommendation } from '../model/review'
 import { httpClient } from '@/shared/api/httpClient'
 import type { ApiResponse } from '@/shared/api/api.types'
 
 export interface ReplyTarget {
   userId: string
-  restaurantId: string | null
-  windowId?: string | null
+  restaurantId: string
   reviewId: string
   replyId: string
   reviewAuthor: { id: string; username: string }
@@ -14,7 +14,7 @@ export interface ReplyTarget {
     body: string
     createdAt: string
     overallScore: number
-    recommended: boolean
+    recommendation: ReviewRecommendation
   }
   replyBody: string
   replyCreatedAt: string
@@ -45,10 +45,7 @@ export async function fetchReplyTarget(
     data.userId !== userId ||
     data.replyId !== replyId ||
     data.reviewId !== reviewId ||
-    !(
-      (id(data.restaurantId) && !data.windowId) ||
-      (data.restaurantId === null && id(data.windowId))
-    ) ||
+    !id(data.restaurantId) ||
     !data.review ||
     data.review.id !== reviewId ||
     typeof data.review.body !== 'string' ||
@@ -56,7 +53,7 @@ export async function fetchReplyTarget(
     !Number.isFinite(data.review.overallScore) ||
     data.review.overallScore < 0 ||
     data.review.overallScore > 10 ||
-    typeof data.review.recommended !== 'boolean' ||
+    !isReviewRecommendation(data.review.recommendation) ||
     !data.reviewAuthor ||
     data.reviewAuthor.id !== userId ||
     typeof data.reviewAuthor.username !== 'string' ||
@@ -70,7 +67,6 @@ export async function fetchReplyTarget(
   return {
     userId,
     restaurantId: data.restaurantId,
-    windowId: data.windowId,
     reviewId,
     replyId,
     reviewAuthor: {
@@ -86,7 +82,7 @@ export async function fetchReplyTarget(
       body: data.review.body,
       createdAt: data.review.createdAt,
       overallScore: data.review.overallScore,
-      recommended: data.review.recommended,
+      recommendation: data.review.recommendation,
     },
     replyBody: data.replyBody,
     replyCreatedAt: data.replyCreatedAt,

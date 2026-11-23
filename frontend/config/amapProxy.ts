@@ -4,7 +4,7 @@ import type { Plugin } from 'vite'
 /** 仅开发服务器使用的高德安全代理。固定上游/地图路径/Key，不接受任意URL；安全密钥永不返回浏览器。 */
 export function amapProxy(env: Record<string, string>): Plugin {
   return {
-    name: 'ginkgo-amap-security-proxy',
+    name: 'foodmap-amap-security-proxy',
     configureServer(server) {
       server.middlewares.use('/_AMapService', (request, response) => {
         const fail = (status: number, code: string) => {

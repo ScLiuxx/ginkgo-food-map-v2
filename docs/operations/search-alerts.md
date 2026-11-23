@@ -1,5 +1,7 @@
 # 检索告警运行说明
 
+2026-11-17起下述规则名和任务标签使用`foodmap`命名，已有Prometheus／Grafana实例须同时加载更新后的配置；表格是当前模板定义，不代表旧监控实例已经切换到新名称。
+
 本地 Prometheus 已加载八条规则，在 `http://127.0.0.1:9090/alerts` 查看规则及排查信息；[Grafana检索与同步看板](grafana.md#告警区域)顶部也展示这些规则的等待/触发状态。规则仍由Prometheus统一计算，未接入 Alertmanager、邮件或其他消息推送，不会自动通知管理员。未部署线上，未嵌入业务管理端。同步指标定义见[同步观测](elasticsearch-sync-metrics.md)。
 
 ## 规则与范围
@@ -8,14 +10,14 @@
 
 | 规则 | 条件 | 持续时间 | 级别 |
 | --- | --- | --- | --- |
-| GinkgoBackendScrapeUnavailable | 后端采集目标up=0 | 1分钟 | critical |
-| GinkgoSearchCircuitOpen | 共享熔断状态为打开 | 1分钟 | warning |
-| GinkgoSearchFallbackHigh | 最近5分钟计划走ES的列表请求至少20次，降级比例>20% | 2分钟 | warning |
-| GinkgoSearchFailureHigh | 最近5分钟列表请求至少20次，最终失败比例>5% | 1分钟 | critical |
-| GinkgoSearchLatencyHigh | 最近5分钟列表计时样本至少20次，整体P95>1秒 | 2分钟 | warning |
-| GinkgoSyncBacklogOld | 存在待同步任务且最老年龄>120秒，成功快照距今<90秒 | 2分钟 | warning |
-| GinkgoSyncFailedTasks | FAILED存量>0，成功快照距今<90秒 | 1分钟 | warning |
-| GinkgoSyncObservationStale | 同步启用时，快照或成功扫描批次时间距今>90秒 | 1分钟 | warning |
+| FoodmapBackendScrapeUnavailable | 后端采集目标up=0 | 1分钟 | critical |
+| FoodmapSearchCircuitOpen | 共享熔断状态为打开 | 1分钟 | warning |
+| FoodmapSearchFallbackHigh | 最近5分钟计划走ES的列表请求至少20次，降级比例>20% | 2分钟 | warning |
+| FoodmapSearchFailureHigh | 最近5分钟列表请求至少20次，最终失败比例>5% | 1分钟 | critical |
+| FoodmapSearchLatencyHigh | 最近5分钟列表计时样本至少20次，整体P95>1秒 | 2分钟 | warning |
+| FoodmapSyncBacklogOld | 存在待同步任务且最老年龄>120秒，成功快照距今<90秒 | 2分钟 | warning |
+| FoodmapSyncFailedTasks | FAILED存量>0，成功快照距今<90秒 | 1分钟 | warning |
+| FoodmapSyncObservationStale | 同步启用时，快照或成功扫描批次时间距今>90秒 | 1分钟 | warning |
 
 列表指标不覆盖地图；共享熔断同时受列表与地图调用影响。所有计算按job和instance分别聚合，避免不同实例混合；业务告警仅在该实例up=1时评估有效，采集失败时避免陈旧业务指标产生重复判断。
 
@@ -37,13 +39,13 @@
 在仓库根目录执行，不打印或修改采集密码：
 
 ```powershell
-docker compose -p ginkgo-monitoring -f deploy/monitoring/compose.yaml config --quiet
-docker compose -p ginkgo-monitoring -f deploy/monitoring/compose.yaml run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
-docker compose -p ginkgo-monitoring -f deploy/monitoring/compose.yaml run --rm --no-deps --entrypoint promtool prometheus test rules /etc/prometheus/alerts/restaurant-search.test.yml
-docker compose -p ginkgo-monitoring -f deploy/monitoring/compose.yaml up -d --no-deps prometheus
+docker compose -p foodmap-monitoring -f deploy/monitoring/compose.yaml config --quiet
+docker compose -p foodmap-monitoring -f deploy/monitoring/compose.yaml run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
+docker compose -p foodmap-monitoring -f deploy/monitoring/compose.yaml run --rm --no-deps --entrypoint promtool prometheus test rules /etc/prometheus/alerts/restaurant-search.test.yml
+docker compose -p foodmap-monitoring -f deploy/monitoring/compose.yaml up -d --no-deps prometheus
 ```
 
-首次增加规则挂载需执行上述up重建Prometheus容器，命名卷保留。后续仅改规则内容可在校验后执行 `docker kill --signal=SIGHUP ginkgo-monitoring-prometheus-1` 重载；也可重启。当前未开放web生命周期重载接口。运行状态检查：`http://127.0.0.1:9090/api/v1/rules?type=alert`，应有8条规则且health=ok、lastError为空。容器健康检查仅代表进程就绪，不能替代规则健康检查。
+首次增加规则挂载需执行上述up重建Prometheus容器，命名卷保留。后续仅改规则内容可在校验后执行 `docker kill --signal=SIGHUP foodmap-monitoring-prometheus-1` 重载；也可重启。当前未开放web生命周期重载接口。运行状态检查：`http://127.0.0.1:9090/api/v1/rules?type=alert`，应有8条规则且health=ok、lastError为空。容器健康检查仅代表进程就绪，不能替代规则健康检查。
 
 规则目录只读挂载，rule_files只加载正式规则，不加载测试文件。测试不缩短生产规则中的for，使用模拟时间推进。告警标签只包含固定范围和实例等维度，不包含搜索词、用户或异常原文；注释提供当前值、看板地址和排查文档。看板地址是本机默认入口，部署其他环境时需同步替换。
 

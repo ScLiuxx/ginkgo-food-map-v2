@@ -1,21 +1,24 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { computed } from 'vue'
+import { userProfilePath } from '@/shared/lib/userProfileNavigation'
 /** 用户只显示用户名；稳定用户ID来自现有作者响应，不按同名用户猜测身份。 */
 const props = defineProps<{
   userId?: string
   username: string
   level?: number
   authenticated: boolean
+  viewerId?: string
   preview?: boolean
 }>()
 const destination = computed(() => {
   if (props.preview || !props.userId || !/^[1-9]\d*$/.test(props.userId)) return null
-  const path = `/users/${props.userId}`
+  const path = userProfilePath(props.userId, props.authenticated ? props.viewerId : undefined)
   return props.authenticated ? path : { path: '/login', query: { redirect: path } }
 })
 </script>
 <template>
-  <RouterLink v-if="destination" class="user-identity" :to="destination">{{ username }}</RouterLink
+  <AppLink v-if="destination" class="user-identity" :to="destination">{{ username }}</AppLink
   ><strong v-else class="user-identity">{{ username }}</strong>
   <span v-if="Number.isInteger(level) && level! > 0" class="identity-level">Lv.{{ level }}</span>
 </template>

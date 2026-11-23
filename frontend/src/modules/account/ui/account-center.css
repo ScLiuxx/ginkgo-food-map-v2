@@ -1,3 +1,25 @@
+/* 名单页共用白底与紧凑页头；限定页面类，避免改变点评、设置和个人主页的卡片布局。 */
+:global(body:has(.account-center.account-follow-page)) {
+  background: #fff;
+}
+.account-center.account-follow-page {
+  width: min(720px, calc(100% - 40px));
+  padding-top: 24px;
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+}
+.account-center.account-follow-page .account-topline {
+  gap: 10px;
+  min-height: 44px;
+  margin-bottom: 16px;
+}
+.account-center.account-follow-page .account-topline h1 {
+  font-size: 23px;
+}
+.follow-page-total {
+  color: #929ba5;
+  font-size: 13px;
+  white-space: nowrap;
+}
 /* 个人中心保持840px阅读宽度；首页卡片布局与子页面样式分开，避免影响设置和成长规则。 */
 .account-center {
   width: min(840px, calc(100% - 64px));
@@ -30,14 +52,22 @@
 }
 .account-back {
   display: inline-flex;
-  gap: 6px;
   align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  min-height: 44px;
+  border-radius: 8px;
   color: #858e98;
-  margin-right: 8px;
-  font-size: 22px;
 }
-.account-back span {
-  font-size: 13px;
+.account-back svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .account-profile {
   padding: 0 0 26px;
@@ -60,12 +90,6 @@
   color: #ad751c;
   font-size: 12px;
   font-weight: 650;
-}
-.public-link {
-  margin-left: auto;
-  color: #8c939b;
-  font-size: 13px;
-  white-space: nowrap;
 }
 .profile-bio {
   margin: 13px 0 24px;
@@ -401,9 +425,6 @@ button.setting-row {
 .account-home {
   font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
 }
-.account-home .account-topline {
-  margin-bottom: 25px;
-}
 .account-home .account-profile,
 .account-home .account-tools {
   background: #fff;
@@ -439,14 +460,6 @@ button.setting-row {
   margin: 8px 0 0;
   color: #8b929c;
   font-size: 14px;
-}
-.profile-identity .public-link {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  color: #727c89;
-  min-height: 44px;
 }
 /* 只在个人中心内统一统计组件；公开主页等复用位置不受深层样式影响。 */
 .account-home .profile-statistics {
@@ -623,9 +636,6 @@ button.setting-row {
   .account-tools strong {
     font-size: 13px;
   }
-  .public-link {
-    font-size: 12px;
-  }
   .profile-statistics {
     gap: 28px;
   }
@@ -653,11 +663,6 @@ button.setting-row {
   }
   .account-home .profile-bio {
     font-size: 13px;
-  }
-  .account-home .public-link {
-    margin-left: auto;
-    font-size: 12px;
-    min-height: 32px;
   }
   .account-home .profile-statistics {
     width: 100%;

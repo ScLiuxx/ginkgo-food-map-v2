@@ -1,11 +1,15 @@
-# 本地IK业务扩展词典
+# IK业务扩展词典与部署
+
+腾讯云新服务器的ES9.5.4及IK首次配置见[服务器部署说明](server/README.md)，使用固定插件镜像和独立数据卷。以下保留本机安装与验证记录，不表示新服务器已完成安装。
 
 2026-11-04已在本地Elasticsearch/IK 9.5.4启用第一版词表：冒菜、螺蛳粉、天街。仅影响本地ES分词，不开启语义搜索，也不切换网站的MySQL查询入口。
 
+2026-11-17项目改名后，本页文件名和挂载来源已同步为`foodmap`，本机Compose的两个IK挂载引用已更新并重启同一ES服务，原有三个持久卷保持不变。索引品牌元数据允许兼容旧标识，不为改名重建已有索引；网站实际查询开关以当前运行配置为准。
+
 ## 文件与实际挂载
 
-- `ik/ginkgo-food.dic`：UTF-8、无BOM、每行一个词；只收录已验证的业务词，不批量导入店名、拼音或同义词。
-- `ik/IKAnalyzer.cfg.xml`：通过ext_dict登记ginkgo-food.dic，保留内置基础词典，不新增停用词或远程词库。
+- `ik/foodmap-food.dic`：UTF-8、无BOM、每行一个词；只收录已验证的业务词，不批量导入店名、拼音或同义词。
+- `ik/IKAnalyzer.cfg.xml`：通过ext_dict登记foodmap-food.dic，保留内置基础词典，不新增停用词或远程词库。
 - 两个文件都由`D:/healthy-agent/compose.yml`只读挂载到`/usr/share/elasticsearch/config/analysis-ik/`下同名文件。该Compose属于本机已有基础设施，仓库根compose.yaml未增加ES服务。
 
 本机原先只持久化ES数据，IK插件和基础词典在容器可写层。此次先完整备份、复制到两个外部持久卷，再重建同一个ES服务。实际挂载为：
@@ -15,14 +19,14 @@
 | 原有ES数据 | healthy-agent_agent_elasticsearch_data | /usr/share/elasticsearch/data |
 | 现有IK 9.5.4插件 | healthy-agent_agent_elasticsearch_ik_plugin | /usr/share/elasticsearch/plugins/analysis-ik |
 | 现有IK基础词典 | healthy-agent_agent_elasticsearch_ik_config | /usr/share/elasticsearch/config/analysis-ik |
-| 本仓库IK配置 | D:/eat/ginkgo-food-map-v2/deploy/elasticsearch/ik/IKAnalyzer.cfg.xml | 上述配置目录/IKAnalyzer.cfg.xml，只读 |
-| 本仓库扩展词表 | D:/eat/ginkgo-food-map-v2/deploy/elasticsearch/ik/ginkgo-food.dic | 上述配置目录/ginkgo-food.dic，只读 |
+| 本仓库IK配置 | D:/eat/foodmap/deploy/elasticsearch/ik/IKAnalyzer.cfg.xml | 上述配置目录/IKAnalyzer.cfg.xml，只读 |
+| 本仓库扩展词表 | D:/eat/foodmap/deploy/elasticsearch/ik/foodmap-food.dic | 上述配置目录/foodmap-food.dic，只读 |
 
 两个IK卷在Compose中声明external=true并显式指定上述name，避免当成Compose管理的新卷。首次迁入时已装入原有插件/基础词典，不能在新机器上只创建空卷就认为IK可用；应先安装匹配版本并准备基础词典。没有把二进制插件或完整基础词库提交到本仓库。
 
 ## 后续维护
 
-1. 将新词加入ginkgo-food.dic，保持UTF-8和一行一词；词库变更也要记录评测证据。
+1. 将新词加入foodmap-food.dic，保持UTF-8和一行一词；词库变更也要记录评测证据。
 2. 本地词典在启动时加载，修改文件后重启本地ES：
 
    ```powershell
@@ -34,7 +38,7 @@
 4. 已索引文档不会因词库更新自动重新分词；必须重建新的物理索引后对照查询，再决定别名切换。此次正式v002为空，无需重建正式业务数据；只重建了随机实验索引并在完成后清理。其他已有索引文档原样保留，没有替其他应用重建索引。
 5. 当前词库下的查询结果与接口耗时见[最终评测](../../docs/history/elasticsearch-final-benchmark-2026-11-05.md)。结构初始化工具的--check只核对mapping/settings/别名，不检查外部词典；必须另外核对挂载、词表内容及真实_analyze。
 
-目前只有本机Compose登记了这些绝对路径；移动仓库需要同步修改两个bind来源。部署到其他环境时，先显式安排兼容插件、词典持久化和数据重建，不直接使用本机路径。
+本机安装记录中的绝对路径仅供该开发环境使用；移动仓库需要同步修改两个bind来源。新服务器使用上述独立部署配置，不直接使用本机路径或复制开发数据卷。
 
 ## 备份与恢复
 
@@ -44,6 +48,6 @@
 
 本次没有修改MySQL、业务代码或API；网站继续使用MySQL搜索。原索引文档数和别名已核对保留，实际搜索回归没有替代未来的语义搜索、拼音、单字子串或人工相关性验收。
 
-## 当前索引版本（2026-11-05）
+## 历史切换记录（2026-11-05）
 
-本地现行别名已从v002切换至v003，9562条正文及external版本逐条一致；仅新增四个Han字符辅助子字段。原IK与扩展词保持不变，默认网站查询开关仍关闭。重建工具、维护锁及回退边界见[结构说明](../../docs/architecture/elasticsearch-schema.md#初始化与核验)，此前词库安装过程和实验记录保留作历史依据。
+当时本地别名从v002切换至v003，9562条正文及external版本逐条一致；仅新增四个Han字符辅助子字段，原IK与扩展词保持不变，当时网站默认查询开关仍关闭。当前索引版本及字段以[结构说明](../../docs/architecture/elasticsearch-schema.md)为准，词库安装过程和实验记录保留作历史依据。

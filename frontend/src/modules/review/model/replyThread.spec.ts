@@ -11,7 +11,7 @@ import { clearAccessToken, setAccessToken } from '@/shared/api/authSession'
 import { useLoginStore } from '@/modules/auth/model/login.store'
 
 let app: App, host: HTMLDivElement
-const props = reactive({ reviewId: '10', username: '点评作者' })
+const props = reactive({ reviewId: '10', username: '点评作者', combined: false })
 const settle = async () => {
   for (let i = 0; i < 15; i++) await nextTick()
 }
@@ -32,8 +32,10 @@ async function mount(
   reply = vi.fn().mockResolvedValue(undefined),
   loggedIn = true,
   multiple = false,
+  combined = false,
 ) {
   props.reviewId = '10'
+  props.combined = combined
   clearAccessToken()
   const pinia = createPinia(),
     auth = useLoginStore(pinia)
@@ -94,6 +96,66 @@ afterEach(() => {
 })
 
 describe('reply thread lifecycle', () => {
+  it('合并入口同时展开回复与编辑，收起重开保留失败正文和UUID', async () => {
+    const reply = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('发送中断'))
+      .mockResolvedValueOnce(undefined)
+    const { list } = await mount(undefined, reply, true, false, true)
+    const action = () => host.querySelector<HTMLButtonElement>('.thread-actions > button')!
+    expect(host.querySelectorAll('.thread-actions > button')).toHaveLength(1)
+    expect(list).not.toHaveBeenCalled()
+    action().click()
+    await settle()
+    expect(action().getAttribute('aria-expanded')).toBe('true')
+    expect(host.querySelector<HTMLFormElement>('form')!.style.display).not.toBe('none')
+    expect(list).toHaveBeenCalledTimes(1)
+    await text('收起后继续重试的正文')
+    await send()
+    const requestId = reply.mock.calls[0]![2]
+    action().click()
+    await settle()
+    expect(host.querySelector<HTMLFormElement>('form')!.style.display).toBe('none')
+    action().click()
+    await settle()
+    expect(host.querySelector('textarea')!.value).toBe('收起后继续重试的正文')
+    expect(list).toHaveBeenCalledTimes(1)
+    await send()
+    expect(reply.mock.calls[1]![2]).toBe(requestId)
+    expect(host.textContent).toContain('回复已发送')
+  })
+
+  it('合并入口收起取消旧读取，重开不接受旧结果；游客仍能阅读后选择登录回复', async () => {
+    let resolve!: (value: ReplyPage) => void
+    const list = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<ReplyPage>((r) => {
+            resolve = r
+          }),
+      )
+      .mockResolvedValueOnce(page('2'))
+    const { router } = await mount(list, undefined, false, false, true)
+    const action = host.querySelector<HTMLButtonElement>('.thread-actions > button')!
+    action.click()
+    await settle()
+    const signal = list.mock.calls[0]![1] as AbortSignal
+    action.click()
+    await settle()
+    expect(signal.aborted).toBe(true)
+    action.click()
+    await settle()
+    resolve(page('1'))
+    await settle()
+    expect(host.textContent).toContain('回复2')
+    expect(host.textContent).not.toContain('回复1')
+    expect(host.querySelector<HTMLFormElement>('form')!.style.display).toBe('none')
+    ;[...host.querySelectorAll<HTMLButtonElement>('button')]
+      .find((b) => b.textContent?.trim() === '登录后回复')!
+      .click()
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/login'))
+  })
   it('loads only on expansion and appends pages without duplicate records', async () => {
     const list = vi
       .fn()

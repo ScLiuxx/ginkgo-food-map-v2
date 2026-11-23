@@ -3,18 +3,31 @@ import { computed, nextTick, onUnmounted, reactive, ref, useId } from 'vue'
 import type { CatalogFilters } from '../model/restaurant.types'
 import { useRestaurantCatalog } from '../model/catalog.store'
 
-/** 高级条件独立草稿，仅确认时批量写回；不触碰分类、排序、关键词与经营状态。 */
-const props = withDefaults(defineProps<{ filters?: CatalogFilters; campusFilters?: boolean }>(), {
-  filters: undefined,
-  campusFilters: false,
-})
+/** 高级条件独立草稿，仅确认时批量写回；地图额外承接收进面板的分类和经营状态。 */
+const props = withDefaults(
+  defineProps<{
+    filters?: CatalogFilters
+    campusFilters?: boolean
+    mapFilters?: boolean
+    categories?: { code: string; name: string }[]
+  }>(),
+  {
+    filters: undefined,
+    campusFilters: false,
+    mapFilters: false,
+    categories: () => [],
+  },
+)
 const catalog = useRestaurantCatalog()
 // 地图预览与正式目录各自持有条件，组件只负责草稿和展示，不启动额外查询。
 const filters = computed(() => props.filters ?? catalog.filters)
 const groups = computed(() => [
+  ...(props.mapFilters ? [{ key: 'category', label: '美食分类' }] : []),
   { key: 'price', label: '人均消费' },
+  { key: 'reviews', label: '点评' },
   { key: 'venue', label: props.campusFilters ? '餐厅类型' : '场所类型' },
   { key: 'dining', label: '用餐方式' },
+  ...(props.mapFilters ? [{ key: 'status', label: '经营状态' }] : []),
 ])
 const activeGroup = ref('price')
 const content = ref<globalThis.HTMLDivElement>()
@@ -23,15 +36,23 @@ const prices = [20, 30, 50, 100]
 const count = computed(
   () =>
     Number(filters.value.maxPrice !== null) +
+    Number(filters.value.hasReviews != null) +
+    (props.mapFilters ? Number(!!filters.value.category) + Number(filters.value.hideClosed) : 0) +
     (props.campusFilters
       ? Number(!!filters.value.restaurantType) + Number(!!filters.value.diningMode)
       : 0),
 )
 const draft = reactive<{
+  hasReviews: boolean | null
   maxPrice: number | null
   restaurantType: NonNullable<CatalogFilters['restaurantType']>
   diningMode: NonNullable<CatalogFilters['diningMode']>
+  category: string
+  hideClosed: boolean
 }>({
+  hasReviews: null,
+  category: '',
+  hideClosed: false,
   restaurantType: '',
   diningMode: '',
   maxPrice: null,
@@ -84,13 +105,16 @@ function open() {
   Object.assign(draft, {
     restaurantType: filters.value.restaurantType || '',
     diningMode: filters.value.diningMode || '',
+    hasReviews: filters.value.hasReviews ?? null,
     maxPrice: filters.value.maxPrice,
+    category: filters.value.category,
+    hideClosed: filters.value.hideClosed,
   })
   trigger.value?.scrollIntoView?.({ block: 'nearest' })
   placeDropdown()
   dialog.value?.showModal()
   opened.value = true
-  activeGroup.value = 'price'
+  activeGroup.value = props.mapFilters ? 'category' : 'price'
   void nextTick(() => {
     if (content.value) content.value.scrollTop = 0
   })
@@ -116,7 +140,14 @@ function close() {
   trigger.value?.focus({ preventScroll: true })
 }
 function apply() {
+  if (props.mapFilters) {
+    filters.value.category = draft.category
+    filters.value.hideClosed = draft.hideClosed
+  }
   Object.assign(filters.value, {
+    ...(draft.hasReviews !== null || filters.value.hasReviews !== undefined
+      ? { hasReviews: draft.hasReviews }
+      : {}),
     maxPrice: draft.maxPrice,
     // 已移除距离入口，确认筛选时清除旧会话残留的距离限制。
     maxDistanceMeters: null,
@@ -132,6 +163,9 @@ function apply() {
 }
 function reset() {
   Object.assign(draft, {
+    hasReviews: null,
+    category: '',
+    hideClosed: false,
     maxPrice: null,
     restaurantType: '',
     diningMode: '',
@@ -171,7 +205,8 @@ onUnmounted(cleanup)
           stroke-linecap="round"
         />
       </svg>
-      更多筛选<span class="filter-chevron" :class="{ opened }" aria-hidden="true">⌄</span
+      {{ mapFilters ? '筛选' : '更多筛选'
+      }}<span class="filter-chevron" :class="{ opened }" aria-hidden="true">⌄</span
       ><span v-if="count" class="filter-count" :aria-label="`${count}个高级条件已生效`">{{
         count
       }}</span>
@@ -181,6 +216,7 @@ onUnmounted(cleanup)
         :id="id"
         ref="dialog"
         class="advanced-filter-dialog"
+        :class="{ 'map-mobile-filters': mapFilters }"
         :style="position"
         :aria-labelledby="id + '-title'"
         @cancel.prevent="close"
@@ -207,6 +243,23 @@ onUnmounted(cleanup)
             </button>
           </nav>
           <div ref="content" class="advanced-filter-body" @scroll="syncGroup">
+            <fieldset v-if="mapFilters" data-group="category">
+              <legend>美食分类</legend>
+              <div class="advanced-choices">
+                <button type="button" :aria-pressed="!draft.category" @click="draft.category = ''">
+                  全部美食
+                </button>
+                <button
+                  v-for="category in categories"
+                  :key="category.code"
+                  type="button"
+                  :aria-pressed="draft.category === category.code"
+                  @click="draft.category = category.code"
+                >
+                  {{ category.name }}
+                </button>
+              </div>
+            </fieldset>
             <fieldset data-group="price">
               <legend>人均消费</legend>
               <div class="advanced-choices">
@@ -227,9 +280,35 @@ onUnmounted(cleanup)
                   {{ price }} 元以下
                 </button>
               </div>
-              <p>包含所选金额；已填报金额和估值均可筛选，价格未知的餐厅将排除。</p>
+              <p>包含所选金额；未填写人均的餐厅将排除。</p>
             </fieldset>
             <!-- 首页与地图共用已接通的服务端筛选，列表和点位使用相同语义。 -->
+            <fieldset data-group="reviews">
+              <legend>点评</legend>
+              <div class="advanced-choices">
+                <button
+                  type="button"
+                  :aria-pressed="draft.hasReviews === null"
+                  @click="draft.hasReviews = null"
+                >
+                  全部
+                </button>
+                <button
+                  type="button"
+                  :aria-pressed="draft.hasReviews === true"
+                  @click="draft.hasReviews = true"
+                >
+                  有点评
+                </button>
+                <button
+                  type="button"
+                  :aria-pressed="draft.hasReviews === false"
+                  @click="draft.hasReviews = false"
+                >
+                  无点评
+                </button>
+              </div>
+            </fieldset>
             <template v-if="campusFilters">
               <fieldset data-group="venue">
                 <legend>餐厅类型</legend>
@@ -302,6 +381,12 @@ onUnmounted(cleanup)
                 <p>资料核实后开放；同一家店可以同时支持两种方式。</p>
               </fieldset>
             </template>
+            <fieldset v-if="mapFilters" data-group="status">
+              <legend>经营状态</legend>
+              <label class="business-status-filter"
+                ><input v-model="draft.hideClosed" type="checkbox" />隐藏停业餐厅</label
+              >
+            </fieldset>
           </div>
         </div>
         <footer>

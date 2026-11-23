@@ -4,7 +4,7 @@
 
 ## 当前基础与第一个交付
 
-现有[点评发布服务](../../backend/src/main/java/com/ginkgo/foodmap/review/service/ReviewWriteService.java)使用独立事务执行完整尝试，包含商户锁、请求回执、图片绑定、评分统计及搜索任务；失败后在事务外有限重试。[本人删评服务](../../backend/src/main/java/com/ginkgo/foodmap/review/service/ReviewDeleteService.java)永久删除点评，但保留请求回执。[申请审核服务](../../backend/src/main/java/com/ginkgo/foodmap/restaurant/service/RestaurantRequestReviewService.java)将商户发布、相册和审核结果放在同一事务中。
+现有[点评发布服务](../../backend/src/main/java/com/foodmap/review/service/ReviewWriteService.java)使用独立事务执行完整尝试，包含商户锁、请求回执、图片绑定、评分统计及搜索任务；失败后在事务外有限重试。[本人删评服务](../../backend/src/main/java/com/foodmap/review/service/ReviewDeleteService.java)永久删除点评，但保留请求回执。[申请审核服务](../../backend/src/main/java/com/foodmap/restaurant/service/RestaurantRequestReviewService.java)将商户发布、相册和审核结果放在同一事务中。
 
 已完成首个交付：新提交成功的点评 → 按每用户每店的一次奖励资格记经验 → 查询本人累计经验和数字等级。奖励记录不随点评删除，以保证删评重发不再次领奖。已存在发布请求的重放分支不补发历史奖励。成长核心包含幂等撤销能力及测试，真实违规处置入口随后接入。
 
@@ -121,7 +121,7 @@ sequenceDiagram
 
 ## 已实现的读取接口
 
-本人摘要接口已加入现行[API契约](../api.md#14-本人成长摘要)：
+本人摘要接口已加入现行[API契约](../api/account.md#growth)：
 
 | 入口 | 认证与结果 |
 | --- | --- |
@@ -150,7 +150,7 @@ sequenceDiagram
 | 午夜边界、事务重试及已完成动作重放 | 同一动作日期和奖励结果稳定，新动作进入对应日期桶。 | 点赞接入 |
 | 点赞与已确认违规处置并发 | 在统一源状态及锁顺序下验证发奖、停止奖励与撤销的最终结果。 | 风控接入 |
 
-纯规则用单元测试覆盖门槛边界、参数校验及撤销金额；锁、唯一约束、回滚与重试使用隔离真实MySQL库验证，记录实际数据库版本。当前已有[真实点评集成测试基础](../../backend/src/test/java/com/ginkgo/foodmap/review/ReviewWriteApiIntegrationTest.java)。故障注入应分别覆盖业务提交前失败与提交成功后响应失败，两者预期不同；测试失败要保留可复现条件，不以重复运行通过代替原因分析。
+纯规则用单元测试覆盖门槛边界、参数校验及撤销金额；锁、唯一约束、回滚与重试使用隔离真实MySQL库验证，记录实际数据库版本。当前已有[真实点评集成测试基础](../../backend/src/test/java/com/foodmap/review/ReviewWriteApiIntegrationTest.java)。故障注入应分别覆盖业务提交前失败与提交成功后响应失败，两者预期不同；测试失败要保留可复现条件，不以重复运行通过代替原因分析。
 
 首个发评闭环和成长核心的发放、撤销、配置调整及异常回滚已有自动化验证，执行数量及环境见[开发记录](../development.md)。表中的汇总重建工具、真实风控接入仍未实现；当前只验证了余额损坏时拒绝撤销，不声称已完成修复工具。没有本功能吞吐量或性能提升结论。
 

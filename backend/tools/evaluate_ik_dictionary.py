@@ -36,9 +36,9 @@ def main():
     additions = [["冒菜", "螺蛳粉", "天街"],
                  ["蜜雪冰城", "瑞幸", "库迪", "茶百道", "塔斯汀", "袁记云饺", "书亦烧仙草", "桂苑", "科创", "合信路"]]
     (output / "dictionary-additions.txt").write_text("\n".join(",".join(group) for group in additions) + "\n", encoding="utf-8")
-    prefix = "/tmp/ginkgo-ik-eval-" + uuid.uuid4().hex
+    prefix = "/tmp/foodmap-ik-eval-" + uuid.uuid4().hex
     paths = [prefix + suffix for suffix in (".java", ".input", ".words", ".output")]
-    if not all(re.fullmatch(r"/tmp/ginkgo-ik-eval-[a-f0-9]{32}\.(java|input|words|output)", p) for p in paths):
+    if not all(re.fullmatch(r"/tmp/foodmap-ik-eval-[a-f0-9]{32}\.(java|input|words|output)", p) for p in paths):
         raise ValueError("非法临时路径")
     def docker(*command, **kwargs):
         return subprocess.run(["docker", *command], check=True, **kwargs)

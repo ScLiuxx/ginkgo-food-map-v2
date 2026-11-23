@@ -34,6 +34,8 @@ describe('authenticated HTTP client', () => {
     await httpClient.post('/auth/email/code/password-reset', {})
     await httpClient.get('/api/public/status')
     await httpClient.get('/api/restaurant-categories')
+    await httpClient.get('/api/restaurant-rankings')
+    await httpClient.post('/api/restaurant-picker/candidates', {})
     await httpClient.get('/api/restaurants')
     await httpClient.get('/api/restaurants/1')
     await httpClient.get('/api/restaurants/1/photos')
@@ -56,7 +58,7 @@ describe('authenticated HTTP client', () => {
     await httpClient.post('/api/restaurants', {})
     await httpClient.put('/api/restaurants/1', {})
     await httpClient.delete('/api/restaurants/1')
-    await httpClient.post('/api/restaurants/1/restore')
+    await httpClient.post('/api/admin/announcements', {})
     await httpClient.post('/api/reviews/10/replies', {})
     for (const config of sent) expect(config.headers.Authorization).toBe('Bearer current-session')
   })
@@ -78,7 +80,7 @@ describe('authenticated HTTP client', () => {
     }
     await expect(httpClient.get('/auth/me')).rejects.toThrow()
     expect(getAccessToken()).toBeNull()
-    expect(localStorage.getItem('ginkgo.access-token')).toBeNull()
+    expect(localStorage.getItem('foodmap.access-token')).toBeNull()
   })
 
   it('does not clear a new session when an old request returns 401', async () => {

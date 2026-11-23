@@ -4,7 +4,6 @@ import { clearAccessToken, setAccessToken } from '@/shared/api/authSession'
 import {
   publishTextReview,
   textReviewGateway,
-  windowReviewGateway,
   fetchReviewPage,
   fetchReviewHistory,
   fetchReplies,
@@ -17,7 +16,7 @@ const draft = (): ReviewDraft => ({
   restaurantId: '101',
   clientRequestId: 'e88a495b-8524-43f6-ab9e-7e7276686798',
   scores: { taste: 8, value: 7.5, service: 7, ambience: 8 },
-  recommended: true,
+  recommendation: 'RECOMMENDED',
   body: '用餐体验很不错',
   photos: [],
 })
@@ -38,7 +37,7 @@ const readPayload = () => ({
         id: '9007199254740993',
         scores: draft().scores,
         overallScore: 7.63,
-        recommended: true,
+        recommendation: 'RECOMMENDED',
         body: '<script>纯文本正文</script>',
         createdAt: '2026-10-30T01:00:00Z',
         scoringStatus: 'current',
@@ -57,6 +56,32 @@ afterEach(() => {
 })
 
 describe('text review HTTP integration', () => {
+  it.each(['RECOMMENDED', 'NEUTRAL', 'NOT_RECOMMENDED'] as const)(
+    'reads and publishes the exact %s attitude code',
+    async (recommendation) => {
+      const payload = readPayload()
+      payload.records[0]!.currentReview.recommendation = recommendation
+      vi.spyOn(httpClient, 'get').mockResolvedValue({ data: { success: true, data: payload } })
+      const result = await fetchReviewPage('101', new AbortController().signal)
+      expect(result.records[0]!.recommendation).toBe(recommendation)
+      setAccessToken('session')
+      const post = vi
+        .spyOn(httpClient, 'post')
+        .mockResolvedValue({ data: { success: true, data: receipt } })
+      await publishTextReview({ ...draft(), recommendation })
+      expect(post.mock.calls[0]![1]).toMatchObject({ recommendation })
+      expect(post.mock.calls[0]![1]).not.toHaveProperty('recommended')
+    },
+  )
+  it.each([true, false, 0, null, 'neutral', 'NEUTRAL ', 'UNKNOWN'])(
+    'rejects a non-canonical attitude from the server: %s',
+    async (recommendation) => {
+      const payload = readPayload()
+      Object.assign(payload.records[0]!.currentReview, { recommendation })
+      vi.spyOn(httpClient, 'get').mockResolvedValue({ data: { success: true, data: payload } })
+      await expect(fetchReviewPage('101', new AbortController().signal)).rejects.toThrow('响应格式')
+    },
+  )
   it('deletes a reply with a fixed credential and rejects unconfirmed receipts', async () => {
     const remove = vi.spyOn(httpClient, 'delete').mockResolvedValue({ status: 204 })
     const controller = new AbortController()
@@ -151,7 +176,7 @@ describe('text review HTTP integration', () => {
       {
         clientRequestId: draft().clientRequestId,
         scores: draft().scores,
-        recommended: true,
+        recommendation: 'RECOMMENDED',
         body: draft().body,
       },
       { headers: { Authorization: 'Bearer initiating-session' } },
@@ -309,58 +334,5 @@ describe('history HTTP integration', () => {
         '响应格式',
       )
     }
-  })
-})
-
-/** 相同数字ID的餐厅与窗口不能共享发布/读取路径。 */
-describe('window review identity', () => {
-  it('publishes to the window route and validates both mutually exclusive target fields', async () => {
-    setAccessToken('window-session')
-    const post = vi
-      .spyOn(httpClient, 'post')
-      .mockResolvedValue({
-        data: {
-          success: true,
-          data: { reviewId: '7', restaurantId: null, windowId: '101', replayed: false },
-        },
-      })
-    await publishTextReview({ ...draft(), windowId: '101' })
-    expect(post).toHaveBeenCalledWith(
-      '/api/canteen-windows/101/reviews',
-      expect.anything(),
-      expect.anything(),
-    )
-    post.mockResolvedValue({ data: { success: true, data: { ...receipt, windowId: '101' } } })
-    await expect(publishTextReview({ ...draft(), windowId: '101' })).rejects.toThrow(
-      '发布结果无法确认',
-    )
-  })
-  it('loads main cards and history using the independent window route', async () => {
-    const get = vi
-      .spyOn(httpClient, 'get')
-      .mockResolvedValue({ data: { success: true, data: readPayload() } })
-    const signal = new globalThis.AbortController().signal
-    await windowReviewGateway.list('101', signal)
-    expect(get).toHaveBeenLastCalledWith(
-      '/api/canteen-windows/101/reviews',
-      expect.objectContaining({ signal }),
-    )
-    get.mockResolvedValue({
-      data: {
-        success: true,
-        data: {
-          author: null,
-          currentReviewId: null,
-          records: [],
-          hasMore: false,
-          nextCursor: null,
-        },
-      },
-    })
-    await windowReviewGateway.history!('101', '22', signal)
-    expect(get).toHaveBeenLastCalledWith(
-      '/api/canteen-windows/101/reviews/authors/22/history',
-      expect.objectContaining({ signal }),
-    )
   })
 })

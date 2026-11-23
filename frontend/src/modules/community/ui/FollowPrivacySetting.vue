@@ -84,9 +84,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="follow-privacy privacy-setting">
     <label class="privacy-row"
-      ><span class="privacy-copy"
-        ><span class="privacy-label">公开关注名单</span
-        ><span class="privacy-description">允许其他登录用户查看</span></span
+      ><span class="privacy-copy"><span class="privacy-label">公开关注名单</span></span
       ><input
         class="privacy-switch"
         type="checkbox"
@@ -96,9 +94,7 @@ onBeforeUnmount(() => {
         :disabled="!known || busy || loading"
         @change="change('followingPublic', $event)" /></label
     ><label class="privacy-row"
-      ><span class="privacy-copy"
-        ><span class="privacy-label">公开粉丝名单</span
-        ><span class="privacy-description">允许其他登录用户查看</span></span
+      ><span class="privacy-copy"><span class="privacy-label">公开粉丝名单</span></span
       ><input
         class="privacy-switch"
         type="checkbox"

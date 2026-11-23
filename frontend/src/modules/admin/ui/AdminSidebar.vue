@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import AppLink from '@/shared/ui/AppLink.vue'
+import './admin-theme.css'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { getAccessToken } from '@/shared/api/authSession'
 import { fetchRequestPage } from '../api/restaurantRequestsApi'
 
@@ -29,31 +31,41 @@ onMounted(async () => {
 onBeforeUnmount(() => controller.abort())
 const items = [
   { name: '商户审核', path: '/admin/reviews', icon: 'review' },
-  { name: '公告管理', path: '/admin/announcements', icon: 'announcement' },
   { name: '举报处理', path: '/admin/reports', icon: 'report' },
   { name: '商户管理', path: '/admin/restaurants', icon: 'shop' },
-  { name: '点评管理', icon: 'chat' },
-  { name: '操作记录', icon: 'history' },
+  { name: '公告管理', path: '/admin/announcements', icon: 'announcement' },
+  { name: '使用统计', path: '/admin/activity', icon: 'activity' },
 ]
+const sidebar = useTemplateRef<globalThis.HTMLElement>('sidebar')
+// 手机横向导航只滚动自身，新增入口及当前页始终可见，不改变正文阅读位置。
+watch(
+  [() => route.path, badge],
+  async () => {
+    await nextTick()
+    const nav = sidebar.value,
+      current = nav?.querySelector<globalThis.HTMLElement>('.selected')
+    if (!nav || !current || nav.scrollWidth <= nav.clientWidth) return
+    const bounds = nav.getBoundingClientRect(),
+      selected = current.getBoundingClientRect()
+    if (selected.left < bounds.left) nav.scrollLeft -= bounds.left - selected.left
+    else if (selected.right > bounds.right) nav.scrollLeft += selected.right - bounds.right
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
-  <nav class="admin-sidebar" aria-label="管理导航">
-    <p class="sidebar-label">内容管理</p>
-    <component
-      :is="item.path ? RouterLink : 'button'"
+  <nav ref="sidebar" class="admin-sidebar" aria-label="管理导航">
+    <AppLink
       v-for="item in items"
       :key="item.icon"
       :to="item.path"
-      :disabled="!item.path"
       class="sidebar-item"
       :class="{
-        selected: item.path && (route.path === item.path || route.path.startsWith(item.path + '/')),
+        selected: route.path === item.path || route.path.startsWith(item.path + '/'),
       }"
       :aria-current="
-        item.path && (route.path === item.path || route.path.startsWith(item.path + '/'))
-          ? 'page'
-          : undefined
+        route.path === item.path || route.path.startsWith(item.path + '/') ? 'page' : undefined
       "
     >
       <svg
@@ -73,62 +85,53 @@ const items = [
           v-else-if="item.icon === 'announcement'"
           d="m4 10 15-6v16L4 14ZM4 10H2v4h2M7 15l2 6h3l-2-5"
         />
-        <path
-          v-else-if="item.icon === 'report'"
-          d="M12 3 2 21h20L12 3Zm0 6v5M12 17h.01"
-        />
+        <path v-else-if="item.icon === 'report'" d="M12 3 2 21h20L12 3Zm0 6v5M12 17h.01" />
+        <path v-else-if="item.icon === 'activity'" d="M4 3v17h17M8 15v-4M13 15V6M18 15V9" />
         <path
           v-else-if="item.icon === 'shop'"
           d="M4 10v10h16V10M3 10l2-6h14l2 6M3 10c0 4 5 4 5 0 0 4 8 4 8 0 0 4 5 4 5 0M9 20v-6h6v6"
         />
-        <path
-          v-else-if="item.icon === 'chat'"
-          d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 3v-3H3V6a2 2 0 0 1 2-2ZM7 9h10M7 13h7"
-        />
-        <path v-else d="M4 7a9 9 0 1 1-1 9M3 3v5h5M12 7v6l4 2" />
       </svg>
       <span>{{ item.name }}</span>
       <span v-if="item.icon === 'review' && badge !== undefined" class="sidebar-count">{{
         badge
       }}</span>
-      <span v-if="!item.path" class="sidebar-later">后续</span>
-    </component>
-    <div class="sidebar-bottom">一起维护校园美食地图<br />让每一份分享都有据可循。</div>
+    </AppLink>
   </nav>
 </template>
 
 <style scoped>
 .admin-sidebar {
   box-sizing: border-box;
-  border-right: 1px solid #eceef0;
-  padding: 36px 18px;
+  border-right: 1px solid var(--admin-divider);
+  padding: 28px var(--admin-sidebar-padding);
   display: flex;
   flex-direction: column;
   gap: 8px;
   font-family: Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  color: #25313d;
-}
-.sidebar-label {
-  font-size: 10px;
-  color: #929aa3;
-  letter-spacing: 2px;
-  margin: 0 16px 12px;
+  color: var(--admin-text);
+  background: var(--admin-surface);
+  min-width: 0;
+  min-height: 0;
 }
 .sidebar-item {
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 12px;
+  flex: none;
+  gap: 10px;
   width: 100%;
-  padding: 13px 15px;
+  height: var(--admin-nav-height);
+  padding: 0 12px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 9px;
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 20px;
   text-align: left;
   text-decoration: none;
   background: transparent;
-  color: inherit;
+  color: var(--admin-secondary);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -138,32 +141,17 @@ const items = [
   flex-shrink: 0;
 }
 .sidebar-item.selected {
-  background: #fcf4e8;
-  color: #bd6816;
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent-text);
   font-weight: 600;
-}
-.sidebar-item:disabled {
-  color: #b3bac2;
-  cursor: default;
 }
 .sidebar-count {
   margin-left: auto;
   font-size: 11px;
-}
-.sidebar-later {
-  margin-left: auto;
-  font-size: 9px;
-  color: #b3bac2;
-}
-.sidebar-bottom {
-  margin-top: auto;
-  padding: 28px 15px 0;
-  font-size: 11px;
-  line-height: 1.9;
-  color: #959ca4;
+  font-weight: 400;
 }
 .sidebar-item:focus-visible {
-  outline: 2px solid #ad6f26;
+  outline: 2px solid var(--admin-focus);
   outline-offset: 3px;
 }
 @media (max-width: 800px) {
@@ -172,17 +160,12 @@ const items = [
     overflow: auto;
     padding: 9px 16px;
     border-right: 0;
-    border-bottom: 1px solid #eceef0;
+    border-bottom: 1px solid var(--admin-divider);
     gap: 0;
-  }
-  .sidebar-label,
-  .sidebar-bottom,
-  .sidebar-later {
-    display: none;
   }
   .sidebar-item {
     width: auto;
-    padding: 10px;
+    padding: 0 10px;
     font-size: 11px;
     gap: 6px;
   }

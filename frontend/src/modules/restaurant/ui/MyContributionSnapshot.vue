@@ -1,79 +1,69 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { contributionFields } from '../model/myContributionFields'
 
 /** 历史快照只读展示，不套用现行编辑校验；未知值保持未知，文字通过插值转义。 */
 const props = defineProps<{ values: Record<string, unknown> }>()
-const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value : '未填写')
-const support = (value: unknown) => (value === true ? '支持' : value === false ? '不支持' : '未知')
-const type = computed(() =>
-  props.values.restaurantType === 'CANTEEN'
-    ? '食堂'
-    : props.values.restaurantType === 'REGULAR'
-      ? '普通餐厅'
-      : '未记录',
-)
-const price = computed(() => {
-  const value = props.values
-  return typeof value.pricePerPerson === 'number' && value.priceKind !== 'UNKNOWN'
-    ? `${value.priceKind === 'ESTIMATE' ? '约 ' : ''}¥${value.pricePerPerson} / 人`
-    : '未知'
+const fields = computed(() => contributionFields(props.values))
+// 店名已在详情标题显示，分类和营业状态压缩为标签；无标签时省去空行。
+const primary = computed(() => {
+  const tags = props.values.tags
+  const hasTags = Array.isArray(tags) && tags.some((tag) => typeof tag === 'string' && tag.trim())
+  return fields.value.filter(
+    (field) =>
+      ['address', 'price', 'dining'].includes(field.key) || (field.key === 'tags' && hasTags),
+  )
 })
-const tags = computed(() =>
-  Array.isArray(props.values.tags)
-    ? props.values.tags.filter((tag): tag is string => typeof tag === 'string').join('、')
-    : '',
+const chips = computed(() =>
+  fields.value.filter((field) => ['category', 'businessStatus'].includes(field.key)),
 )
 </script>
 <template>
+  <div class="contribution-property-chips">
+    <span
+      v-for="field in chips"
+      :key="field.key"
+      :class="{
+        'is-operating': field.key === 'businessStatus' && values.businessStatus === 'OPERATING',
+      }"
+      >{{ field.text }}</span
+    >
+  </div>
   <dl class="contribution-snapshot">
-    <dt>店铺名称</dt>
-    <dd>{{ text(values.name) }}</dd>
-    <dt>类型 / 分类</dt>
-    <dd>
-      {{ type
-      }}<template v-if="values.restaurantType !== 'CANTEEN'">
-        · {{ text(values.categoryName || values.categoryCode) }}</template
-      >
-    </dd>
-    <dt>人均消费</dt>
-    <dd>{{ price }}</dd>
-    <dt>店铺地址</dt>
-    <dd>{{ text(values.address) }}</dd>
-    <dt>营业状态</dt>
-    <dd>
-      {{
-        values.businessStatus === 'OPERATING'
-          ? '营业中'
-          : values.businessStatus === 'CLOSED'
-            ? '已停业'
-            : '未知'
-      }}
-    </dd>
-    <dt>堂食 / 外卖</dt>
-    <dd>{{ support(values.supportsDineIn) }} / {{ support(values.supportsDelivery) }}</dd>
-    <dt>地图位置</dt>
-    <dd>
-      {{
-        typeof values.latitude === 'number' && typeof values.longitude === 'number'
-          ? `${values.latitude}, ${values.longitude}`
-          : '未记录'
-      }}<template v-if="values.locationConfirmed === true">（提交时已确认）</template>
-    </dd>
-    <dt>标签</dt>
-    <dd>{{ tags || '未填写' }}</dd>
+    <template v-for="field in primary" :key="field.key"
+      ><dt>{{ field.label }}</dt>
+      <dd>{{ field.text }}</dd></template
+    >
   </dl>
 </template>
 <style scoped>
 .contribution-snapshot {
   display: grid;
-  grid-template-columns: 88px minmax(0, 1fr);
-  gap: 13px 12px;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 9px 10px;
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.7;
 }
 dt {
-  color: #8c959e;
+  color: #74818c;
+}
+.contribution-property-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 15px;
+}
+.contribution-property-chips span {
+  background: #f3f5f7;
+  color: #65737e;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 5px;
+}
+.contribution-property-chips .is-operating {
+  background: #eff7f1;
+  color: #447759;
 }
 dd {
   margin: 0;

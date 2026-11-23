@@ -1,0 +1,207 @@
+/* 消息列表不叠加卡片；仅内容区之间保留浅分隔，操作入口预留44px触控范围。 */
+.notification-entry {
+  position: relative;
+}
+.notification-entry + .notification-entry::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 54px;
+  right: 0;
+  height: 1px;
+  background: #f0f1f2;
+}
+.notification-card {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  min-height: 112px;
+  padding: 22px 44px 22px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.notification-avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #f5ede4;
+  color: #9e7752;
+  font-size: 16px;
+}
+.avatar-tone-1 {
+  background: #edf3ee;
+  color: #6e8876;
+}
+.avatar-tone-2 {
+  background: #eaf0f6;
+  color: #768dab;
+}
+.system-avatar {
+  border-radius: 14px;
+  background: #fff3e7;
+  color: #bd884b;
+}
+.system-avatar.report {
+  background: #eff3f8;
+  color: #7c91af;
+}
+.notification-avatar svg {
+  width: 21px;
+  height: 21px;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.notification-copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding-top: 1px;
+  overflow-wrap: anywhere;
+}
+.notification-title {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.6;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.system-entry .notification-title {
+  white-space: normal;
+}
+.notification-detail {
+  font-size: 13px;
+  color: #69727d;
+  line-height: 1.7;
+}
+.notification-reason {
+  color: #89919b;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.notification-copy time {
+  margin-top: 3px;
+  color: #949da7;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.notification-unread {
+  position: absolute;
+  right: 19px;
+  top: 29px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #e7a35b;
+}
+.notification-actions {
+  position: absolute;
+  top: 31px;
+  right: 0;
+}
+.notification-more {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #99a3af;
+  cursor: pointer;
+}
+.notification-more svg {
+  width: 19px;
+  height: 19px;
+  fill: currentColor;
+}
+.notification-menu {
+  position: absolute;
+  top: 39px;
+  right: 0;
+  z-index: 5;
+  min-width: 125px;
+  padding: 5px;
+  border: 1px solid #eeeff1;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 6px 24px #23304416;
+}
+.notification-menu button {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #ac6856;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.notification-delete-confirm {
+  margin: 0 0 18px 54px;
+  padding: 12px;
+  border-radius: 9px;
+  background: #f7f8fa;
+  color: #69727d;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.notification-delete-confirm p {
+  margin: 0;
+  line-height: 1.8;
+}
+.notification-delete-confirm > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+.notification-delete-confirm button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #69727d;
+  font: inherit;
+  cursor: pointer;
+}
+.notification-delete-confirm .confirm-delete {
+  color: #ac6856;
+}
+.notification-entry button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+/* 鼠标及触屏不增加黄色描边，键盘仍显示中性焦点，保证读取和删除入口可辨认。 */
+.notification-entry button:focus-visible {
+  outline: 2px solid #8795a6;
+  outline-offset: -2px;
+}
+@media (hover: hover) {
+  .notification-more:hover:not(:disabled),
+  .notification-menu button:hover:not(:disabled) {
+    background: #f6f7f9;
+  }
+  .notification-card:hover:not(:disabled) .notification-title {
+    color: #8e6940;
+  }
+}

@@ -1,31 +1,23 @@
-/* 使用原生复选控件绘制开关，保留键盘、禁用和回执确认后更新的原有行为。 */
+/* 隐私项仅显示名称与开关，行高与其他设置项对齐；保留原生控件的键盘和禁用行为。 */
 .privacy-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 19px 0;
-  min-height: 80px;
+  padding: 16px 0;
+  min-height: 56px;
   cursor: pointer;
 }
 .privacy-row + .privacy-row {
   border-top: 1px solid #edf0f3;
 }
 .privacy-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
   min-width: 0;
 }
 .privacy-label {
   font-size: 15px;
   color: #34404d;
   line-height: 1.6;
-}
-.privacy-description {
-  font-size: 12px;
-  color: #929ca7;
-  line-height: 1.7;
 }
 .privacy-switch {
   appearance: none;

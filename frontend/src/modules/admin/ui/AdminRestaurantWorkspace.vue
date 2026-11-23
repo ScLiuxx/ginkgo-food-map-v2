@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import AppLink from '@/shared/ui/AppLink.vue'
+import { computed, ref } from 'vue'
+import RestaurantDeleteDialog from '@/modules/restaurant/ui/RestaurantDeleteDialog.vue'
+import type { RestaurantManagement } from '@/modules/restaurant/api/restaurantApi'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import { useAdminRestaurants } from '../model/useAdminRestaurants'
 import AdminSidebar from './AdminSidebar.vue'
+import AdminHeader from './AdminHeader.vue'
 
 const props = defineProps<{
   editing?: boolean
@@ -29,20 +33,26 @@ const {
   error,
   categoryError,
   notice,
-  lookupId,
-  selected,
-  inspecting,
   busy,
-  actionError,
-  confirming,
   sessionChanged,
   reload,
   loadCategories,
-  inspect,
-  applyAction,
-  close,
   search,
 } = useAdminRestaurants(enabled)
+
+const deleteTarget = ref<{ id: string; name: string } | null>(null)
+function removed(result: RestaurantManagement) {
+  notice.value = `「${result.restaurant.name}」已删除。`
+  void reload()
+}
+function closeDelete() {
+  deleteTarget.value = null
+  busy.value = false
+}
+function clearSearch() {
+  keyword.value = ''
+  search()
+}
 
 // 写入结果确认前留在当前页面，避免导航销毁状态后误以为操作未提交。
 onBeforeRouteLeave(() => !busy.value)
@@ -50,59 +60,96 @@ onBeforeRouteUpdate(() => !busy.value)
 </script>
 
 <template>
-  <div class="management">
-    <header>
-      <RouterLink class="brand" to="/admin/reviews"
-        ><em>泥电</em>美食地图 <small>管理工作台</small></RouterLink
-      >
-      <div class="account">
-        <span>{{ username }}</span
-        ><button :disabled="loggingOut" @click="$emit('logout')">
-          {{ loggingOut ? '正在退出…' : '退出登录' }}
-        </button>
-      </div>
-    </header>
+  <div class="management admin-theme">
+    <AdminHeader :username="username" :logging-out="loggingOut" @logout="$emit('logout')" />
     <p v-if="sessionError" class="alert" role="alert">{{ sessionError }}</p>
     <div class="shell">
       <AdminSidebar />
       <main>
-        <div class="breadcrumb">管理工作台 / 商户管理{{ editing ? ' / 维护资料' : '' }}</div>
         <slot v-if="editing" />
         <template v-else-if="!sessionChanged">
           <div class="heading">
             <div>
               <h1>商户管理</h1>
-              <p class="muted">维护公开店铺资料，让每一次发现都有准确的信息。</p>
             </div>
-            <RouterLink class="primary" to="/admin/restaurants/new">＋ 新增店铺</RouterLink>
+            <AppLink class="primary" to="/admin/restaurants/new">＋ 新增店铺</AppLink>
           </div>
           <p v-if="notice || route.query.saved" class="notice" role="status">
             {{ notice || `店铺资料已保存，ID：${route.query.saved}` }}
           </p>
           <form class="toolbar" @submit.prevent="search">
-            <input
-              v-model="keyword"
-              aria-label="搜索店铺"
-              placeholder="搜索店名、地址或标签"
-              type="search"
-              :disabled="busy"
-            />
-            <select v-model="category" aria-label="美食分类" :disabled="busy">
+            <div class="search-field">
+              <input
+                v-model="keyword"
+                aria-label="搜索店铺"
+                placeholder="搜索店名、地址或标签"
+                type="search"
+                :disabled="busy"
+              />
+              <button
+                v-if="keyword"
+                type="button"
+                class="mobile-only search-clear"
+                aria-label="清空搜索"
+                :disabled="busy"
+                @click="clearSearch"
+              >
+                ×
+              </button>
+              <button class="mobile-only search-submit" aria-label="查询店铺" :disabled="busy">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  aria-hidden="true"
+                >
+                  <circle cx="10.5" cy="10.5" r="6.5" />
+                  <path d="m16 16 4.5 4.5" />
+                </svg>
+              </button>
+            </div>
+            <select v-model="category" class="desktop-only" aria-label="美食分类" :disabled="busy">
               <option value="">全部美食</option>
               <option v-for="item in categories" :key="item.code" :value="item.code">
                 {{ item.name }}
               </option>
             </select>
-            <button class="primary" :disabled="busy">查询</button
-            ><button type="button" :disabled="busy || loading" @click="reload">刷新</button>
+            <button class="primary desktop-only" :disabled="busy">查询</button
+            ><button type="button" class="desktop-only" :disabled="busy || loading" @click="reload">
+              刷新
+            </button>
           </form>
           <p v-if="categoryError" class="alert" role="alert">
             分类加载失败：{{ categoryError }}
             <button @click="loadCategories">重试</button>
           </p>
           <div class="list-summary">
-            <span>{{ loading ? '正在加载…' : `共 ${total} 家公开店铺` }}</span
-            ><span class="muted">包含停业店铺 · 每页 {{ pageSize }} 家</span>
+            <span class="desktop-only">{{ loading ? '正在加载…' : `共 ${total} 家公开店铺` }}</span>
+            <span class="mobile-only mobile-total" role="status">{{
+              loading ? '正在加载…' : `共 ${total.toLocaleString('zh-CN')} 家店铺`
+            }}</span>
+            <label class="mobile-only mobile-category"
+              ><select
+                v-model="category"
+                aria-label="筛选美食分类"
+                :disabled="busy"
+                @change="search"
+              >
+                <option value="">全部分类</option>
+                <option v-for="item in categories" :key="item.code" :value="item.code">
+                  {{ item.name }}
+                </option></select
+              ><svg
+                viewBox="0 0 12 12"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                aria-hidden="true"
+              >
+                <path d="m3 4.5 3 3 3-3" /></svg
+            ></label>
+            <span class="muted desktop-only">包含停业店铺 · 每页 {{ pageSize }} 家</span>
           </div>
           <p v-if="error" class="alert" role="alert">
             {{ error }} <button @click="reload">重新加载</button>
@@ -122,40 +169,51 @@ onBeforeRouteUpdate(() => !busy.value)
               </thead>
               <tbody>
                 <tr v-for="item in items" :key="item.id">
-                  <td>
-                    <strong>{{ item.name }}</strong
-                    ><small>{{ item.address || '地址待补充' }}</small
-                    ><small>ID：{{ item.id }}</small>
+                  <td class="merchant-summary">
+                    <strong class="merchant-name">{{ item.name }}</strong
+                    ><small class="merchant-address" :title="item.address">{{
+                      item.address || '地址待补充'
+                    }}</small
+                    ><small class="merchant-id">ID：{{ item.id }}</small>
+                    <span class="mobile-only mobile-meta"
+                      ><span>{{
+                        item.restaurantType === 'CANTEEN' ? '食堂' : item.category || '分类未知'
+                      }}</span
+                      ><template v-if="item.price !== null"
+                        ><span class="meta-separator" aria-hidden="true">·</span
+                        ><span>¥{{ item.price }} / 人</span></template
+                      ></span
+                    >
                   </td>
-                  <td>
+                  <td class="desktop-only">
                     {{ item.restaurantType === 'CANTEEN' ? '食堂' : item.category || '分类未知' }}
                   </td>
-                  <td>
-                    {{
-                      item.price === null
-                        ? '未知'
-                        : `¥${item.price}${item.priceKind === 'estimate' ? '（估）' : ''}`
-                    }}
+                  <td class="desktop-only">
+                    {{ item.price === null ? '未知' : `¥${item.price}` }}
                   </td>
-                  <td>
-                    <span class="badge" :class="{ closed: item.closed }">{{
-                      item.closed ? '停业' : '正常经营'
-                    }}</span>
+                  <td class="merchant-status">
+                    <span class="badge" :class="{ closed: item.closed }"
+                      ><span class="desktop-only">{{ item.closed ? '停业' : '正常经营' }}</span
+                      ><span class="mobile-only mobile-status-label">{{
+                        item.closed ? '停业' : '营业'
+                      }}</span></span
+                    >
                   </td>
                   <td class="actions">
-                    <RouterLink
-                      v-if="item.restaurantType === 'CANTEEN'"
-                      :to="`/admin/restaurants/${item.id}/windows`"
-                      >窗口管理</RouterLink
+                    <AppLink :to="`/admin/restaurants/${item.id}/edit`">编辑</AppLink
+                    ><button
+                      :disabled="busy"
+                      class="danger"
+                      @click="deleteTarget = { id: item.id, name: item.name }"
                     >
-                    <RouterLink :to="`/admin/restaurants/${item.id}/edit`">编辑</RouterLink
-                    ><button :disabled="busy" @click="inspect(item.id)">管理 / 删除</button>
+                      删除
+                    </button>
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <nav class="pagination" aria-label="店铺分页">
+          <nav class="pagination desktop-only" aria-label="店铺分页">
             <label
               >每页
               <select v-model="pageSize" aria-label="每页数量" :disabled="loading || busy">
@@ -199,61 +257,50 @@ onBeforeRouteUpdate(() => !busy.value)
               ><button :disabled="loading || busy || !totalPages">跳转</button>
             </form>
           </nav>
-          <section class="lookup">
-            <h2>按 ID 管理 / 恢复店铺</h2>
-            <p class="muted">
-              已删除店铺不在公开列表中。输入删除时保留的店铺 ID，可查询状态并恢复。
-            </p>
-            <form class="toolbar" @submit.prevent="inspect()">
-              <input
-                v-model="lookupId"
-                aria-label="店铺 ID"
-                placeholder="输入完整店铺 ID"
-                inputmode="numeric"
-                :disabled="busy"
-              /><button :disabled="busy || inspecting">
-                {{ inspecting ? '正在查询…' : '查询店铺' }}
-              </button>
-            </form>
-          </section>
-          <section v-if="selected" class="detail" aria-labelledby="management-title">
-            <div class="heading">
-              <h2 id="management-title">{{ selected.restaurant.name }}</h2>
-              <button :disabled="busy" @click="close">关闭</button>
-            </div>
-            <p>
-              ID：{{ selected.restaurant.id }} ·
-              {{ selected.deleted ? '已删除' : '公开中' }}
-            </p>
-            <p class="muted">
-              {{ selected.restaurant.address || '地址待补充' }}
-            </p>
-            <p v-if="selected.deleted">恢复后将重新出现在公开目录，原经营状态及历史资料保留。</p>
-            <p v-else>删除后从公开目录和地图隐藏，历史点评及资料保留，可按 ID 恢复。</p>
-            <div class="actions">
-              <RouterLink
-                v-if="!selected.deleted && !busy"
-                :to="`/admin/restaurants/${selected.restaurant.id}/edit`"
-                >编辑资料</RouterLink
+          <nav class="mobile-only mobile-pagination" aria-label="店铺分页">
+            <select v-model="pageSize" aria-label="每页数量" :disabled="loading || busy">
+              <option v-for="size in [10, 20, 50, 100]" :key="size" :value="size">
+                {{ size }} 条 / 页
+              </option>
+            </select>
+            <div class="mobile-pager">
+              <button :disabled="page <= 1 || loading || busy" aria-label="上一页" @click="page--">
+                <svg
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.4"
+                  aria-hidden="true"
+                >
+                  <path d="m10 4-4 4 4 4" />
+                </svg></button
+              ><span class="mobile-page-number"
+                ><b>{{ page }}</b> / {{ Math.max(1, totalPages) }}</span
               ><button
-                v-if="!confirming"
-                class="danger"
-                :disabled="busy"
-                @click="confirming = true"
+                :disabled="page >= totalPages || loading || busy"
+                aria-label="下一页"
+                @click="page++"
               >
-                {{ selected.deleted ? '恢复店铺' : '删除店铺' }}
+                <svg
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.4"
+                  aria-hidden="true"
+                >
+                  <path d="m6 4 4 4-4 4" />
+                </svg>
               </button>
             </div>
-            <div v-if="confirming" class="confirm" role="group" aria-label="确认店铺操作">
-              <p>
-                确认{{ selected.deleted ? '恢复' : '删除' }}「{{ selected.restaurant.name }}」？
-              </p>
-              <button class="primary" :disabled="busy" @click="applyAction">
-                {{ busy ? '正在处理…' : '确认操作' }}</button
-              ><button :disabled="busy" @click="confirming = false">取消</button>
-            </div>
-          </section>
-          <p v-if="actionError" class="alert" role="alert">{{ actionError }}</p>
+          </nav>
+          <RestaurantDeleteDialog
+            v-if="deleteTarget"
+            :id="deleteTarget.id"
+            :name="deleteTarget.name"
+            @busy="busy = $event"
+            @deleted="removed"
+            @close="closeDelete"
+          />
         </template>
         <p v-else class="alert" role="alert">登录状态已变化，请重新进入商户管理。</p>
       </main>
@@ -262,65 +309,28 @@ onBeforeRouteUpdate(() => !busy.value)
 </template>
 
 <style scoped>
-/* 沿用审核页的橙色品牌、白底和细分隔线；窄屏表格独立滚动，不挤压操作按钮。 */
+/* 电脑保留表格；手机将同一批资料排成紧凑列表，不增加另一套查询状态。 */
+.mobile-only {
+  display: none;
+}
+.search-field {
+  display: contents;
+}
 .management {
   min-height: 100vh;
-  background: #fff;
-  color: #25313d;
+  background: var(--admin-canvas);
+  color: var(--admin-text);
   font-family: Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-}
-header {
-  height: 84px;
-  padding: 0 40px;
-  border-bottom: 1px solid #e9ecef;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-}
-.brand {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  font-size: 23px;
-  font-weight: 650;
-}
-.brand em {
-  font-style: normal;
-  color: #e97913;
-  font-size: 35px;
-}
-.brand small {
-  font-size: 13px;
-  color: #78818b;
-  font-weight: 400;
-  border-left: 1px solid #e1e5e8;
-  padding-left: 20px;
-}
-.account {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  font-size: 13px;
-}
-.account span {
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .shell {
   display: grid;
-  grid-template-columns: 204px minmax(0, 1fr);
-  min-height: calc(100vh - 84px);
+  grid-template-columns: var(--admin-sidebar-width) minmax(0, 1fr);
+  min-height: calc(100vh - var(--admin-header-height));
+  min-height: calc(100dvh - var(--admin-header-height));
 }
 main {
   min-width: 0;
   padding: 30px 40px 60px;
-}
-.breadcrumb {
-  font-size: 12px;
-  color: #89919a;
-  margin-bottom: 28px;
 }
 .heading {
   display: flex;
@@ -331,14 +341,14 @@ main {
 }
 h1 {
   font-size: 28px;
-  margin: 0 0 10px;
+  margin: 0;
 }
 h2 {
   font-size: 18px;
   margin: 0 0 12px;
 }
 .muted {
-  color: #89919a;
+  color: var(--admin-muted);
   font-size: 13px;
   line-height: 1.8;
 }
@@ -356,9 +366,9 @@ a.primary {
   cursor: pointer;
 }
 button {
-  border: 1px solid #e1e5e8;
+  border: 1px solid var(--admin-border);
   border-radius: 5px;
-  background: white;
+  background: var(--admin-surface);
   padding: 9px 14px;
   color: inherit;
 }
@@ -368,20 +378,20 @@ button:disabled {
 }
 .primary {
   display: inline-block;
-  border: 1px solid #df821e;
+  border: 1px solid var(--admin-primary);
   border-radius: 5px;
-  background: #e98a20;
-  color: white;
+  background: var(--admin-primary);
+  color: var(--admin-surface);
   padding: 10px 17px;
   white-space: nowrap;
 }
 input,
 select {
-  border: 1px solid #dfe3e7;
+  border: 1px solid var(--admin-border);
   border-radius: 5px;
   padding: 10px 12px;
   min-width: 0;
-  background: white;
+  background: var(--admin-surface);
   color: inherit;
 }
 input {
@@ -402,6 +412,7 @@ input {
   font-size: 13px;
 }
 .table-wrap {
+  background: var(--admin-surface);
   overflow: auto;
 }
 table {
@@ -413,20 +424,20 @@ table {
 }
 th {
   font-weight: 500;
-  color: #89919a;
-  background: #fafbfc;
+  color: var(--admin-muted);
+  background: var(--admin-surface-muted);
   padding: 14px;
 }
 td {
   padding: 18px 14px;
-  border-bottom: 1px solid #edf0f2;
+  border-bottom: 1px solid var(--admin-divider);
 }
 td:first-child {
   width: 42%;
 }
 td small {
   display: block;
-  color: #89919a;
+  color: var(--admin-muted);
   font-size: 12px;
   line-height: 1.8;
   overflow-wrap: anywhere;
@@ -436,16 +447,16 @@ strong {
 }
 .badge {
   display: inline-block;
-  background: #edf7ef;
-  color: #458458;
+  background: var(--admin-success-soft);
+  color: var(--admin-success);
   padding: 5px 8px;
   border-radius: 4px;
   font-size: 12px;
   white-space: nowrap;
 }
 .closed {
-  background: #f2f3f5;
-  color: #818a94;
+  background: var(--admin-surface-hover);
+  color: var(--admin-muted);
 }
 .actions {
   white-space: nowrap;
@@ -453,7 +464,7 @@ strong {
 .actions > a,
 .actions > button {
   display: inline-block;
-  color: #b16c22;
+  color: var(--admin-accent-text);
   margin-right: 12px;
   font-size: 13px;
 }
@@ -470,9 +481,9 @@ strong {
   font-size: 13px;
 }
 .current-page {
-  background: #e98a20;
-  color: white;
-  border-color: #e98a20;
+  background: var(--admin-primary);
+  color: var(--admin-surface);
+  border-color: var(--admin-primary);
 }
 .page-jump {
   display: flex;
@@ -486,28 +497,6 @@ strong {
 .pagination label {
   white-space: nowrap;
 }
-.lookup {
-  border-top: 1px solid #e9ecef;
-  padding-top: 30px;
-  margin-top: 20px;
-}
-.lookup .toolbar {
-  max-width: 560px;
-}
-.detail {
-  margin-top: 22px;
-  border: 1px solid #e5e8ec;
-  border-radius: 8px;
-  padding: 24px;
-  overflow-wrap: anywhere;
-}
-.detail .heading {
-  margin-bottom: 10px;
-}
-.detail p {
-  font-size: 13px;
-  line-height: 1.8;
-}
 .notice,
 .alert {
   padding: 13px 16px;
@@ -516,48 +505,28 @@ strong {
   line-height: 1.8;
 }
 .notice {
-  background: #edf7ef;
-  color: #458458;
+  background: var(--admin-success-soft);
+  color: var(--admin-success);
 }
-.alert,
-.confirm {
-  background: #fff3e8;
-  color: #9a5022;
-}
-.confirm {
-  padding: 16px;
-  margin-top: 16px;
-  border-radius: 5px;
-}
-.confirm button {
-  margin-right: 10px;
+.alert {
+  background: var(--admin-danger-soft);
+  color: var(--admin-danger);
 }
 .danger {
-  color: #ab493e !important;
+  color: var(--admin-danger) !important;
 }
 .empty {
   padding: 60px 15px;
   text-align: center;
-  color: #89919a;
+  color: var(--admin-muted);
 }
 button:focus-visible,
 a:focus-visible,
-input:focus-visible,
 select:focus-visible {
-  outline: 2px solid #b57932;
+  outline: 2px solid var(--admin-focus);
   outline-offset: 3px;
 }
 @media (max-width: 800px) {
-  header {
-    padding: 0 18px;
-  }
-  .brand {
-    font-size: 18px;
-    gap: 8px;
-  }
-  .brand small {
-    display: none;
-  }
   .shell {
     grid-template-columns: 1fr;
   }
@@ -574,18 +543,117 @@ select:focus-visible {
   .list-summary {
     gap: 12px;
   }
-  .account {
-    gap: 10px;
-  }
-  .account span {
-    max-width: 90px;
-  }
   .toolbar select {
     max-width: 150px;
   }
 }
-/* 手机端按店铺分组展示，编辑及删除入口无需横向滚动即可操作。 */
+/* 手机搜索、分类和分页复用原查询；窄屏内完整展示操作，不依赖横向滚动。 */
 @media (max-width: 600px) {
+  .desktop-only,
+  .merchant-id {
+    display: none;
+  }
+  main {
+    padding: 22px 16px 28px;
+  }
+  .heading {
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 19px;
+  }
+  .heading h1 {
+    font-size: 23px;
+  }
+  .heading .primary {
+    padding: 9px 13px;
+    font-size: 13px;
+    border-radius: 6px;
+  }
+  .toolbar {
+    display: block;
+  }
+  .search-field {
+    display: flex;
+    align-items: center;
+    height: 45px;
+    overflow: hidden;
+    border: 1px solid var(--admin-border);
+    border-radius: 7px;
+    background: var(--admin-surface);
+  }
+  .toolbar input {
+    width: 0;
+    min-width: 0;
+    padding: 12px 0 12px 14px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    font-size: 13px;
+  }
+  .toolbar input::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+  }
+  .toolbar input::placeholder {
+    color: #9099a5;
+  }
+  .search-field .search-clear,
+  .search-field .search-submit {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 44px;
+    height: 43px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    color: #7e8996;
+  }
+  .search-clear {
+    font-size: 21px;
+  }
+  .search-submit svg {
+    width: 18px;
+    height: 18px;
+  }
+  .list-summary {
+    align-items: center;
+    gap: 8px;
+    height: 54px;
+    margin: 0;
+    color: #818b98;
+    font-size: 12px;
+  }
+  .mobile-total {
+    display: inline;
+    font-variant-numeric: tabular-nums;
+  }
+  .mobile-category {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: none;
+  }
+  .mobile-category select {
+    appearance: none;
+    max-width: 135px;
+    min-height: 44px;
+    padding: 10px 19px 10px 6px;
+    border: 0;
+    background: transparent;
+    color: #6b7785;
+    font-size: 12px;
+  }
+  .mobile-category svg {
+    position: absolute;
+    right: 0;
+    width: 12px;
+    height: 12px;
+    pointer-events: none;
+  }
+  .table-wrap {
+    overflow: hidden;
+    border-radius: 8px;
+  }
   table {
     min-width: 0;
   }
@@ -596,21 +664,171 @@ select:focus-visible {
     display: block;
   }
   tr {
+    position: relative;
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    border-bottom: 1px solid #edf0f2;
-    padding: 12px 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px 9px;
+    border-bottom: 1px solid var(--admin-divider);
+    padding: 17px 16px 10px;
+  }
+  tr:last-child {
+    border-bottom: 0;
   }
   td {
     border: 0;
-    padding: 8px 12px;
+    padding: 0;
   }
-  td:first-child {
+  td.merchant-summary {
+    display: contents;
     width: auto;
+  }
+  .merchant-name {
     grid-column: 1 / -1;
+    grid-row: 1;
+    padding-right: 42px;
+    min-width: 0;
+    font-size: 14px;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+  }
+  .merchant-address {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    margin: 0;
+    overflow: hidden;
+    color: #818c9a;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mobile-meta {
+    display: flex;
+    grid-column: 1;
+    grid-row: 3;
+    align-items: center;
+    min-width: 0;
+    gap: 6px;
+    overflow: hidden;
+    color: #788695;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .mobile-meta > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .meta-separator {
+    color: #b1b8c1;
+  }
+  .merchant-status {
+    position: absolute;
+    top: 22px;
+    right: 16px;
+  }
+  .merchant-status .badge {
+    padding: 0;
+    background: none;
+    color: #718879;
+    font-size: 10px;
+  }
+  .merchant-status .closed {
+    color: #8b939d;
+  }
+  .mobile-status-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .mobile-status-label::before {
+    content: '';
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
   }
   td.actions {
-    grid-column: 1 / -1;
+    display: flex;
+    grid-column: 2;
+    grid-row: 3;
+    align-items: center;
+    gap: 2px;
+    margin: 0 -4px 0 0;
+  }
+  .actions > a,
+  .actions > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    min-height: 42px;
+    margin: 0;
+    padding: 8px 4px;
+    border: 0;
+    background: transparent;
+    font-size: 12px;
+  }
+  .mobile-pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 18px 0 4px;
+    color: #7e8996;
+    font-size: 11px;
+  }
+  .mobile-pagination select {
+    max-width: 115px;
+    padding: 8px 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: inherit;
+  }
+  .mobile-pager {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mobile-pager button {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+  }
+  .mobile-pager svg {
+    width: 14px;
+    height: 14px;
+  }
+  .mobile-page-number {
+    min-width: 55px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .mobile-page-number b {
+    font-weight: 500;
+    color: #596777;
+  }
+}
+@media (max-width: 350px) {
+  main {
+    padding-right: 13px;
+    padding-left: 13px;
+  }
+  tr {
+    padding-right: 13px;
+    padding-left: 13px;
+    column-gap: 6px;
+  }
+  .merchant-name {
+    font-size: 13px;
+  }
+  .merchant-status {
+    right: 13px;
+  }
+  .mobile-meta {
+    gap: 4px;
   }
 }
 </style>

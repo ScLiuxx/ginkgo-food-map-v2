@@ -51,6 +51,7 @@ function coordinate(value: string, min: number, max: number): boolean {
 export function validateRestaurantDraft(
   form: RestaurantDraft,
   type: 'REGULAR' | 'CANTEEN' = 'REGULAR',
+  requireLocationConfirmation = true,
 ): RestaurantErrors {
   const errors: RestaurantErrors = {}
   if (!form.name.trim() || characterCount(form.name.trim()) > 40)
@@ -58,14 +59,15 @@ export function validateRestaurantDraft(
   if (type === 'REGULAR' && !form.categoryCode) errors.categoryCode = '请选择餐厅分类。'
   if (characterCount(form.address.trim()) > 80) errors.address = '地址最多80个字符。'
   if (
-    form.priceKind !== 'UNKNOWN' &&
+    form.price.trim() !== '' &&
     (!/^\d+$/.test(form.price.trim()) || Number(form.price) < 1 || Number(form.price) > 5000)
   ) {
     errors.price = '人均需为1–5000的整数元。'
   }
   if (!coordinate(form.latitude, 3, 54)) errors.latitude = '纬度需为3–54，最多6位小数。'
   if (!coordinate(form.longitude, 73, 136)) errors.longitude = '经度需为73–136，最多6位小数。'
-  if (!form.locationConfirmed) errors.locationConfirmed = '请核对坐标后确认餐厅位置。'
+  if (requireLocationConfirmation && !form.locationConfirmed)
+    errors.locationConfirmed = '请核对坐标后确认餐厅位置。'
   const tags = draftTags(form.tags)
   if (tags.length > 8 || tags.reduce((sum, tag) => sum + characterCount(tag), 0) > 80) {
     errors.tags = '最多8个标签，输入总字符数最多80。'
@@ -82,8 +84,8 @@ export function restaurantInput(
     name: form.name.trim(),
     // 即使草稿曾选择普通餐厅分类，食堂请求也始终显式使用null。
     categoryCode: type === 'CANTEEN' ? null : form.categoryCode,
-    priceKind: form.priceKind,
-    pricePerPerson: form.priceKind === 'UNKNOWN' ? null : Number(form.price),
+    priceKind: form.price.trim() ? 'EXACT' : 'UNKNOWN',
+    pricePerPerson: form.price.trim() ? Number(form.price) : null,
     address: form.address.trim() || null,
     latitude: Number(form.latitude),
     longitude: Number(form.longitude),

@@ -1,3 +1,4 @@
+import { createRequestId } from '@/shared/lib/createRequestId'
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { useLoginStore } from '@/modules/auth'
 import { authToken } from '@/shared/api/authSession'
@@ -76,7 +77,7 @@ export function useAdminAnnouncements() {
     const actor = identity()
     if (!actor || busy.value || (!pending.value && !validForm.value)) return false
     pending.value ??= {
-      clientRequestId: crypto.randomUUID(),
+      clientRequestId: createRequestId(),
       title: normalizeAnnouncementText(title.value),
       content: normalizeAnnouncementText(content.value),
     }

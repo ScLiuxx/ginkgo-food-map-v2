@@ -1,0 +1,79 @@
+/* 管理入口共用配色；仅在管理工作区内生效，避免影响用户端主题。 */
+.admin-theme {
+  /* 顶栏、侧栏和菜单尺寸共同响应窗口宽度，切换管理入口时保持位置一致。 */
+  --admin-header-height: 72px;
+  --admin-header-padding: 30px;
+  --admin-sidebar-width: 202px;
+  --admin-sidebar-padding: 16px;
+  --admin-nav-height: 48px;
+  --admin-canvas: #f4f5f7;
+  --admin-surface: #fff;
+  --admin-surface-muted: #f7f8fa;
+  --admin-surface-hover: #f0f2f5;
+  --admin-text: #29313b;
+  --admin-secondary: #626d7b;
+  --admin-muted: #6b7582;
+  --admin-border: #e1e5ea;
+  --admin-divider: #edf0f3;
+  --admin-brand: #df8e34;
+  /* 实心按钮用较深的橙色，保证白色按钮文字清晰；浅橙只用于选中背景。 */
+  --admin-primary: #b65f1d;
+  --admin-primary-hover: #a55d1f;
+  --admin-accent-text: #a55d1f;
+  --admin-accent-soft: #fbefdf;
+  --admin-accent-hover: #f7e7d3;
+  --admin-accent-subtle: #fff9f0;
+  --admin-success: #55745f;
+  --admin-success-soft: #edf4ef;
+  --admin-danger: #a64e3d;
+  --admin-danger-soft: #f7efed;
+  --admin-focus: #929aa5;
+  --admin-backdrop: #25313d55;
+  --admin-shadow: #28334118;
+  --admin-loading: #ffffffa8;
+  color-scheme: light;
+}
+
+@media (min-width: 801px) and (max-width: 1200px) {
+  .admin-theme {
+    --admin-sidebar-width: 180px;
+  }
+}
+@media (min-width: 801px) and (max-width: 950px) {
+  .admin-theme {
+    --admin-sidebar-width: 160px;
+    --admin-sidebar-padding: 12px;
+  }
+}
+@media (max-width: 800px) {
+  .admin-theme {
+    --admin-header-height: 64px;
+    --admin-header-padding: 18px;
+    --admin-nav-height: 42px;
+  }
+}
+
+/* 文字输入只显示光标；按钮、链接及选项控件仍保留中性灰键盘焦点。 */
+.admin-theme :where(input, textarea) {
+  caret-color: var(--admin-text);
+}
+.admin-theme :where(input:not([type='checkbox'], [type='radio']), textarea):focus {
+  outline: none;
+  box-shadow: none;
+}
+.admin-theme :where(input[type='checkbox'], input[type='radio']) {
+  accent-color: var(--admin-primary);
+}
+.admin-theme :where(button, a, select, input[type='checkbox'], input[type='radio']):focus-visible {
+  outline: 2px solid var(--admin-focus);
+  outline-offset: 3px;
+}
+
+.admin-theme
+  :is(.btn.primary, button.primary, a.primary, .link-existing-dialog button.confirm):hover:not(
+    :disabled
+  ) {
+  background: var(--admin-primary-hover);
+  border-color: var(--admin-primary-hover);
+  filter: none;
+}

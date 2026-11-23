@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { RestaurantDetail } from '@/modules/restaurant'
 
-defineProps<{ id: string; window?: boolean }>()
+defineProps<{ id: string }>()
 </script>
 
-<template><RestaurantDetail :id="id" :window="window" /></template>
+<template><RestaurantDetail :id="id" /></template>

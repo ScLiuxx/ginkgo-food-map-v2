@@ -5,7 +5,7 @@ umask 022
 
 release_id="${1:?Usage: deploy.sh COMMIT-RUN_ID-ATTEMPT}"
 [[ "$release_id" =~ ^[a-f0-9]{40}-[0-9]+-[0-9]+$ ]] || { echo 'Invalid release ID' >&2; exit 1; }
-root="${GINKGO_DEPLOY_ROOT:-/opt/ginkgo}"
+root="${FOODMAP_DEPLOY_ROOT:-/opt/foodmap}"
 [[ "$root" = /* && "$root" != / && ! -L "$root" ]] || { echo 'Invalid deployment root' >&2; exit 1; }
 root="$(realpath -e "$root")"
 incoming="$root/incoming/$release_id"
@@ -66,14 +66,14 @@ rollback() {
   echo 'Deployment failed; attempting application rollback' >&2
   if [[ -n "$previous" ]]; then
     activate "$previous"
-    if sudo -n systemctl restart ginkgo-backend.service && healthy "$(cat "$previous/commit.txt")"; then
+    if sudo -n systemctl restart foodmap-backend.service && healthy "$(cat "$previous/commit.txt")"; then
       echo 'Previous application release restored' >&2
     else
       echo 'Rollback needs operator attention' >&2
     fi
   else
     # 首次发布没有上一版，停止失败服务并移除本次刚建立的链接，保留产物供排查。
-    sudo -n systemctl stop ginkgo-backend.service || true
+    sudo -n systemctl stop foodmap-backend.service || true
     if [[ -L "$root/current" && "$(readlink -f "$root/current")" == "$release" ]]; then
       unlink "$root/current"
     fi
@@ -84,7 +84,7 @@ rollback() {
 
 trap rollback ERR
 activate "$release"
-sudo -n systemctl restart ginkgo-backend.service
+sudo -n systemctl restart foodmap-backend.service
 healthy "$commit"
 trap - ERR
 printf 'Deployed commit %s\n' "$commit"

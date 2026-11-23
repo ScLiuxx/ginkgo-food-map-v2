@@ -4,6 +4,8 @@ import AppHeader from '@/shared/ui/layout/AppHeader.vue'
 import AdminLayout from './AdminLayout.vue'
 import BottomNavigation from '@/shared/ui/layout/BottomNavigation.vue'
 import { useLoginStore } from '@/modules/auth'
+import { ReviewComposer, notifyReviewPublished } from '@/modules/review'
+import { hasDetailComposer } from '@/shared/lib/reviewNavigation'
 
 import { useRoute, useRouter } from 'vue-router'
 import { computed, ref, watchEffect } from 'vue'
@@ -25,26 +27,34 @@ watchEffect(() => {
 const detailPage = computed(
   () => /^\/restaurants\/[^/]+$/.test(route.path) && route.path !== '/restaurants/new',
 )
+const mapPage = computed(() => route.path === '/map' || route.path === '/previews/map')
 </script>
 
 <template>
   <!-- 管理端沿用示意图的独立页头与侧栏，不叠加前台页头及底部导航。 -->
   <AdminLayout v-if="route.meta.layout === 'admin'" />
   <section
-    v-else-if="resolvingIdentity || auth.isAdministrator"
+    v-else-if="!routeReady || resolvingIdentity || auth.isAdministrator"
     class="identity-check"
     role="status"
   >
-    <h1>{{ auth.error ? '暂时无法验证登录状态' : '正在验证登录状态' }}</h1>
+    <!-- 首次路由尚未就绪时不展示导航，避免把当前来路误读成默认首页。 -->
+    <h1>
+      {{ !routeReady ? '正在加载页面' : auth.error ? '暂时无法验证登录状态' : '正在验证登录状态' }}
+    </h1>
     <p>{{ auth.error || '验证完成后进入对应页面。' }}</p>
     <template v-if="auth.error"
       ><button :disabled="auth.restoring" @click="auth.restore">重新验证</button
       ><button :disabled="auth.loggingOut" @click="auth.signOut">退出当前会话</button></template
     >
   </section>
-  <div v-else class="app-shell">
+  <div
+    v-else
+    class="app-shell"
+    :class="{ 'ranking-shell': route.meta.ranking, 'map-shell': mapPage }"
+  >
     <AppHeader
-      :discovery="route.path === '/' || detailPage"
+      :discovery="route.path === '/' || detailPage || !!route.meta.ranking"
       :authenticated="auth.authenticated"
       :username="auth.user?.username"
       :restoring="auth.restoring"
@@ -57,16 +67,83 @@ const detailPage = computed(
     <main>
       <RouterView />
     </main>
+    <!-- 全站写评留在来源页；店铺详情继续使用自己的固定对象编辑器。 -->
+    <ReviewComposer
+      v-if="!hasDetailComposer(route.path)"
+      hide-trigger
+      @published="notifyReviewPublished"
+    />
     <BottomNavigation
       v-if="!detailPage"
       :has-unread-notifications="hasUnreadNotifications"
-      :discovery="route.path === '/'"
+      :discovery="route.path === '/' || !!route.meta.ranking"
       :authenticated="auth.authenticated"
     />
   </div>
 </template>
 
 <style scoped>
+/* 手机地图采用单视口布局，底栏参与布局，避免地图和拖动面板落到固定底栏后面。 */
+@media (max-width: 700px) {
+  /* 移动浏览器的100vh可能大于可视高度，解除全站body最小高度以免地址栏出现时整页仍可滚动。 */
+  :global(body:has(.map-shell)) {
+    min-height: 0;
+  }
+  .map-shell {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    padding-bottom: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .map-shell :deep(.topbar) {
+    display: none;
+  }
+  .map-shell > main {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+  .map-shell :deep(.bottom-navigation) {
+    position: relative;
+    bottom: auto;
+    left: auto;
+    transform: none;
+    margin: 0 auto max(12px, env(safe-area-inset-bottom));
+    flex-shrink: 0;
+  }
+}
+/* 榜单品牌保留局部排版；底栏统一采用全站悬浮胶囊。 */
+.ranking-shell {
+  padding-bottom: 96px;
+}
+.ranking-shell :deep(.topbar.is-discovery) {
+  max-width: 1056px;
+}
+.ranking-shell :deep(.is-discovery .brand strong) {
+  font-size: 23px;
+  gap: 12px;
+}
+.ranking-shell :deep(.is-discovery .brand em) {
+  font-size: 32px;
+  color: #ee970f;
+  font-weight: 850;
+}
+@media (max-width: 600px) {
+  .ranking-shell :deep(.topbar.is-discovery) {
+    width: calc(100% - 36px);
+    height: 65px;
+  }
+  .ranking-shell :deep(.is-discovery .brand strong) {
+    font-size: 17px;
+    gap: 8px;
+  }
+  .ranking-shell :deep(.is-discovery .brand em) {
+    font-size: 25px;
+  }
+}
 .identity-check {
   max-width: 560px;
   margin: 100px auto;

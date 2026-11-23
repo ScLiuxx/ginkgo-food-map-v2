@@ -15,9 +15,6 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
-.home-review :deep(.review-open) {
-  display: none;
-}
 .discovery-footer {
   display: flex;
   justify-content: center;

@@ -19,7 +19,7 @@
   "mappings": {
     "dynamic": "strict",
     "_meta": {
-      "schema": "ginkgo.restaurant-search",
+      "schema": "foodmap.restaurant-search",
       "schema_version": "002",
       "description": "商户搜索投影：普通餐厅与食堂，每商户一文档；MySQL仍为正式资料来源",
       "coordinate_system": "GCJ02",

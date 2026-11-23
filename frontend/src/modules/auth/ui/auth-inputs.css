@@ -1,4 +1,41 @@
 /* 账号页统一使用浅灰白底，覆盖浏览器自动填充的蓝色，同时保留密码管理器能力。 */
+:is(form.login-form, form.password-reset-form) .form-field .email-input {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  height: 50px;
+  border: 1px solid #e1e1dc;
+  border-radius: 14px;
+  background: #f7f7f5;
+}
+:is(form.login-form, form.password-reset-form) .form-field .email-input input {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+}
+:is(form.login-form, form.password-reset-form) .form-field .email-input span {
+  flex: 0 0 auto;
+  padding-right: 14px;
+  color: #96968e;
+  font-size: 12px;
+  white-space: nowrap;
+}
+:is(form.login-form, form.password-reset-form) .form-field .email-input:focus-within {
+  border-color: #b8b8b0;
+}
+@media (max-width: 480px) {
+  :is(form.login-form, form.password-reset-form) .form-field .email-input input {
+    padding-inline: 10px 8px;
+  }
+  :is(form.login-form, form.password-reset-form) .form-field .email-input span {
+    padding-right: 10px;
+    font-size: 11px;
+  }
+}
 :is(form.login-form, form.registration-form, form.password-reset-form) .field-error {
   margin: 8px 0 0;
   color: #a43b32;

@@ -113,34 +113,6 @@
 .album-error {
   color: #a94c36;
 }
-.album-lightbox {
-  border: 0;
-  border-radius: 8px;
-  padding: 16px;
-  max-width: calc(100vw - 24px);
-  background: #fff;
-}
-.album-lightbox::backdrop {
-  background: #151d27cc;
-}
-.album-lightbox img {
-  display: block;
-  max-width: 85vw;
-  max-height: 72dvh;
-  margin: 12px auto 0;
-}
-.album-lightbox p {
-  font-size: 13px;
-  color: #626e7b;
-}
-.album-lightbox button {
-  border: 1px solid #dde1e5;
-  background: #fff;
-  border-radius: 5px;
-  padding: 10px 16px;
-  font: inherit;
-  cursor: pointer;
-}
 button:focus-visible {
   outline: 2px solid #ad6f26;
   outline-offset: 3px;
@@ -148,4 +120,30 @@ button:focus-visible {
 button:disabled {
   cursor: wait;
   opacity: 0.6;
+}
+/* 紧凑模式的页首只保留封面和已加载数量；完整选图控件在大图内继续提供。 */
+.album-compact .gallery-empty {
+  min-height: 54px;
+  padding: 12px;
+  font-size: 12px;
+}
+.album-compact .gallery-empty button + button {
+  margin-top: 8px;
+}
+.gallery-main .gallery-count {
+  inset: auto 10px 10px auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 20px;
+  padding: 4px 9px;
+  background: #27313c99;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.gallery-count svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
 }

@@ -1,17 +1,17 @@
 <script setup lang="ts">
+import { createRequestId } from '@/shared/lib/createRequestId'
 import { inject, onUnmounted, provide, ref, watch, computed } from 'vue'
 import { activeReplyEditorKey } from '../model/replyEditor'
 import { useRouter, useRoute } from 'vue-router'
 import { authToken } from '@/shared/api/authSession'
 import { useLoginStore } from '@/modules/auth/model/login.store'
 import ReviewEntry from './ReviewEntry.vue'
-import { windowReviewGateway } from '../api/reviewApi'
+import PhotoViewer from '@/shared/ui/PhotoViewer.vue'
 import ReviewHistory from './ReviewHistory.vue'
 import { reviewGatewayKey, unavailableReviewGateway, validBody } from '../model/review'
-import type { ReviewItem, ReviewSort } from '../model/review'
+import type { ReviewItem, ReviewSort, ReviewPhotoSelection } from '../model/review'
 import { detailPhotos, type DetailPhotoUpdate } from '../model/detailPhotos'
 const props = defineProps<{
-    window?: boolean
     restaurantId: string
     preview?: boolean
     revision?: number
@@ -19,9 +19,7 @@ const props = defineProps<{
     title?: string
   }>(),
   emit = defineEmits<{ changed: []; photos: [update: DetailPhotoUpdate] }>()
-const gateway = props.window
-    ? windowReviewGateway
-    : inject(reviewGatewayKey, unavailableReviewGateway),
+const gateway = inject(reviewGatewayKey, unavailableReviewGateway),
   auth = useLoginStore(),
   router = useRouter(),
   route = useRoute()
@@ -31,12 +29,12 @@ const records = ref<ReviewItem[]>([]),
   error = ref(''),
   texts = ref<Record<string, string>>({}),
   busy = ref(false),
-  photo = ref(''),
-  lightbox = ref<globalThis.HTMLDialogElement>(),
+  lightbox = ref<InstanceType<typeof PhotoViewer>>(),
   deleting = ref<ReviewItem | null>(null),
   confirm = ref<globalThis.HTMLDialogElement>()
 let controller: globalThis.AbortController | undefined,
   generation = 0
+let restoreDeleteFocus: (() => void) | undefined
 const replyRequests = new Map<string, { body: string; id: string }>()
 provide(activeReplyEditorKey, ref<string | null>(null))
 const page = ref(1),
@@ -47,7 +45,7 @@ const currentOnly = ref(false)
 const sort = ref<ReviewSort>('DEFAULT')
 // 切换排序回到第一页；load取消旧请求并核验代次，阻止旧排序响应覆盖新选择。
 watch(sort, () => {
-  cancelDelete()
+  clearDelete()
   void load(1)
 })
 const viewerId = computed(() =>
@@ -66,6 +64,7 @@ const wall = computed(() =>
 )
 /** 真实传输由适配器提供；未接通时显示失败状态，绝不使用模拟评价回填。 */
 async function load(targetPage = page.value) {
+  lightbox.value?.close()
   const ticket = ++generation
   const restaurantId = props.restaurantId
   controller?.abort()
@@ -102,7 +101,7 @@ async function load(targetPage = page.value) {
 watch(
   () => [props.restaurantId, props.revision],
   () => {
-    cancelDelete()
+    clearDelete()
     page.value = 1
     totalPages.value = totalReviews.value = 0
     void load(1)
@@ -112,8 +111,7 @@ watch(
 watch(authToken, () => {
   texts.value = {}
   replyRequests.clear()
-  deleting.value = null
-  confirm.value?.close?.()
+  clearDelete()
   // 身份改变后重新读取可管理标记，避免沿用上一账号看到的删除入口。
   void load()
 })
@@ -138,7 +136,7 @@ async function reply(item: ReviewItem) {
   // 网络失败保留同次请求号；账号切换或正文改变才生成新号。
   let request = replyRequests.get(item.id)
   if (!request || request.body !== text.trim()) {
-    request = { body: text.trim(), id: globalThis.crypto.randomUUID() }
+    request = { body: text.trim(), id: createRequestId() }
     replyRequests.set(item.id, request)
   }
   try {
@@ -156,16 +154,26 @@ async function reply(item: ReviewItem) {
     busy.value = false
   }
 }
-function askDelete(item: ReviewItem) {
+function askDelete(item: ReviewItem, restoreFocus?: () => void) {
+  if (busy.value) return
   if (!props.preview && (!viewerId.value || item.authorId !== viewerId.value)) return
   deleteError.value = ''
   deleting.value = item
+  restoreDeleteFocus = restoreFocus
   confirm.value?.showModal()
 }
-function cancelDelete() {
+/** 换店、换号及排序时直接清理旧确认；不能将焦点送回已失效的菜单。 */
+function clearDelete() {
   confirm.value?.close?.()
   deleting.value = null
   deleteError.value = ''
+  restoreDeleteFocus = undefined
+}
+function cancelDelete() {
+  if (busy.value) return
+  const restoreFocus = restoreDeleteFocus
+  clearDelete()
+  restoreFocus?.()
 }
 async function remove() {
   if (!deleting.value || busy.value) return
@@ -177,8 +185,7 @@ async function remove() {
   try {
     await gateway.remove(deleting.value.id)
     if (ticket === generation && owner === authToken.value) {
-      confirm.value?.close?.()
-      deleting.value = null
+      clearDelete()
       // 归组及代表可能移动，回第一页避免删掉末页最后一组后停在空页。
       await load(1)
       emit('changed')
@@ -190,9 +197,12 @@ async function remove() {
     busy.value = false
   }
 }
-function view(url: string) {
-  photo.value = url
-  lightbox.value?.showModal()
+function view(selection: ReviewPhotoSelection) {
+  void lightbox.value?.open(selection)
+}
+function viewWall(id: string) {
+  const item = records.value.find((record) => record.photos.some((photo) => photo.id === id))
+  if (item) view({ photos: item.photos, index: item.photos.findIndex((photo) => photo.id === id) })
 }
 </script>
 <template>
@@ -206,15 +216,31 @@ function view(url: string) {
         {{ title || '同学点评' }}
         <small v-if="starScale">({{ totalReviews }})</small>
       </h2>
-      <div v-if="!preview" class="content-filters" aria-label="点评排序">
-        <button type="button" :aria-pressed="sort === 'DEFAULT'" @click="sort = 'DEFAULT'">
-          默认排序
-        </button>
-        <button type="button" :aria-pressed="sort === 'TIME'" @click="sort = 'TIME'">
-          时间排序
-        </button>
-      </div>
-      <button type="button" :disabled="loading" @click="load(1)">刷新评价</button>
+      <!-- 只显示当前排序，点击直接切换；沿用排序侦听器的回首页和旧请求隔离。 -->
+      <button
+        v-if="!preview"
+        type="button"
+        class="sort-toggle"
+        :aria-label="
+          sort === 'DEFAULT'
+            ? '当前按推荐排序，切换为按时间排序'
+            : '当前按时间排序，切换为按推荐排序'
+        "
+        :title="sort === 'DEFAULT' ? '切换为按时间排序' : '切换为按推荐排序'"
+        @click="sort = sort === 'DEFAULT' ? 'TIME' : 'DEFAULT'"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+        {{ sort === 'DEFAULT' ? '按推荐' : '按时间' }}
+      </button>
+      <button
+        v-if="preview"
+        class="refresh-reviews"
+        type="button"
+        :disabled="loading"
+        @click="load(1)"
+      >
+        刷新评价
+      </button>
     </header>
     <template v-if="preview && hasScoringStatus">
       <p class="scoring-rule">
@@ -240,7 +266,7 @@ function view(url: string) {
       <p>下方各条点评保留作者和照片对应关系，点击照片可查看大图。</p>
     </details>
     <div v-if="preview" class="photos">
-      <button v-for="p in wall" :key="p.id" type="button" @click="view(p.url)">
+      <button v-for="p in wall" :key="p.id" type="button" @click="viewWall(p.id)">
         <img :src="p.url" alt="餐厅评价照片" loading="lazy" />
       </button>
     </div>
@@ -250,6 +276,7 @@ function view(url: string) {
       :item="item"
       :preview="preview"
       :star-scale="starScale"
+      :list-card="starScale && !preview"
       :authenticated="auth.authenticated"
       :viewer-id="viewerId"
       :busy="busy"
@@ -261,12 +288,13 @@ function view(url: string) {
       @reply="reply"
       @text="(id, text) => (texts[id] = text)"
     >
-      <template v-if="!preview && gateway.history && item.historyCount" #history>
+      <template v-if="!preview && gateway.history && item.historyCount" #history="{ restoreFocus }">
         <ReviewHistory
           :restaurant-id="restaurantId"
           :item="item"
           :viewer-id="viewerId"
           :star-scale="starScale"
+          :restore-focus="restoreFocus"
           @photo="view"
           @refresh="load()"
           @delete="askDelete"
@@ -295,17 +323,22 @@ function view(url: string) {
         <h3 id="delete-review-title">确定删除这条评价？</h3>
         <p v-if="deleteError" role="alert">{{ deleteError }}</p>
         <div class="delete-dialog-actions">
-          <button type="button" class="cancel-delete" autofocus @click="cancelDelete">取消</button>
+          <button
+            type="button"
+            class="cancel-delete"
+            :disabled="busy"
+            autofocus
+            @click="cancelDelete"
+          >
+            取消
+          </button>
           <button type="button" class="confirm-delete" :disabled="busy" @click="remove">
             {{ busy ? '删除中…' : '确认删除' }}
           </button>
         </div>
       </dialog>
     </Teleport>
-    <dialog ref="lightbox" class="lightbox">
-      <button type="button" aria-label="关闭大图" @click="lightbox?.close()">关闭 ×</button
-      ><img :src="photo || undefined" alt="评价照片大图" />
-    </dialog>
+    <PhotoViewer ref="lightbox" />
   </section>
 </template>
 <style scoped>
@@ -317,7 +350,7 @@ function view(url: string) {
   background: white;
 }
 .star-panel > header {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   min-height: 77px;
 }
@@ -334,7 +367,7 @@ function view(url: string) {
   letter-spacing: 0;
   color: #8d97a3;
 }
-.star-panel > header > button {
+.star-panel > header > .refresh-reviews {
   border: 0;
   border-left: 1px solid #eceff2;
   border-radius: 0;
@@ -350,20 +383,29 @@ function view(url: string) {
   color: #99a1aa;
   font-size: 12px;
 }
-.content-filters {
-  display: flex;
-  gap: 4px;
-}
-.content-filters button {
+.review-panel .sort-toggle {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 5px;
+  margin-left: auto;
   border: 0;
-  border-radius: 5px;
-  padding: 8px 11px;
+  padding: 0;
+  background: transparent;
   color: #9099a4;
-  font-size: 12px;
+  font-size: 13px;
 }
-.content-filters button[aria-pressed='true'] {
-  background: #fff4e9;
-  color: #ed8424;
+.sort-toggle svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.sort-toggle:focus-visible {
+  outline: 2px solid #a5adb7;
+  outline-offset: 3px;
 }
 .star-panel .empty {
   padding: 40px 0;
@@ -376,15 +418,10 @@ function view(url: string) {
 }
 @media (max-width: 480px) {
   .star-panel h2 {
-    flex: 1 0 100%;
     font-size: 20px;
-    margin-top: 20px;
   }
   .star-panel > header {
-    padding-bottom: 12px;
-  }
-  .star-panel > header > button {
-    margin-left: auto;
+    min-height: 64px;
   }
 }
 .scoring-rule {
@@ -528,12 +565,6 @@ dialog {
 .delete-dialog-actions .confirm-delete:hover:not(:disabled) {
   background: #ed7d1a;
   border-color: #ed7d1a;
-}
-.lightbox img {
-  display: block;
-  max-width: 85vw;
-  max-height: 75dvh;
-  margin-top: 10px;
 }
 dialog::backdrop {
   background: #242018bb;

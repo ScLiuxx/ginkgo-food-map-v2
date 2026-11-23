@@ -1,12 +1,19 @@
 name: CI and automatic deployment
 
-# 只处理 develop 分支推送；检查全部通过后自动部署同一提交。
+# PR先检查；develop推送检查通过且新服务器就绪后自动发布同一提交。
 on:
+  pull_request:
+    branches: [develop]
   push:
     branches: [develop]
 
 permissions:
   contents: read
+
+# 更新PR时取消旧检查；develop发布不中断，部署作业另有串行锁。
+concurrency:
+  group: foodmap-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   backend:
@@ -22,10 +29,21 @@ jobs:
           MYSQL_ROOT_HOST: '%'
         ports:
           - 3306:3306
+          # 统计测试拒绝默认业务端口；仍连接本作业临时MySQL、创建随机库。
+          - 13306:3306
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
           --health-interval=10s
           --health-timeout=5s
+          --health-retries=12
+      activity-redis:
+        image: redis:8-alpine
+        ports:
+          - 16379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
           --health-retries=12
       redis:
         image: redis:8-alpine
@@ -56,7 +74,15 @@ jobs:
           REVIEW_TEST_DB_PASSWORD: ci-only-mysql-password
           # 回复集成测试要求显式指定隔离服务器；连接本作业的临时MySQL容器。
           REVIEW_TEST_DB_SERVER: jdbc:mysql://127.0.0.1:3306/
-        run: mvn --batch-mode --no-transfer-progress verify -Dredis.integration=true -Dauth.integration=true -Drestaurant.integration=true -Dreview.integration=true
+          ACTIVITY_TEST_DB_SERVER: jdbc:mysql://127.0.0.1:13306/
+          ACTIVITY_TEST_DB_USERNAME: root
+          ACTIVITY_TEST_DB_PASSWORD: ci-only-mysql-password
+          ACTIVITY_TEST_REDIS_PORT: '16379'
+        run: >-
+          mvn --batch-mode --no-transfer-progress verify
+          -Dredis.integration=true -Dauth.integration=true
+          -Drestaurant.integration=true -Dreview.integration=true
+          -Dactivity.structure.integration=true -Dactivity.backend.integration=true
       - name: Save test reports even on failure
         if: always()
         uses: actions/upload-artifact@v4
@@ -69,7 +95,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: checked-backend
-          path: backend/target/ginkgo-food-map-backend-*.jar
+          path: backend/target/foodmap-backend-*.jar
           retention-days: 7
           if-no-files-found: error
 
@@ -77,6 +103,10 @@ jobs:
     name: Frontend checks
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      # JS Key允许进入浏览器构建；高德安全密钥只留在服务器Nginx配置。
+      VITE_AMAP_KEY: ${{ vars.VITE_AMAP_KEY }}
+      VITE_AMAP_SERVICE_HOST: /_AMapService
     steps:
       - uses: actions/checkout@v4
         with:
@@ -86,6 +116,14 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      - name: Require browser map configuration before automatic deployment
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop' && vars.AUTO_DEPLOY_ENABLED == 'true'
+        shell: bash
+        run: |
+          [[ "$VITE_AMAP_KEY" =~ ^[[:xdigit:]]{32}$ ]] || {
+            echo 'Configure repository variable VITE_AMAP_KEY before deployment.' >&2
+            exit 1
+          }
       - name: Install locked dependencies
         working-directory: frontend
         run: npm ci
@@ -103,13 +141,15 @@ jobs:
   deploy:
     name: Deploy checked commit
     needs: [backend, frontend, deployment-checks]
-    # 服务器 Runner 只执行本仓库可信 develop 的发布，构建与测试仍在 GitHub 托管机器运行。
-    if: github.repository == 'kanno111/ginkgo-food-map-v2' && github.event_name == 'push' && github.ref == 'refs/heads/develop'
-    runs-on: [self-hosted, Linux, X64, ginkgo-deploy]
+    # 仓库变量是首次配置的就绪开关，开启后无需逐次确认；PR不读取部署密钥。
+    if: github.repository == 'kanno111/foodmap' && github.event_name == 'push' && github.ref == 'refs/heads/develop' && vars.AUTO_DEPLOY_ENABLED == 'true'
+    # 测试、打包和SSH客户端均在GitHub托管机器执行。
+    runs-on: ubuntu-24.04
+    environment: production
     timeout-minutes: 20
     # 不取消正在切换版本的部署，避免进程被中断后留下半完成状态。
     concurrency:
-      group: ginkgo-server-deployment
+      group: foodmap-server-deployment
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
@@ -122,14 +162,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # 使用系统 Python，服务器无需安装 gh，也不保存长期 GitHub 访问令牌。
+          # 使用本作业的只读令牌确认develop，服务器无需连接GitHub。
           python3 - <<'PY'
           import json, os, urllib.request
           url = f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/git/ref/heads/develop"
           request = urllib.request.Request(url, headers={
               'Authorization': 'Bearer ' + os.environ['GITHUB_TOKEN'],
               'Accept': 'application/vnd.github+json',
-              'User-Agent': 'ginkgo-deployment',
+              'User-Agent': 'foodmap-deployment',
           })
           with urllib.request.urlopen(request, timeout=30) as response:
               latest = json.load(response)['object']['sha']
@@ -162,19 +202,16 @@ jobs:
           printf '%s\n' "$GITHUB_SHA" > release/frontend/version.txt
           tar -czf release.tar.gz -C release backend.jar frontend commit.txt
           sha256sum release.tar.gz > SHA256SUMS
-      - name: Activate release on this server
+      - name: Upload and activate checked release over SSH
         if: steps.latest.outputs.current == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         shell: bash
-        run: |
-          set -euo pipefail
-          # Runner 由 ginkgo-deploy 运行，本地复制产物；自动发布不再连接入站 SSH。
-          [[ "$(id -un)" == 'ginkgo-deploy' ]]
-          release_id="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          [[ "$release_id" =~ ^[a-f0-9]{40}-[0-9]+-[0-9]+$ ]]
-          incoming="/opt/ginkgo/incoming/${release_id}"
-          mkdir -m 700 "$incoming"
-          cp release.tar.gz SHA256SUMS deploy/deploy.sh deploy/healthcheck.py "$incoming/"
-          bash "$incoming/deploy.sh" "$release_id"
+        run: bash deploy/ssh-publish.sh
 
   deployment-checks:
     name: Deployment checks
@@ -184,7 +221,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - name: Check script syntax and release failure handling
         run: |
           bash -n deploy/deploy.sh
+          bash -n deploy/ssh-publish.sh
+          sudo visudo -cf deploy/foodmap-deploy.sudoers
+          python3 -m py_compile deploy/application/prepare.py deploy/nginx/prepare.py
           python3 -m unittest discover -s deploy/tests -v

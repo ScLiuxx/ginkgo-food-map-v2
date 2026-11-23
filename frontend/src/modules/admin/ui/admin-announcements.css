@@ -1,126 +1,57 @@
 /* 发布页遵循确认稿：单列纯文本表单，不增加预览、定向接收或草稿区域。 */
 .announcement-workspace {
   min-height: 100vh;
-  color: #242a30;
-  background: #faf9f7;
+  color: var(--admin-text);
+  background: var(--admin-canvas);
   font-family: Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 .announcement-workspace * {
   box-sizing: border-box;
 }
-.announcement-topbar {
-  height: 86px;
-  padding: 0 40px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  background: #fff;
-  border-bottom: 1px solid #e6e6e6;
-}
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  text-decoration: none;
-  color: #151515;
-  white-space: nowrap;
-  font-size: 29px;
-  font-weight: 700;
-}
-.brand em {
-  color: #e97913;
-  font-size: 38px;
-  font-style: normal;
-}
-.brand small {
-  margin-left: 18px;
-  padding-left: 24px;
-  border-left: 1px solid #ddd;
-  font-size: 21px;
-  font-weight: 400;
-  color: #606060;
-}
-.admin-identity {
-  display: flex;
-  gap: 14px;
-  align-items: center;
-  font-size: 16px;
-  min-width: 0;
-}
-.admin-identity > span:nth-child(2) {
-  max-width: 130px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.admin-avatar {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: #fff0e0;
-  color: #ce6b16;
-}
-.admin-identity button {
-  white-space: nowrap;
-  flex-shrink: 0;
-  border: 0;
-  border-left: 1px solid #ddd;
-  border-radius: 0;
-  margin-left: 8px;
-  padding-left: 24px;
-  background: transparent;
-  color: #666;
-}
 .announcement-shell {
   display: grid;
-  grid-template-columns: 204px minmax(0, 1fr);
-  min-height: calc(100vh - 86px);
+  grid-template-columns: var(--admin-sidebar-width) minmax(0, 1fr);
+  min-height: calc(100vh - var(--admin-header-height));
+  min-height: calc(100dvh - var(--admin-header-height));
 }
 .announcement-workspace main {
-  padding: 28px 48px 46px;
+  padding: 30px 40px 46px;
   min-width: 0;
 }
-.announcement-breadcrumb {
-  color: #777;
-  font-size: 15px;
-  margin-bottom: 24px;
-}
 h1 {
-  font-size: 32px;
+  font-size: 28px;
   line-height: 1.3;
-  margin: 0 0 16px;
+  margin: 0 0 24px;
   font-weight: 700;
 }
 .announcement-tabs {
   display: flex;
-  gap: 28px;
-  border-bottom: 1px solid #dcdcdc;
+  gap: 24px;
+  max-width: 1110px;
+  border-bottom: 1px solid var(--admin-border);
 }
 .announcement-tabs button {
-  padding: 12px 12px 18px;
+  padding: 0 0 13px;
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;
-  color: #666;
+  color: var(--admin-secondary);
   background: transparent;
-  font-size: 19px;
+  font-size: 15px;
 }
 .announcement-tabs .active {
-  border-bottom-color: #e97913;
-  color: #e97913;
+  border-bottom-color: var(--admin-brand);
+  color: var(--admin-accent-text);
   font-weight: 600;
 }
 .announcement-editor,
 .announcement-records {
   max-width: 1110px;
-  margin: 26px auto 0;
-  padding: 28px 32px 24px;
-  border: 1px solid #d9d9d9;
-  border-radius: 8px;
-  background: #fff;
+  margin: 22px 0 0;
+  padding: 24px;
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  background: var(--admin-surface);
 }
 h2 {
   margin: 0;
@@ -132,13 +63,13 @@ h2 {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #777;
-  margin: 9px 0 28px;
-  font-size: 17px;
+  color: var(--admin-muted);
+  margin: 0 0 20px;
+  font-size: 13px;
 }
 .announcement-audience svg {
-  width: 25px;
-  height: 25px;
+  width: 18px;
+  height: 18px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.5;
@@ -146,27 +77,27 @@ h2 {
 .announcement-field {
   display: flex;
   flex-direction: column;
-  margin-top: 26px;
+  margin-top: 20px;
 }
 .announcement-field label {
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 600;
-  margin-bottom: 12px;
+  margin-bottom: 9px;
 }
 .announcement-field label span {
-  color: #e97913;
+  color: var(--admin-accent-text);
 }
 .announcement-field input,
 .announcement-field textarea {
-  border: 1px solid #c9c9c9;
+  border: 1px solid var(--admin-border);
   border-radius: 6px;
   padding: 12px 18px;
   width: 100%;
   min-width: 0;
   font: inherit;
-  font-size: 17px;
-  color: #222;
-  background: #fff;
+  font-size: 15px;
+  color: var(--admin-text);
+  background: var(--admin-surface);
 }
 .announcement-field input {
   height: 48px;
@@ -179,15 +110,15 @@ h2 {
 .announcement-field small {
   text-align: right;
   margin-top: 7px;
-  color: #888;
-  font-size: 14px;
+  color: var(--admin-muted);
+  font-size: 12px;
 }
 .announcement-field .invalid,
 .announcement-error {
-  color: #b33d2e;
+  color: var(--admin-danger);
 }
 .announcement-reminder {
-  color: #888;
+  color: var(--admin-muted);
   display: flex;
   gap: 10px;
   align-items: baseline;
@@ -200,21 +131,21 @@ h2 {
 }
 .announcement-actions {
   display: flex;
-  gap: 24px;
+  gap: 12px;
   justify-content: flex-end;
-  border-top: 1px solid #e2e2e2;
-  padding-top: 24px;
-  margin-top: 24px;
+  border-top: 1px solid var(--admin-divider);
+  padding-top: 20px;
+  margin-top: 20px;
 }
 button,
 select {
   font: inherit;
   font-size: 15px;
-  border: 1px solid #c7c7c7;
+  border: 1px solid var(--admin-border);
   border-radius: 7px;
   padding: 10px 20px;
-  background: #fff;
-  color: #333;
+  background: var(--admin-surface);
+  color: var(--admin-text);
   cursor: pointer;
 }
 button:disabled {
@@ -222,20 +153,18 @@ button:disabled {
   cursor: default;
 }
 button.primary {
-  border-color: #e97913;
-  background: #ed7900;
-  color: #fff;
+  border-color: var(--admin-primary);
+  background: var(--admin-primary);
+  color: var(--admin-surface);
   font-weight: 600;
 }
 .announcement-actions button {
-  min-width: 134px;
-  font-size: 17px;
+  min-width: 104px;
+  font-size: 14px;
 }
 button:focus-visible,
-input:focus-visible,
-textarea:focus-visible,
 select:focus-visible {
-  outline: 2px solid #bd6816;
+  outline: 2px solid var(--admin-focus);
   outline-offset: 3px;
 }
 .announcement-error,
@@ -244,7 +173,7 @@ select:focus-visible {
   overflow-wrap: anywhere;
 }
 .announcement-notice {
-  color: #597242;
+  color: var(--admin-success);
   padding: 12px 0;
 }
 .announcement-record-toolbar {
@@ -252,10 +181,14 @@ select:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 20px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--admin-divider);
+  color: var(--admin-muted);
+  font-size: 13px;
 }
 .announcement-record-toolbar select {
-  margin-left: 10px;
+  padding: 9px 32px 9px 12px;
+  font-size: 13px;
 }
 .announcement-record-list {
   padding: 0;
@@ -264,19 +197,33 @@ select:focus-visible {
 }
 .announcement-record-list li {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 18px;
-  padding: 22px 0;
-  border-bottom: 1px solid #ececec;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--admin-divider);
+}
+.record-summary {
+  min-width: 0;
+}
+.record-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 12px;
 }
 .record-title {
   text-align: left;
   border: 0;
   padding: 0;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
   overflow-wrap: anywhere;
+  line-height: 1.6;
+  background: none;
+}
+.record-title:hover {
+  color: var(--admin-accent-text);
 }
 .announcement-record-list li p {
   display: flex;
@@ -284,32 +231,38 @@ select:focus-visible {
   gap: 12px;
   margin: 9px 0 0;
   font-size: 12px;
-  color: #888;
+  color: var(--admin-muted);
 }
 .announcement-status {
   display: inline-block;
   font-size: 12px;
-  padding: 5px 10px;
-  color: #b46117;
-  background: #fff2e4;
+  padding: 3px 7px;
+  color: var(--admin-success);
+  background: var(--admin-success-soft);
   border-radius: 4px;
   white-space: nowrap;
 }
 .announcement-status.withdrawn {
-  color: #777;
-  background: #f0f0f0;
+  color: var(--admin-muted);
+  background: var(--admin-surface-hover);
 }
 .record-actions {
   display: flex;
   gap: 10px;
 }
 .record-actions button {
-  padding: 7px 12px;
+  border: 0;
+  padding: 8px 0 8px 12px;
   font-size: 13px;
+  color: var(--admin-secondary);
+  background: none;
+}
+.record-actions button:hover:not(:disabled) {
+  color: var(--admin-danger);
 }
 .announcement-empty {
   text-align: center;
-  color: #888;
+  color: var(--admin-muted);
   padding: 50px 0;
 }
 .announcement-pagination {
@@ -320,23 +273,23 @@ select:focus-visible {
   gap: 12px;
   margin-top: 24px;
   font-size: 13px;
-  color: #777;
+  color: var(--admin-muted);
 }
 .announcement-pagination button {
   font-size: 13px;
   padding: 8px 12px;
 }
 .announcement-dialog {
-  border: 1px solid #ddd;
-  border-radius: 9px;
-  padding: 30px;
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  padding: 26px;
   width: min(560px, calc(100% - 32px));
   max-height: 85vh;
-  color: #303030;
+  color: var(--admin-text);
   overflow: auto;
 }
 .announcement-dialog::backdrop {
-  background: rgb(30 25 20 / 30%);
+  background: var(--admin-backdrop);
 }
 .announcement-dialog p {
   line-height: 1.8;
@@ -345,36 +298,83 @@ select:focus-visible {
 .announcement-dialog .confirmation-title {
   font-weight: 600;
 }
-.record-dialog {
-  width: min(720px, calc(100% - 32px));
-  padding-top: 45px;
+.announcement-dialog.record-dialog {
+  width: min(560px, calc(100% - 32px));
+  max-height: 80vh;
+  max-height: 80dvh;
+  padding: 0;
+  overflow: hidden;
+  background: var(--admin-surface);
+  box-shadow: 0 20px 70px var(--admin-shadow);
+}
+.record-dialog-shell {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(80vh - 2px);
+  max-height: calc(80dvh - 2px);
+}
+.record-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+  padding: 24px 26px 18px;
+  border-bottom: 1px solid var(--admin-divider);
+}
+.record-dialog-header h2 {
+  font-size: 22px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+.announcement-reading-heading {
+  min-width: 0;
+}
+.announcement-reading-heading .announcement-detail-meta {
+  margin-top: 10px;
+}
+.record-dialog-content {
+  padding: 20px 26px 26px;
+  overflow: auto;
+  min-height: 0;
+}
+.detail-failure {
+  font-size: 14px;
+  color: var(--admin-danger);
 }
 .dialog-close {
-  position: absolute;
-  top: 10px;
-  right: 12px;
+  flex-shrink: 0;
   border: 0;
-  padding: 4px 10px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   font-size: 24px;
+  color: var(--admin-muted);
+  background: transparent;
+}
+.dialog-close:hover {
+  background: var(--admin-surface-hover);
+  color: var(--admin-text);
 }
 .announcement-detail-meta {
-  color: #888;
-  font-size: 13px;
+  color: var(--admin-muted);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
-.announcement-body {
+.record-dialog .announcement-body {
+  margin: 0;
+  color: var(--admin-text);
+  font-size: 15px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.announcement-withdrawn-time {
+  margin: 18px 0 0;
+}
 @media (max-width: 1000px) {
-  .brand {
-    font-size: 23px;
-  }
-  .brand small {
-    font-size: 16px;
-  }
-  .announcement-shell {
-    grid-template-columns: 204px minmax(0, 1fr);
-  }
   .announcement-workspace main {
     padding: 28px 24px;
   }
@@ -384,35 +384,6 @@ select:focus-visible {
   }
 }
 @media (max-width: 800px) {
-  .announcement-topbar {
-    height: 72px;
-    padding: 0 18px;
-  }
-  .brand {
-    font-size: 18px;
-    gap: 6px;
-  }
-  .brand em {
-    font-size: 29px;
-  }
-  .brand small {
-    display: none;
-  }
-  .admin-identity {
-    font-size: 12px;
-    gap: 7px;
-  }
-  .admin-avatar {
-    display: none;
-  }
-  .admin-identity > span:nth-child(2) {
-    max-width: 80px;
-  }
-  .admin-identity button {
-    font-size: 12px;
-    margin: 0;
-    padding: 6px 0 6px 10px;
-  }
   .announcement-shell {
     display: flex;
     flex-direction: column;
@@ -420,16 +391,12 @@ select:focus-visible {
   .announcement-workspace main {
     padding: 24px 16px;
   }
-  .announcement-breadcrumb {
-    font-size: 12px;
-    margin-bottom: 16px;
-  }
   h1 {
     font-size: 27px;
   }
   .announcement-tabs button {
-    font-size: 16px;
-    padding: 10px 8px 14px;
+    font-size: 14px;
+    padding: 0 0 12px;
   }
   .announcement-editor,
   .announcement-records {
@@ -463,7 +430,6 @@ select:focus-visible {
     gap: 14px;
   }
   .record-actions {
-    grid-column: 1/-1;
     justify-content: flex-end;
   }
   .announcement-dialog {
@@ -471,5 +437,17 @@ select:focus-visible {
   }
   .announcement-dialog h2 {
     font-size: 21px;
+  }
+  .record-dialog {
+    padding: 0;
+  }
+  .record-dialog-header {
+    padding: 20px 20px 16px;
+  }
+  .record-dialog-header h2 {
+    font-size: 20px;
+  }
+  .record-dialog-content {
+    padding: 18px 20px 22px;
   }
 }

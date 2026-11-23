@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.ginkgo.foodmap.restaurant.mapper.RestaurantWriteMapper">
-    <select id="selectManagementById" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantManagementEntity">
-        SELECT <include refid="com.ginkgo.foodmap.restaurant.mapper.RestaurantCatalogMapper.publicColumns"/>,
+<mapper namespace="com.foodmap.restaurant.mapper.RestaurantWriteMapper">
+    <select id="selectManagementById" resultType="com.foodmap.restaurant.entity.RestaurantManagementEntity">
+        SELECT <include refid="com.foodmap.restaurant.mapper.RestaurantCatalogMapper.publicColumns"/>,
             r.created_by, r.updated_by, r.deleted_at
         <!-- 管理回执复用公开统计字段，保存餐厅资料后不会把已有分数覆盖为空态。 -->
-        <include refid="com.ginkgo.foodmap.restaurant.mapper.RestaurantCatalogMapper.catalogFrom"/>
+        <include refid="com.foodmap.restaurant.mapper.RestaurantCatalogMapper.catalogFrom"/>
         WHERE r.id = #{id}
     </select>
 
-    <select id="lockById" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantManagementEntity">
+    <select id="lockById" resultType="com.foodmap.restaurant.entity.RestaurantManagementEntity">
         SELECT id, category_code, restaurant_type, created_by, deleted_at FROM restaurants WHERE id = #{id} FOR UPDATE
     </select>
 
-    <select id="lockCategory" resultType="com.ginkgo.foodmap.restaurant.entity.RestaurantCategoryEntity">
+    <select id="lockCategory" resultType="com.foodmap.restaurant.entity.RestaurantCategoryEntity">
         SELECT code, name, sort_order, enabled FROM restaurant_categories WHERE code = #{code} FOR SHARE
     </select>
 
@@ -59,14 +59,6 @@
             delete_reason_code=CASE WHEN #{admin} THEN 'ADMIN_REMOVAL' ELSE 'OWNER_REQUEST' END,
             updated_by=#{actor}, updated_at=CURRENT_TIMESTAMP(6)
         WHERE id=#{id} AND deleted_at IS NULL AND (#{admin} OR created_by=#{actor})
-            AND search_projection_version &lt; 9223372036854775807
-    </update>
-
-    <update id="restoreCurrent">
-        UPDATE restaurants SET search_projection_version=search_projection_version+1,
-            deleted_at=NULL, deleted_by=NULL, delete_reason_code=NULL,
-            updated_by=#{actor}, updated_at=CURRENT_TIMESTAMP(6)
-        WHERE id=#{id} AND deleted_at IS NOT NULL
             AND search_projection_version &lt; 9223372036854775807
     </update>
 

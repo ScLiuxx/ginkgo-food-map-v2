@@ -2,18 +2,13 @@ import { computed, onBeforeUnmount, ref, watch, type Ref } from 'vue'
 import {
   fetchRestaurants,
   fetchRestaurantCategories,
-  fetchRestaurantManagement,
-  deleteRestaurant,
-  restoreRestaurant,
-  useRestaurantCatalog,
   type RestaurantReadModel,
   type RestaurantCategory,
-  type RestaurantManagement,
 } from '@/modules/restaurant'
 import { authToken, getAccessToken } from '@/shared/api/authSession'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 
-/** 管理列表只使用真实分页；删除快照单独授权读取，不将公开目录冒充回收站。 */
+/** 管理列表负责查询分页；删除确认由共用弹窗独立处理。 */
 export function useAdminRestaurants(enabled: Ref<boolean>) {
   const keyword = ref(''),
     category = ref(''),
@@ -35,18 +30,11 @@ export function useAdminRestaurants(enabled: Ref<boolean>) {
     loading = ref(false),
     error = ref('')
   const categoryError = ref(''),
-    notice = ref(''),
-    lookupId = ref('')
-  const selected = ref<RestaurantManagement | null>(null)
-  const inspecting = ref(false),
-    busy = ref(false),
-    actionError = ref('')
-  const confirming = ref(false),
-    sessionChanged = ref(false)
+    notice = ref('')
+  const busy = ref(false)
+  const sessionChanged = ref(false)
   const token = getAccessToken()
-  const catalog = useRestaurantCatalog()
   let revision = 0,
-    inspection = 0,
     disposed = false
   let controller: AbortController | undefined
   const validSession = () =>
@@ -101,65 +89,9 @@ export function useAdminRestaurants(enabled: Ref<boolean>) {
     }
   }
 
-  /** 按ID查询可读取删除资料；打开另一商户立即清除旧确认与错误。 */
-  async function inspect(id = lookupId.value.trim()) {
-    if (busy.value || !validSession()) return
-    const current = ++inspection
-    selected.value = null
-    confirming.value = false
-    actionError.value = ''
-    if (!/^[1-9]\d*$/.test(id)) {
-      actionError.value = '请输入有效的店铺 ID。'
-      return
-    }
-    inspecting.value = true
-    try {
-      const result = await fetchRestaurantManagement(id, token!)
-      if (current === inspection && validSession()) selected.value = result
-    } catch (reason) {
-      if (current === inspection && validSession()) actionError.value = toErrorMessage(reason)
-    } finally {
-      if (current === inspection) inspecting.value = false
-    }
-  }
-
-  /** 写入不自动重试；结果不明时提示重新查询，成功后保留ID便于恢复。 */
-  async function applyAction() {
-    const snapshot = selected.value
-    if (!snapshot || !confirming.value || busy.value || !validSession()) return
-    busy.value = true
-    actionError.value = ''
-    const id = snapshot.restaurant.id
-    try {
-      const result = snapshot.deleted
-        ? await restoreRestaurant(id, token!)
-        : await deleteRestaurant(id, token!)
-      if (!validSession()) return
-      selected.value = result
-      confirming.value = false
-      catalog.invalidate()
-      notice.value = `「${result.restaurant.name}」已${result.deleted ? '删除' : '恢复'}，店铺 ID：${id}。`
-      await reload()
-    } catch (reason) {
-      if (validSession())
-        actionError.value = `${toErrorMessage(reason)}。请重新按 ID 查询当前状态后再决定是否重试。`
-    } finally {
-      busy.value = false
-    }
-  }
-
-  function close() {
-    if (busy.value) return
-    inspection++
-    inspecting.value = false
-    selected.value = null
-    confirming.value = false
-    actionError.value = ''
-  }
   function search() {
     appliedKeyword.value = keyword.value.trim()
     appliedCategory.value = category.value
-    close()
     if (page.value !== 1) page.value = 1
     else void reload()
   }
@@ -181,7 +113,6 @@ export function useAdminRestaurants(enabled: Ref<boolean>) {
   watch(
     enabled,
     (value) => {
-      close()
       if (value) {
         void reload()
         void loadCategories()
@@ -197,15 +128,12 @@ export function useAdminRestaurants(enabled: Ref<boolean>) {
     if (getAccessToken() === token) return
     sessionChanged.value = true
     revision++
-    inspection++
     controller?.abort()
     items.value = []
-    selected.value = null
   })
   onBeforeUnmount(() => {
     disposed = true
     revision++
-    inspection++
     controller?.abort()
   })
   return {
@@ -224,18 +152,10 @@ export function useAdminRestaurants(enabled: Ref<boolean>) {
     error,
     categoryError,
     notice,
-    lookupId,
-    selected,
-    inspecting,
     busy,
-    actionError,
-    confirming,
     sessionChanged,
     reload,
     loadCategories,
-    inspect,
-    applyAction,
-    close,
     search,
   }
 }

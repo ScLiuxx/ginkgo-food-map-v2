@@ -15,7 +15,7 @@ export function placeNavigationUrl(place: {
     place.latitude > 54
   )
     return null
-  return `https://uri.amap.com/marker?${new URLSearchParams({ position: `${place.longitude},${place.latitude}`, name: place.name, coordinate: 'gaode', src: 'ginkgo', callnative: '1' })}`
+  return `https://uri.amap.com/marker?${new URLSearchParams({ position: `${place.longitude},${place.latitude}`, name: place.name, coordinate: 'gaode', src: 'foodmap', callnative: '1' })}`
 }
 
 /** 导航只使用已确认的GCJ-02坐标；示例餐厅不允许进入真实导航。 */
@@ -59,5 +59,4 @@ export const mapExamples: RestaurantReadModel[] = [
   closed: false,
   priceKind: 'exact',
   dimensions: { taste: null, value: null, service: null, ambience: null },
-  recommendRate: null,
 }))

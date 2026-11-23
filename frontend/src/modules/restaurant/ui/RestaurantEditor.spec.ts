@@ -1,3 +1,5 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
+import { mockDialog } from '@/shared/test/mockDialog'
 import { AxiosError, AxiosHeaders } from 'axios'
 import { createPinia, disposePinia } from 'pinia'
 import { createApp, nextTick } from 'vue'
@@ -40,11 +42,13 @@ describe('restaurant maintenance form', () => {
   let app: App
   let host: HTMLDivElement
   let router: Router
+  let restoreDialog: () => void
   let pinia: ReturnType<typeof createPinia>
   const settle = async () => {
     for (let i = 0; i < 8; i++) await nextTick()
   }
   beforeEach(() => {
+    restoreDialog = mockDialog()
     vi.resetAllMocks()
     setAccessToken('owner-session')
     vi.mocked(fetchRestaurantCategories).mockResolvedValue(categoryFixtures)
@@ -82,6 +86,7 @@ describe('restaurant maintenance form', () => {
     host.remove()
     clearAccessToken()
     vi.restoreAllMocks()
+    restoreDialog()
   })
   async function mount(path = '/restaurants/new') {
     await router.push(path)
@@ -105,7 +110,8 @@ describe('restaurant maintenance form', () => {
     await field('category', 'HOT_POT')
     await field('latitude', '30.7544')
     await field('longitude', '103.9312')
-    await field('location-confirmed', true)
+    if (host.querySelector('#restaurant-location-confirmed'))
+      await field('location-confirmed', true)
   }
   async function submit() {
     host
@@ -117,7 +123,7 @@ describe('restaurant maintenance form', () => {
     clearAccessToken()
     await mount()
     expect(host.querySelector('form')).toBeNull()
-    expect(host.querySelector('a[href^="/login"]')?.getAttribute('href')).toContain(
+    expect(await captureLinkTarget(app, host.querySelector('.editor-notice a'))).toContain(
       'redirect=/restaurants/new',
     )
     expect(fetchRestaurantManagement).not.toHaveBeenCalled()
@@ -288,19 +294,31 @@ describe('restaurant maintenance form', () => {
   it('asks before leaving unsaved input and permits cancel when confirmed', async () => {
     await mount()
     await fill()
-    const confirm = vi.spyOn(globalThis, 'confirm').mockReturnValue(false)
-    await router.push('/')
+    const confirm = vi.spyOn(globalThis, 'confirm')
+    const cancel = router.push('/')
+    await settle()
+    document.querySelector<HTMLButtonElement>('.leave-confirmation button')!.click()
+    await cancel
     expect(router.currentRoute.value.path).toBe('/restaurants/new')
-    confirm.mockReturnValue(true)
-    await router.push('/')
+    const leave = router.push('/')
+    await settle()
+    document.querySelector<HTMLButtonElement>('.leave-confirmation .leave')!.click()
+    await leave
     expect(router.currentRoute.value.path).toBe('/')
+    expect(confirm).not.toHaveBeenCalled()
   })
 
   it('protects unsaved input when the editor route changes to another restaurant', async () => {
     await mount('/restaurants/1/edit')
     await field('name', '尚未保存')
-    vi.spyOn(globalThis, 'confirm').mockReturnValue(false)
-    await router.push('/restaurants/2/edit')
+    const navigation = router.push('/restaurants/2/edit')
+    await vi.waitFor(() =>
+      expect(document.querySelector<HTMLDialogElement>('.leave-confirmation')?.open).toBe(true),
+    )
+    document
+      .querySelector('.leave-confirmation')!
+      .dispatchEvent(new Event('cancel', { cancelable: true }))
+    await navigation
     expect(router.currentRoute.value.path).toBe('/restaurants/1/edit')
     expect(host.querySelector<HTMLInputElement>('#restaurant-name')?.value).toBe('尚未保存')
   })

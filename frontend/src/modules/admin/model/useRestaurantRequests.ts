@@ -8,6 +8,7 @@ import {
   fetchRequestPhoto,
   approveRequest,
   rejectRequest,
+  linkExistingRequest,
   fetchReviewCategories,
   type ReviewInput,
   type ReviewCategory,
@@ -19,7 +20,7 @@ import {
 export const requestStatusNames: Record<RequestStatus, string> = {
   PENDING: '待审核',
   APPROVED: '已通过',
-  REJECTED: '已拒绝',
+  REJECTED: '已驳回',
 }
 /** 服务端UTC时间按浏览器本地时间展示，缺失或非法值不显示成有效日期。 */
 export function formatRequestTime(value: string) {
@@ -222,7 +223,11 @@ export function useRestaurantRequests() {
   const comparison = computed(() => {
     if (!detail.value) return []
     const before =
-        detail.value.application.status === 'APPROVED' ? detail.value.before : detail.value.current,
+        detail.value.application.approvalMode === 'LINKED_EXISTING'
+          ? detail.value.proposed
+          : detail.value.application.status === 'APPROVED'
+            ? detail.value.before
+            : detail.value.current,
       after = draft.value
     const text = (value: unknown) => (value == null || value === '' ? '未填写' : String(value))
     const yes = (value: unknown) => (value === true ? '支持' : value === false ? '不支持' : '未知')
@@ -253,12 +258,6 @@ export function useRestaurantRequests() {
             : `${data.latitude}, ${data.longitude}`,
       ],
       ['人均消费', (data) => (data.pricePerPerson == null ? '未知' : `¥${data.pricePerPerson}`)],
-      [
-        '价格口径',
-        (data) =>
-          ({ UNKNOWN: '未知', EXACT: '填报金额', ESTIMATE: '估值' })[String(data.priceKind)] ??
-          '未知',
-      ],
       ['堂食情况', (data) => yes(data.supportsDineIn)],
       ['外卖情况', (data) => yes(data.supportsDelivery)],
       [
@@ -283,7 +282,6 @@ export function useRestaurantRequests() {
       'address',
       'position',
       'pricePerPerson',
-      'priceKind',
       'supportsDineIn',
       'supportsDelivery',
       'businessStatus',
@@ -310,9 +308,7 @@ export function useRestaurantRequests() {
     if (key === 'categoryCode')
       draft.value.categoryName =
         categories.value.find((entry) => entry.code === value)?.name ?? value
-    if (key === 'priceKind' && value === 'UNKNOWN') draft.value.pricePerPerson = null
-    if (key === 'pricePerPerson' && value != null && draft.value.priceKind === 'UNKNOWN')
-      draft.value.priceKind = 'EXACT'
+    if (key === 'pricePerPerson') draft.value.priceKind = value == null ? 'UNKNOWN' : 'EXACT'
     decisionError.value = ''
   }
 
@@ -329,7 +325,7 @@ export function useRestaurantRequests() {
       throw new Error('请填写有效的经纬度')
     if (data.locationConfirmed !== true) throw new Error('请确认商户位置')
     if (
-      data.priceKind !== 'UNKNOWN' &&
+      data.pricePerPerson != null &&
       (typeof data.pricePerPerson !== 'number' ||
         !Number.isInteger(data.pricePerPerson) ||
         data.pricePerPerson < 1 ||
@@ -346,15 +342,15 @@ export function useRestaurantRequests() {
       latitude: data.latitude,
       longitude: data.longitude,
       locationConfirmed: true,
-      priceKind: data.priceKind as ReviewInput['priceKind'],
-      pricePerPerson: data.priceKind === 'UNKNOWN' ? null : Number(data.pricePerPerson),
+      priceKind: data.pricePerPerson == null ? 'UNKNOWN' : 'EXACT',
+      pricePerPerson: data.pricePerPerson == null ? null : Number(data.pricePerPerson),
       businessStatus: data.businessStatus as ReviewInput['businessStatus'],
       tags: Array.isArray(data.tags) ? [...data.tags] : [],
     }
   }
 
   /** 完成写入后单独刷新队列；刷新失败不能被描述为审核失败，更不能重发已确认的写请求。 */
-  async function decide(kind: 'approve' | 'reject', reason = '') {
+  async function decide(kind: 'approve' | 'reject' | 'link-existing', reason = '') {
     if (submitting.value || !token || detail.value?.application.status !== 'PENDING') return
     const id = detail.value.application.id
     let payload: ReviewInput | undefined
@@ -362,6 +358,14 @@ export function useRestaurantRequests() {
     notice.value = ''
     try {
       if (kind === 'approve') payload = input()
+      // 关联操作不校验待审资料编辑草稿，但必须显式选择有效目标，禁止空选误提交。
+      if (
+        kind === 'link-existing' &&
+        (detail.value.application.requestType !== 'CREATE' ||
+          !/^[1-9]\d{0,18}$/.test(reason) ||
+          BigInt(reason) > 9223372036854775807n)
+      )
+        throw new Error('请选择已收录的店铺')
     } catch (error) {
       decisionError.value = toErrorMessage(error)
       return
@@ -374,11 +378,14 @@ export function useRestaurantRequests() {
       const receipt =
         kind === 'approve'
           ? await approveRequest(id, payload!, token)
-          : await rejectRequest(id, reason, token)
+          : kind === 'link-existing'
+            ? await linkExistingRequest(id, reason, token)
+            : await rejectRequest(id, reason, token)
       if (disposed) return
       // 立即反映服务器已确认的终态，即使后续列表读取失败也不能再次操作此申请。
       detail.value!.application.status = receipt.status
       detail.value!.application.restaurantId = receipt.restaurantId
+      detail.value!.application.approvalMode = receipt.approvalMode
       detail.value!.reviewedBy = receipt.reviewedBy
       detail.value!.reviewedAt = receipt.reviewedAt
       detail.value!.rejectReason = receipt.rejectReason
@@ -386,7 +393,9 @@ export function useRestaurantRequests() {
       notice.value =
         kind === 'approve'
           ? `申请 #${id} 已审核通过并更新；${receipt.publishedPhotos?.length ? `已发布 ${receipt.publishedPhotos.length} 张商户相册图片。` : '本次未新增相册图片。'}`
-          : `申请 #${id} 已驳回，正式商户资料未改变。`
+          : kind === 'link-existing'
+            ? `申请 #${id} 已关联到已收录店铺；如有附带点评，已自动发布。`
+            : `申请 #${id} 已驳回，正式商户资料未改变。`
       // 审核前快照和规范化后的通过值只认服务端；读取失败保留已确认终态，不重发写入。
       loadingDetail.value = true
       try {

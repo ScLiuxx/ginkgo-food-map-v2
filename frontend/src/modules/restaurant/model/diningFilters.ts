@@ -5,10 +5,7 @@ export function matchesDiningFilters(
   record: RestaurantReadModel,
   filters: CatalogFilters,
 ): boolean {
-  if (record.dining?.kind === 'window') return false
-  const type =
-    record.restaurantType ??
-    (record.dining?.kind === 'canteen' || record.category === '食堂' ? 'CANTEEN' : 'REGULAR')
+  const type = record.restaurantType ?? (record.category === '食堂' ? 'CANTEEN' : 'REGULAR')
   if (filters.restaurantType && type !== filters.restaurantType) return false
   if (filters.diningMode === 'dineIn' && record.supportsDineIn !== true) return false
   if (filters.diningMode === 'delivery' && record.supportsDelivery !== true) return false

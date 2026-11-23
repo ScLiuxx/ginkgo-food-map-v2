@@ -23,9 +23,9 @@ class SingleCharacterBenchmarkTest(unittest.TestCase):
         self.assertEqual((tokenizer['min_gram'],tokenizer['max_gram']),(1,1))
 
     def test_mutation_guard_rejects_official_names_wildcards_and_unowned_uuid(self):
-        good='ginkgo-char-ab-'+'a'*32+'-b'
+        good='foodmap-char-ab-'+'a'*32+'-b'
         require_owned(good,{good})
-        for name in ('restaurant-search','restaurant-search-v002','ginkgo-char-ab-*',good):
+        for name in ('restaurant-search','restaurant-search-v002','foodmap-char-ab-*',good):
             with self.assertRaises(ValueError):require_owned(name,set())
 
     def test_single_character_search_is_four_field_or_with_exact_total_and_bounded_page(self):
@@ -41,7 +41,12 @@ class SingleCharacterBenchmarkTest(unittest.TestCase):
         count,page=sql_statements({'params':{'keyword':"%' OR 1=1",'sort':'recommend'}})
         self.assertNotIn("OR 1=1",count[0])
         self.assertIn("!%",count[1][0])
-        self.assertIn('ROUND(',page[0]);self.assertIn(',3)',page[0])
+        self.assertIn('ROUND(',page[0]);self.assertIn(',1)',page[0])
+        self.assertNotIn('recommend_rate',page[0])
+        self.assertIn('ORDER BY COALESCE(s.review_count,0) DESC,r.id',page[0])
+        body=search_body({'params':{'keyword':'面','sort':'recommend'}})
+        self.assertEqual(body['sort'][0],{'reviewCount':{'order':'desc','missing':'_last'}})
+        self.assertNotIn('runtime_mappings',body)
         self.assertEqual(page[1][-2:],[8,0])
 
     def test_fixed_query_cases_include_nonempty_and_empty_filter_controls(self):

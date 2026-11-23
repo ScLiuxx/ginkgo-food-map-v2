@@ -1,0 +1,401 @@
+.activity-workspace {
+  min-height: 100vh;
+  background: var(--admin-canvas);
+  color: var(--admin-text);
+  font-family: Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+.activity-workspace * {
+  box-sizing: border-box;
+}
+.activity-shell {
+  display: grid;
+  grid-template-columns: var(--admin-sidebar-width) minmax(0, 1fr);
+  min-height: calc(100vh - var(--admin-header-height));
+  min-height: calc(100dvh - var(--admin-header-height));
+}
+.activity-main {
+  min-width: 0;
+  padding: 30px 40px 38px;
+}
+.activity-inner {
+  max-width: 1200px;
+  margin: auto;
+}
+.activity-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.activity-heading h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.activity-updated {
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.activity-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 26px 0;
+  margin-bottom: 22px;
+  border: 1px solid var(--admin-divider);
+  border-radius: 12px;
+  background: var(--admin-surface);
+}
+.activity-metric {
+  min-width: 0;
+  padding: 0 28px;
+  border-left: 1px solid var(--admin-divider);
+}
+.activity-metric:first-child {
+  border-left: 0;
+}
+.activity-metric-label {
+  margin-bottom: 13px;
+  color: var(--admin-secondary);
+  font-size: 14px;
+}
+.activity-metric-number {
+  overflow-wrap: anywhere;
+  font-size: 38px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
+}
+.activity-metric:first-child .activity-metric-number {
+  color: var(--admin-accent-text);
+}
+.activity-current-note {
+  display: inline-block;
+  margin-left: 8px;
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.activity-chart-card {
+  padding: 25px 28px 17px;
+  border: 1px solid var(--admin-divider);
+  border-radius: 12px;
+  background: var(--admin-surface);
+}
+.activity-chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 23px;
+}
+.activity-chart-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.activity-chart-title h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.activity-date-range {
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.activity-tabs {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.activity-tabs button {
+  padding: 8px 0 11px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--admin-secondary);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.activity-tabs button.active {
+  border-bottom-color: var(--admin-brand);
+  color: var(--admin-accent-text);
+  font-weight: 600;
+}
+.activity-tabs button:hover {
+  color: var(--admin-accent-text);
+}
+.activity-chart-wrap {
+  position: relative;
+  min-width: 0;
+}
+.activity-axis-unit {
+  padding-bottom: 7px;
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+.activity-plot {
+  display: block;
+  width: 100%;
+  height: 310px;
+  outline: none;
+  touch-action: pan-y;
+}
+.activity-plot:focus-visible {
+  outline: 2px solid var(--admin-focus);
+  outline-offset: 4px;
+}
+.activity-axis line {
+  stroke: var(--admin-divider);
+}
+.activity-axis text,
+.activity-axis-label {
+  fill: var(--admin-muted);
+  font-size: 11px;
+}
+.activity-trend-line {
+  fill: none;
+  stroke: #d38b42;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.activity-trend-point {
+  fill: var(--admin-surface);
+  stroke: #d38b42;
+  stroke-width: 2;
+}
+.activity-hover-line {
+  stroke: #d9c0a3;
+  stroke-dasharray: 3 4;
+}
+.activity-tooltip {
+  position: absolute;
+  z-index: 1;
+  min-width: 160px;
+  max-width: calc(100% - 8px);
+  padding: 13px 15px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: var(--admin-surface);
+  box-shadow: 0 5px 18px #29313b10;
+  pointer-events: none;
+}
+.activity-tooltip-date {
+  margin-bottom: 10px;
+  color: var(--admin-secondary);
+  font-size: 12px;
+}
+.activity-tooltip-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.activity-tooltip-value strong {
+  margin-left: auto;
+  font-size: 15px;
+  font-weight: 600;
+}
+.activity-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d38b42;
+}
+.activity-tooltip-status {
+  margin-top: 8px;
+  color: var(--admin-muted);
+  font-size: 11px;
+}
+.activity-chart-foot {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--admin-divider);
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+.activity-data-origin {
+  padding: 17px 1px 0;
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+.activity-state,
+.activity-chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  min-height: 337px;
+  color: var(--admin-muted);
+  font-size: 14px;
+}
+.activity-state button,
+.activity-update-error button {
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--admin-accent-text);
+  font: inherit;
+  cursor: pointer;
+}
+.activity-update-error {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  color: var(--admin-danger);
+  font-size: 13px;
+}
+.activity-update-error button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.activity-error {
+  color: var(--admin-danger);
+  font-size: 13px;
+}
+.activity-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (min-width: 801px) and (max-width: 1100px) {
+  .activity-main {
+    padding: 28px 24px;
+  }
+  .activity-metric {
+    padding: 0 18px;
+  }
+  .activity-metric-number {
+    font-size: 32px;
+  }
+  .activity-current-note {
+    display: block;
+    margin: 6px 0 0;
+  }
+}
+@media (max-width: 800px) {
+  .activity-shell {
+    display: flex;
+    flex-direction: column;
+  }
+  .activity-main {
+    padding: 24px 16px 30px;
+  }
+  .activity-heading {
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .activity-heading h1 {
+    font-size: 24px;
+  }
+  .activity-updated {
+    font-size: 11px;
+  }
+  .activity-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 0;
+    margin-bottom: 18px;
+    border-radius: 10px;
+  }
+  .activity-metric {
+    padding: 21px 20px;
+  }
+  .activity-metric:nth-child(3) {
+    border-left: 0;
+  }
+  .activity-metric:nth-child(n + 3) {
+    border-top: 1px solid var(--admin-divider);
+  }
+  .activity-metric-label {
+    margin-bottom: 10px;
+    font-size: 13px;
+  }
+  .activity-metric-number {
+    font-size: 32px;
+  }
+  .activity-current-note {
+    margin-left: 5px;
+    font-size: 11px;
+  }
+  .activity-chart-card {
+    padding: 20px 15px 15px;
+    border-radius: 10px;
+  }
+  .activity-chart-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 17px;
+  }
+  .activity-chart-title {
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .activity-chart-title h2 {
+    font-size: 15px;
+  }
+  .activity-date-range {
+    font-size: 11px;
+  }
+  .activity-tabs {
+    gap: 25px;
+  }
+  .activity-tabs button {
+    padding: 0 0 10px;
+    font-size: 12px;
+  }
+  .activity-plot {
+    height: 235px;
+  }
+  .activity-chart-foot {
+    padding-top: 12px;
+    font-size: 11px;
+  }
+  .activity-axis-unit,
+  .activity-data-origin {
+    font-size: 11px;
+  }
+  .activity-data-origin {
+    padding-top: 15px;
+  }
+  .activity-state,
+  .activity-chart-empty {
+    min-height: 262px;
+    font-size: 13px;
+  }
+}
+@media (max-width: 360px) {
+  .activity-metric {
+    padding: 19px 14px;
+  }
+  .activity-metric-number {
+    font-size: 29px;
+  }
+  .activity-current-note {
+    display: block;
+    margin: 6px 0 0;
+  }
+}

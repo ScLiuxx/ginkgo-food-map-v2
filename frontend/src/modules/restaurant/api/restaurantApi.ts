@@ -1,8 +1,9 @@
-import { fetchCanteenWindows } from './canteenWindowApi'
 import type { ApiResponse } from '@/shared/api/api.types'
 import { httpClient } from '@/shared/api/httpClient'
 import type { CatalogFilters, RestaurantReadModel } from '../model/restaurant.types'
 import { restaurantPhotoUrl, type RestaurantAlbumPhoto } from './restaurantAlbumApi'
+import type { AttachedReviewInput } from '../model/attachedReview'
+import type { RestaurantPhotoSelection } from './restaurantPhotoManagementApi'
 
 /** API字段独立于页面模型，保留字符串ID和所有空值，不将未知价格或评分转换为0。 */
 export interface RestaurantResponse {
@@ -10,8 +11,6 @@ export interface RestaurantResponse {
   restaurantType?: RestaurantReadModel['restaurantType']
   supportsDineIn?: boolean | null
   supportsDelivery?: boolean | null
-  /** 校园展示模型由正式餐厅与独立窗口接口组装。 */
-  dining?: RestaurantReadModel['dining']
   id: string
   name: string
   /** 食堂不适用美食分类，编码及名称均为null。 */
@@ -27,7 +26,8 @@ export interface RestaurantResponse {
   distanceKm: number | null
   tags: string[]
   score: number | null
-  recommendRate: number | null
+  /** 新版接口独立返回五分制口碑分，旧score保持原十分制均分语义。 */
+  reputationScore?: number | null
   reviewCount: number
   participantCount: number
   dimensions: RestaurantReadModel['dimensions']
@@ -95,7 +95,6 @@ export function toRestaurantModel(value: RestaurantResponse): RestaurantReadMode
     restaurantType: value.restaurantType,
     supportsDineIn: value.supportsDineIn ?? null,
     supportsDelivery: value.supportsDelivery ?? null,
-    ...(value.dining ? { dining: value.dining } : {}),
     id: value.id,
     name: value.name,
     category: value.restaurantType === 'CANTEEN' ? '' : (value.categoryName ?? ''),
@@ -109,8 +108,14 @@ export function toRestaurantModel(value: RestaurantResponse): RestaurantReadMode
     priceKind: { UNKNOWN: 'unknown', EXACT: 'exact', ESTIMATE: 'estimate' }[
       value.priceKind
     ] as RestaurantReadModel['priceKind'],
-    score: value.score,
-    recommendRate: value.recommendRate,
+    // 展示模型沿用十分制星级组件的输入；新口碑分只在此转换一次，原始四维不变。
+    score:
+      value.reputationScore === undefined
+        ? value.score
+        : value.reputationScore === null
+          ? null
+          : value.reputationScore * 2,
+    reputationScore: value.reputationScore,
     reviewCount: value.reviewCount,
     participantCount: value.participantCount,
     dimensions: value.dimensions,
@@ -147,6 +152,7 @@ export async function fetchRestaurants(
         keyword: filters.keyword,
         restaurantType: filters.restaurantType || undefined,
         diningMode: filters.diningMode || undefined,
+        hasReviews: filters.hasReviews ?? undefined,
         category: filters.category,
         sort: filters.sort,
         hideClosed: filters.hideClosed,
@@ -175,16 +181,6 @@ export async function fetchRestaurant(
     { signal },
   )
   const model = toRestaurantModel(response.data.data)
-  if (model.restaurantType === 'CANTEEN')
-    model.dining = {
-      kind: 'canteen',
-      campus: null,
-      parent: null,
-      floor: null,
-      description: null,
-      windows: await fetchCanteenWindows(id, signal),
-      dishes: [],
-    }
   return model
 }
 
@@ -207,7 +203,13 @@ export async function fetchRestaurantManagement(
 }
 
 /** 新建不会自动重试；超时可能已提交，调用方应先核对目录。 */
-export async function createRestaurant(input: RestaurantSaveInput, token: string) {
+/** 管理员相册可选，省略保留、空数组清空；普通投稿不接受此字段。 */
+export interface RestaurantDirectSaveInput extends Omit<RestaurantSaveInput, 'locationConfirmed'> {
+  locationConfirmed?: boolean | null
+  photos?: RestaurantPhotoSelection[] | null
+}
+
+export async function createRestaurant(input: RestaurantDirectSaveInput, token: string) {
   const response = await httpClient.post<ApiResponse<RestaurantManagement>>(
     '/api/restaurants',
     input,
@@ -217,7 +219,11 @@ export async function createRestaurant(input: RestaurantSaveInput, token: string
 }
 
 /** 整份保存及标签替换由后端事务完成，不附加版本号或客户端身份字段。 */
-export async function updateRestaurant(id: string, input: RestaurantSaveInput, token: string) {
+export async function updateRestaurant(
+  id: string,
+  input: RestaurantDirectSaveInput,
+  token: string,
+) {
   const response = await httpClient.put<ApiResponse<RestaurantManagement>>(
     `/api/restaurants/${encodeURIComponent(id)}`,
     input,
@@ -235,16 +241,6 @@ export async function deleteRestaurant(id: string, token: string) {
   return response.data.data
 }
 
-/** 管理员恢复软删除商户；由服务端再次验证权限，不在客户端伪造成功状态。 */
-export async function restoreRestaurant(id: string, token: string) {
-  const response = await httpClient.post<ApiResponse<RestaurantManagement>>(
-    `/api/restaurants/${encodeURIComponent(id)}/restore`,
-    null,
-    authenticated(token),
-  )
-  return response.data.data
-}
-
 /** 纠错读取公开资料，允许登录用户为任意公开商户提出申请，不获取归属管理权限。 */
 export async function fetchCorrectionSource(id: string, signal?: AbortSignal) {
   const response = await httpClient.get<ApiResponse<RestaurantResponse>>(
@@ -255,6 +251,8 @@ export async function fetchCorrectionSource(id: string, signal?: AbortSignal) {
 }
 
 export interface RestaurantCorrectionInput extends RestaurantSaveInput {
+  /** 仅新店投稿可附带点评，纠错路径不提供该字段。 */
+  review?: AttachedReviewInput
   photoIds?: string[]
   clientRequestId: string
   restaurantType: 'REGULAR' | 'CANTEEN'

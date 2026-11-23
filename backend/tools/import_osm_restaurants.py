@@ -87,16 +87,17 @@ def main():
     config = yaml.safe_load((backend/'config/application-local.yml').read_text(encoding='utf-8-sig'))['spring']['datasource']
     target = urlsplit(config['url'].removeprefix('jdbc:'))
     # 复用本地工具的目标约束，禁止远程主机、其他库或环境变量重定向。
-    if target.hostname not in ('localhost', '127.0.0.1', '::1') or target.path != '/ginkgo_food_map':
+    # 沿用既有开发库时不迁移数据，也不放宽主机或库名白名单。
+    if target.hostname not in ('localhost', '127.0.0.1', '::1') or target.path not in ('/foodmap', '/ginkgo_food_map'):
         raise ValueError('仅允许本机开发库')
-    connection = pymysql.connect(host=target.hostname, port=target.port or 3306, database='ginkgo_food_map',
+    connection = pymysql.connect(host=target.hostname, port=target.port or 3306, database=target.path[1:],
                                  user=config['username'], password=str(config.get('password', '')),
                                  charset='utf8mb4', autocommit=False, connect_timeout=5)
     report = {'batch': BATCH, 'apply': args.apply, 'license': 'https://www.openstreetmap.org/copyright',
               'attribution': '© OpenStreetMap contributors; ODbL-1.0',
               'inputSha256': hashlib.sha256(args.input.read_bytes()).hexdigest(),
               'campus': campus, 'candidateCount': len(candidates), 'skippedExisting': [], 'inserted': []}
-    lock = 'ginkgo_food_map:osm_shahe_seed'
+    lock = f'{target.path[1:]}:osm_shahe_seed'
     try:
         with connection.cursor(pymysql.cursors.DictCursor) as cur:
             cur.execute('SELECT GET_LOCK(%s,5) AS acquired', (lock,))

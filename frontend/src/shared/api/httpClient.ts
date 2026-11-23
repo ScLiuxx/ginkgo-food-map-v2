@@ -24,10 +24,9 @@ httpClient.interceptors.request.use((config) => {
   const path = (config.url ?? '').split('?')[0] ?? ''
   const publicRestaurantRead =
     config.method === 'get' &&
-    (/^\/api\/canteen-windows\/[^/]+(?:\/reviews(?:\/authors\/[^/]+\/history)?)?$/.test(path) ||
-      /^\/api\/restaurants\/[^/]+\/windows$/.test(path) ||
-      path === '/api/content-likes' ||
+    (path === '/api/content-likes' ||
       path === '/api/restaurant-categories' ||
+      path === '/api/restaurant-rankings' ||
       path === '/api/restaurants' ||
       /^\/api\/restaurants\/[^/]+$/.test(path) ||
       /^\/api\/restaurants\/[^/]+\/photos(?:\/[^/]+)?$/.test(path) ||
@@ -38,7 +37,8 @@ httpClient.interceptors.request.use((config) => {
     token &&
     !publicAuthPaths.has(path) &&
     !path.startsWith('/api/public/') &&
-    !publicRestaurantRead
+    !publicRestaurantRead &&
+    !(config.method === 'post' && path === '/api/restaurant-picker/candidates')
   ) {
     config.headers.Authorization ??= `Bearer ${token}`
   }

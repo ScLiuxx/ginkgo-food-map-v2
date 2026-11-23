@@ -2,9 +2,11 @@
 import { ref, watch, onBeforeUnmount, useTemplateRef } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { authToken } from '@/shared/api/authSession'
+import LeaveConfirmation from '@/shared/ui/LeaveConfirmation.vue'
 import { useAdminAnnouncements } from '../model/useAdminAnnouncements'
 import type { AnnouncementDetail } from '@/modules/announcement'
 import AdminSidebar from './AdminSidebar.vue'
+import AdminHeader from './AdminHeader.vue'
 defineProps<{ username: string; loggingOut: boolean; sessionError: string | null }>()
 defineEmits<{ logout: [] }>()
 const state = useAdminAnnouncements()
@@ -31,7 +33,17 @@ const confirmation = useTemplateRef('confirmation'),
 const confirming = ref<{ kind: 'publish' | 'clear' | 'withdraw'; row?: AnnouncementDetail } | null>(
   null,
 )
+const recordId = ref('')
 const time = (value: string) => new Date(value).toLocaleString('zh-CN', { hour12: false })
+const readingTime = (value: string) =>
+  new Date(value).toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
 function ask(kind: 'publish' | 'clear' | 'withdraw', row?: AnnouncementDetail) {
   if (busy.value) return
   actionError.value = ''
@@ -64,6 +76,7 @@ async function confirm() {
   if (success) closeConfirmation()
 }
 function inspect(id: string) {
+  recordId.value = id
   recordDialog.value?.showModal()
   void state.inspect(id)
 }
@@ -71,9 +84,8 @@ function leave(event: globalThis.BeforeUnloadEvent) {
   if (dirty.value || busy.value) event.preventDefault()
 }
 globalThis.addEventListener('beforeunload', leave)
-onBeforeRouteLeave(
-  () => !busy.value && (!dirty.value || globalThis.confirm('尚有未发布或未确认的公告，确认离开？')),
-)
+const leaveConfirmation = useTemplateRef('leaveConfirmation')
+onBeforeRouteLeave(() => !busy.value && (!dirty.value || leaveConfirmation.value?.ask()))
 watch(
   authToken,
   () => {
@@ -90,24 +102,18 @@ onBeforeUnmount(() => {
 })
 </script>
 <template>
-  <div class="announcement-workspace">
-    <header class="announcement-topbar">
-      <RouterLink class="brand" to="/admin/reviews"
-        ><em>泥电</em><span>美食地图</span><small>管理工作台</small></RouterLink
-      >
-      <div class="admin-identity">
-        <span class="admin-avatar" aria-hidden="true">管</span
-        ><span :title="username">{{ username }}</span
-        ><button :disabled="loggingOut || busy" @click="$emit('logout')">
-          {{ loggingOut ? '正在退出…' : '退出登录' }}
-        </button>
-      </div>
-    </header>
+  <div class="announcement-workspace admin-theme">
+    <LeaveConfirmation ref="leaveConfirmation" message="公告尚未发布或确认，确定离开？" />
+    <AdminHeader
+      :username="username"
+      :logging-out="loggingOut"
+      :disabled="busy"
+      @logout="$emit('logout')"
+    />
     <p v-if="sessionError" role="alert" class="announcement-error">{{ sessionError }}</p>
     <div class="announcement-shell">
       <AdminSidebar />
       <main>
-        <div class="announcement-breadcrumb">管理工作台 / 公告管理</div>
         <h1>公告管理</h1>
         <div class="announcement-tabs" aria-label="公告管理视图">
           <button
@@ -128,12 +134,11 @@ onBeforeUnmount(() => {
         </div>
         <p v-if="notice" role="status" class="announcement-notice">{{ notice }}</p>
         <form v-if="tab === 'publish'" class="announcement-editor" @submit.prevent="ask('publish')">
-          <h2>发布全体公告</h2>
           <p class="announcement-audience">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="9" cy="7" r="4" />
               <path d="M2 21v-3a7 7 0 0 1 14 0v3M16 3a4 4 0 0 1 0 8M18 14a6 6 0 0 1 4 6" /></svg
-            >所有用户可见
+            >全体用户
           </p>
           <div class="announcement-field">
             <label for="announcement-title">公告标题 <span>*</span></label
@@ -174,14 +179,12 @@ onBeforeUnmount(() => {
         </form>
         <section v-else class="announcement-records" aria-label="公告记录">
           <div class="announcement-record-toolbar">
-            <label
-              >状态
-              <select v-model="status" :disabled="busy">
-                <option value="ALL">全部状态</option>
-                <option value="PUBLISHED">已发布</option>
-                <option value="WITHDRAWN">已撤回</option>
-              </select></label
-            ><button :disabled="loading || busy" @click="state.load()">刷新</button>
+            <select v-model="status" aria-label="公告状态" :disabled="busy">
+              <option value="ALL">全部状态</option>
+              <option value="PUBLISHED">已发布</option>
+              <option value="WITHDRAWN">已撤回</option>
+            </select>
+            <span>{{ loading ? '正在加载…' : result ? `共 ${result.total} 条公告` : '' }}</span>
           </div>
           <p v-if="actionError" role="alert" class="announcement-error">{{ actionError }}</p>
           <p v-if="loading" role="status">正在加载公告…</p>
@@ -195,34 +198,34 @@ onBeforeUnmount(() => {
             </p>
             <ul v-else class="announcement-record-list">
               <li v-for="row in result.records" :key="row.id">
-                <div>
-                  <button class="record-title" :disabled="busy" @click="inspect(row.id)">
-                    {{ row.title }}
-                  </button>
+                <div class="record-summary">
+                  <div class="record-heading">
+                    <button class="record-title" :disabled="busy" @click="inspect(row.id)">
+                      {{ row.title }}
+                    </button>
+                    <span
+                      class="announcement-status"
+                      :class="{ withdrawn: row.status === 'WITHDRAWN' }"
+                      >{{ row.status === 'PUBLISHED' ? '已发布' : '已撤回' }}</span
+                    >
+                  </div>
                   <p>
-                    <time>{{ time(row.publishedAt) }}</time
-                    ><span>发布人 #{{ row.publishedBy }}</span>
+                    <time :datetime="row.publishedAt">{{ time(row.publishedAt) }}</time>
                   </p>
                 </div>
-                <span
-                  class="announcement-status"
-                  :class="{ withdrawn: row.status === 'WITHDRAWN' }"
-                  >{{ row.status === 'PUBLISHED' ? '已发布' : '已撤回' }}</span
-                >
                 <div class="record-actions">
-                  <button :disabled="busy" @click="inspect(row.id)">查看</button
-                  ><button
+                  <button
                     v-if="row.status === 'PUBLISHED'"
                     :disabled="busy"
                     @click="ask('withdraw', row)"
                   >
-                    撤回
+                    撤回公告
                   </button>
                 </div>
               </li>
             </ul>
             <div class="announcement-pagination">
-              <span>共 {{ result.total }} 条 · 第 {{ page }} / {{ result.totalPages || 1 }} 页</span
+              <span>第 {{ page }} / {{ result.totalPages || 1 }} 页</span
               ><button :disabled="page <= 1 || busy" @click="state.load(page - 1)">上一页</button
               ><button :disabled="page >= result.totalPages || busy" @click="state.load(page + 1)">
                 下一页
@@ -272,25 +275,45 @@ onBeforeUnmount(() => {
         </button>
       </footer>
     </dialog>
-    <dialog ref="recordDialog" class="announcement-dialog record-dialog" aria-label="公告详情">
-      <button class="dialog-close" aria-label="关闭公告详情" @click="recordDialog?.close()">
-        ×
-      </button>
-      <p v-if="inspecting" role="status">正在加载公告…</p>
-      <p v-else-if="!detail" role="alert">{{ actionError || '公告暂时不可用，请关闭后重试。' }}</p>
-      <article v-else>
-        <span class="announcement-status">{{
-          detail.status === 'PUBLISHED' ? '已发布' : '已撤回'
-        }}</span>
-        <h2>{{ detail.title }}</h2>
-        <p class="announcement-detail-meta">
-          {{ time(detail.publishedAt) }} · 发布人 #{{ detail.publishedBy }}
-        </p>
-        <p class="announcement-body">{{ detail.content }}</p>
-        <p v-if="detail.withdrawnAt" class="announcement-detail-meta">
-          {{ time(detail.withdrawnAt) }} · 撤回人 #{{ detail.withdrawnBy }}
-        </p>
-      </article>
+    <dialog
+      ref="recordDialog"
+      class="announcement-dialog record-dialog"
+      aria-labelledby="announcement-detail-title"
+    >
+      <div class="record-dialog-shell">
+        <header class="record-dialog-header">
+          <div class="announcement-reading-heading">
+            <h2 id="announcement-detail-title">{{ detail?.title || '公告详情' }}</h2>
+            <div v-if="detail" class="announcement-detail-meta">
+              <time :datetime="detail.publishedAt">{{ readingTime(detail.publishedAt) }}</time>
+              <span
+                class="announcement-status"
+                :class="{ withdrawn: detail.status === 'WITHDRAWN' }"
+                >{{ detail.status === 'PUBLISHED' ? '已发布' : '已撤回' }}</span
+              >
+            </div>
+          </div>
+          <button class="dialog-close" aria-label="关闭公告详情" @click="recordDialog?.close()">
+            ×
+          </button>
+        </header>
+        <div class="record-dialog-content">
+          <p v-if="inspecting" role="status" class="announcement-empty">正在加载公告…</p>
+          <div v-else-if="!detail" role="alert" class="detail-failure">
+            <p>{{ actionError || '公告暂时不可用。' }}</p>
+            <button @click="state.inspect(recordId)">重试加载</button>
+          </div>
+          <article v-else>
+            <p class="announcement-body">{{ detail.content }}</p>
+            <p
+              v-if="detail.withdrawnAt"
+              class="announcement-detail-meta announcement-withdrawn-time"
+            >
+              撤回于 {{ readingTime(detail.withdrawnAt) }}
+            </p>
+          </article>
+        </div>
+      </div>
     </dialog>
   </div>
 </template>

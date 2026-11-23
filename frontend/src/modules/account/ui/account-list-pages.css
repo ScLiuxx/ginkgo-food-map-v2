@@ -1,4 +1,4 @@
-/* 独立点评与收藏页沿用个人主页的内容卡片，统一工具栏，不重复列表标题。 */
+/* 独立内容列表统一浅灰底；投稿入口放在标题旁，减少单独工具栏占用。 */
 :global(body:has(.account-list-page)) {
   background: #f6f7f9;
 }
@@ -9,11 +9,113 @@
   margin-bottom: 25px;
   gap: 18px;
 }
+.account-contributions .contribution-submit {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 10px 0;
+  color: #b77d29;
+  font-size: 13px;
+  text-decoration: none;
+}
+.account-contributions .contribution-submit:focus-visible {
+  outline: 2px solid #d8a23b;
+  outline-offset: 3px;
+}
 .account-list-card {
   border: 1px solid #e5e8ec;
   border-radius: 16px;
   background: #fff;
   padding: 0 28px 8px;
+}
+/* 本人点评省去整页外框，数量和写评入口随标题展示，每家店由点评模块独立成卡。 */
+.account-reviews .account-topline {
+  gap: 12px;
+  min-height: 46px;
+  margin-bottom: 22px;
+}
+.account-reviews .account-topline h1 {
+  font-size: 23px;
+}
+.account-review-total {
+  color: #8c96a2;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.account-reviews .account-write-review {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 40px;
+  margin-left: auto;
+  padding: 0 12px;
+  border: 1px solid #ecd9bf;
+  border-radius: 9px;
+  background: #fff9f1;
+  color: #ad7429;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.account-write-review svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.account-review-content {
+  min-width: 0;
+}
+@media (min-width: 800px) {
+  .account-center.account-reviews {
+    width: min(960px, calc(100% - 64px));
+  }
+  .account-reviews .account-topline {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 16px;
+    margin-bottom: 24px;
+  }
+  .account-reviews .account-back {
+    grid-column: 1 / -1;
+    justify-self: start;
+    margin-bottom: 2px;
+  }
+  .account-reviews .account-topline h1 {
+    grid-column: 1;
+    grid-row: 2;
+    font-size: 25px;
+  }
+  .account-reviews .account-review-total {
+    grid-column: 1;
+    grid-row: 3;
+    font-size: 12px;
+  }
+  .account-reviews .account-write-review {
+    grid-column: 2;
+    grid-row: 2 / 4;
+    padding: 0 20px;
+    border: 0;
+    border-radius: 7px;
+    background: #e98527;
+    color: white;
+    font-size: 13px;
+  }
+  .account-reviews .account-write-review:hover {
+    background: #db791e;
+  }
+  .account-reviews :is(.account-back, .account-write-review):focus-visible {
+    outline: 2px solid #a5adb7;
+    outline-offset: 3px;
+  }
+  .account-reviews .account-write-review svg {
+    display: none;
+  }
+}
+.account-write-review:focus-visible {
+  outline: 2px solid #cf9f53;
+  outline-offset: 3px;
 }
 .account-list-toolbar {
   display: flex;
@@ -34,7 +136,6 @@
   margin-left: auto;
   flex-shrink: 0;
 }
-.account-list-actions button,
 .account-list-actions a {
   display: inline-flex;
   align-items: center;
@@ -51,6 +152,16 @@
   color: #bb812e;
 }
 @media (max-width: 600px) {
+  .account-contributions .account-topline {
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .account-contributions .account-topline h1 {
+    font-size: 19px;
+  }
+  .account-contributions .contribution-submit {
+    font-size: 12px;
+  }
   .account-list-card {
     padding: 0 18px 4px;
     border-radius: 12px;

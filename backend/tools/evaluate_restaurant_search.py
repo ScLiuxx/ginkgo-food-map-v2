@@ -24,7 +24,7 @@ from setup_restaurant_search_index import LocalElasticsearch, load_spec, setup
 
 ROOT = Path(__file__).resolve().parents[2]
 CASES = Path(__file__).with_name("search-evaluation-cases.json")
-PREFIX = "ginkgo-search-eval-"
+PREFIX = "foodmap-search-eval-"
 MODES = ("smart_or", "smart_and", "max_and")
 
 
@@ -72,8 +72,8 @@ def connect():
     """只读本机固定开发库；读取忽略配置但不输出URL、账号或密码。"""
     datasource = yaml.safe_load((ROOT / "backend/config/application-local.yml").read_text(encoding="utf-8-sig"))["spring"]["datasource"]
     target = urlsplit(datasource["url"].removeprefix("jdbc:"))
-    if target.hostname not in ("localhost", "127.0.0.1") or target.path != "/ginkgo_food_map":
-        raise ValueError("评测只允许本机ginkgo_food_map开发库")
+    if target.hostname not in ("localhost", "127.0.0.1") or target.path != "/foodmap":
+        raise ValueError("评测只允许本机foodmap开发库")
     return pymysql.connect(host=target.hostname, port=target.port or 3306, database=target.path[1:],
                            user=datasource["username"], password=str(datasource.get("password", "")),
                            charset="utf8mb4", autocommit=False, cursorclass=pymysql.cursors.DictCursor,
@@ -98,8 +98,7 @@ def read_snapshot(cases: list[dict]) -> tuple[list[dict], list[dict], dict]:
                 r.price_per_person AS pricePerPerson, r.price_kind AS priceKind,
                 r.business_status AS businessStatus, r.latitude, r.longitude, r.needs_location AS needsLocation,
                 COALESCE(s.participant_count,0) AS participantCount, COALESCE(s.review_count,0) AS reviewCount,
-                CAST(s.overall_score_sum AS DECIMAL(40,20))/NULLIF(s.participant_count,0) AS ratingScore,
-                CAST(s.recommend_count AS DECIMAL(40,20))/NULLIF(s.participant_count,0) AS recommendRate
+                CAST(s.overall_score_sum AS DECIMAL(40,20))/NULLIF(s.participant_count,0) AS ratingScore
                 FROM restaurants r LEFT JOIN restaurant_categories c ON c.code=r.category_code
                 LEFT JOIN restaurant_review_statistics s ON s.restaurant_id=r.id
                 WHERE r.deleted_at IS NULL ORDER BY r.id""")

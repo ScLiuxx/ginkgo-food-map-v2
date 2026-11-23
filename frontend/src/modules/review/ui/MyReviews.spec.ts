@@ -1,3 +1,4 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
 import { createApp, h, nextTick, type App } from 'vue'
 import { createPinia, disposePinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -7,8 +8,11 @@ import { clearAccessToken } from '@/shared/api/authSession'
 import { fetchMyReviews, type MyReviewPage } from '../api/myReviewApi'
 import { reviewGatewayKey, unavailableReviewGateway, type ReviewHistoryPage } from '../model/review'
 import MyReviews from './MyReviews.vue'
+import { notifyReviewPublished } from '../model/reviewPublication'
+import { fetchLike } from '@/modules/community/api/likesApi'
 
 vi.mock('../api/myReviewApi', () => ({ fetchMyReviews: vi.fn() }))
+vi.mock('@/modules/community/api/likesApi', () => ({ fetchLike: vi.fn(), setLike: vi.fn() }))
 const result = (id = '102', userId = '42', historyCount = 1): MyReviewPage => ({
   author: { id: userId, username: '同学' + userId },
   page: 1,
@@ -29,7 +33,7 @@ const result = (id = '102', userId = '42', historyCount = 1): MyReviewPage => ({
         overallScore: 8,
         createdAt: '2026-11-07T00:00:00Z',
         scores: { taste: 8, value: 8, service: 8, ambience: 8 },
-        recommended: true,
+        recommendation: 'RECOMMENDED',
         body: '第' + id + '条真实点评',
         photos: [],
         canDelete: false,
@@ -54,7 +58,9 @@ describe('我的点评页面', () => {
   let app: App | undefined, host: HTMLDivElement
   let pinia: ReturnType<typeof createPinia>
   const remove = vi.fn(),
-    history = vi.fn()
+    history = vi.fn(),
+    listReplies = vi.fn(),
+    reply = vi.fn()
   const originalShow = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal')
   const originalClose = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close')
   beforeEach(() => {
@@ -65,7 +71,15 @@ describe('我的点评页面', () => {
     host = document.createElement('div')
     document.body.append(host)
     vi.mocked(fetchMyReviews).mockResolvedValue(result())
+    vi.mocked(fetchLike).mockImplementation(async (_type, targetId) => ({
+      targetId,
+      count: 0,
+      liked: false,
+      available: true,
+    }))
     remove.mockResolvedValue(undefined)
+    listReplies.mockResolvedValue({ records: [], hasMore: false, nextCursor: null })
+    reply.mockResolvedValue(undefined)
     history.mockResolvedValue({
       currentReviewId: '102',
       records: [
@@ -96,6 +110,7 @@ describe('我的点评页面', () => {
     host.remove()
     disposePinia(pinia)
     clearAccessToken()
+    vi.unstubAllGlobals()
     for (const [name, descriptor] of [
       ['showModal', originalShow],
       ['close', originalClose],
@@ -112,24 +127,35 @@ describe('我的点评页面', () => {
       user: { id, username: '同学' + id, roles: ['ROLE_USER'] },
     })
   }
-  async function mount(signedIn = true) {
+  async function mount(signedIn = true, publicUserId?: string) {
     if (signedIn) signIn()
     const router = createRouter({
       history: createMemoryHistory(),
-      routes: ['/', '/account/reviews', '/restaurants/1', '/users/42', '/login'].map((path) => ({
+      routes: [
+        '/',
+        '/account',
+        '/account/reviews',
+        '/restaurants/1',
+        '/users/42',
+        '/users/22',
+        '/login',
+      ].map((path) => ({
         path,
         component: { template: '<p>目标</p>' },
       })),
     })
-    await router.push('/account/reviews')
+    await router.push(publicUserId ? `/users/${publicUserId}` : '/account/reviews')
     await router.isReady()
-    app = createApp({ render: () => h(MyReviews) })
+    app = createApp({
+      render: () => h(MyReviews, { cardLayout: true, publicUserId, profileLayout: !!publicUserId }),
+    })
       .use(pinia)
       .use(router)
     app.provide(reviewGatewayKey, {
       ...unavailableReviewGateway,
       supportsReplies: true,
-      listReplies: vi.fn().mockResolvedValue({ records: [], hasMore: false, nextCursor: null }),
+      listReplies,
+      reply,
       remove,
       history,
     })
@@ -141,17 +167,254 @@ describe('我的点评页面', () => {
       (button) => button.textContent?.trim() === text,
     )
   const confirm = () => document.querySelector<HTMLDialogElement>('.my-review-confirm')!
+  async function more() {
+    host.querySelector<HTMLButtonElement>('[aria-label="更多操作"]')!.click()
+    await settle()
+  }
+  async function deleteCurrent() {
+    await more()
+    buttons('删除点评')[0]!.click()
+    await settle()
+  }
+  function desktopMedia() {
+    const media = Object.assign(new EventTarget(), { matches: true })
+    vi.stubGlobal('matchMedia', () => media)
+    return (matches: boolean) => {
+      media.matches = matches
+      media.dispatchEvent(new Event('change'))
+    }
+  }
+  async function openHistoryDetail() {
+    host.querySelector<HTMLButtonElement>('.desktop-history-access .history-trigger')!.click()
+    await settle()
+    const panel = document.querySelector<HTMLDialogElement>('.history-dialog')!
+    panel.querySelector<HTMLButtonElement>('.review-body-link')!.click()
+    await settle()
+    return panel
+  }
+
+  it('电脑历史与详情共用一个模态窗口，返回保留列表位置、焦点和失败回复UUID', async () => {
+    desktopMedia()
+    await mount()
+    const panel = await openHistoryDetail()
+    expect(document.querySelectorAll('dialog[open]')).toHaveLength(1)
+    expect(panel.querySelector('.embedded-discussion .detail-original-body')?.textContent).toBe(
+      '历史正文',
+    )
+    expect(panel.querySelector('.history-scroll')?.getAttribute('style')).toContain('display: none')
+    const scroll = panel.querySelector<HTMLElement>('.history-scroll')!
+    scroll.scrollTop = 80
+    const input = panel.querySelector('textarea')!
+    input.value = '保留历史点评回复草稿'
+    input.dispatchEvent(new Event('input'))
+    await settle()
+    reply.mockRejectedValueOnce(new Error('模拟回复失败'))
+    panel.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }))
+    await settle()
+    expect(reply.mock.calls[0]?.slice(0, 2)).toEqual(['101', '保留历史点评回复草稿'])
+    const requestId = reply.mock.calls[0]![2]
+    panel.querySelector<HTMLButtonElement>('[aria-label="返回历史"]')!.click()
+    await settle()
+    expect(panel.open).toBe(true)
+    expect(scroll.style.display).not.toBe('none')
+    expect(scroll.scrollTop).toBe(80)
+    expect(document.activeElement).toBe(panel.querySelector('.review-body-link'))
+    panel.querySelector<HTMLButtonElement>('.review-body-link')!.click()
+    await settle()
+    expect(panel.querySelector('textarea')).toBe(input)
+    expect(input.value).toBe('保留历史点评回复草稿')
+    expect(panel.textContent).toContain('模拟回复失败')
+    panel.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }))
+    await settle()
+    expect(reply.mock.calls[1]![2]).toBe(requestId)
+    const focusHistory = vi.spyOn(
+      host.querySelector<HTMLButtonElement>('.desktop-history-access .history-trigger')!,
+      'focus',
+    )
+    panel.querySelector<HTMLButtonElement>('[aria-label="关闭点评详情"]')!.click()
+    await settle()
+    expect(document.querySelector('dialog[open]')).toBeNull()
+    // jsdom不应用媒体查询，电脑专用入口在其CSS引擎中仍隐藏；实际焦点另由Edge验证。
+    expect(focusHistory).toHaveBeenCalledWith({ preventScroll: true })
+    expect(document.documentElement.style.overflow).toBe('')
+  })
+
+  it('历史详情跨电脑与手机断点移动同一编辑器，Esc先返回历史再关闭', async () => {
+    const resize = desktopMedia()
+    await mount()
+    const panel = await openHistoryDetail()
+    const input = panel.querySelector('textarea')!
+    input.value = '切换窗口大小保留文字'
+    input.dispatchEvent(new Event('input'))
+    await settle()
+    resize(false)
+    await settle()
+    const detail = [...document.querySelectorAll<HTMLDialogElement>('.discussion-dialog')].find(
+      (d) => d.open,
+    )!
+    expect(detail.querySelector('textarea')).toBe(input)
+    expect(input.value).toBe('切换窗口大小保留文字')
+    resize(true)
+    await settle()
+    expect(document.querySelectorAll('dialog[open]')).toHaveLength(1)
+    expect(panel.querySelector('textarea')).toBe(input)
+    panel.dispatchEvent(new Event('cancel', { cancelable: true }))
+    await settle()
+    expect(panel.open).toBe(true)
+    expect(panel.querySelector<HTMLElement>('.history-scroll')!.style.display).not.toBe('none')
+    panel.dispatchEvent(new Event('cancel', { cancelable: true }))
+    await settle()
+    expect(panel.open).toBe(false)
+    expect(document.documentElement.style.overflow).toBe('')
+  })
+
+  it('电脑历史关闭取消详情在途读取，迟到回复不进入重新打开的窗口', async () => {
+    desktopMedia()
+    await mount()
+    listReplies.mockRejectedValueOnce(new Error('预览暂时不可用'))
+    host.querySelector<HTMLButtonElement>('.desktop-history-access .history-trigger')!.click()
+    await settle()
+    let finish!: (value: { records: []; hasMore: false; nextCursor: null }) => void
+    listReplies.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const panel = document.querySelector<HTMLDialogElement>('.history-dialog')!
+    panel.querySelector<HTMLButtonElement>('.history-detail-link')!.click()
+    await settle()
+    const signal = listReplies.mock.calls.at(-1)![1] as AbortSignal
+    panel.querySelector<HTMLButtonElement>('[aria-label="关闭点评详情"]')!.click()
+    await settle()
+    expect(signal.aborted).toBe(true)
+    finish({ records: [], hasMore: false, nextCursor: null })
+    await settle()
+    expect(document.querySelector('dialog[open]')).toBeNull()
+    expect(document.documentElement.style.overflow).toBe('')
+    await openHistoryDetail()
+    expect(panel.querySelector('.embedded-discussion .detail-original-body')?.textContent).toBe(
+      '历史正文',
+    )
+    expect(document.querySelectorAll('dialog[open]')).toHaveLength(1)
+  })
+
+  it('点击当前正文直接打开同一点评，关闭回到原入口；历史正文保持历史ID', async () => {
+    await mount()
+    const body = host.querySelector<HTMLButtonElement>('.review-body-link')!
+    body.click()
+    await settle()
+    const current = [...document.querySelectorAll<HTMLDialogElement>('.discussion-dialog')].find(
+      (dialog) => dialog.open,
+    )!
+    expect(current.querySelector('.detail-original-body')?.textContent).toBe('第102条真实点评')
+    expect(await captureLinkTarget(app, current.querySelector('.discussion-store-title a'))).toBe(
+      '/restaurants/1',
+    )
+    current.querySelector<HTMLButtonElement>('[aria-label="关闭点评详情"]')!.click()
+    await settle()
+    expect(document.activeElement).toBe(body)
+    await more()
+    host.querySelector<HTMLButtonElement>('.history-trigger')!.click()
+    await settle()
+    const historyBody = document.querySelector<HTMLButtonElement>(
+      '.history-dialog .review-body-link',
+    )!
+    historyBody.click()
+    await settle()
+    const previous = [...document.querySelectorAll<HTMLDialogElement>('.discussion-dialog')].find(
+      (dialog) => dialog.open,
+    )!
+    expect(previous.querySelector('.detail-original-body')?.textContent).toBe('历史正文')
+    expect(previous.textContent).not.toContain('第102条真实点评')
+    previous.querySelector<HTMLButtonElement>('[aria-label="关闭点评详情"]')!.click()
+    await settle()
+    expect(document.activeElement).toBe(historyBody)
+    expect(document.querySelector<HTMLDialogElement>('.history-dialog')?.open).toBe(true)
+  })
+
+  it('他人主页复用卡片和独立回复详情，公开读取不提供删除他人点评的入口', async () => {
+    vi.mocked(fetchMyReviews).mockResolvedValue(result('102', '22'))
+    history.mockResolvedValue({
+      currentReviewId: '102',
+      records: [{ ...result('101', '22').records[0]!.item, scoringStatus: 'history' }],
+      hasMore: false,
+      nextCursor: null,
+    })
+    await mount(true, '22')
+    expect(fetchMyReviews).toHaveBeenCalledWith(
+      1,
+      '22',
+      'session-42',
+      expect.any(AbortSignal),
+      '22',
+    )
+    expect(host.querySelector('.list-card-review .dimension-details')).not.toBeNull()
+    expect(host.querySelector('.my-reviews-toolbar, .delete-review')).toBeNull()
+    expect(host.querySelector('.report-entry')).not.toBeNull()
+    await more()
+    host.querySelector<HTMLButtonElement>('.history-trigger')!.click()
+    await settle()
+    expect(history).toHaveBeenCalledWith('1', '22', expect.any(AbortSignal), 'cursor')
+    const previous = document.querySelector<HTMLDialogElement>('.history-dialog')!
+    expect(previous.querySelector('.delete-review')).toBeNull()
+    previous.querySelector<HTMLButtonElement>('[aria-label="关闭历史点评"]')!.click()
+    await settle()
+    host.querySelector<HTMLButtonElement>('.discussion-reply-action')!.click()
+    await settle()
+    const detail = document.querySelector<HTMLDialogElement>('.discussion-dialog')!
+    expect(detail.open).toBe(true)
+    expect(detail.querySelector('.detail-original-body')?.textContent).toBe('第102条真实点评')
+    expect(detail.querySelector('.delete-review')).toBeNull()
+    expect(detail.querySelector('.report-entry')).not.toBeNull()
+    expect(
+      await captureLinkTarget(app, detail.querySelector('.detail-original .user-identity')),
+    ).toBe('/users/22')
+    expect(remove).not.toHaveBeenCalled()
+  })
+
+  it('同页发布完成后读取当前页的新数据', async () => {
+    await mount()
+    vi.mocked(fetchMyReviews).mockResolvedValueOnce(result('103'))
+    notifyReviewPublished()
+    await settle()
+    expect(fetchMyReviews).toHaveBeenCalledTimes(2)
+    expect(host.textContent).toContain('第103条真实点评')
+  })
 
   it('显示真实店铺组和历史入口，店名转义，不把暂停营业当删除', async () => {
     await mount()
     expect(host.textContent).toContain('当前可查看 1 家店')
     expect(host.textContent).toContain('暂停营业')
-    expect(host.querySelector('.my-review-store a')?.getAttribute('href')).toBe('/restaurants/1')
+    expect(await captureLinkTarget(app, host.querySelector('.my-review-store a'))).toBe(
+      '/restaurants/1',
+    )
     expect(host.querySelector('.my-review-store img, .avatar')).toBeNull()
     expect(host.querySelector('.history-trigger')).not.toBeNull()
     expect(buttons('回复')).toHaveLength(1)
-    expect(buttons('查看回复')).toHaveLength(1)
+    expect(buttons('查看回复')).toHaveLength(0)
     expect(fetchMyReviews).toHaveBeenCalledWith(1, '42', 'session-42', expect.any(AbortSignal))
+  })
+  it('四维评分默认折叠，日期在评分行，次要操作可用Esc和外点收起', async () => {
+    await mount()
+    const details = host.querySelector<HTMLDetailsElement>('.dimension-details')!
+    expect(details.open).toBe(false)
+    expect(details.querySelectorAll('.dimension-values span')).toHaveLength(4)
+    expect(host.querySelector('.review-card header time')?.textContent).toContain('2026')
+    expect(host.querySelector('.entry-footer-date')).toBeNull()
+    const trigger = host.querySelector<HTMLButtonElement>('[aria-label="更多操作"]')!
+    await more()
+    expect(trigger.getAttribute('aria-expanded')).toBe('true')
+    trigger.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    )
+    await settle()
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(trigger)
+    await more()
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    await settle()
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
   })
   it('真实空列表与失败分开，读取失败可重试且不伪造空态', async () => {
     vi.mocked(fetchMyReviews)
@@ -163,7 +426,9 @@ describe('我的点评页面', () => {
     buttons('重试加载')[0]!.click()
     await settle()
     expect(host.textContent).toContain('还没有可展示的点评')
-    expect(host.querySelector('.my-review-empty a')?.getAttribute('href')).toBe('/?writeReview=1')
+    expect(await captureLinkTarget(app, host.querySelector('.my-review-empty a'))).toBe(
+      '/account/reviews?writeReview=1',
+    )
   })
   it('翻页只读目标页，失败重试仍请求目标页', async () => {
     vi.mocked(fetchMyReviews)
@@ -186,12 +451,33 @@ describe('我的点评页面', () => {
     expect(host.textContent).toContain('第202条真实点评')
   })
   it('历史面板复用店铺、账号和游标，历史删除传递精确ID', async () => {
+    const current = result()
+    current.records[0]!.item.recommendation = 'NEUTRAL'
+    vi.mocked(fetchMyReviews).mockResolvedValueOnce(current)
+    const previous = result().records[0]!.item
+    history.mockResolvedValueOnce({
+      currentReviewId: '102',
+      records: [
+        {
+          ...previous,
+          id: '101',
+          recommendation: 'NEUTRAL',
+          scoringStatus: 'history',
+          body: '历史正文',
+        },
+      ],
+      hasMore: false,
+      nextCursor: null,
+    } satisfies ReviewHistoryPage)
     await mount()
+    expect(host.querySelector('.attitude-badge')?.textContent).toBe('一般')
+    await more()
     host.querySelector<HTMLButtonElement>('.history-trigger')!.click()
     await settle()
     expect(history).toHaveBeenCalledWith('1', '42', expect.any(AbortSignal), 'cursor')
     const panel = document.querySelector('.history-dialog')!
     expect(panel.textContent).toContain('历史正文')
+    expect(panel.querySelector('.attitude-badge, .verdict')?.textContent).toContain('一般')
     ;[...panel.querySelectorAll<HTMLButtonElement>('button')]
       .find((button) => button.textContent?.trim() === '删除评价')!
       .click()
@@ -203,7 +489,7 @@ describe('我的点评页面', () => {
   })
   it('必须二次确认，取消不删除；删除成功后回第一页', async () => {
     await mount()
-    buttons('删除评价')[0]!.click()
+    await deleteCurrent()
     await settle()
     expect(confirm().textContent).toContain('确定删除这条点评？')
     expect(confirm().querySelector('p')).toBeNull()
@@ -212,8 +498,9 @@ describe('我的点评页面', () => {
       .find((button) => button.textContent?.trim() === '取消')!
       .click()
     expect(remove).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(host.querySelector('[aria-label="更多操作"]'))
     vi.mocked(fetchMyReviews).mockResolvedValueOnce(result('101', '42', 0))
-    buttons('删除评价')[0]!.click()
+    await deleteCurrent()
     await settle()
     confirm().querySelector<HTMLButtonElement>('.confirm-remove')!.click()
     await settle()
@@ -224,7 +511,7 @@ describe('我的点评页面', () => {
   it('删除失败可用原ID重试，成功后读取失败不重新删除', async () => {
     remove.mockRejectedValueOnce(new Error('删除未确认')).mockResolvedValueOnce(undefined)
     await mount()
-    buttons('删除评价')[0]!.click()
+    await deleteCurrent()
     await settle()
     confirm().querySelector<HTMLButtonElement>('.confirm-remove')!.click()
     await settle()
@@ -267,7 +554,7 @@ describe('我的点评页面', () => {
     let complete!: () => void
     remove.mockImplementationOnce(() => new Promise<void>((resolve) => (complete = resolve)))
     await mount()
-    buttons('删除评价')[0]!.click()
+    await deleteCurrent()
     await settle()
     const submit = confirm().querySelector<HTMLButtonElement>('.confirm-remove')!
     submit.click()

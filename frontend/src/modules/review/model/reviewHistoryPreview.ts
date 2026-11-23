@@ -14,7 +14,7 @@ export function initialPreviewReviews(): PreviewReview[] {
       username: '小王',
       createdAt: '2026-10-29T12:30:00+08:00',
       scores: scores(6),
-      recommended: false,
+      recommendation: 'NOT_RECOMMENDED',
       body: '第二次来吃。今天米饭有些偏硬，出餐也慢了些，和上次的体验不一样，希望之后能稳定一点。',
       photos: [],
       canDelete: true,
@@ -26,7 +26,7 @@ export function initialPreviewReviews(): PreviewReview[] {
       username: '小李',
       createdAt: '2026-10-28T18:00:00+08:00',
       scores: scores(9),
-      recommended: true,
+      recommendation: 'RECOMMENDED',
       body: '第一次来，点了招牌铁板饭，分量足，口味也合适。对我来说是愿意再来的店。',
       photos: [],
       canDelete: false,
@@ -38,7 +38,7 @@ export function initialPreviewReviews(): PreviewReview[] {
       username: '小王',
       createdAt: '2026-10-20T12:10:00+08:00',
       scores: scores(8),
-      recommended: true,
+      recommendation: 'RECOMMENDED',
       body: '第一次来，鸡肉很嫩，米饭口感不错，整体挺满意的，下次想尝尝其他口味。',
       photos: [],
       canDelete: true,
@@ -77,9 +77,6 @@ export function previewSnapshot(reviews: PreviewReview[]) {
     people: active.length,
     score: active.length
       ? active.reduce((sum, item) => sum + overall(item.scores), 0) / active.length
-      : null,
-    recommendRate: active.length
-      ? Math.round((active.filter((item) => item.recommended).length / active.length) * 100)
       : null,
   }
 }

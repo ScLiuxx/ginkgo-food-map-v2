@@ -1,5 +1,6 @@
 import { createPinia } from 'pinia'
-import { createApp, type App } from 'vue'
+import { createApp, nextTick, type App } from 'vue'
+import { useRestaurantCatalog } from '../model/catalog.store'
 import { afterEach, describe, expect, it } from 'vitest'
 import MapRestaurantCard from './MapRestaurantCard.vue'
 import { restaurantFixture } from '../api/restaurant.test-data'
@@ -46,8 +47,8 @@ describe('地图商户分栏信息', () => {
     })
     expect(host.querySelector('.map-score')?.textContent).toContain('4.3')
     expect(host.querySelector('.map-review-count')?.textContent).toContain('12 条点评')
-    expect(host.querySelector('.map-price-value')?.textContent).toContain('约 ¥25')
-    expect(host.querySelector('.map-price-kind')?.textContent).toContain('估值')
+    expect(host.querySelector('.map-price-value')?.textContent).toContain('¥25')
+    expect(host.querySelector('.map-price-kind')).toBeNull()
     expect(host.querySelector('.map-facts')?.textContent).toContain('家常菜')
     expect(host.querySelector('.map-address')?.textContent).toBe('校园南路10号')
     expect(host.textContent).not.toContain('测试数据')
@@ -58,5 +59,16 @@ describe('地图商户分栏信息', () => {
       '/api/restaurants/1/photos/801',
     )
     expect(host.querySelector('.dish-placeholder img')?.getAttribute('alt')).toBe('商户相册封面')
+  })
+  it('以查询返回的距离及校区参照展示，不能被本地重算或误标为距我', async () => {
+    mount({ ...restaurantFixture, latitude: 30.7, longitude: 104.1, distanceKm: 0.42 })
+    Object.assign(useRestaurantCatalog().filters, {
+      distanceOrigin: 'QINGSHUIHE',
+      latitude: 30.7544,
+      longitude: 103.9312,
+    })
+    await nextTick()
+    expect(host.querySelector('.map-distance')?.textContent).toContain('距清水河 420米')
+    expect(host.querySelector('.map-distance')?.getAttribute('title')).toContain('不是步行距离')
   })
 })

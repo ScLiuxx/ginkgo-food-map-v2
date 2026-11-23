@@ -11,8 +11,9 @@ import json
 
 from benchmark_es_search import database_state, digest
 from evaluate_restaurant_search import connect, read_snapshot
-from setup_restaurant_search_index import ALIAS, INDEX, LocalElasticsearch, load_spec, verify_definition
+from setup_restaurant_search_index import ALIAS, LocalElasticsearch, load_spec, mappings_match, verify_definition
 
+INDEX = 'restaurant-search-v003'
 PREVIOUS = 'restaurant-search-v002'
 LOCK_TABLES = ('restaurants', 'restaurant_categories', 'restaurant_tags',
                'restaurant_review_statistics', 'restaurant_photos',
@@ -53,10 +54,10 @@ def snapshot(client, target):
 
 def verify_candidate(client):
     """候选只能具有当前完整定义且未绑定其他别名；已有候选绝不覆盖结构。"""
-    spec = load_spec()
+    spec = load_spec("003")
     actual = client.request('GET', '/' + INDEX)[INDEX]
     settings = actual['settings']['index']
-    if actual['mappings'] != spec['mappings'] or settings['analysis'] != spec['settings']['analysis']:
+    if not mappings_match(actual['mappings'], spec['mappings']) or settings['analysis'] != spec['settings']['analysis']:
         raise RuntimeError('Candidate schema drift; no alias change')
     for key in ('number_of_shards', 'number_of_replicas', 'refresh_interval'):
         if str(settings[key]) != str(spec['settings'][key]):
@@ -70,7 +71,7 @@ def copy_and_switch(client, expected):
     if alias_target(client) != PREVIOUS:
         raise RuntimeError('Alias changed before rebuild')
     if client.optional('/' + INDEX) is None:
-        spec = deepcopy(load_spec())
+        spec = deepcopy(load_spec("003"))
         spec['aliases'] = {}
         if client.request('PUT', '/' + INDEX, spec).get('acknowledged') is not True:
             raise RuntimeError('Candidate creation not acknowledged; inspect before retry')
@@ -90,14 +91,14 @@ def copy_and_switch(client, expected):
         {'add': {'index': INDEX, 'alias': ALIAS, 'is_write_index': True}}]})
     if switched.get('acknowledged') is not True:
         raise RuntimeError('Alias acknowledgement uncertain; inspect alias before retry')
-    verify_definition(client, load_spec())
+    verify_definition(client, load_spec("003"), index=INDEX)
     return copied
 
 
 def run(client, apply=False):
     """默认只读。实际迁移期间短暂锁定相关表，始终释放；不写MySQL数据或配置。"""
     if alias_target(client) == INDEX:
-        verify_definition(client, load_spec())
+        verify_definition(client, load_spec("003"), index=INDEX)
         return {'index': INDEX, 'changed': False, 'status': 'already-current'}
     connection = connect()
     try:

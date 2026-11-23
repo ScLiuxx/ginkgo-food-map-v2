@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import axios from 'axios'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
@@ -130,7 +131,7 @@ onBeforeUnmount(() => {
   <section v-if="authToken" class="restaurant-management" aria-label="餐厅维护">
     <p v-if="checking" role="status">正在确认管理权限…</p>
     <div v-if="canManage" class="management-buttons">
-      <RouterLink :to="`/restaurants/${encodeURIComponent(id)}/edit`">编辑餐厅</RouterLink>
+      <AppLink :to="`/restaurants/${encodeURIComponent(id)}/edit`">编辑餐厅</AppLink>
       <button ref="deleteButton" type="button" :disabled="deleting" @click="confirmDelete">
         删除餐厅
       </button>
@@ -211,6 +212,7 @@ a:focus-visible {
 }
 dialog {
   width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
   max-height: calc(100dvh - 40px);
   overflow-y: auto;
   padding: 26px;

@@ -7,7 +7,7 @@ from unittest.mock import Mock
 import uuid
 
 from setup_restaurant_search_index import (
-    ALIAS, INDEX, ElasticsearchRequestError, LocalElasticsearch, load_spec, setup,
+    ALIAS, INDEX, ElasticsearchRequestError, LocalElasticsearch, load_spec, mappings_match, setup,
 )
 
 
@@ -44,8 +44,29 @@ class IndexInitializationSafetyTest(unittest.TestCase):
             setup(client)
         self.assertTrue(all(call.args[0] == "GET" for call in client.request.call_args_list))
 
+    def test_legacy_brand_metadata_is_accepted_without_changing_existing_mapping(self):
+        expected = load_spec()['mappings']
+        legacy = copy.deepcopy(expected)
+        legacy['_meta']['schema'] = 'ginkgo.restaurant-search'
+        self.assertTrue(mappings_match(legacy, expected))
+        self.assertEqual(legacy['_meta']['schema'], 'ginkgo.restaurant-search')
+
+    def test_legacy_brand_does_not_allow_field_version_or_unknown_identity_drift(self):
+        expected = load_spec()['mappings']
+        for change in ('field', 'version', 'identity'):
+            legacy = copy.deepcopy(expected)
+            legacy['_meta']['schema'] = 'ginkgo.restaurant-search'
+            if change == 'field':
+                legacy['properties']['pricePerPerson']['type'] = 'text'
+            elif change == 'version':
+                legacy['_meta']['schema_version'] = '999'
+            else:
+                legacy['_meta']['schema'] = 'another-project.restaurant-search'
+            with self.subTest(change=change):
+                self.assertFalse(mappings_match(legacy, expected))
+
     def test_current_schema_adds_only_four_character_subfields_and_preserves_source_contract(self):
-        current, previous = load_spec(), load_spec("002")
+        current, previous = load_spec("003"), load_spec("002")
         self.assertEqual(current['mappings']['_meta']['schema_version'], '003')
         self.assertEqual(set(current['mappings']['properties']), set(previous['mappings']['properties']))
         for name in ('name', 'address', 'categoryName', 'tags'):
@@ -55,14 +76,14 @@ class IndexInitializationSafetyTest(unittest.TestCase):
         with self.assertRaises(ValueError):load_spec('../../other')
 
 
-@unittest.skipUnless(os.environ.get("GINKGO_ES_SCHEMA_IT") == "true", "显式设置GINKGO_ES_SCHEMA_IT=true才创建隔离ES测试索引")
+@unittest.skipUnless(os.environ.get("FOODMAP_ES_SCHEMA_IT") == "true", "显式设置FOODMAP_ES_SCHEMA_IT=true才创建隔离ES测试索引")
 class ElasticsearchSchemaIntegrationTest(unittest.TestCase):
     """在安装IK的真实ES验证空值、分词、精确过滤、数字和地理字段，不依赖MySQL。"""
 
     @classmethod
     def setUpClass(cls):
-        cls.client = LocalElasticsearch(os.environ.get("GINKGO_ES_URL", "http://127.0.0.1:9200"))
-        cls.index = "ginkgo-restaurant-schema-it-" + uuid.uuid4().hex
+        cls.client = LocalElasticsearch(os.environ.get("FOODMAP_ES_URL", "http://127.0.0.1:9200"))
+        cls.index = "foodmap-restaurant-schema-it-" + uuid.uuid4().hex
         spec = load_spec()
         spec["aliases"] = {cls.index + "-read": {"is_write_index": True}}
         result = cls.client.request("PUT", "/" + cls.index, spec)
@@ -74,18 +95,18 @@ class ElasticsearchSchemaIntegrationTest(unittest.TestCase):
             "tags": ["学生聚餐"], "address": "清水河校区南门", "restaurantType": "REGULAR",
             "supportsDineIn": True, "supportsDelivery": False, "pricePerPerson": 25, "priceKind": "EXACT",
             "businessStatus": "OPERATING", "location": {"lat": 30.75, "lon": 103.93}, "needsLocation": False,
-            "ratingScore": 8.0, "recommendRate": 0.5, "participantCount": 2, "reviewCount": 3,
+            "ratingScore": 8.0, "participantCount": 2, "reviewCount": 3,
 
             "deleted": False, "projectionVersion": 1, "coverPhotoId": "9007199254740993",
         }
         canteen = {**base, "id": 2, "name": "测试食堂", "restaurantType": "CANTEEN",
             "categoryCode": None, "categoryName": None, "tags": [], "pricePerPerson": None, "priceKind": "UNKNOWN",
             "supportsDineIn": None, "supportsDelivery": None, "location": {"lat": 30.7502, "lon": 103.9302},
-            "ratingScore": None, "recommendRate": None, "participantCount": 0, "reviewCount": 0,
+            "ratingScore": None, "participantCount": 0, "reviewCount": 0,
             "coverPhotoId": None}
         zero = {**base, "id": 10, "name": "测试面馆", "categoryCode": "FAST_FOOD", "categoryName": "小吃快餐",
             "supportsDineIn": False, "pricePerPerson": 40, "location": None, "needsLocation": True,
-            "ratingScore": 0, "recommendRate": 0, "participantCount": 1, "reviewCount": 1,
+            "ratingScore": 0, "participantCount": 1, "reviewCount": 1,
             "coverPhotoId": None}
         deleted = {**base, "id": 20, "name": "已删除测试商户", "deleted": True}
         for document in (base, canteen, zero, deleted):
@@ -95,7 +116,7 @@ class ElasticsearchSchemaIntegrationTest(unittest.TestCase):
     @classmethod
     def remove_owned_index(cls):
         """仅清理本次已确认创建且精确匹配UUID前缀的索引，禁止通配删除及正式别名删除。"""
-        if not re.fullmatch(r"ginkgo-restaurant-schema-it-[a-f0-9]{32}", cls.index):
+        if not re.fullmatch(r"foodmap-restaurant-schema-it-[a-f0-9]{32}", cls.index):
             raise RuntimeError("Refusing to delete an unexpected index")
         cls.client.request("DELETE", "/" + cls.index)
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { formatRating } from '@/shared/lib/formatRating'
 import { computed, provide, ref } from 'vue'
 import ReviewPanel from './ReviewPanel.vue'
@@ -39,7 +40,7 @@ function reset() {
       <strong>界面预览 · 示例数据</strong
       ><span>下方餐厅、账号和点评均为演示，不代表真实评价，不会写入数据库。</span>
     </div>
-    <RouterLink class="back-link" to="/">← 返回发现餐厅</RouterLink>
+    <AppLink class="back-link" to="/">← 返回发现餐厅</AppLink>
     <header class="restaurant-heading">
       <div>
         <p class="eyebrow">同一家店，不同次用餐</p>
@@ -65,13 +66,7 @@ function reset() {
             <span>评价人数</span
             ><strong data-testid="people">{{ snapshot.people }}<small> 人</small></strong>
           </div>
-          <div>
-            <span>推荐率</span
-            ><strong>{{
-              snapshot.recommendRate === null ? '—' : snapshot.recommendRate + '%'
-            }}</strong>
-          </div>
-          <p>每人只取最新一条有效点评计算四维均分与推荐率，历史记录不重复计分。</p>
+          <p>每人只取最新一条有效点评计算四维均分，历史记录不重复计分。</p>
         </section>
         <ReviewPanel :key="revision" restaurant-id="preview-restaurant" preview />
       </div>
@@ -171,7 +166,7 @@ h1 small {
 }
 .summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   border: 1px solid #ecdfc1;
   border-radius: 16px;

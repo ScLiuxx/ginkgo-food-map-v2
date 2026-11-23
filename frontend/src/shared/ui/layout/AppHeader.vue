@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 // 展示组件只接收布局层提供的状态，不反向依赖认证业务模块。
 withDefaults(
   defineProps<{
@@ -17,13 +18,13 @@ defineEmits<{ logout: []; retry: [] }>()
 
 <template>
   <header class="topbar" :class="{ 'is-discovery': discovery }">
-    <RouterLink class="brand" to="/" aria-label="返回首页">
+    <AppLink class="brand" to="/" aria-label="返回首页">
       <!-- 页头品牌使用文字展示，移除左侧装饰图标。 -->
       <span>
         <strong><em>泥电</em>美食地图</strong>
         <small>校园美食评价社区</small>
       </span>
-    </RouterLink>
+    </AppLink>
 
     <!-- 顶部只承担身份操作，页面切换统一使用既有底部导航。 -->
     <nav class="account-actions" aria-label="账号操作">
@@ -35,7 +36,7 @@ defineEmits<{ logout: []; retry: [] }>()
       </template>
       <span v-else-if="restoring" role="status">正在恢复登录…</span>
       <template v-else>
-        <RouterLink class="login-button" to="/login">登录</RouterLink>
+        <AppLink class="login-button" to="/login">登录</AppLink>
       </template>
     </nav>
   </header>

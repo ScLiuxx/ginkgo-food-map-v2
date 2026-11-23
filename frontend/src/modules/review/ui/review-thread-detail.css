@@ -1,0 +1,478 @@
+.reply-thread {
+  min-width: 0;
+  margin-top: 8px;
+  font-size: 13px;
+}
+/* 普通卡片的编辑器仍跨互动网格整行；详情变体才将它作为固定底栏承载。 */
+.reply-editor-host:not(.detail-composer-dock) {
+  display: contents;
+}
+.reply-editor-host > .reply-composer,
+.reply-editor-host > .reply-notice {
+  grid-column: 1 / -1;
+}
+.thread-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-height: 44px;
+}
+.combined-replies .thread-actions > .text-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.combined-replies .thread-actions > .text-action svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.extra-actions {
+  margin-left: auto;
+  min-width: 0;
+}
+.text-action,
+.cancel-action {
+  font: inherit;
+  border: 0;
+  background: transparent;
+  color: #85755f;
+  cursor: pointer;
+  min-height: 44px;
+  padding: 8px 0;
+}
+.text-action:hover,
+.cancel-action:hover {
+  color: #674714;
+}
+button:focus-visible {
+  outline: 2px solid #ad7618;
+  outline-offset: 3px;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.thread-content {
+  padding-left: 16px;
+  border-left: 2px solid #eee8df;
+  margin: 0 0 12px 4px;
+  overflow-wrap: anywhere;
+}
+.reply-list {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+}
+.reply-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #f3f0e9;
+  color: #968365;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+.reply-copy {
+  min-width: 0;
+  flex: 1;
+}
+.reply-meta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.reply-meta strong {
+  font-weight: 600;
+  color: #655741;
+  overflow-wrap: anywhere;
+}
+time,
+.word-count,
+.muted,
+.empty-replies {
+  color: #9a9081;
+  font-size: 12px;
+}
+time {
+  white-space: nowrap;
+}
+.reply-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+  color: #423d35;
+  margin: 4px 0 0;
+}
+.reply-composer {
+  margin: 8px 0 16px;
+  padding: 14px;
+  border: 1px solid #e3e7ed;
+  border-radius: 10px;
+  background: white;
+}
+label {
+  display: block;
+  font-size: 12px;
+  color: #657180;
+  font-weight: 500;
+  margin-bottom: 10px;
+  overflow-wrap: anywhere;
+}
+textarea {
+  display: block;
+  width: 100%;
+  min-height: 64px;
+  box-sizing: border-box;
+  resize: vertical;
+  max-height: 180px;
+  font: inherit;
+  line-height: 1.7;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  color: #303b49;
+  font-size: 14px;
+}
+textarea::placeholder {
+  color: #a0a8b2;
+}
+/* 白底编辑区使用浅灰边框，聚焦时仅以淡橙描边衔接页面主色，避免框中框。 */
+textarea:focus-visible {
+  outline: none;
+}
+.reply-composer:focus-within {
+  border-color: #f1b780;
+  box-shadow: 0 0 0 3px #fb8b2414;
+}
+.composer-footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f2f5;
+}
+.word-count {
+  margin-right: auto;
+  color: #929ca9;
+}
+.cancel-action {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 7px;
+  background: #f5f6f8;
+  color: #697586;
+}
+.send-action {
+  border: 0;
+  border-radius: 7px;
+  background: #fb8b24;
+  color: white;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0 20px;
+  min-height: 40px;
+  cursor: pointer;
+}
+.send-action:hover:not(:disabled) {
+  background: #ed7d1a;
+}
+.reply-composer button:focus-visible {
+  outline-color: #f19741;
+}
+.reply-composer .cancel-action:hover {
+  background: #eceff3;
+  color: #465365;
+}
+.reply-error {
+  color: #a53c2e;
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.reply-notice {
+  color: #68804b;
+  font-size: 12px;
+}
+.delete-confirmation {
+  padding: 8px 12px;
+  border: 1px solid #e8dfd0;
+  border-radius: 8px;
+}
+.delete-confirmation p {
+  margin: 4px 0;
+}
+.delete-confirmation button + button {
+  margin-left: 20px;
+}
+.invalid {
+  color: #a53c2e;
+}
+@media (max-width: 480px) {
+  .thread-actions {
+    gap: 16px;
+  }
+  .thread-content {
+    padding-left: 10px;
+  }
+  .reply-composer {
+    padding: 12px;
+  }
+}
+
+/* 仅详情变体重排回复，普通店铺／历史卡继续使用原阅读与编辑布局。 */
+.detail-replies {
+  margin: 0;
+  font-size: 13px;
+}
+.detail-replies .thread-content {
+  padding: 0 20px;
+  margin: 0;
+  border: 0;
+}
+.all-replies-title {
+  margin: 10px -20px 0;
+  padding: 18px 20px 6px;
+  border-top: 7px solid #f6f7f9;
+  font-size: 14px;
+  font-weight: 600;
+  color: #344252;
+}
+.all-replies-title span {
+  font-size: 12px;
+  color: #a4acb5;
+  font-weight: 400;
+  margin-left: 5px;
+}
+.detail-replies .reply-list li {
+  gap: 10px;
+  padding: 17px 0 0;
+}
+.detail-reply-avatar {
+  display: grid;
+  place-items: center;
+  width: 31px;
+  height: 31px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #eef1f5;
+  color: #8996a4;
+  font-size: 12px;
+}
+.detail-replies .reply-copy {
+  padding-bottom: 15px;
+  border-bottom: 1px solid #f0f2f4;
+}
+.detail-replies li:last-child .reply-copy {
+  border-bottom: 0;
+}
+.detail-replies .reply-meta :deep(.user-identity) {
+  font-size: 12px;
+  color: #84919e;
+}
+.detail-replies .reply-body {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #344252;
+  margin: 5px 0 9px;
+}
+.detail-replies .reply-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  color: #9aa4af;
+}
+.detail-replies .reply-row-actions time {
+  margin-right: auto;
+  font-size: 10px;
+  color: #a4acb5;
+}
+.detail-replies .reply-row-actions :deep(.content-actions) {
+  margin: 0;
+}
+.detail-replies .reply-row-actions :deep(.review-actions-menu) {
+  margin-left: 0;
+}
+.detail-replies .reply-row-actions :deep(.more-review-actions) {
+  height: 32px;
+  width: 28px;
+}
+.detail-replies .reply-row-actions :deep(.more-review-actions svg) {
+  width: 17px;
+}
+.detail-replies .empty-replies {
+  padding: 22px 0;
+  color: #a0a9b3;
+}
+.detail-composer-dock {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-top: 1px solid #eaeef2;
+  background: #fff;
+  padding: 12px 18px max(16px, env(safe-area-inset-bottom));
+  z-index: 2;
+}
+.detail-replies .reply-composer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.detail-input-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.detail-replies .reply-composer textarea {
+  flex: 1;
+  min-width: 0;
+  width: 0;
+  min-height: 40px;
+  height: 40px;
+  max-height: 110px;
+  resize: none;
+  border: 0;
+  border-radius: 22px;
+  padding: 9px 16px;
+  background: #f4f5f7;
+  color: #3f4a57;
+  font-size: 13px;
+  line-height: 22px;
+}
+.detail-replies .reply-composer textarea:focus {
+  border: 0;
+  outline: none;
+  box-shadow: none;
+}
+.detail-replies .composer-footer {
+  display: contents;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.detail-replies .send-action {
+  min-height: 40px;
+  border: 0;
+  border-radius: 0;
+  padding: 0 2px;
+  background: none;
+  color: #b88543;
+  font-size: 13px;
+  font-weight: 500;
+}
+.detail-replies .send-action:hover:not(:disabled) {
+  background: none;
+  color: #a76d25;
+}
+.detail-replies .send-action:disabled {
+  color: #a6aebb;
+  opacity: 1;
+}
+.detail-replies .word-count {
+  order: 3;
+  flex-basis: 100%;
+  font-size: 11px;
+  margin: 0;
+  text-align: right;
+}
+.detail-replies .reply-composer .reply-error {
+  order: 4;
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 11px;
+}
+.detail-replies .reply-notice {
+  margin: 0 0 7px;
+  font-size: 11px;
+}
+.detail-login-reply {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 22px;
+  background: #f4f5f7;
+  color: #929dab;
+  min-height: 40px;
+  font: inherit;
+  cursor: pointer;
+}
+.detail-replies .delete-confirmation {
+  border: 0;
+  background: #f7f8fa;
+  border-radius: 8px;
+  margin-top: 8px;
+}
+.detail-replies button:focus-visible {
+  outline: 2px solid #a5adb7;
+  outline-offset: 2px;
+}
+.detail-replies .reply-list > li.target-reply-highlight {
+  background: #fff6e9;
+  border-radius: 8px;
+  box-shadow: 0 0 0 8px #fff6e9;
+}
+@media (min-width: 800px) {
+  .detail-replies .thread-content {
+    padding: 0 30px;
+  }
+  .detail-replies .all-replies-title {
+    margin: 0;
+    padding: 20px 0 6px;
+    border-top: 1px solid #eef0f2;
+    font-weight: 500;
+  }
+  .detail-composer-dock {
+    padding: 17px 30px 20px;
+  }
+  .detail-replies .reply-composer textarea {
+    border-radius: 7px;
+    height: 43px;
+    min-height: 43px;
+    padding: 10px 13px;
+  }
+  .detail-replies .send-action {
+    padding: 0 21px;
+    min-height: 43px;
+    border-radius: 7px;
+    background: #e98527;
+    color: #fff;
+  }
+  .detail-replies .send-action:hover:not(:disabled) {
+    background: #db791e;
+    color: white;
+  }
+  .detail-replies .send-action:disabled {
+    color: white;
+    opacity: 0.5;
+  }
+}

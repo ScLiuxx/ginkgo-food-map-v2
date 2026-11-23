@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ResourceLink from '@/shared/ui/ResourceLink.vue'
+import AppLink from '@/shared/ui/AppLink.vue'
 import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 import {
   useRestaurantRequests,
@@ -8,6 +10,8 @@ import {
 import type { RequestStatus } from '../api/restaurantRequestsApi'
 import ReviewInlineField from './ReviewInlineField.vue'
 import AdminSidebar from './AdminSidebar.vue'
+import AdminHeader from './AdminHeader.vue'
+import LinkExistingRestaurantDialog from './LinkExistingRestaurantDialog.vue'
 
 // 身份由页面编排传入；真实查询只在管理会话校验通过后挂载，不跨模块读取认证Store。
 defineProps<{
@@ -49,7 +53,33 @@ const {
   loadPhoto,
 } = useRestaurantRequests()
 const statuses: RequestStatus[] = ['PENDING', 'APPROVED', 'REJECTED']
+const linkOpen = ref(false)
+/** 打开独立核对窗口，清除上一轮操作错误，不带入资料编辑草稿。 */
+function openLinkExisting() {
+  decisionError.value = ''
+  rejectOpen.value = false
+  linkOpen.value = true
+}
+/** 选择窗口绑定当前申请；切换记录或服务端确认终态后立即销毁，清空搜索和选择。 */
+watch(
+  () => [selectedId.value, detail.value?.application.status],
+  () => {
+    linkOpen.value = false
+  },
+)
 const changedCount = computed(() => comparison.value.filter((row) => row.changed).length)
+/** 新店没有旧资料可比较；已收录记录仍须核对原投稿和关联店铺，不能误示为资料覆盖。 */
+const singleColumn = computed(
+  () =>
+    selected.value?.requestType === 'CREATE' && selected.value.approvalMode !== 'LINKED_EXISTING',
+)
+const statusLabel = computed(() =>
+  selected.value?.approvalMode === 'LINKED_EXISTING'
+    ? '店铺已收录'
+    : selected.value
+      ? requestStatusNames[selected.value.status]
+      : '',
+)
 const photoDialog = useTemplateRef('photoDialog')
 const previewSrc = ref(''),
   previewTitle = ref('')
@@ -68,36 +98,36 @@ onBeforeUnmount(() => photoDialog.value?.close())
 </script>
 
 <template>
-  <div class="admin-review-preview">
-    <header class="topbar">
-      <RouterLink class="brand" to="/admin/reviews"
-        ><em>泥电</em>美食地图<span class="brand-label">管理工作台</span></RouterLink
-      >
-      <div class="account">
-        <span class="preview">商户审核</span
-        ><span class="identity"
-          ><span class="avatar">管</span
-          ><span class="admin-username" :title="username">{{ username }}</span></span
-        ><button class="admin-logout" :disabled="loggingOut" @click="$emit('logout')">
-          {{ loggingOut ? '正在退出…' : '退出登录' }}
-        </button>
-      </div>
-    </header>
+  <div class="admin-review-preview admin-theme">
+    <AdminHeader :username="username" :logging-out="loggingOut" @logout="$emit('logout')" />
     <p v-if="sessionError" class="session-error" role="alert">
       {{ sessionError }}，可重新点击退出登录重试。
     </p>
     <div class="shell">
       <AdminSidebar :pending-count="loadingList ? '…' : counts.PENDING" />
       <main>
-        <div class="breadcrumb">管理工作台<span>/</span>商户审核</div>
         <div class="page-head">
-          <div>
-            <h1>商户审核</h1>
-            <p>核对同学提交的资料，让可靠的商户信息出现在地图上。</p>
-          </div>
-          <div class="queue-count">
-            <b>{{ loadingList ? '…' : counts.PENDING }}</b> 条待处理
-          </div>
+          <h1>商户审核</h1>
+          <label class="search">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              aria-hidden="true"
+            >
+              <circle cx="10.5" cy="10.5" r="6.5" />
+              <path d="m16 16 5 5" />
+            </svg>
+            <input
+              v-model="query"
+              type="search"
+              aria-label="搜索申请"
+              placeholder="搜索店名或申请编号"
+              maxlength="80"
+              :disabled="submitting"
+            />
+          </label>
         </div>
         <div class="toolbar">
           <div class="tabs" aria-label="申请状态筛选">
@@ -110,19 +140,10 @@ onBeforeUnmount(() => photoDialog.value?.close())
               :disabled="submitting"
               @click="tab = status"
             >
-              {{ requestStatusNames[status] }}<span>{{ loadingList ? '…' : counts[status] }}</span>
+              {{ requestStatusNames[status]
+              }}<span v-if="status === 'PENDING'">{{ loadingList ? '…' : counts[status] }}</span>
             </button>
           </div>
-          <label class="search"
-            ><span aria-hidden="true">⌕</span
-            ><input
-              v-model="query"
-              type="search"
-              aria-label="搜索申请"
-              placeholder="搜索商户名称 / 申请编号"
-              maxlength="80"
-              :disabled="submitting"
-          /></label>
         </div>
         <p v-if="notice" class="decision-notice" role="status">{{ notice }}</p>
         <div class="workspace">
@@ -130,7 +151,7 @@ onBeforeUnmount(() => photoDialog.value?.close())
             <div class="queue-title">
               <span aria-live="polite"
                 >{{ requestStatusNames[tab] }} · {{ loadingList ? '…' : total }} 条</span
-              ><span>最早提交优先 ↓</span>
+              ><span>最早提交优先</span>
             </div>
             <div v-if="loadingList" class="empty" role="status">正在加载申请…</div>
             <div v-else-if="listError" class="query-error" role="alert">
@@ -147,115 +168,152 @@ onBeforeUnmount(() => photoDialog.value?.close())
                 :disabled="submitting"
                 @click="selectRequest(item.id)"
               >
-                <span class="request-top"
+                <strong>{{ item.name }}</strong>
+                <span class="request-summary"
                   ><span class="pill" :class="{ new: item.requestType === 'CREATE' }">{{
                     item.requestType === 'CREATE' ? '新店投稿' : '资料纠错'
                   }}</span
-                  ><span class="muted request-time">{{
-                    formatRequestTime(item.createdAt)
-                  }}</span></span
-                >
-                <strong>{{ item.name }}</strong
-                ><span class="request-description">申请 #{{ item.id }}</span
-                ><span class="request-foot"
-                  ><span>{{ item.submitterName }}</span
-                  ><span>{{ item.photoCount }} 张图片 · →</span></span
-                >
+                  ><span class="request-author">{{ item.submitterName }}</span>
+                  <span v-if="item.approvalMode === 'LINKED_EXISTING'" class="linked-status"
+                    >店铺已收录</span
+                  >
+                </span>
+                <time class="request-time" :datetime="item.createdAt">{{
+                  formatRequestTime(item.createdAt)
+                }}</time>
               </button>
               <p v-if="!items.length" class="empty">
                 {{ query.trim() ? '没有匹配的申请' : '暂无' + requestStatusNames[tab] + '申请' }}
               </p>
             </div>
-            <div v-if="totalPages > 1" class="queue-pagination">
-              <button
-                class="btn"
-                :disabled="submitting || loadingList || page <= 1"
-                @click="page--"
-              >
-                上一页</button
-              ><span>{{ page }} / {{ totalPages }}</span
-              ><button
-                class="btn"
-                :disabled="submitting || loadingList || page >= totalPages"
-                @click="page++"
-              >
-                下一页
-              </button>
-            </div>
-            <div v-if="!loadingList && !listError && items.length" class="queue-end">
-              共 {{ total }} 条 · 本页 {{ items.length }} 条
-              <button :disabled="submitting" @click="reload()">刷新</button>
+            <div v-if="!loadingList && !listError && items.length" class="queue-footer">
+              <span>共 {{ total }} 条</span>
+              <div v-if="totalPages > 1" class="queue-pagination">
+                <button
+                  class="btn"
+                  aria-label="上一页"
+                  :disabled="submitting || loadingList || page <= 1"
+                  @click="page--"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    aria-hidden="true"
+                  >
+                    <path d="m14 5-7 7 7 7" />
+                  </svg></button
+                ><span>{{ page }} / {{ totalPages }}</span
+                ><button
+                  class="btn"
+                  aria-label="下一页"
+                  :disabled="submitting || loadingList || page >= totalPages"
+                  @click="page++"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    aria-hidden="true"
+                  >
+                    <path d="m9 5 7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </section>
           <article v-if="selected" class="detail" aria-label="审核详情" :aria-busy="loadingDetail">
             <div class="detail-content" :class="{ 'is-loading': loadingDetail }">
-              <div class="detail-top">
-                <span class="pill" :class="{ new: selected.requestType === 'CREATE' }">{{
-                  selected.requestType === 'CREATE' ? '新店投稿' : '资料纠错'
-                }}</span
-                ><span class="small orange">· {{ requestStatusNames[selected.status] }}</span
-                ><span class="request-id">申请 #{{ selected.id }}</span>
-              </div>
-              <h2>{{ selected.name }}</h2>
-              <div class="meta">
-                <span>提交人：{{ selected.submitterName }}</span
-                ><span>{{ formatRequestTime(selected.createdAt) }}</span
-                ><span>{{
-                  selected.restaurantId ? `商户 #${selected.restaurantId}` : '新商户 · 尚未公开'
+              <div class="detail-heading">
+                <h2>{{ selected.name }}</h2>
+                <span class="status-badge" :class="selected.status.toLowerCase()">{{
+                  statusLabel
                 }}</span>
+              </div>
+              <div class="meta">
+                <span>{{ selected.requestType === 'CREATE' ? '新店投稿' : '资料纠错' }}</span>
+                <span>{{ selected.submitterName }}</span
+                ><span>{{ formatRequestTime(selected.createdAt) }}</span
+                ><span>#{{ selected.id }}</span>
               </div>
               <div v-if="detailError" class="query-error" role="alert">
                 <p>{{ detailError }}</p>
                 <button class="btn" @click="selectRequest(selected.id)">重试详情</button>
               </div>
               <template v-if="detail && !detailError">
-                <div class="intro">
-                  <span aria-hidden="true">ⓘ</span
-                  ><span v-if="detail.targetDeleted">目标商户已删除；当前资料仅供管理员核对。</span
-                  ><span v-else-if="selected.status === 'PENDING'"
-                    >本次提交仅为待审申请，通过后才会更新公开资料。</span
-                  ><span v-else
-                    >处理状态：{{ requestStatusNames[selected.status]
-                    }}{{ detail.rejectReason ? ' · ' + detail.rejectReason : '' }}</span
-                  >
+                <div v-if="detail.targetDeleted || detail.rejectReason" class="intro" role="status">
+                  <span v-if="detail.targetDeleted">目标商户已删除；当前资料仅供核对。</span>
+                  <span v-if="detail.rejectReason">驳回原因：{{ detail.rejectReason }}</span>
                 </div>
-                <div v-if="detail.reviewedAt" class="meta">
+                <div v-if="detail.reviewedAt" class="meta review-meta">
                   审核人 #{{ detail.reviewedBy }} ·
                   {{ formatRequestTime(detail.reviewedAt) }}
+                  <AppLink
+                    v-if="selected.restaurantId && !detail.targetDeleted"
+                    :to="`/admin/restaurants/${selected.restaurantId}/edit`"
+                    >查看店铺资料 ↗</AppLink
+                  >
                 </div>
                 <div class="section-head">
-                  <h3>资料核对</h3>
-                  <span
+                  <h3>
+                    {{
+                      singleColumn
+                        ? selected.status === 'APPROVED'
+                          ? '通过资料'
+                          : '店铺资料'
+                        : '资料核对'
+                    }}
+                  </h3>
+                  <span v-if="!singleColumn"
                     ><i class="legend" />{{
-                      selected.requestType === 'CREATE' && !detail.current
-                        ? '新商户资料'
-                        : `${changedCount} 项变更已标出`
+                      selected.approvalMode === 'LINKED_EXISTING'
+                        ? '投稿资料与关联店铺的差异，不代表资料更新'
+                        : `${changedCount} 项变更`
                     }}</span
                   >
                 </div>
-                <table class="comparison">
-                  <thead>
+                <table
+                  class="comparison"
+                  :class="{ 'single-column': singleColumn }"
+                  :aria-label="singleColumn ? '店铺资料' : '资料对照'"
+                >
+                  <thead v-if="!singleColumn">
                     <tr>
                       <th scope="col">资料项</th>
                       <th scope="col">
-                        {{ selected.status === 'APPROVED' ? '审核前资料' : '当前商户资料' }}
+                        {{
+                          selected.approvalMode === 'LINKED_EXISTING'
+                            ? '原投稿资料'
+                            : selected.status === 'APPROVED'
+                              ? '审核前资料'
+                              : '当前商户资料'
+                        }}
                       </th>
                       <th scope="col">
-                        {{ selected.status === 'APPROVED' ? '最终通过资料' : '本次提交' }}
+                        {{
+                          selected.approvalMode === 'LINKED_EXISTING'
+                            ? '关联店铺资料（处理时）'
+                            : selected.status === 'APPROVED'
+                              ? '最终通过资料'
+                              : '本次提交'
+                        }}
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="row in comparison" :key="row.label">
-                      <td>{{ row.label }}</td>
+                    <tr v-for="row in comparison" :key="`${selected.id}-${row.key}`">
+                      <th scope="row">{{ row.label }}</th>
                       <td
+                        v-if="!singleColumn"
                         :class="{
                           'old-value': row.changed && detail.current !== null,
                         }"
                       >
                         {{ row.before }}
                       </td>
-                      <td :class="{ changed: row.changed }">
+                      <td class="field-value" :class="{ changed: row.changed && !singleColumn }">
                         <template v-if="row.key && selected.status === 'PENDING'">
                           <div v-if="row.key === 'position'" class="coordinate-edit">
                             <ReviewInlineField
@@ -308,9 +366,11 @@ onBeforeUnmount(() => photoDialog.value?.close())
                         ? '通过后按顺序加入商户相册'
                         : selected.status === 'REJECTED'
                           ? '已驳回，图片仅供审核核对'
-                          : detail.publishedPhotos?.length
-                            ? `本次已发布 ${detail.publishedPhotos.length} 张`
-                            : '历史申请图片未发布到相册'
+                          : selected.approvalMode === 'LINKED_EXISTING'
+                            ? '已关联已有店铺，投稿附图保留供核对'
+                            : detail.publishedPhotos?.length
+                              ? `本次已发布 ${detail.publishedPhotos.length} 张`
+                              : '历史申请图片未发布到相册'
                     }}</span>
                   </div>
                   <p v-if="!photos.length" class="photo-note">本次申请未附图片。</p>
@@ -352,9 +412,9 @@ onBeforeUnmount(() => photoDialog.value?.close())
                     <span v-if="detail.targetDeleted"
                       >照片 {{ photo.position + 1 }}（商户已删除）
                     </span>
-                    <a v-else :href="photo.url" target="_blank" rel="noopener noreferrer"
+                    <ResourceLink v-else :href="photo.url" target="_blank" rel="noopener noreferrer"
                       >照片 {{ photo.position + 1 }}{{ photo.cover ? '（封面）' : '' }} ↗
-                    </a>
+                    </ResourceLink>
                   </template>
                 </p>
               </template>
@@ -363,10 +423,10 @@ onBeforeUnmount(() => photoDialog.value?.close())
               <span class="loading-spinner" />正在加载申请详情…
             </div>
             <div class="review-actions">
-              <div class="action-note" aria-live="polite">
+              <div v-if="selected.status !== 'PENDING'" class="action-note" aria-live="polite">
                 {{
-                  selected.status === 'PENDING'
-                    ? '通过后发布资料与附图；纠错图片追加到原相册。'
+                  selected.approvalMode === 'LINKED_EXISTING'
+                    ? `已关联已有店铺 #${selected.restaurantId}，申请已结束。`
                     : '此申请已处理，不能再次变更审核结果。'
                 }}
               </div>
@@ -376,12 +436,20 @@ onBeforeUnmount(() => photoDialog.value?.close())
                     v-model="continuous"
                     type="checkbox"
                     :disabled="submitting"
-                  />审核后自动加载下一条</label
+                  />自动加载下一条</label
                 >
                 <p v-if="decisionError" class="decision-error" role="alert">
                   {{ decisionError }}
                 </p>
                 <div class="buttons">
+                  <button
+                    v-if="selected.requestType === 'CREATE'"
+                    class="btn secondary"
+                    :disabled="submitting || loadingList || !detail || loadingDetail"
+                    @click="openLinkExisting"
+                  >
+                    店铺已收录
+                  </button>
                   <div class="reject-control">
                     <button
                       class="btn reject-button"
@@ -389,7 +457,7 @@ onBeforeUnmount(() => photoDialog.value?.close())
                       :aria-expanded="rejectOpen"
                       @click="rejectOpen = !rejectOpen"
                     >
-                      ✗ 驳回
+                      驳回
                     </button>
                     <template v-if="rejectOpen">
                       <button
@@ -429,7 +497,7 @@ onBeforeUnmount(() => photoDialog.value?.close())
                     "
                     @click="decide('approve')"
                   >
-                    {{ submitting ? '正在提交…' : '✓ 审核通过并更新' }}
+                    {{ submitting ? '正在提交…' : '审核通过' }}
                   </button>
                 </div>
               </div>
@@ -455,7 +523,6 @@ onBeforeUnmount(() => photoDialog.value?.close())
             </p>
           </div>
         </div>
-        <footer>待审资料仅管理员可见 · 首次审核通过后附图公开</footer>
       </main>
     </div>
     <dialog ref="photoDialog" class="photo-viewer" aria-labelledby="admin-photo-title">
@@ -465,6 +532,16 @@ onBeforeUnmount(() => photoDialog.value?.close())
         <button class="btn" @click="photoDialog?.close()">关闭</button>
       </div>
     </dialog>
+    <LinkExistingRestaurantDialog
+      v-if="linkOpen && detail && selected?.status === 'PENDING'"
+      :key="selectedId ?? ''"
+      :restaurant-name="String(detail.proposed.name ?? '')"
+      :restaurant-type="detail.proposed.restaurantType === 'CANTEEN' ? 'CANTEEN' : 'REGULAR'"
+      :submitting="submitting"
+      :error="decisionError"
+      @close="linkOpen = false"
+      @confirm="decide('link-existing', $event)"
+    />
   </div>
 </template>
 

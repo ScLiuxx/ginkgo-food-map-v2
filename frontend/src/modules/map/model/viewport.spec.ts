@@ -1,128 +1,150 @@
-import { createApp, reactive, nextTick } from 'vue'
+import { createApp, reactive } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { useViewport } from './viewport'
-import { fetchRestaurants, type CatalogFilters } from '@/modules/restaurant'
-import { fetchMapPoints } from '../api/mapApi'
+import { useViewport, type ViewportSnapshot } from './viewport'
+import type { CatalogFilters } from '@/modules/restaurant'
+import { mapExamples } from './map'
+import { fetchMapPoints, type MapPoints } from '../api/mapApi'
 
-vi.mock('@/modules/restaurant', () => ({ fetchRestaurants: vi.fn() }))
 vi.mock('../api/mapApi', () => ({ fetchMapPoints: vi.fn() }))
 
-/** 使用可控时钟和乱序Promise验证真实竞态；不依赖高德账号或网络。 */
-describe('地图自动查询', () => {
-  let unmount: () => void = () => {}
+/** 检查集合一致、范围约束及真实乱序响应，避免地图和列表重新分成两条查询链路。 */
+describe('以地图范围为核心的统一候选集', () => {
+  let unmount = () => {}
   afterEach(() => {
     unmount()
     vi.useRealTimers()
     vi.resetAllMocks()
   })
-  function setup() {
+  const area = { west: 104, east: 104.2, south: 30.6, north: 30.8 }
+  function batch(count = 0, total = count): MapPoints {
+    const records = Array.from({ length: count }, (_, index) => ({
+      ...mapExamples[0]!,
+      id: String(index + 1),
+      needsLocation: false,
+      latitude: 30.7,
+      longitude: 104.1,
+    }))
+    return {
+      records,
+      points: records.map((row) => ({
+        id: row.id,
+        name: row.name,
+        latitude: row.latitude,
+        longitude: row.longitude,
+        score: row.score,
+        pricePerPerson: row.price,
+        businessStatus: row.closed ? 'CLOSED' : 'OPERATING',
+      })),
+      matchedCount: total,
+      returnedCount: count,
+      limit: 100,
+      truncated: total > count,
+    }
+  }
+  function setup(enabled = true, initial?: ViewportSnapshot) {
     vi.useFakeTimers()
     const filters = reactive<CatalogFilters>({
       keyword: '',
       category: '',
-      sort: 'score' as const,
+      sort: 'score',
       hideClosed: false,
       maxPrice: null,
       maxDistanceMeters: null,
     })
     let state!: ReturnType<typeof useViewport>
-    const node = globalThis.document.createElement('div')
     const app = createApp({
       setup() {
-        state = useViewport(filters)
+        state = useViewport(filters, enabled, initial)
         return () => null
       },
     })
-    app.mount(node)
+    app.mount(document.createElement('div'))
     unmount = () => app.unmount()
-    vi.mocked(fetchRestaurants).mockResolvedValue({
-      records: [],
-      total: 0,
-      totalPages: 0,
-      page: 1,
-      pageSize: 8,
-    })
-    vi.mocked(fetchMapPoints).mockResolvedValue({
-      points: [],
-      matchedCount: 0,
-      returnedCount: 0,
-      limit: 100,
-      truncated: false,
-    })
+    vi.mocked(fetchMapPoints).mockResolvedValue(batch())
     return { state, filters }
   }
-  const area = { west: 104, east: 104.2, south: 30.6, north: 30.8 }
-  it('列表与点位保留相同的类型及用餐方式筛选，不再丢弃条件', async () => {
+  it('SDK尚未提供范围时不查询全站，预览也不请求真实数据', async () => {
+    const { state, filters } = setup()
+    await state.load()
+    filters.keyword = '火锅'
+    await vi.advanceTimersByTimeAsync(300)
+    expect(fetchMapPoints).not.toHaveBeenCalled()
+    state.move(area)
+    await vi.advanceTimersByTimeAsync(300)
+    expect(fetchMapPoints).toHaveBeenCalledTimes(1)
+    unmount()
+    const preview = setup(false)
+    preview.state.move(area)
+    await preview.state.load()
+    await vi.advanceTimersByTimeAsync(300)
+    expect(fetchMapPoints).toHaveBeenCalledTimes(1)
+  })
+  it('300ms防抖后只请求最后范围，并保留类型、用餐方式和预算筛选', async () => {
     const { state, filters } = setup()
     filters.restaurantType = 'CANTEEN'
     filters.diningMode = 'dineIn'
-    state.move(area)
-    await vi.advanceTimersByTimeAsync(300)
-    expect(fetchRestaurants).toHaveBeenCalledTimes(1)
-    expect(fetchMapPoints).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(fetchRestaurants).mock.calls[0]?.[0]).toMatchObject({
-      restaurantType: 'CANTEEN',
-      diningMode: 'dineIn',
-    })
-    expect(vi.mocked(fetchMapPoints).mock.calls[0]?.[0]).toMatchObject({
-      restaurantType: 'CANTEEN',
-      diningMode: 'dineIn',
-    })
-  })
-  it('连续移动及重复事件只请求最终范围，300ms前不请求', async () => {
-    const { state } = setup()
+    filters.maxPrice = 30
+    filters.hasReviews = false
     state.move(area)
     state.move({ ...area, east: 104.3 })
     state.move({ ...area, east: 104.3 })
     await vi.advanceTimersByTimeAsync(299)
-    expect(fetchRestaurants).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(1)
-    expect(fetchRestaurants).toHaveBeenCalledTimes(1)
-    expect(fetchMapPoints).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(fetchRestaurants).mock.calls[0]?.[4]?.east).toBe(104.3)
-  })
-  it('区域不变的列表翻页不重新读取点位，筛选变化回第一页', async () => {
-    const { state, filters } = setup()
-    vi.mocked(fetchRestaurants).mockResolvedValue({
-      records: [],
-      total: 20,
-      totalPages: 3,
-      page: 1,
-      pageSize: 8,
-    })
-    state.move(area)
-    await vi.advanceTimersByTimeAsync(300)
-    state.goToPage(2)
-    await nextTick()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(state.page.value).toBe(2)
-    expect(fetchMapPoints).toHaveBeenCalledTimes(1)
-    filters.keyword = '火锅'
-    await vi.advanceTimersByTimeAsync(300)
-    expect(state.page.value).toBe(1)
-    expect(fetchMapPoints).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(fetchRestaurants).mock.calls.at(-1)![4]).toBeUndefined()
-  })
-  it('有关键词时跨视口搜索，移动保留页码，清空后按最新地图范围浏览', async () => {
-    const { state, filters } = setup()
-    filters.keyword = '餐厅'
-    state.move(area)
-    await vi.advanceTimersByTimeAsync(300)
     expect(fetchMapPoints).not.toHaveBeenCalled()
-    expect(vi.mocked(fetchRestaurants).mock.calls[0]![4]).toBeUndefined()
-    const calls = vi.mocked(fetchRestaurants).mock.calls.length
+    await vi.advanceTimersByTimeAsync(1)
+    expect(fetchMapPoints).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(fetchMapPoints).mock.calls[0]?.slice(0, 2)).toEqual([
+      expect.objectContaining({
+        restaurantType: 'CANTEEN',
+        diningMode: 'dineIn',
+        maxPrice: 30,
+        hasReviews: false,
+      }),
+      { ...area, east: 104.3 },
+    ])
+  })
+  it('同一次响应保留相同的100家及顺序，完整数量与截断标记独立显示', async () => {
+    const { state } = setup()
+    vi.mocked(fetchMapPoints).mockResolvedValue(batch(100, 150))
+    state.move(area)
+    await vi.advanceTimersByTimeAsync(300)
+    expect(state.rows.value.map((row) => row.id)).toEqual(
+      state.points.value.map((point) => point.id),
+    )
+    expect(state.rows.value).toHaveLength(100)
+    expect(state.total.value).toBe(150)
+    expect(state.truncated.value).toBe(true)
+    expect(state.resultsCurrent.value).toBe(true)
+  })
+  it('关键词搜索受视口约束，拖动后按新区域重搜，清空关键词仍保留范围', async () => {
+    const { state, filters } = setup()
+    filters.keyword = '火锅'
+    state.move(area)
+    await vi.advanceTimersByTimeAsync(300)
+    expect(fetchMapPoints).toHaveBeenLastCalledWith(
+      expect.objectContaining({ keyword: '火锅' }),
+      area,
+      expect.anything(),
+    )
     state.move({ ...area, east: 104.3 })
-    await vi.advanceTimersByTimeAsync(500)
-    expect(fetchRestaurants).toHaveBeenCalledTimes(calls)
+    expect(state.resultsCurrent.value).toBe(false)
+    await vi.advanceTimersByTimeAsync(300)
+    expect(fetchMapPoints).toHaveBeenLastCalledWith(
+      expect.objectContaining({ keyword: '火锅' }),
+      { ...area, east: 104.3 },
+      expect.anything(),
+    )
     filters.keyword = ''
     await vi.advanceTimersByTimeAsync(300)
-    expect(vi.mocked(fetchRestaurants).mock.calls.at(-1)![4]?.east).toBe(104.3)
-    expect(fetchMapPoints).toHaveBeenCalledTimes(1)
+    expect(fetchMapPoints).toHaveBeenLastCalledWith(
+      expect.objectContaining({ keyword: '' }),
+      { ...area, east: 104.3 },
+      expect.anything(),
+    )
   })
-  it('移动立刻废弃旧响应，即使旧请求忽略abort也不能覆盖新结果', async () => {
+  it('移动立即取消旧响应，即使请求忽略abort也不能在防抖等待中覆盖新范围', async () => {
     const { state } = setup()
-    let finish!: (value: Awaited<ReturnType<typeof fetchRestaurants>>) => void
-    vi.mocked(fetchRestaurants).mockImplementationOnce(
+    let finish!: (value: MapPoints) => void
+    vi.mocked(fetchMapPoints).mockImplementationOnce(
       () =>
         new Promise((resolve) => {
           finish = resolve
@@ -130,32 +152,82 @@ describe('地图自动查询', () => {
     )
     state.move(area)
     await vi.advanceTimersByTimeAsync(300)
+    const signal = vi.mocked(fetchMapPoints).mock.calls[0]![2]!
     state.move({ ...area, east: 104.4 })
-    await vi.advanceTimersByTimeAsync(300)
-    finish({ records: [], total: 999, totalPages: 125, page: 1, pageSize: 8 })
+    finish(batch(10, 999))
     await vi.advanceTimersByTimeAsync(0)
+    expect(signal.aborted).toBe(true)
+    expect(state.total.value).toBe(0)
+    await vi.advanceTimersByTimeAsync(300)
     expect(state.total.value).toBe(0)
   })
-  it('失败保留旧结果并标记错误，卸载取消待执行查询', async () => {
+  it('失败时地图与列表一起保留旧集合，重试成功后一起替换并恢复空状态', async () => {
     const { state } = setup()
-    vi.mocked(fetchRestaurants).mockResolvedValueOnce({
-      records: [],
-      total: 20,
-      totalPages: 3,
-      page: 1,
-      pageSize: 8,
-    })
+    vi.mocked(fetchMapPoints).mockResolvedValueOnce(batch(3))
     state.move(area)
     await vi.advanceTimersByTimeAsync(300)
-    vi.mocked(fetchRestaurants).mockRejectedValueOnce(new Error('offline'))
+    vi.mocked(fetchMapPoints).mockRejectedValueOnce(new Error('offline'))
     state.move({ ...area, east: 104.5 })
     await vi.advanceTimersByTimeAsync(300)
-    expect(state.total.value).toBe(20)
+    expect(state.rows.value).toHaveLength(3)
+    expect(state.points.value).toHaveLength(3)
+    expect(state.total.value).toBe(3)
     expect(state.error.value).toBeTruthy()
+    expect(state.resultsCurrent.value).toBe(false)
+    await state.load()
+    expect(state.rows.value).toEqual([])
+    expect(state.points.value).toEqual([])
+    expect(state.resultsCurrent.value).toBe(true)
+  })
+  it('缺少距离参照坐标时同时清空两边，不发送不完整的距离查询', async () => {
+    const { state, filters } = setup()
+    vi.mocked(fetchMapPoints).mockResolvedValueOnce(batch(3))
     state.move(area)
+    await vi.advanceTimersByTimeAsync(300)
+    filters.sort = 'distance'
+    await vi.advanceTimersByTimeAsync(300)
+    expect(fetchMapPoints).toHaveBeenCalledTimes(1)
+    expect(state.rows.value).toEqual([])
+    expect(state.points.value).toEqual([])
+    expect(state.total.value).toBe(0)
+  })
+  it('卸载取消待执行查询和在途请求', async () => {
+    const { state } = setup()
+    state.move(area)
+    await vi.advanceTimersByTimeAsync(300)
+    const signal = vi.mocked(fetchMapPoints).mock.calls[0]![2]!
+    state.move({ ...area, east: 104.4 })
     unmount()
     unmount = () => {}
     await vi.advanceTimersByTimeAsync(300)
-    expect(fetchRestaurants).toHaveBeenCalledTimes(2)
+    expect(signal.aborted).toBe(true)
+    expect(fetchMapPoints).toHaveBeenCalledTimes(1)
+  })
+  it('返回时立即恢复同批卡片和点位，按保存范围重查，失败保留再刷新', async () => {
+    const cached = batch(3, 150)
+    const { state } = setup(true, {
+      bounds: area,
+      total: 150,
+      rows: cached.records,
+      points: cached.points,
+      truncated: true,
+      searchNotice: '已保存提示',
+      error: null,
+    })
+    expect(state.rows.value.map((row) => row.id)).toEqual(['1', '2', '3'])
+    expect(state.points.value.map((point) => point.id)).toEqual(['1', '2', '3'])
+    expect(state.total.value).toBe(150)
+    expect(state.truncated.value).toBe(true)
+    expect(fetchMapPoints).not.toHaveBeenCalled()
+    vi.mocked(fetchMapPoints).mockRejectedValueOnce(new Error('offline'))
+    await state.load()
+    expect(fetchMapPoints).toHaveBeenLastCalledWith(expect.anything(), area, expect.anything())
+    expect(state.snapshot().rows).toHaveLength(3)
+    expect(state.snapshot().error).toBeTruthy()
+    vi.mocked(fetchMapPoints).mockResolvedValueOnce(batch(1))
+    await state.load()
+    expect(state.rows.value).toHaveLength(1)
+    expect(state.points.value).toHaveLength(1)
+    expect(state.resultsCurrent.value).toBe(true)
   })
 })

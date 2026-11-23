@@ -21,7 +21,7 @@ class HealthcheckTest(unittest.TestCase):
             '/actuator/health': (200, {'status': 'UP'}),
             '/version.txt': (200, 'a' * 40),
             '/login': (200, '<div id="app"></div>'),
-            '/api/public/status': (200, {'data': {'application': 'ginkgo-food-map-v2'}}),
+            '/api/public/status': (200, {'data': {'application': 'foodmap'}}),
             '/auth/me': (401, {'code': 'AUTH_UNAUTHENTICATED'}),
         }
         responses = self.responses

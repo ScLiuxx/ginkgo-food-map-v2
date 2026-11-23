@@ -1,3 +1,4 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
 import { createApp, h, nextTick, type App } from 'vue'
 import { createPinia, disposePinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
@@ -161,8 +162,11 @@ describe('个人中心', () => {
     expect(host.querySelectorAll('.account-tools > a')).toHaveLength(4)
     expect(host.querySelector('.level-badge')?.textContent).toBe('Lv.2')
     expect(host.querySelector('progress')?.value).toBeCloseTo((25 / 300) * 100)
-    expect(host.querySelector('.avatar, img')).toBeNull()
+    expect(host.querySelector('.profile-avatar img')?.getAttribute('src')).toContain(
+      '/api/users/42/avatar',
+    )
     expect(host.querySelector('.profile-avatar')?.textContent).toBe('测')
+    expect(host.querySelector('.public-link, a[href="/users/42"]')).toBeNull()
     expect(host.querySelectorAll('.profile-statistics strong')[0]?.textContent).toBe('2')
     expect(host.textContent).not.toMatch(/私信|最近浏览|草稿箱|会员|称号|我的举报/)
   })
@@ -217,8 +221,8 @@ describe('个人中心', () => {
     expect(fetchOwnGrowth).not.toHaveBeenCalled()
     expect(fetchOwnProfile).not.toHaveBeenCalled()
     expect(host.textContent).toContain('登录后查看个人主页')
-    const href = host.querySelector<HTMLAnchorElement>('.account-primary')!.href
-    expect(new URL(href).searchParams.get('redirect')).toBe('/users/42')
+    const target = await captureLinkTarget(app, host.querySelector('.account-primary'))
+    expect(new URL(target, 'http://localhost').searchParams.get('redirect')).toBe('/users/42')
     expect(host.querySelector('.account-profile, .account-tools, .growth-card')).toBeNull()
   })
 
@@ -241,16 +245,16 @@ describe('个人中心', () => {
     expect(host.textContent).not.toContain('暂无收藏')
     await router.push('/account/contributions')
     await nextTick()
-    expect(host.querySelector('.contributions-toolbar a')?.getAttribute('href')).toBe(
-      '/restaurants/submit',
-    )
-    expect(host.textContent).toContain('仅你和有权处理的管理员可见')
+    expect(
+      await captureLinkTarget(app, host.querySelector('.account-topline .contribution-submit')),
+    ).toBe('/restaurants/submit')
     expect(fetchMyRequestPage).toHaveBeenCalledWith(
       'ALL',
       1,
       '42',
       'session-42',
       expect.any(AbortSignal),
+      10,
     )
   })
 

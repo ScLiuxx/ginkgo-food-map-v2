@@ -1,7 +1,7 @@
 ﻿param(
     [Parameter(Mandatory = $true)]
     [string]$GrafanaHome,
-    [string]$RuntimeDirectory = (Join-Path ([System.IO.Path]::GetTempPath()) 'ginkgo-grafana')
+    [string]$RuntimeDirectory = (Join-Path ([System.IO.Path]::GetTempPath()) 'foodmap-grafana')
 )
 
 $ErrorActionPreference = 'Stop'

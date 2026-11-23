@@ -1,18 +1,19 @@
 # Elasticsearch商户搜索索引结构
 
-物理索引`restaurant-search-v003`，别名`restaurant-search`。每家普通餐厅或食堂对应一份文档，`_id`为商户ID的十进制字符串，正文id为long。字段定义来源于[索引定义JSON](../../backend/src/main/resources/elasticsearch/restaurant-search-v003.json)。
+物理索引`restaurant-search-v004`，别名`restaurant-search`。每家普通餐厅或食堂对应一份文档，`_id`为商户ID的十进制字符串，正文id为long。字段定义来源于[索引定义JSON](../../backend/src/main/resources/elasticsearch/restaurant-search-v004.json)。
 
-## 当前读取边界
+## 文档边界
 
-列表接口直接读取现有投影：普通浏览使用match_all，关键词使用既有匹配规则，不再回查MySQL或Outbox；资料、评分及删除/恢复允许同步延迟。coverPhotoId用于组装同源图片地址，图片读取仍校验实际状态。四维及审计时间未在索引中，列表返回null，详情独立读取MySQL。地图点位仍使用身份/版本回查。字段和mapping不变，无需因本次读取改造重建索引。
+本文维护索引设置、字段映射、序列化及空值含义。列表／地图的引擎选择、投影读取和同步一致性见[搜索实现](restaurant-search.md)，响应字段与查询语义见[搜索契约](../api/restaurants.md#search)，部署和监控见[同步运维说明](../operations/elasticsearch-sync-metrics.md)。
 
 ## 索引设置
 
 | 项目 | 当前定义 | 含义 |
 | --- | --- | --- |
-| 物理索引 | `restaurant-search-v003` | 固定当前字段与分词配置版本 |
+| 物理索引 | `restaurant-search-v004` | 固定当前字段与分词配置版本 |
 | 业务别名 | `restaurant-search` | 业务访问名称 |
-| 写索引标记 | `is_write_index=true` | 别名当前唯一指向v003 |
+| schema标识 | `foodmap.restaurant-search` | mapping的`_meta.schema`；仅改名前的`ginkgo.restaurant-search`作为兼容标识接受，其余结构与版本仍严格核对 |
+| 写索引标记 | `is_write_index=true` | 别名当前唯一指向v004 |
 | 主分片 | 1 | 主分片数 |
 | 副本 | 0 | 副本数 |
 | 刷新间隔 | `1s` | 刷新周期 |
@@ -57,8 +58,9 @@
 
 | 字段 | ES类型 | 来源/计算 | 用途 |
 | --- | --- | --- | --- |
-| `ratingScore` | `double` | overall_score_sum / participant_count | 商户综合评分排序，使用后端0–10口径 |
-| `recommendRate` | `double` | recommend_count / participant_count | 好评优先，0–1比例 |
+| `reputationScore` | `double` | MySQL五分制派生分 | 综合分展示与排序；无计分用户缺省，食堂与普通餐厅统一从直接点评计算口碑分 |
+| `ratingScore` | `double` | overall_score_sum / participant_count | 原始综合均分，保留0–10口径 |
+| `recommendRate` | `double` | 已停用的历史字段 | 现有mapping兼容保留；当前投影不生成、查询不读取、接口不返回 |
 | `participantCount` | `long` | participant_count | 计分人数 |
 | `reviewCount` | `long` | review_count | 有效点评总条数 |
 
@@ -105,7 +107,6 @@
   "location": {"lat": 30.75, "lon": 103.93},
   "needsLocation": false,
   "ratingScore": 8.0,
-  "recommendRate": 0.5,
   "participantCount": 2,
   "reviewCount": 3,
   "deleted": false,

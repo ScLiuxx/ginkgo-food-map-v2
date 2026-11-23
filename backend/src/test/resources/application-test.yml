@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:ginkgo;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    url: jdbc:h2:mem:foodmap;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
     username: sa
     password:
     driver-class-name: org.h2.Driver
@@ -14,6 +14,13 @@ spring:
         enabled: false
 
 app:
+  ranking:
+    # 普通测试及读取基准不得在启动时隐式生成或发布；调度专项单独开启。
+    generation-enabled: false
+    # 基线及其他模块测试不隐式缓存；榜单专项按场景开启。
+    caffeine-enabled: false
+    # 普通测试不得连接真实Redis或触碰开发键，隔离集成测试显式开启。
+    redis-enabled: false
   user:
     verification-code:
       # 仅供自动化测试完成配置校验，不得复制到生产环境。

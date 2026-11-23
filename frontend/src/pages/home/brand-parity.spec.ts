@@ -1,3 +1,4 @@
+import { captureLinkTarget } from '@/shared/test/captureLinkTarget'
 import { createApp } from 'vue'
 import type { App } from 'vue'
 import { createPinia, disposePinia } from 'pinia'
@@ -44,8 +45,9 @@ describe('approved homepage composition', () => {
     expect(host.querySelector('.filter-toolbar .random-banner')?.textContent).toContain(
       '帮我选一家',
     )
-    expect(host.querySelector('input[type="search"]')?.getAttribute('placeholder')).toBe(
-      '搜索餐厅、食堂或窗口…',
+    expect(host.querySelector('input[type="search"]')?.getAttribute('aria-label')).toBe('搜索餐厅')
+    expect(await captureLinkTarget(app, host.querySelector('.catalog-ranking-entry'))).toBe(
+      '/restaurant-rankings',
     )
     expect(host.textContent).not.toContain('看点评')
   })

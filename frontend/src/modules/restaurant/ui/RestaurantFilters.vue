@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLink from '@/shared/ui/AppLink.vue'
 import { computed } from 'vue'
 import { useRestaurantCatalog } from '../model/catalog.store'
 import RestaurantAdvancedFilters from './RestaurantAdvancedFilters.vue'
@@ -18,20 +19,29 @@ const cuisineCategories = computed(() =>
 
 <template>
   <div class="catalog-filters">
-    <form class="search-field" role="search" @submit.prevent="catalog.load">
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.6" />
-        <path d="m16 16 4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-      </svg>
-      <input
-        v-model="catalog.filters.keyword"
-        aria-label="搜索餐厅"
-        placeholder="搜索餐厅、食堂或窗口…"
-        maxlength="100"
-        type="search"
-      />
-      <button type="submit" class="search-submit" aria-label="提交搜索">搜索</button>
-    </form>
+    <div class="catalog-search-line">
+      <form class="search-field" role="search" @submit.prevent="catalog.load">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.6" />
+          <path d="m16 16 4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+        </svg>
+        <input
+          v-model="catalog.filters.keyword"
+          aria-label="搜索餐厅"
+          maxlength="100"
+          type="search"
+        />
+        <button type="submit" class="search-submit" aria-label="提交搜索">搜索</button>
+      </form>
+      <AppLink class="catalog-ranking-entry" to="/restaurant-rankings">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M8 3h8v5a4 4 0 0 1-8 0ZM8 5H4v2a4 4 0 0 0 4 4m8-6h4v2a4 4 0 0 1-4 4M12 12v6m-4 3h8M9 18h6"
+          />
+        </svg>
+        推荐榜 <span aria-hidden="true">→</span>
+      </AppLink>
+    </div>
     <nav class="quick-categories" aria-label="美食快捷分类">
       <button
         type="button"
@@ -65,20 +75,26 @@ const cuisineCategories = computed(() =>
       </button>
       <RestaurantAdvancedFilters campus-filters />
       <RandomRestaurant />
-      <p class="catalog-result-count" role="status" aria-live="polite">
-        {{ catalog.loading ? '正在加载…' : `共 ${catalog.total} 家餐厅与食堂` }}
-      </p>
     </div>
     <div
       v-if="
         catalog.filters.maxPrice !== null ||
         catalog.filters.maxDistanceMeters !== null ||
         catalog.filters.restaurantType ||
-        catalog.filters.diningMode
+        catalog.filters.diningMode ||
+        catalog.filters.hasReviews != null
       "
       class="advanced-tags"
       aria-label="已应用的高级筛选"
     >
+      <button
+        v-if="catalog.filters.hasReviews != null"
+        type="button"
+        aria-label="移除点评筛选"
+        @click="catalog.filters.hasReviews = null"
+      >
+        {{ catalog.filters.hasReviews ? '有点评' : '无点评' }} <span aria-hidden="true">×</span>
+      </button>
       <button
         v-if="catalog.filters.restaurantType"
         type="button"

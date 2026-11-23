@@ -24,10 +24,10 @@ class DeployTest(unittest.TestCase):
         (self.root / 'releases').mkdir()
         (self.root / 'bin').mkdir()
         sudo = self.root / 'bin/sudo'
-        sudo.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$GINKGO_DEPLOY_ROOT/service-calls"\n')
+        sudo.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$FOODMAP_DEPLOY_ROOT/service-calls"\n')
         sudo.chmod(0o755)
         self.environment = os.environ.copy()
-        self.environment['GINKGO_DEPLOY_ROOT'] = str(self.root)
+        self.environment['FOODMAP_DEPLOY_ROOT'] = str(self.root)
         self.environment['PATH'] = str(self.root / 'bin') + ':' + self.environment['PATH']
 
     def tearDown(self):
@@ -79,7 +79,7 @@ class DeployTest(unittest.TestCase):
         release_id = self.prepare('a' * 40, fail=True)
         self.assertNotEqual(self.deploy(release_id).returncode, 0)
         self.assertFalse((self.root / 'current').is_symlink())
-        self.assertIn('stop ginkgo-backend.service', (self.root / 'service-calls').read_text())
+        self.assertIn('stop foodmap-backend.service', (self.root / 'service-calls').read_text())
 
     def test_checksum_failure_does_not_restart_services(self):
         release_id = self.prepare('a' * 40)
