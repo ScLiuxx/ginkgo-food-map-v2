@@ -478,10 +478,10 @@ class RestaurantReadApiIntegrationTest {
         mvc.perform(get("/api/restaurants").param("sort", "score").param("pageSize", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.records[0].id").value("102"))
-                .andExpect(jsonPath("$.data.records[0].reputationScore").value(4.3));
+                .andExpect(jsonPath("$.data.records[0].reputationScore").value(4.40909091));
         mvc.perform(get("/api/restaurants/101"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.reputationScore").value(3.75))
+                .andExpect(jsonPath("$.data.reputationScore").value(4.0))
                 .andExpect(jsonPath("$.data.score").value(10));
         for (String sort : java.util.List.of("reviews", "recommend")) {
             mvc.perform(get("/api/restaurants").param("sort", sort).param("pageSize", "1"))
@@ -1237,14 +1237,14 @@ class RestaurantReadApiIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
-    /** 口碑依次为3、3.5、4、3.4995；后两家分别缺统计行与零评价，均没有可比较分数。 */
+    /** 口碑依次为3、3.5、4及略低于3.5；后两家分别缺统计行与零评价。 */
     private void pickerRatingFixtures() {
         for (int id = 108; id <= 111; id++) {
             insert(id, "评分夹具" + id, "OTHER", 20, "EXACT", "测试地址", 30.7544, 103.9312, "OPERATING");
         }
-        statistics(101, 5, 5, 0, "25", "25", "25", "25", "25");
+        statistics(101, 5, 5, 0, "28", "28", "28", "28", "28");
         statistics(102, 5, 5, 0, "35", "35", "35", "35", "35");
-        statistics(108, 5, 5, 0, "45", "45", "45", "45", "45");
+        statistics(108, 5, 5, 0, "42", "42", "42", "42", "42");
         statistics(109, 5, 5, 0, "34.99", "34.99", "34.99", "34.99", "34.99");
         statistics(111, 0, 0, 0, "0", "0", "0", "0", "0");
     }

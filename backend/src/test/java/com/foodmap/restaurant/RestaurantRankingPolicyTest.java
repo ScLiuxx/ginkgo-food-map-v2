@@ -22,12 +22,11 @@ class RestaurantRankingPolicyTest {
 
     @Test
     void convertsScoresOnceAndUsesConfirmedWeightsAndPrior() {
-        var stats = stats(1, 3, "27", "24", "21", "18");
+        var stats = stats(1, 2, "18", "16", "14", "12");
         var result = policy.rank(List.of(candidate(1)), List.of(stats), area).getFirst();
         assertThat(result.tasteMean()).isEqualByComparingTo("4.5");
-        // R=4.25，W=(3*4.25+5*3.5)/8=3.78125；旧累计综合分及推荐、收藏不参与。
-        assertThat(result.numerator()).isEqualByComparingTo("30.25");
-        assertThat(result.sortingScore()).isEqualByComparingTo("3.78125");
+        // 两人时原始加权分4.25与基准3.5各占一半。
+        assertThat(result.sortingScore()).isEqualByComparingTo("3.875");
     }
 
     @Test
@@ -71,16 +70,16 @@ class RestaurantRankingPolicyTest {
                 policy.rank(
                         List.of(candidate(10), candidate(2), candidate(1)),
                         List.of(
-                                stats(1, 3, "30", "30", "30", "30"),
-                                stats(10, 5, "50", "25", "50", "50"),
-                                stats(2, 5, "50", "25", "50", "50")),
+                                stats(1, 2, "20", "20", "20", "20"),
+                                stats(10, 4, "40", "20", "40", "40"),
+                                stats(2, 4, "40", "20", "40", "40")),
                         area);
         assertThat(result)
                 .extracting(value -> value.restaurant().getId())
                 .containsExactly(2L, 10L, 1L);
         assertThat(result)
                 .allSatisfy(
-                        value -> assertThat(value.sortingScore()).isEqualByComparingTo("4.0625"));
+                        value -> assertThat(value.sortingScore()).isEqualByComparingTo("4.25"));
     }
 
     @Test
