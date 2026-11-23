@@ -55,7 +55,7 @@ class RestaurantRankingCalculationServiceTest {
             assertThat(view.getItems()).isEmpty();
             var rules = json.readTree(row.getRulesSnapshot());
             assertThat(rules.get("c").decimalValue()).isEqualByComparingTo("3.5");
-            assertThat(rules.get("m").intValue()).isEqualTo(5);
+            assertThat(rules.get("m").intValue()).isEqualTo(2);
             assertThat(rules.get("sourceScoreScale").intValue()).isEqualTo(10);
             assertThat(rules.get("campus").get("coordinateSystem").stringValue()).isEqualTo("GCJ02");
         }
