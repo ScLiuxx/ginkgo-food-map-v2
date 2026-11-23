@@ -244,6 +244,19 @@
   line-height: 1.7;
 }
 
+.review-photo-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 18rpx;
+}
+
+.review-photo-title {
+  color: var(--ink-soft);
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
 .photo-head {
   display: flex;
   align-items: center;

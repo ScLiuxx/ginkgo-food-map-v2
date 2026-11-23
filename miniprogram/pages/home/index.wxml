@@ -67,6 +67,9 @@
     <picker mode="selector" range="{{diningLabels}}" value="{{diningIndex}}" bindchange="onDiningChange">
       <view class="filter-select">方式：{{diningLabels[diningIndex]}} ▾</view>
     </picker>
+    <picker mode="selector" range="{{distanceLabels}}" value="{{distanceIndex}}" bindchange="onDistanceChange">
+      <view class="filter-select">距离：{{distanceLabels[distanceIndex]}} ▾</view>
+    </picker>
     <view
       class="filter-select filter-check {{hasReviews ? 'active' : ''}}"
       bindtap="toggleHasReviews"

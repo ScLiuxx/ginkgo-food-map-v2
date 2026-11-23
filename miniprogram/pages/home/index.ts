@@ -36,6 +36,9 @@ type HomeData = {
   filterOpen: boolean
   hideClosed: boolean
   hasReviews: boolean
+  distanceLabels: string[]
+  distanceValues: Array<number | null>
+  distanceIndex: number
   maxPriceLabels: string[]
   maxPriceValues: Array<number | null>
   maxPriceIndex: number
@@ -81,8 +84,10 @@ type HomeCustom = {
   randomSeenIds: string[]
   /** 上一家仅在本轮有效，回看前用 checkIds 复核是否仍符合条件。 */
   randomPreviousView: RestaurantView | null
-  /** 用户位置按需获取，避免打开页面就申请定位权限。 */
-  randomLocation: { latitude: number; longitude: number } | null
+  /** 目录距离筛选与随机选店共用一次定位结果，打开页面时不主动申请权限。 */
+  userLocation: { latitude: number; longitude: number } | null
+  /** 距离选择代次：定位返回前重置筛选时，丢弃迟到的选择结果。 */
+  distanceSelectionSeq: number
   loadCategories(): Promise<void>
   loadPage(reset: boolean): Promise<void>
   loadMore(): void
@@ -93,6 +98,7 @@ type HomeCustom = {
   toggleHideClosed(): void
   toggleHasReviews(): void
   recalcFilterCount(): void
+  onDistanceChange(event: WxPickerEvent): void
   onPriceChange(event: WxPickerEvent): void
   onTypeChange(event: WxPickerEvent): void
   onDiningChange(event: WxPickerEvent): void
@@ -102,7 +108,7 @@ type HomeCustom = {
   restartRandom(): void
   rerollRandom(): void
   previousRandom(): void
-  ensureRandomLocation(): Promise<{ latitude: number; longitude: number }>
+  ensureLocation(): Promise<{ latitude: number; longitude: number }>
   chooseRandom(checkId?: string): Promise<void>
   onRandomRangeChange(event: WxPickerEvent): void
   onRandomDistanceChange(event: WxPickerEvent): void
@@ -144,6 +150,9 @@ Page<HomeData, HomeCustom>({
     filterOpen: false,
     hideClosed: true,
     hasReviews: false,
+    distanceLabels: ['不限距离', '500m 内', '1km 内', '3km 内', '5km 内'],
+    distanceValues: [null, 500, 1000, 3000, 5000],
+    distanceIndex: 0,
     maxPriceLabels: ['不限人均', '≤15元', '≤30元', '≤50元', '≤100元'],
     maxPriceValues: [null, 15, 30, 50, 100],
     maxPriceIndex: 0,
@@ -186,7 +195,8 @@ Page<HomeData, HomeCustom>({
   randomSequence: 0,
   randomSeenIds: [],
   randomPreviousView: null,
-  randomLocation: null,
+  userLocation: null,
+  distanceSelectionSeq: 0,
 
   onLoad() {
     this.setData({ loggedIn: isLoggedIn() })
@@ -247,6 +257,8 @@ Page<HomeData, HomeCustom>({
     )
 
     try {
+      const maxDistanceMeters = this.data.distanceValues[this.data.distanceIndex]
+      const location = maxDistanceMeters !== null ? this.userLocation : null
       const result = await fetchRestaurants({
         keyword: this.data.keyword,
         category: this.data.activeCategory,
@@ -256,6 +268,9 @@ Page<HomeData, HomeCustom>({
         diningMode: this.data.diningValues[this.data.diningIndex],
         maxPrice: this.data.maxPriceValues[this.data.maxPriceIndex],
         hasReviews: this.data.hasReviews || undefined,
+        latitude: location?.latitude,
+        longitude: location?.longitude,
+        maxDistanceMeters: maxDistanceMeters ?? undefined,
         page,
         pageSize: PAGE_SIZE,
       })
@@ -356,15 +371,49 @@ Page<HomeData, HomeCustom>({
     void this.loadPage(true)
   },
 
-  /** 面板内三个下拉和“只看有点评”合并计数，隐藏停业是独立开关不计数。 */
+  /** 面板内四个下拉和“只看有点评”合并计数，隐藏停业是独立开关不计数。 */
   recalcFilterCount() {
     this.setData({
       activeFilterCount:
         (this.data.maxPriceIndex > 0 ? 1 : 0) +
         (this.data.typeIndex > 0 ? 1 : 0) +
         (this.data.diningIndex > 0 ? 1 : 0) +
+        (this.data.distanceIndex > 0 ? 1 : 0) +
         (this.data.hasReviews ? 1 : 0),
     })
+  },
+
+  /**
+   * 选择距离上限。
+   *
+   * 只有选择具体距离时才申请定位；拒绝授权或定位失败时保持“不限距离”，
+   * 不能用旧坐标或校区中心冒充用户位置。定位结果在页面内复用，
+   * 后续切换距离档位或下拉刷新不再重复弹窗。
+   */
+  async onDistanceChange(event: WxPickerEvent) {
+    const index = Number(event.detail.value)
+    if (!Number.isInteger(index) || index < 0 || index >= this.data.distanceValues.length) {
+      return
+    }
+    if (index === this.data.distanceIndex) return
+    const sequence = ++this.distanceSelectionSeq
+    if (index === 0) {
+      this.setData({ distanceIndex: 0 })
+      this.recalcFilterCount()
+      void this.loadPage(true)
+      return
+    }
+    try {
+      await this.ensureLocation()
+    } catch (reason) {
+      wx.showToast({ title: toErrorMessage(reason), icon: 'none' })
+      return
+    }
+    // 定位期间用户可能重置筛选或改选其他档位，只接受最后一次选择。
+    if (sequence !== this.distanceSelectionSeq) return
+    this.setData({ distanceIndex: index })
+    this.recalcFilterCount()
+    void this.loadPage(true)
   },
 
   onPriceChange(event: WxPickerEvent) {
@@ -395,12 +444,14 @@ Page<HomeData, HomeCustom>({
   },
 
   resetFilters() {
+    this.distanceSelectionSeq += 1
     this.setData({
       hideClosed: true,
       hasReviews: false,
       maxPriceIndex: 0,
       typeIndex: 0,
       diningIndex: 0,
+      distanceIndex: 0,
       activeFilterCount: 0,
       filterOpen: false,
     })
@@ -525,9 +576,9 @@ Page<HomeData, HomeCustom>({
     void this.chooseRandom()
   },
 
-  /** 仅在用户明确选择“我的位置”时申请定位，失败时提示改用校区范围。 */
-  ensureRandomLocation(): Promise<{ latitude: number; longitude: number }> {
-    if (this.randomLocation) return Promise.resolve(this.randomLocation)
+  /** 仅在用户明确选择距离或“我的位置”时申请定位，失败时由调用方提示。 */
+  ensureLocation(): Promise<{ latitude: number; longitude: number }> {
+    if (this.userLocation) return Promise.resolve(this.userLocation)
     return new Promise((resolve, reject) => {
       wx.getLocation({
         type: 'gcj02',
@@ -536,14 +587,14 @@ Page<HomeData, HomeCustom>({
           const latitude = Number(result.latitude)
           const longitude = Number(result.longitude)
           if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-            reject(new Error('定位结果无法确认，请改用校区范围。'))
+            reject(new Error('定位结果无法确认，请稍后重试。'))
             return
           }
-          this.randomLocation = { latitude, longitude }
-          resolve(this.randomLocation)
+          this.userLocation = { latitude, longitude }
+          resolve(this.userLocation)
         },
         fail: () => {
-          reject(new Error('无法获取我的位置，请允许定位或改用校区范围。'))
+          reject(new Error('无法获取我的位置，请允许定位后重试。'))
         },
       })
     })
@@ -577,7 +628,7 @@ Page<HomeData, HomeCustom>({
     try {
       let location: { latitude: number; longitude: number } | undefined
       if (range === 'USER') {
-        location = await this.ensureRandomLocation()
+        location = await this.ensureLocation()
         if (sequence !== this.randomSequence) return
       }
       const result = await fetchPickerCandidates({

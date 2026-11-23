@@ -230,6 +230,39 @@
             auto-height
           />
           <view class="field-hint">{{reviewBodyCount}} / 500</view>
+
+          <view class="review-photo-head">
+            <text class="review-photo-title">点评照片（可选）</text>
+            <text class="muted">{{reviewPhotos.length}} / {{maxReviewPhotos}}</text>
+          </view>
+          <view class="photo-grid">
+            <view wx:for="{{reviewPhotos}}" wx:key="key" class="photo-item">
+              <image
+                class="photo-image"
+                src="{{item.previewPath}}"
+                mode="aspectFill"
+                data-index="{{index}}"
+                bindtap="previewReviewPhotos"
+              />
+              <view wx:if="{{item.status === 'uploading'}}" class="photo-mask">上传中…</view>
+              <view
+                wx:elif="{{item.status === 'failed'}}"
+                class="photo-mask failed"
+                data-index="{{index}}"
+                bindtap="retryReviewPhoto"
+              >上传失败，点此重试</view>
+              <view class="photo-remove" data-index="{{index}}" catchtap="removeReviewPhoto">×</view>
+            </view>
+            <view
+              wx:if="{{reviewPhotos.length < maxReviewPhotos}}"
+              class="photo-add"
+              bindtap="chooseReviewPhotos"
+            >
+              <text class="photo-add-plus">＋</text>
+              <text class="photo-add-text">添加照片</text>
+            </view>
+          </view>
+          <view class="field-hint">最多 5 张，上传前自动压缩；照片随点评一起审核。</view>
         </view>
       </view>
     </view>

@@ -17,6 +17,8 @@ export type TriState = boolean | null
 export type SubmissionRecommendation = 'RECOMMENDED' | 'NEUTRAL' | 'NOT_RECOMMENDED'
 
 export const MAX_SUBMISSION_PHOTOS = 5
+/** 附带点评与正式点评共用同一图片上限，审核通过后原样绑定到新点评。 */
+export const MAX_ATTACHED_REVIEW_PHOTOS = 5
 export const MAX_SUBMISSION_NAME = 40
 export const MAX_SUBMISSION_ADDRESS = 80
 export const MAX_SUBMISSION_TAGS = 8
@@ -35,7 +37,7 @@ export interface AttachedReviewDraft {
   scores: AttachedReviewScores
   recommendation: SubmissionRecommendation
   body: string
-  /** 小程序投稿点评暂不接收图片，始终提交空数组。 */
+  /** 图片先以 REVIEW 用途上传，随投稿审核通过后绑定到正式点评。 */
   photoIds: string[]
 }
 
@@ -209,7 +211,7 @@ export function validateSubmissionDraft(draft: SubmissionDraft): string {
       return `附带点评正文需为 1–${MAX_ATTACHED_REVIEW_BODY} 个字符。`
     }
     if (
-      photoIds.length > MAX_SUBMISSION_PHOTOS ||
+      photoIds.length > MAX_ATTACHED_REVIEW_PHOTOS ||
       new Set(photoIds).size !== photoIds.length ||
       photoIds.some((id) => !isLongId(id))
     ) {

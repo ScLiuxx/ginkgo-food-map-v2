@@ -1,5 +1,6 @@
 import { fetchCategories, fetchRestaurantDetail } from '../../modules/restaurant/api'
 import {
+  MAX_ATTACHED_REVIEW_PHOTOS,
   MAX_SUBMISSION_PHOTOS,
   buildSubmissionPayload,
   submitNewRestaurant,
@@ -90,11 +91,14 @@ type SubmissionData = {
   reviewRecommendation: SubmissionRecommendation
   reviewBody: string
   reviewBodyCount: number
+  /** 附带点评图片与店铺图片用途不同，分开维护各自的预览和上传状态。 */
+  reviewPhotos: DraftPhoto[]
   photos: DraftPhoto[]
   uploading: boolean
   submitting: boolean
   errorMessage: string
   maxPhotos: number
+  maxReviewPhotos: number
 }
 
 type SubmissionCustom = {
@@ -129,6 +133,11 @@ type SubmissionCustom = {
   changeReviewScore(event: WxSliderEvent): void
   chooseReviewRecommendation(event: WxTapEvent): void
   changeReviewBody(event: WxInputEvent): void
+  chooseReviewPhotos(): void
+  startReviewUpload(key: number): Promise<void>
+  retryReviewPhoto(event: WxTapEvent): void
+  removeReviewPhoto(event: WxTapEvent): void
+  previewReviewPhotos(event: WxTapEvent): void
   choosePhotos(): void
   startUpload(key: number): Promise<void>
   retryPhoto(event: WxTapEvent): void
@@ -137,6 +146,7 @@ type SubmissionCustom = {
   submit(): Promise<void>
   refreshUploadingState(): void
   patchPhoto(key: number, patch: Partial<DraftPhoto>): void
+  patchReviewPhoto(key: number, patch: Partial<DraftPhoto>): void
   buildDraft(): SubmissionDraft
   buildReviewScores(): AttachedReviewScores
   actionName(): string
@@ -242,11 +252,13 @@ Page<SubmissionData, SubmissionCustom>({
     reviewRecommendation: 'RECOMMENDED',
     reviewBody: '',
     reviewBodyCount: 0,
+    reviewPhotos: [],
     photos: [],
     uploading: false,
     submitting: false,
     errorMessage: '',
     maxPhotos: MAX_SUBMISSION_PHOTOS,
+    maxReviewPhotos: MAX_ATTACHED_REVIEW_PHOTOS,
   },
 
   requestId: '',
@@ -451,6 +463,7 @@ Page<SubmissionData, SubmissionCustom>({
       reviewRecommendation: 'RECOMMENDED',
       reviewBody: '',
       reviewBodyCount: 0,
+      reviewPhotos: [],
       sourceLoading: false,
       sourceError: '',
     })
@@ -484,6 +497,8 @@ Page<SubmissionData, SubmissionCustom>({
     if (!Number.isInteger(index) || index < 0 || index >= TYPE_VALUES.length) return
     // 食堂没有分类，切换后清空分类选择，避免提交时被服务端拒绝。
     this.setData({ typeIndex: index, categoryIndex: 0, errorMessage: '' })
+    // 食堂不发送附带点评，切换后不能继续被子点评图片的上传状态阻塞。
+    this.refreshUploadingState()
   },
 
   changeCategory(event: WxPickerEvent): void {
@@ -580,6 +595,8 @@ Page<SubmissionData, SubmissionCustom>({
   /** 附带点评只在新店投稿的普通餐厅显示；切换类型时 buildDraft 会兜底忽略。 */
   toggleAttachedReview(): void {
     this.setData({ reviewAttached: !this.data.reviewAttached, errorMessage: '' })
+    // 关闭附带点评后，未完成的点评图片不应继续阻塞资料提交。
+    this.refreshUploadingState()
   },
 
   changeReviewScore(event: WxSliderEvent): void {
@@ -609,6 +626,95 @@ Page<SubmissionData, SubmissionCustom>({
   changeReviewBody(event: WxInputEvent): void {
     const body = (event.detail.value ?? '').slice(0, MAX_REVIEW_BODY)
     this.setData({ reviewBody: body, reviewBodyCount: Array.from(body).length })
+  },
+
+  /** 附带点评图片单独选择，上传用途固定 REVIEW，不能与店铺照片混用。 */
+  chooseReviewPhotos(): void {
+    if (this.data.submitting) return
+    const remaining = MAX_ATTACHED_REVIEW_PHOTOS - this.data.reviewPhotos.length
+    if (remaining <= 0) return
+    const generation = pageGeneration
+    wx.chooseMedia({
+      count: remaining,
+      mediaType: ['image'],
+      sizeType: ['compressed'],
+      sourceType: ['album', 'camera'],
+      success: (result) => {
+        if (generation !== pageGeneration) return
+        const files = (result.tempFiles ?? []).filter((file) => Boolean(file.tempFilePath))
+        if (!files.length) return
+        const appended = files.slice(0, remaining).map((file): DraftPhoto => {
+          const key = ++photoSeq
+          return {
+            key,
+            previewPath: file.tempFilePath,
+            sourcePath: file.tempFilePath,
+            fileId: '',
+            status: 'uploading',
+            error: '',
+          }
+        })
+        this.setData({
+          reviewPhotos: this.data.reviewPhotos.concat(appended),
+          errorMessage: '',
+        })
+        this.refreshUploadingState()
+        appended.forEach((photo) => void this.startReviewUpload(photo.key))
+      },
+    })
+  },
+
+  async startReviewUpload(key: number): Promise<void> {
+    const generation = pageGeneration
+    const photo = this.data.reviewPhotos.find((item) => item.key === key)
+    if (!photo) return
+    this.patchReviewPhoto(key, { status: 'uploading', error: '' })
+    this.refreshUploadingState()
+    try {
+      const prepared = await prepareImage(photo.sourcePath)
+      if (generation !== pageGeneration) return
+      this.patchReviewPhoto(key, { previewPath: prepared })
+      /*
+       * 附带点评审核通过后会成为正式点评图片，必须使用 REVIEW 用途；
+       * 若误用 RESTAURANT，服务端会把它绑定为店铺相册图片。
+       */
+      const uploaded = await uploadImage(prepared, 'REVIEW')
+      if (generation !== pageGeneration) return
+      this.patchReviewPhoto(key, { status: 'ready', fileId: uploaded.fileId, error: '' })
+    } catch (reason) {
+      if (generation !== pageGeneration) return
+      this.patchReviewPhoto(key, { status: 'failed', error: toErrorMessage(reason) })
+    } finally {
+      if (generation === pageGeneration) this.refreshUploadingState()
+    }
+  },
+
+  retryReviewPhoto(event: WxTapEvent): void {
+    if (this.data.submitting) return
+    const index = Number(event.currentTarget.dataset.index)
+    const photo = this.data.reviewPhotos[index]
+    if (!photo || photo.status !== 'failed') return
+    void this.startReviewUpload(photo.key)
+  },
+
+  removeReviewPhoto(event: WxTapEvent): void {
+    if (this.data.submitting) return
+    const index = Number(event.currentTarget.dataset.index)
+    const photo = this.data.reviewPhotos[index]
+    if (!photo) return
+    this.setData({
+      reviewPhotos: this.data.reviewPhotos.filter((item) => item.key !== photo.key),
+    })
+    this.refreshUploadingState()
+    if (photo.fileId) void cancelImage(photo.fileId).catch(() => undefined)
+  },
+
+  previewReviewPhotos(event: WxTapEvent): void {
+    const index = Number(event.currentTarget.dataset.index)
+    const current = this.data.reviewPhotos[index]
+    const urls = this.data.reviewPhotos.map((item) => item.previewPath)
+    if (!current || !urls.length) return
+    wx.previewImage({ urls, current: current.previewPath })
   },
 
   choosePhotos(): void {
@@ -720,7 +826,7 @@ Page<SubmissionData, SubmissionCustom>({
               scores: this.buildReviewScores(),
               recommendation: this.data.reviewRecommendation,
               body: this.data.reviewBody,
-              photoIds: [],
+              photoIds: this.data.reviewPhotos.map((item) => item.fileId),
             }
           : null,
     }
@@ -757,6 +863,16 @@ Page<SubmissionData, SubmissionCustom>({
     }
     if (this.data.photos.some((item) => !isLongId(item.fileId))) {
       this.setData({ errorMessage: '照片编号异常，请移除后重新上传。' })
+      return
+    }
+    const reviewActive =
+      this.data.mode === 'new' && this.data.typeIndex === 0 && this.data.reviewAttached
+    if (reviewActive && this.data.reviewPhotos.some((item) => item.status !== 'ready')) {
+      this.setData({ errorMessage: '点评照片尚未全部上传成功，请重试或移除失败照片。' })
+      return
+    }
+    if (reviewActive && this.data.reviewPhotos.some((item) => !isLongId(item.fileId))) {
+      this.setData({ errorMessage: '点评照片编号异常，请移除后重新上传。' })
       return
     }
 
@@ -833,13 +949,28 @@ Page<SubmissionData, SubmissionCustom>({
     return this.data.isCorrection ? '提交纠错' : '提交投稿'
   },
 
+  /** 只有当前会提交的图片队列才参与上传中判断，关闭附带点评后不再阻塞资料提交。 */
   refreshUploadingState(): void {
-    this.setData({ uploading: this.data.photos.some((item) => item.status === 'uploading') })
+    const reviewActive =
+      this.data.mode === 'new' && this.data.typeIndex === 0 && this.data.reviewAttached
+    this.setData({
+      uploading:
+        this.data.photos.some((item) => item.status === 'uploading') ||
+        (reviewActive && this.data.reviewPhotos.some((item) => item.status === 'uploading')),
+    })
   },
 
   patchPhoto(key: number, patch: Partial<DraftPhoto>): void {
     this.setData({
       photos: this.data.photos.map((item) => (item.key === key ? { ...item, ...patch } : item)),
+    })
+  },
+
+  patchReviewPhoto(key: number, patch: Partial<DraftPhoto>): void {
+    this.setData({
+      reviewPhotos: this.data.reviewPhotos.map((item) =>
+        item.key === key ? { ...item, ...patch } : item,
+      ),
     })
   },
 
