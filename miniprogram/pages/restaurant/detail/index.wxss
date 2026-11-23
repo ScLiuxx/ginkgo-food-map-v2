@@ -393,12 +393,18 @@
   align-items: center;
   justify-content: center;
   margin-right: 18rpx;
+  overflow: hidden;
   border: 1rpx solid rgba(255, 255, 255, 0.75);
   border-radius: 50%;
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.8), rgba(172, 219, 255, 0.55));
   color: #0a6fbf;
   font-size: 30rpx;
   font-weight: 750;
+}
+
+.avatar-image {
+  width: 100%;
+  height: 100%;
 }
 
 .review-author {
@@ -437,6 +443,11 @@
 .review-badge.recommend {
   background: rgba(52, 199, 89, 0.14);
   color: #1f7a45;
+}
+
+.review-badge.neutral {
+  background: rgba(120, 120, 128, 0.14);
+  color: #5b5b63;
 }
 
 .review-badge.avoid {

@@ -49,8 +49,6 @@ type MessagesData = {
   detailTargetId: string
   /** 关注提醒携带的触发者编号；用于打开对方公开主页。 */
   detailActorId: string
-  /** 回复目标可能是食堂窗口；窗口没有餐厅资料，跳转参数和文案需区分。 */
-  detailIsWindow: boolean
 }
 
 type MessagesCustom = {
@@ -143,7 +141,6 @@ Page<MessagesData, MessagesCustom>({
     detailBlocks: [],
     detailTargetId: '',
     detailActorId: '',
-    detailIsWindow: false,
   },
 
   onShow() {
@@ -317,7 +314,6 @@ Page<MessagesData, MessagesCustom>({
       detailLoading: false,
       detailTargetId: '',
       detailActorId: '',
-      detailIsWindow: false,
     })
     if (item.notificationType === 'ANNOUNCEMENT') {
       const announcementId = item.announcementId
@@ -382,8 +378,7 @@ Page<MessagesData, MessagesCustom>({
             { label: `原点评 · ${target.reviewAuthor}`, text: target.reviewBody },
             { label: '回复', text: `${target.replyAuthor}：${target.replyBody}` },
           ],
-          detailTargetId: target.restaurantId ?? target.windowId ?? '',
-          detailIsWindow: target.restaurantId === null && target.windowId !== null,
+          detailTargetId: target.restaurantId,
         })
       } catch (reason) {
         this.setData({ detailLoading: false, detailError: messageErrorText(reason) })
@@ -422,8 +417,7 @@ Page<MessagesData, MessagesCustom>({
               text: '获赞原文已按当前权限重新读取；可进入所在店铺查看完整点评与回复。',
             },
           ],
-          detailTargetId: target.restaurantId ?? target.windowId ?? '',
-          detailIsWindow: target.restaurantId === null && target.windowId !== null,
+          detailTargetId: target.restaurantId,
         })
       } catch (reason) {
         this.setData({ detailLoading: false, detailError: messageErrorText(reason) })
@@ -452,7 +446,6 @@ Page<MessagesData, MessagesCustom>({
       detailBlocks: [],
       detailTargetId: '',
       detailActorId: '',
-      detailIsWindow: false,
     })
   },
 
@@ -505,13 +498,8 @@ Page<MessagesData, MessagesCustom>({
   openRestaurant() {
     const id = this.data.detailTargetId
     if (!id) return
-    const isWindow = this.data.detailIsWindow
     this.closeDetail()
-    wx.navigateTo({
-      url: isWindow
-        ? `/pages/restaurant/detail/index?windowId=${encodeURIComponent(id)}`
-        : `/pages/restaurant/detail/index?id=${encodeURIComponent(id)}`,
-    })
+    wx.navigateTo({ url: `/pages/restaurant/detail/index?id=${encodeURIComponent(id)}` })
   },
 
   /** 关注提醒进入触发者主页；编号缺失时入口不渲染，避免跳到无效页面。 */

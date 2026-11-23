@@ -173,6 +173,65 @@
         />
         <view class="field-hint">空行会被忽略，标签总长度最多 80 个字符。</view>
       </view>
+
+      <view wx:if="{{mode === 'new' && typeIndex === 0}}" class="field-block review-block">
+        <view class="review-toggle-row">
+          <view class="flex-1">
+            <view class="field-label">附带一条点评（可选）</view>
+            <view class="field-hint">随投稿一起审核，通过后自动发布；仅普通餐厅支持。</view>
+          </view>
+          <switch checked="{{reviewAttached}}" color="#0a84ff" bindchange="toggleAttachedReview" />
+        </view>
+
+        <view wx:if="{{reviewAttached}}" class="review-form">
+          <view class="review-score-row" wx:for="{{reviewScoreRows}}" wx:key="key">
+            <view class="review-score-head">
+              <text>{{item.label}}</text>
+              <text class="review-score-value">{{item.valueText}}</text>
+            </view>
+            <slider
+              min="0"
+              max="20"
+              step="1"
+              value="{{item.index}}"
+              activeColor="#0a84ff"
+              block-size="18"
+              data-index="{{index}}"
+              bindchange="changeReviewScore"
+            />
+          </view>
+
+          <view class="review-choice-title">推荐态度</view>
+          <view class="review-choices">
+            <view
+              class="review-choice {{reviewRecommendation === 'RECOMMENDED' ? 'active' : ''}}"
+              data-value="RECOMMENDED"
+              bindtap="chooseReviewRecommendation"
+            >推荐</view>
+            <view
+              class="review-choice {{reviewRecommendation === 'NEUTRAL' ? 'active' : ''}}"
+              data-value="NEUTRAL"
+              bindtap="chooseReviewRecommendation"
+            >一般</view>
+            <view
+              class="review-choice {{reviewRecommendation === 'NOT_RECOMMENDED' ? 'active' : ''}}"
+              data-value="NOT_RECOMMENDED"
+              bindtap="chooseReviewRecommendation"
+            >不推荐</view>
+          </view>
+
+          <textarea
+            class="review-textarea"
+            value="{{reviewBody}}"
+            maxlength="500"
+            placeholder="说说你对这家店的真实体验，1–500 字。"
+            placeholder-class="field-placeholder"
+            bindinput="changeReviewBody"
+            auto-height
+          />
+          <view class="field-hint">{{reviewBodyCount}} / 500</view>
+        </view>
+      </view>
     </view>
 
     <view class="card form-card">

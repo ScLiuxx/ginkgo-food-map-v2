@@ -6,7 +6,16 @@
   </view>
 
   <view class="account-hero">
-    <view class="account-avatar">{{initial}}</view>
+    <view class="account-avatar">
+      <image
+        wx:if="{{loggedIn && avatarUrl && !avatarFailed}}"
+        class="account-avatar-image"
+        src="{{avatarUrl}}"
+        mode="aspectFill"
+        binderror="onAvatarError"
+      />
+      <text wx:else>{{initial}}</text>
+    </view>
     <view class="account-copy">
       <view class="account-name">{{loggedIn ? username : '未登录'}}</view>
       <view class="account-sub">{{loggedIn ? roleText : '登录后可收藏店铺并管理个人内容'}}</view>

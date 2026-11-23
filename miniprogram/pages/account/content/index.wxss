@@ -161,6 +161,11 @@
   color: var(--ink-muted);
 }
 
+.badge-bad {
+  background: rgba(255, 59, 48, 0.12);
+  color: #a1322a;
+}
+
 .content-link {
   color: var(--accent-deep);
   font-size: 23rpx;

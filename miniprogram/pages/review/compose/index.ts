@@ -7,11 +7,11 @@ import {
   isValidScores,
   normalizeReviewBody,
   publishReview,
-  publishWindowReview,
   reviewBodyLength,
   type ReviewScores,
   type ScoreKey,
 } from '../../../modules/review/compose'
+import type { ReviewRecommendation } from '../../../modules/review/types'
 import { createRequestId } from '../../../shared/lib/id'
 import { prepareImage } from '../../../shared/lib/image'
 
@@ -36,14 +36,11 @@ type ScoreRow = {
 
 type ComposeData = {
   restaurantId: string
-  /** 独立食堂窗口点评通过 windowId 区分；与餐厅编号可能数值相同。 */
-  windowId: string
-  isWindow: boolean
   restaurantName: string
   loggedIn: boolean
   scoreRows: ScoreRow[]
   scores: ReviewScores
-  recommended: boolean
+  recommendation: ReviewRecommendation
   body: string
   bodyCount: number
   photos: DraftPhoto[]
@@ -60,7 +57,7 @@ type ComposeCustom = {
   submittedContent: string
   startUpload(key: number): Promise<void>
   changeScore(event: WxSliderEvent): void
-  changeRecommended(event: WxSwitchEvent): void
+  chooseRecommendation(event: WxTapEvent): void
   changeBody(event: WxInputEvent): void
   choosePhotos(): void
   retryPhoto(event: WxTapEvent): void
@@ -108,13 +105,11 @@ let pageGeneration = 0
 Page<ComposeData, ComposeCustom>({
   data: {
     restaurantId: '',
-    windowId: '',
-    isWindow: false,
     restaurantName: '',
     loggedIn: false,
     scoreRows: buildRows(defaultScores()),
     scores: defaultScores(),
-    recommended: true,
+    recommendation: 'RECOMMENDED',
     body: '',
     bodyCount: 0,
     photos: [],
@@ -127,26 +122,16 @@ Page<ComposeData, ComposeCustom>({
 
   onLoad(query) {
     pageGeneration++
-    /*
-     * 窗口详情通过 windowId 进入；窗口与餐厅编号可能相同，
-     * 因此不能把 windowId 塞进 id 参数，否则会发布到同号的餐厅。
-     */
-    const windowId = query.windowId ? decodeURIComponent(query.windowId) : ''
+    // 餐厅与食堂都只接受自身 restaurantId，不再存在窗口目标。
     const rawId = query.id ? decodeURIComponent(query.id) : ''
     const name = query.name ? decodeURIComponent(query.name) : ''
     const loggedIn = isLoggedIn()
-    const targetId = windowId || rawId
-    if (!/^[1-9]\d*$/.test(targetId)) {
-      this.setData({
-        loggedIn,
-        errorMessage: `${windowId ? '窗口' : '店铺'}编号无效，无法写点评。`,
-      })
+    if (!/^[1-9]\d*$/.test(rawId)) {
+      this.setData({ loggedIn, errorMessage: '店铺编号无效，无法写点评。' })
       return
     }
     this.setData({
-      restaurantId: windowId ? '' : targetId,
-      windowId,
-      isWindow: Boolean(windowId),
+      restaurantId: rawId,
       restaurantName: name,
       loggedIn,
     })
@@ -170,8 +155,17 @@ Page<ComposeData, ComposeCustom>({
     this.setData({ scores, scoreRows: buildRows(scores), errorMessage: '' })
   },
 
-  changeRecommended(event: WxSwitchEvent) {
-    this.setData({ recommended: Boolean(event.detail.value) })
+  /** 三态推荐必须显式选择；点击当前项也保持幂等。 */
+  chooseRecommendation(event: WxTapEvent) {
+    const value = String(event.currentTarget.dataset.value ?? '')
+    if (
+      value !== 'RECOMMENDED' &&
+      value !== 'NEUTRAL' &&
+      value !== 'NOT_RECOMMENDED'
+    ) {
+      return
+    }
+    this.setData({ recommendation: value, errorMessage: '' })
   },
 
   changeBody(event: WxInputEvent) {
@@ -271,15 +265,15 @@ Page<ComposeData, ComposeCustom>({
       this.setData({ errorMessage: '照片尚未全部上传成功，请重试或移除失败照片。' })
       return
     }
-    const targetId = this.data.isWindow ? this.data.windowId : this.data.restaurantId
+    const targetId = this.data.restaurantId
     if (!/^[1-9]\d*$/.test(targetId)) {
       this.setData({ errorMessage: '评价对象无效，请返回详情页重新进入。' })
       return
     }
     const body = normalizeReviewBody(this.data.body)
     const length = reviewBodyLength(this.data.body)
-    if (length < 5 || length > MAX_REVIEW_BODY) {
-      this.setData({ errorMessage: `请填写 5–${MAX_REVIEW_BODY} 字的点评正文。` })
+    if (length < 1 || length > MAX_REVIEW_BODY) {
+      this.setData({ errorMessage: `请填写 1–${MAX_REVIEW_BODY} 字的点评正文。` })
       return
     }
     if (!isValidScores(this.data.scores)) {
@@ -288,12 +282,11 @@ Page<ComposeData, ComposeCustom>({
     }
 
     const photoIds = this.data.photos.map((item) => item.fileId)
-    // 类型和编号一起参与指纹：同号餐厅与窗口不能共用同一个幂等请求号。
+    // 目标编号与全部内容一起参与指纹，内容变化后必须换新请求号。
     const content = JSON.stringify([
-      this.data.isWindow ? 'WINDOW' : 'RESTAURANT',
       targetId,
       this.data.scores,
-      this.data.recommended,
+      this.data.recommendation,
       body,
       photoIds,
     ])
@@ -309,13 +302,11 @@ Page<ComposeData, ComposeCustom>({
       const input = {
         clientRequestId: this.requestId,
         scores: this.data.scores,
-        recommended: this.data.recommended,
+        recommendation: this.data.recommendation,
         body,
         photoIds,
       }
-      const receipt = this.data.isWindow
-        ? await publishWindowReview(targetId, input)
-        : await publishReview(targetId, input)
+      const receipt = await publishReview(targetId, input)
       this.submittedContent = ''
       this.requestId = ''
       wx.showToast({ title: receipt.replayed ? '点评已存在' : '点评已发布', icon: 'success' })
@@ -342,12 +333,8 @@ Page<ComposeData, ComposeCustom>({
   },
 
   login() {
-    // 回跳保留目标类型，窗口登录后仍回到窗口发布，而不是同号餐厅。
-    const target = this.data.isWindow
-      ? `windowId=${encodeURIComponent(this.data.windowId)}`
-      : `id=${encodeURIComponent(this.data.restaurantId)}`
     const name = this.data.restaurantName
-    const redirect = `/pages/review/compose/index?${target}${
+    const redirect = `/pages/review/compose/index?id=${encodeURIComponent(this.data.restaurantId)}${
       name ? `&name=${encodeURIComponent(name)}` : ''
     }`
     wx.navigateTo({ url: `/pages/login/index?redirect=${encodeURIComponent(redirect)}` })

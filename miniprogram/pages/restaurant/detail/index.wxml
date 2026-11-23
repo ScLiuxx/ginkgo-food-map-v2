@@ -45,12 +45,11 @@
         </view>
         <view class="summary-actions">
           <view
-            wx:if="{{!isWindow}}"
             class="favorite-button {{favorited ? 'active' : ''}}"
             bindtap="toggleFavorite"
           >{{favoriteBusy ? '处理中' : (favorited ? '已收藏' : '收藏')}}</view>
-          <view wx:if="{{!isCanteen}}" class="write-button" bindtap="writeReview">写点评</view>
-          <view wx:if="{{!isWindow}}" class="correction-button" bindtap="openCorrection">补充 / 纠错</view>
+          <view class="write-button" bindtap="writeReview">写点评</view>
+          <view wx:if="{{!restaurant.isCanteen}}" class="correction-button" bindtap="openCorrection">补充 / 纠错</view>
         </view>
       </view>
 
@@ -60,9 +59,7 @@
         <view class="summary-score">{{restaurant.scoreText}}</view>
         <view class="flex-1">
           <view class="summary-count">{{restaurant.reviewCountText}}</view>
-          <view class="muted summary-meta">
-            {{restaurant.participantCountText}}<text wx:if="{{restaurant.recommendText}}"> · 推荐率 {{restaurant.recommendText}}</text>
-          </view>
+          <view class="muted summary-meta">{{restaurant.participantCountText}}</view>
         </view>
         <view class="summary-price">{{restaurant.priceText}}</view>
       </view>
@@ -80,10 +77,6 @@
         <text class="info-label">地址</text>
         <text class="info-value">{{restaurant.addressText}}</text>
       </view>
-      <view wx:if="{{isWindow && windowDescription}}" class="info-row">
-        <text class="info-label">介绍</text>
-        <text class="info-value">{{windowDescription}}</text>
-      </view>
       <view wx:if="{{restaurant.distanceText}}" class="info-row">
         <text class="info-label">距离</text>
         <text class="info-value">{{restaurant.distanceText}}</text>
@@ -97,41 +90,12 @@
         <text wx:for="{{restaurant.tags}}" wx:key="*this" class="tag">{{item}}</text>
       </view>
 
-      <view class="map-tip">{{isWindow ? '窗口位于所属食堂内，可按食堂地址前往。' : restaurant.latitude !== null && restaurant.longitude !== null ? '定位与路线由高德地图处理。' : '该店位置待确认，当前可先通过地址前往。'}}</view>
+      <view class="map-tip">{{restaurant.latitude !== null && restaurant.longitude !== null ? '定位与路线由高德地图处理。' : '该店位置待确认，当前可先通过地址前往。'}}</view>
       <view
-        wx:if="{{!isWindow && restaurant.latitude !== null && restaurant.longitude !== null}}"
+        wx:if="{{restaurant.latitude !== null && restaurant.longitude !== null}}"
         class="navigate-button"
         bindtap="openNavigation"
       >在高德中打开</view>
-    </view>
-
-    <view wx:if="{{isCanteen}}" class="section">
-      <view class="section-head">
-        <view class="section-title">食堂窗口</view>
-        <view class="section-meta">{{windows.length}} 个窗口</view>
-      </view>
-      <view wx:if="{{windows.length}}" class="card window-card">
-        <view
-          wx:for="{{windows}}"
-          wx:key="id"
-          class="window-row"
-          data-id="{{item.id}}"
-          bindtap="openWindow"
-        >
-          <view class="window-cover">
-            <image wx:if="{{item.coverUrl}}" class="window-image" src="{{item.coverUrl}}" mode="aspectFill" lazy-load />
-            <view wx:else class="window-placeholder">窗口</view>
-          </view>
-          <view class="flex-1">
-            <view class="window-name">{{item.name}}</view>
-            <view class="window-meta">{{item.floorText}} · {{item.priceText}}</view>
-            <view class="window-score">{{item.scoreText}} <text class="muted">{{item.reviewCountText}}</text></view>
-          </view>
-          <view wx:if="{{item.closed}}" class="window-closed">停业</view>
-          <view wx:else class="window-arrow">›</view>
-        </view>
-      </view>
-      <view wx:else class="card empty-window">窗口信息暂未补充。</view>
     </view>
 
     <view class="section">
@@ -174,7 +138,17 @@
         <view wx:for="{{reviews}}" wx:key="id" class="card review-card">
           <view class="review-head">
             <view class="review-identity" data-index="{{index}}" bindtap="openAuthor">
-              <view class="avatar">{{item.avatarText}}</view>
+              <view class="avatar">
+                <image
+                  wx:if="{{item.avatarUrl && !item.avatarFailed}}"
+                  class="avatar-image"
+                  src="{{item.avatarUrl}}"
+                  mode="aspectFill"
+                  data-index="{{index}}"
+                  binderror="onReviewAvatarError"
+                />
+                <text wx:else>{{item.avatarText}}</text>
+              </view>
               <view class="flex-1">
                 <view class="review-author">
                   {{item.username}}<text wx:if="{{item.authorLevelText}}" class="author-level"> {{item.authorLevelText}}</text>
@@ -186,7 +160,7 @@
             </view>
             <view class="review-score">{{item.overallScoreText}}</view>
           </view>
-          <view class="review-badge {{item.recommended ? 'recommend' : 'avoid'}}">{{item.recommendationText}}</view>
+          <view class="review-badge {{item.recommendation === 'RECOMMENDED' ? 'recommend' : item.recommendation === 'NEUTRAL' ? 'neutral' : 'avoid'}}">{{item.recommendationText}}</view>
           <view class="review-body">{{item.body}}</view>
           <view wx:if="{{item.photoUrls.length}}" class="review-photos">
             <image

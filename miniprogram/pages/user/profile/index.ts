@@ -10,6 +10,7 @@ import type { FavoriteCard } from '../../../modules/restaurant/types'
 import { fetchUserReviewGroups } from '../../../modules/review/api'
 import type { MyReviewCard } from '../../../modules/review/types'
 import { ApiError } from '../../../shared/api/request'
+import { userAvatarUrl } from '../../../shared/api/avatars'
 import { getCurrentUser, isLoggedIn } from '../../../shared/auth/session'
 import { isLongId } from '../../../shared/lib/id'
 
@@ -23,6 +24,8 @@ type ProfileData = {
   errorMessage: string
   profile: PublicProfile | null
   avatarText: string
+  avatarUrl: string
+  avatarFailed: boolean
   social: FollowSummary | null
   socialLoading: boolean
   socialError: string
@@ -63,6 +66,7 @@ type ProfileCustom = {
   openFollows(event: WxTapEvent): void
   openRestaurant(event: WxTapEvent): void
   retry(): void
+  onAvatarError(): void
   login(): void
   currentPath(): string
   handleAuthFailure(reason: unknown): boolean
@@ -83,6 +87,8 @@ Page<ProfileData, ProfileCustom>({
     errorMessage: '',
     profile: null,
     avatarText: '',
+    avatarUrl: '',
+    avatarFailed: false,
     social: null,
     socialLoading: false,
     socialError: '',
@@ -185,6 +191,8 @@ Page<ProfileData, ProfileCustom>({
       this.setData({
         profile,
         avatarText: Array.from(profile.username)[0]?.toUpperCase() ?? '?',
+        avatarUrl: userAvatarUrl(id),
+        avatarFailed: false,
         loading: false,
       })
     } catch (reason) {
@@ -194,6 +202,10 @@ Page<ProfileData, ProfileCustom>({
         this.setData({ errorMessage: toMessage(reason) })
       }
     }
+  },
+
+  onAvatarError() {
+    this.setData({ avatarFailed: true })
   },
 
   async loadSocial(): Promise<void> {
@@ -378,11 +390,7 @@ Page<ProfileData, ProfileCustom>({
     }
     const review = this.data.reviews.find((row) => row.restaurantId === id)
     if (!review) return
-    wx.navigateTo({
-      url: review.isWindow
-        ? `/pages/restaurant/detail/index?windowId=${encodeURIComponent(review.windowId)}`
-        : `/pages/restaurant/detail/index?id=${encodeURIComponent(id)}`,
-    })
+    wx.navigateTo({ url: `/pages/restaurant/detail/index?id=${encodeURIComponent(id)}` })
   },
 
   retry(): void {

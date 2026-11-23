@@ -76,7 +76,7 @@
         <view class="content-card-body">{{item.body}}</view>
         <view class="content-card-foot">
           <view class="content-badges">
-            <text class="badge {{item.recommended ? 'badge-good' : 'badge-plain'}}">{{item.recommendationText}}</text>
+            <text class="badge {{item.recommendation === 'RECOMMENDED' ? 'badge-good' : item.recommendation === 'NEUTRAL' ? 'badge-plain' : 'badge-bad'}}">{{item.recommendationText}}</text>
             <text wx:if="{{item.historyText}}" class="badge badge-plain">{{item.historyText}}</text>
             <text wx:if="{{item.photoCountText}}" class="badge badge-plain">{{item.photoCountText}}</text>
           </view>

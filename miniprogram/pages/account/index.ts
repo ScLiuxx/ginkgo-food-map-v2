@@ -1,11 +1,14 @@
 import { logout } from '../../modules/auth/api'
 import { fetchFollowSummary } from '../../modules/community/api'
+import { userAvatarUrl } from '../../shared/api/avatars'
 import { clearSession, getCurrentUser, isLoggedIn } from '../../shared/auth/session'
 
 type AccountData = {
   loggedIn: boolean
   username: string
   initial: string
+  avatarUrl: string
+  avatarFailed: boolean
   roleText: string
   userId: string
   /** 关注数据读取失败时显示占位符，不能用 0 冒充真实人数。 */
@@ -33,6 +36,7 @@ type AccountCustom = {
   openPrivacy(): void
   openFollows(event: WxTapEvent): void
   openMyPublicProfile(): void
+  onAvatarError(): void
   confirmLogout(): void
 }
 
@@ -41,6 +45,8 @@ Page<AccountData, AccountCustom>({
     loggedIn: false,
     username: '',
     initial: 'G',
+    avatarUrl: '',
+    avatarFailed: false,
     roleText: '',
     userId: '',
     followingText: '—',
@@ -62,6 +68,8 @@ Page<AccountData, AccountCustom>({
       loggedIn,
       username: user?.username ?? '',
       initial: user ? Array.from(user.username)[0] ?? 'G' : 'G',
+      avatarUrl: user ? userAvatarUrl(String(user.id)) : '',
+      avatarFailed: false,
       roleText: user?.roles?.includes('ROLE_ADMIN') ? '管理员' : '校园用户',
       userId: user ? String(user.id) : '',
     })
@@ -148,6 +156,10 @@ Page<AccountData, AccountCustom>({
         `/pages/user/follows/index?id=${encodeURIComponent(this.data.userId)}` +
         `&kind=${kind}`,
     })
+  },
+
+  onAvatarError() {
+    this.setData({ avatarFailed: true })
   },
 
   openMyPublicProfile() {

@@ -364,12 +364,48 @@
   font-size: 23rpx;
 }
 
+.filter-check.active {
+  background: rgba(10, 132, 255, 0.16);
+  color: var(--accent-deep);
+  font-weight: 700;
+}
+
 .filter-reset {
   margin-left: auto;
   padding: 10rpx 18rpx;
   color: var(--accent-deep);
   font-size: 23rpx;
   font-weight: 650;
+}
+
+/* 近期推荐榜入口使用整行卡片，避免与筛选栏争夺点击区域。 */
+.ranking-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+  padding: 20rpx 24rpx;
+  border: 1rpx solid var(--glass-line);
+  border-radius: 24rpx;
+  background: linear-gradient(120deg, rgba(255, 186, 73, 0.2), rgba(255, 255, 255, 0.72));
+}
+
+.ranking-entry-title {
+  color: var(--ink);
+  font-size: 28rpx;
+  font-weight: 800;
+}
+
+.ranking-entry-sub {
+  margin-top: 4rpx;
+  color: var(--ink-muted);
+  font-size: 22rpx;
+}
+
+.ranking-entry-arrow {
+  color: var(--accent-deep);
+  font-size: 24rpx;
+  font-weight: 700;
 }
 
 .random-mask {
@@ -414,6 +450,12 @@
   font-size: 40rpx;
 }
 
+.random-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
 .random-budget {
   display: inline-flex;
   padding: 12rpx 24rpx;
@@ -422,6 +464,14 @@
   color: var(--accent-deep);
   font-size: 25rpx;
   font-weight: 650;
+}
+
+.random-restart {
+  margin-top: 18rpx;
+  padding: 10rpx 0;
+  color: var(--ink-muted);
+  font-size: 23rpx;
+  text-align: center;
 }
 
 .random-note {

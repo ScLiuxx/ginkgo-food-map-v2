@@ -50,6 +50,12 @@
   font-weight: 650;
 }
 
+.login-field-hint {
+  margin-top: 10rpx;
+  color: var(--ink-muted);
+  font-size: 21rpx;
+}
+
 .login-error {
   margin: 4rpx 4rpx 20rpx;
 }

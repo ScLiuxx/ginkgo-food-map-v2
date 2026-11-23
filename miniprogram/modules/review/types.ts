@@ -1,7 +1,24 @@
 import { absoluteUrl } from '../../config/env'
+import { userAvatarUrl } from '../../shared/api/avatars'
 import { businessLabel, formatDate, formatRating } from '../../shared/lib/format'
 
 export type ReviewSort = 'DEFAULT' | 'TIME'
+
+/** 与后端一致的三态推荐态度；不再使用布尔字段 recommended。 */
+export type ReviewRecommendation = 'RECOMMENDED' | 'NEUTRAL' | 'NOT_RECOMMENDED'
+
+const RECOMMENDATION_TEXT: Record<ReviewRecommendation, string> = {
+  RECOMMENDED: '推荐',
+  NEUTRAL: '一般',
+  NOT_RECOMMENDED: '不推荐',
+}
+
+/** 把三态态度转换成展示文案，未知值返回空串以便上层判定数据异常。 */
+export function recommendationText(value: unknown): string {
+  return typeof value === 'string' && value in RECOMMENDATION_TEXT
+    ? RECOMMENDATION_TEXT[value as ReviewRecommendation]
+    : ''
+}
 
 export interface ReviewScores {
   taste: number
@@ -20,7 +37,7 @@ export interface CurrentReviewRaw {
   id: string
   scores: ReviewScores
   overallScore: number
-  recommended: boolean
+  recommendation: ReviewRecommendation
   body: string
   createdAt: string
   scoringStatus: 'current' | 'history'
@@ -49,11 +66,12 @@ export interface ReviewView {
   authorId: string
   username: string
   avatarText: string
+  avatarUrl: string
   authorLevelText: string
   historyText: string
   overallScoreText: string
   createdAtText: string
-  recommended: boolean
+  recommendation: ReviewRecommendation
   recommendationText: string
   body: string
   photoUrls: string[]
@@ -104,7 +122,7 @@ export function toReviewPageView(raw: ReviewGroupPageRaw, expectedPage: number):
       ids.has(review.id) ||
       review.scoringStatus !== 'current' ||
       typeof review.body !== 'string' ||
-      typeof review.recommended !== 'boolean' ||
+      recommendationText(review.recommendation) === '' ||
       !Number.isFinite(review.overallScore) ||
       !Number.isFinite(Date.parse(review.createdAt)) ||
       !review.scores ||
@@ -129,12 +147,13 @@ export function toReviewPageView(raw: ReviewGroupPageRaw, expectedPage: number):
       authorId: group.author.id,
       username: group.author.username,
       avatarText: Array.from(group.author.username)[0] ?? '?',
+      avatarUrl: userAvatarUrl(group.author.id),
       authorLevelText: group.author.level ? `Lv.${group.author.level}` : '',
       historyText: group.historyCount > 0 ? `另有 ${group.historyCount} 条历史点评` : '',
       overallScoreText: formatRating(review.overallScore),
       createdAtText: formatDate(review.createdAt),
-      recommended: review.recommended,
-      recommendationText: review.recommended ? '推荐' : '不推荐',
+      recommendation: review.recommendation,
+      recommendationText: recommendationText(review.recommendation),
       body: review.body,
       photoUrls,
     }
@@ -161,9 +180,6 @@ export interface MyReviewGroupRaw {
     id: string
     name: string
     businessStatus: 'OPERATING' | 'CLOSED'
-    /** 窗口点评的分组 id 为窗口编号；缺少类型时按普通餐厅处理。 */
-    targetType?: 'RESTAURANT' | 'WINDOW'
-    windowId?: string | null
   }
   currentReview: CurrentReviewRaw
   historyCount: number
@@ -185,13 +201,10 @@ export interface MyReviewCard {
   reviewId: string
   restaurantId: string
   restaurantName: string
-  /** 窗口点评进入独立窗口详情；普通餐厅继续使用 restaurantId。 */
-  isWindow: boolean
-  windowId: string
   businessText: string
   closed: boolean
   overallScoreText: string
-  recommended: boolean
+  recommendation: ReviewRecommendation
   recommendationText: string
   createdAtText: string
   body: string
@@ -243,19 +256,13 @@ export function toMyReviewPageView(raw: MyReviewPageRaw, expectedPage: number): 
       typeof restaurant.name !== 'string' ||
       !restaurant.name.trim() ||
       (restaurant.businessStatus !== 'OPERATING' && restaurant.businessStatus !== 'CLOSED') ||
-      (restaurant.targetType !== undefined &&
-        restaurant.targetType !== 'RESTAURANT' &&
-        restaurant.targetType !== 'WINDOW') ||
-      (restaurant.windowId !== undefined &&
-        restaurant.windowId !== null &&
-        !validId(restaurant.windowId)) ||
       restaurantIds.has(restaurant.id) ||
       !review ||
       !validId(review.id) ||
       reviewIds.has(review.id) ||
       review.scoringStatus !== 'current' ||
       typeof review.body !== 'string' ||
-      typeof review.recommended !== 'boolean' ||
+      recommendationText(review.recommendation) === '' ||
       !Number.isFinite(review.overallScore) ||
       review.overallScore < 0 ||
       review.overallScore > 10 ||
@@ -273,17 +280,11 @@ export function toMyReviewPageView(raw: MyReviewPageRaw, expectedPage: number): 
       reviewId: review.id,
       restaurantId: restaurant.id,
       restaurantName: restaurant.name,
-      isWindow: restaurant.targetType === 'WINDOW',
-      // 窗口分组 id 即窗口编号；缺少显式 windowId 时沿用分组 id。
-      windowId:
-        restaurant.targetType === 'WINDOW'
-          ? (restaurant.windowId ?? restaurant.id)
-          : '',
       businessText: businessLabel(restaurant.businessStatus),
       closed: restaurant.businessStatus === 'CLOSED',
       overallScoreText: formatRating(review.overallScore),
-      recommended: review.recommended,
-      recommendationText: review.recommended ? '推荐' : '不推荐',
+      recommendation: review.recommendation,
+      recommendationText: recommendationText(review.recommendation),
       createdAtText: formatDate(review.createdAt),
       body: review.body,
       historyText: group.historyCount > 0 ? `另有 ${group.historyCount} 条历史点评` : '',

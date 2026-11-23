@@ -165,6 +165,85 @@
   line-height: 1.7;
 }
 
+.review-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+/* 附带点评在投稿卡片内展开，边框区分“资料”与“点评”两种待审内容。 */
+.review-form {
+  margin-top: 20rpx;
+  padding: 20rpx;
+  border: 1rpx dashed rgba(10, 132, 255, 0.28);
+  border-radius: 24rpx;
+  background: rgba(10, 132, 255, 0.04);
+}
+
+.review-score-row + .review-score-row {
+  margin-top: 8rpx;
+}
+
+.review-score-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  color: var(--ink);
+  font-size: 25rpx;
+  font-weight: 650;
+}
+
+.review-score-value {
+  color: var(--accent-deep);
+  font-weight: 800;
+}
+
+.review-choice-title {
+  margin-top: 20rpx;
+  color: var(--ink);
+  font-size: 25rpx;
+  font-weight: 650;
+}
+
+.review-choices {
+  display: flex;
+  gap: 14rpx;
+  margin-top: 12rpx;
+}
+
+.review-choice {
+  flex: 1;
+  padding: 14rpx 0;
+  border: 1rpx solid var(--glass-line);
+  border-radius: 16rpx;
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--ink-muted);
+  font-size: 24rpx;
+  font-weight: 650;
+  text-align: center;
+}
+
+.review-choice.active {
+  border-color: transparent;
+  background: rgba(10, 132, 255, 0.14);
+  color: var(--accent-deep);
+  font-weight: 800;
+}
+
+.review-textarea {
+  width: 100%;
+  min-height: 140rpx;
+  margin-top: 18rpx;
+  padding: 20rpx 22rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.7);
+  border-radius: 22rpx;
+  background: rgba(255, 255, 255, 0.56);
+  box-sizing: border-box;
+  color: var(--ink);
+  font-size: 26rpx;
+  line-height: 1.7;
+}
+
 .photo-head {
   display: flex;
   align-items: center;

@@ -432,6 +432,8 @@ function toEditDraft(snapshot: ContributionSnapshotRaw): SubmissionDraft {
       ? snapshot.tags.filter((tag) => typeof tag === 'string' && tag.trim()).join('\n')
       : '',
     photoIds: [],
+    // 修改与重提页面暂不编辑附带点评，保留 null 不改变已有点评。
+    review: null,
   }
 }
 

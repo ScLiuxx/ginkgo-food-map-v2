@@ -218,12 +218,8 @@ Page<ContentData, ContentCustom>({
     }
     const review = this.data.reviews.find((row) => row.restaurantId === id)
     if (!review) return
-    // 窗口点评的分组编号属于 canteen-windows，不能当作餐厅编号打开。
-    wx.navigateTo({
-      url: review.isWindow
-        ? `/pages/restaurant/detail/index?windowId=${encodeURIComponent(review.windowId)}`
-        : `/pages/restaurant/detail/index?id=${encodeURIComponent(id)}`,
-    })
+    // 餐厅与食堂点评都直接使用分组中的 restaurantId 打开详情。
+    wx.navigateTo({ url: `/pages/restaurant/detail/index?id=${encodeURIComponent(id)}` })
   },
 
   unfavorite(event: WxTapEvent): void {

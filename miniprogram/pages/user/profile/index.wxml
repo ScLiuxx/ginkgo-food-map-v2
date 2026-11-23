@@ -25,7 +25,16 @@
     <block wx:elif="{{profile}}">
       <view class="card profile-card">
         <view class="profile-identity">
-          <view class="profile-avatar">{{avatarText}}</view>
+          <view class="profile-avatar">
+            <image
+              wx:if="{{avatarUrl && !avatarFailed}}"
+              class="profile-avatar-image"
+              src="{{avatarUrl}}"
+              mode="aspectFill"
+              binderror="onAvatarError"
+            />
+            <text wx:else>{{avatarText}}</text>
+          </view>
           <view class="profile-info">
             <view class="profile-heading">
               <text class="profile-name">{{profile.username}}</text>
@@ -103,7 +112,7 @@
           <view class="content-card-body">{{item.body}}</view>
           <view class="content-card-foot">
             <view class="content-badges">
-              <text class="badge {{item.recommended ? 'badge-good' : 'badge-plain'}}">{{item.recommendationText}}</text>
+              <text class="badge {{item.recommendation === 'RECOMMENDED' ? 'badge-good' : item.recommendation === 'NEUTRAL' ? 'badge-plain' : 'badge-bad'}}">{{item.recommendationText}}</text>
               <text wx:if="{{item.historyText}}" class="badge badge-plain">{{item.historyText}}</text>
               <text wx:if="{{item.photoCountText}}" class="badge badge-plain">{{item.photoCountText}}</text>
             </view>

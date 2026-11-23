@@ -5,7 +5,6 @@ import {
   formatDistance,
   formatPrice,
   formatRating,
-  formatRecommendRate,
 } from '../../shared/lib/format'
 
 /** 后端公开餐厅字段；保留 null 语义，未知不能被转换成 0。 */
@@ -27,7 +26,6 @@ export interface RestaurantResponse {
   distanceKm: number | null
   tags: string[]
   score: number | null
-  recommendRate: number | null
   reviewCount: number
   participantCount: number
   dimensions: Record<'taste' | 'value' | 'service' | 'ambience', number | null>
@@ -63,6 +61,12 @@ export interface CatalogQuery {
   diningMode?: '' | 'dineIn' | 'delivery'
   /** 人均上限；null/undefined 表示不限，未知价格不会被算作符合条件。 */
   maxPrice?: number | null
+  /** 只看已有有效点评的店铺；false/undefined 表示不限。 */
+  hasReviews?: boolean
+  /** 查看校区或本人附近时的查询中心；三者必须同时提供才发送。 */
+  latitude?: number | null
+  longitude?: number | null
+  maxDistanceMeters?: number | null
   page?: number
   pageSize?: number
 }
@@ -71,12 +75,12 @@ export interface CatalogQuery {
 export interface RestaurantView {
   id: string
   name: string
+  isCanteen: boolean
   categoryLabel: string
   typeLabel: string
   scoreText: string
   reviewCountText: string
   participantCountText: string
-  recommendText: string
   priceText: string
   addressText: string
   distanceText: string
@@ -111,12 +115,12 @@ export function toRestaurantView(row: RestaurantResponse): RestaurantView {
   return {
     id: row.id,
     name: row.name,
+    isCanteen,
     categoryLabel: isCanteen ? '食堂' : row.categoryName ?? '未分类',
     typeLabel: isCanteen ? '食堂' : '餐厅',
     scoreText: formatRating(row.score),
     reviewCountText: `${row.reviewCount} 条点评`,
     participantCountText: `${row.participantCount} 人评分`,
-    recommendText: formatRecommendRate(row.recommendRate),
     priceText: formatPrice(row.pricePerPerson, row.priceKind),
     addressText: row.address ?? '地址待补充',
     distanceText: distance,

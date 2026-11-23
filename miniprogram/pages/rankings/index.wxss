@@ -1,0 +1,133 @@
+@import "../account/content/index.wxss";
+
+.section-title {
+  margin-bottom: 12rpx;
+  color: var(--ink);
+  font-size: 27rpx;
+  font-weight: 600;
+}
+
+.rankings-page {
+  padding-bottom: calc(56rpx + env(safe-area-inset-bottom));
+}
+
+.rankings-head {
+  margin-top: 8rpx;
+}
+
+.rankings-copy {
+  margin-top: 10rpx;
+  color: var(--ink-muted);
+  font-size: 24rpx;
+  line-height: 1.7;
+}
+
+.rankings-filters {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 20rpx;
+}
+
+.rankings-select {
+  padding: 12rpx 24rpx;
+  border-radius: 999rpx;
+  background: rgba(10, 132, 255, 0.1);
+  color: var(--accent-deep);
+  font-size: 25rpx;
+  font-weight: 650;
+}
+
+.rankings-window {
+  margin-top: 16rpx;
+  color: var(--ink-muted);
+  font-size: 22rpx;
+}
+
+.ranking-list {
+  margin-top: 18rpx;
+}
+
+.ranking-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.ranking-number {
+  width: 56rpx;
+  flex: none;
+  color: var(--ink-muted);
+  font-size: 30rpx;
+  font-weight: 800;
+  text-align: center;
+}
+
+.ranking-number.top {
+  color: #e06f00;
+}
+
+.ranking-cover {
+  width: 112rpx;
+  height: 112rpx;
+  flex: none;
+  overflow: hidden;
+  border-radius: 20rpx;
+  background: rgba(10, 132, 255, 0.08);
+}
+
+.ranking-image {
+  width: 100%;
+  height: 100%;
+}
+
+.ranking-placeholder {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-muted);
+  font-size: 20rpx;
+}
+
+.ranking-copy {
+  flex: 1;
+  min-width: 0;
+  margin-left: 20rpx;
+}
+
+.ranking-name {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 30rpx;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ranking-score-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12rpx;
+  margin-top: 8rpx;
+}
+
+.ranking-score {
+  color: #e06f00;
+  font-size: 32rpx;
+  font-weight: 800;
+}
+
+.ranking-taste,
+.ranking-participants {
+  color: var(--ink-muted);
+  font-size: 22rpx;
+}
+
+.ranking-arrow {
+  flex: none;
+  margin-left: 12rpx;
+  color: var(--ink-muted);
+  font-size: 34rpx;
+}

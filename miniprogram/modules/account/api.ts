@@ -117,6 +117,24 @@ function toProfile(raw: {
   }
 }
 
+/**
+ * 保存本人头像。
+ *
+ * fileId 必须是本人刚上传、未绑定的 AVATAR 临时图；保存成功后服务端 204，
+ * 旧头像由后台任务回收。这里不读取响应正文，也不缓存头像地址。
+ */
+export async function saveAvatar(fileId: string): Promise<void> {
+  if (!/^[1-9]\d*$/.test(fileId)) {
+    throw new Error('头像文件编号无效，请重新选择。')
+  }
+  await request<undefined>({
+    path: '/api/me/avatar',
+    method: 'PUT',
+    auth: 'required',
+    data: { fileId },
+  })
+}
+
 /** 读取本人资料；服务端只返回用户名、脱敏邮箱和简介，不返回完整邮箱。 */
 export async function fetchProfile(): Promise<ProfileView> {
   const raw = await request<ProfileView>({ path: '/api/me/profile', auth: 'required' })

@@ -427,8 +427,7 @@ export async function fetchAnnouncement(announcementId: string): Promise<Announc
 export interface ReplyTarget {
   reviewId: string
   replyId: string
-  restaurantId: string | null
-  windowId: string | null
+  restaurantId: string
   reviewAuthor: string
   replyAuthor: string
   reviewBody: string
@@ -450,8 +449,7 @@ export async function fetchReplyTarget(
   if (!isId(replyId) || !isId(reviewId)) throw new Error('回复编号无法确认。')
   const raw = await request<{
     userId: string
-    restaurantId: string | null
-    windowId?: string | null
+    restaurantId: string
     reviewId: string
     replyId: string
     reviewAuthor: { id: string; username: string }
@@ -468,10 +466,7 @@ export async function fetchReplyTarget(
     raw.userId !== userId ||
     raw.replyId !== replyId ||
     raw.reviewId !== reviewId ||
-    (raw.restaurantId !== null && !isId(raw.restaurantId)) ||
-    (raw.windowId !== undefined &&
-      raw.windowId !== null &&
-      !isId(raw.windowId)) ||
+    !isId(raw.restaurantId) ||
     !raw.review ||
     raw.review.id !== reviewId ||
     typeof raw.review.body !== 'string' ||
@@ -490,7 +485,6 @@ export async function fetchReplyTarget(
     reviewId,
     replyId,
     restaurantId: raw.restaurantId,
-    windowId: raw.windowId ?? null,
     reviewAuthor: raw.reviewAuthor.username,
     replyAuthor: raw.replyAuthor.username,
     reviewBody: raw.review.body,
@@ -504,8 +498,7 @@ export interface LikeTarget {
   targetType: 'REVIEW' | 'REPLY'
   targetId: string
   reviewId: string
-  restaurantId: string | null
-  windowId: string | null
+  restaurantId: string
   author: string
   body: string
   createdAt: string
@@ -532,8 +525,7 @@ export async function fetchLikeTarget(
     targetType: string
     targetId: string
     reviewId: string
-    restaurantId: string | null
-    windowId?: string | null
+    restaurantId: string
     author: { id: string; username: string }
     body: string
     createdAt: string
@@ -541,8 +533,7 @@ export async function fetchLikeTarget(
     path: `/api/me/received-likes/${encodeURIComponent(likeId)}/target`,
     auth: 'required',
   })
-  const restaurantId = raw?.restaurantId ?? null
-  const windowId = raw?.windowId ?? null
+  const restaurantId = raw?.restaurantId
   if (
     !raw ||
     raw.userId !== userId ||
@@ -551,10 +542,7 @@ export async function fetchLikeTarget(
     !isId(raw.targetId) ||
     raw.reviewId !== reviewId ||
     (expectedType === 'REVIEW' && raw.targetId !== reviewId) ||
-    !(
-      (isId(restaurantId) && windowId === null) ||
-      (restaurantId === null && isId(windowId))
-    ) ||
+    !isId(restaurantId) ||
     !raw.author ||
     raw.author.id !== userId ||
     typeof raw.author.username !== 'string' ||
@@ -570,7 +558,6 @@ export async function fetchLikeTarget(
     targetId: raw.targetId,
     reviewId,
     restaurantId,
-    windowId,
     author: raw.author.username,
     body: raw.body,
     createdAt: raw.createdAt,

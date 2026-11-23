@@ -6,10 +6,12 @@ import {
   submitRestaurantCorrection,
   toCorrectionDraft,
   validateSubmissionDraft,
+  type AttachedReviewScores,
   type RestaurantType,
   type SubmissionBusinessStatus,
   type SubmissionDraft,
   type SubmissionPriceKind,
+  type SubmissionRecommendation,
   type TriState,
 } from '../../modules/restaurant/submission'
 import {
@@ -26,6 +28,15 @@ import { prepareImage } from '../../shared/lib/image'
 type PhotoStatus = 'uploading' | 'ready' | 'failed'
 type RequestMode = 'edit' | 'resubmit'
 type SubmissionMode = 'new' | 'correction' | RequestMode
+
+type AttachedScoreRow = {
+  key: keyof AttachedReviewScores
+  label: string
+  /** slider 只认 0–18 的档位下标，展示值单独保留。 */
+  index: number
+  value: number
+  valueText: string
+}
 
 type DraftPhoto = {
   key: number
@@ -73,6 +84,12 @@ type SubmissionData = {
   dineIndex: number
   deliveryIndex: number
   tagsText: string
+  /** 仅新店投稿的普通餐厅可附带一条待审核点评。 */
+  reviewAttached: boolean
+  reviewScoreRows: AttachedScoreRow[]
+  reviewRecommendation: SubmissionRecommendation
+  reviewBody: string
+  reviewBodyCount: number
   photos: DraftPhoto[]
   uploading: boolean
   submitting: boolean
@@ -108,6 +125,10 @@ type SubmissionCustom = {
   changeDineIn(event: WxPickerEvent): void
   changeDelivery(event: WxPickerEvent): void
   changeTags(event: WxInputEvent): void
+  toggleAttachedReview(): void
+  changeReviewScore(event: WxSliderEvent): void
+  chooseReviewRecommendation(event: WxTapEvent): void
+  changeReviewBody(event: WxInputEvent): void
   choosePhotos(): void
   startUpload(key: number): Promise<void>
   retryPhoto(event: WxTapEvent): void
@@ -117,6 +138,7 @@ type SubmissionCustom = {
   refreshUploadingState(): void
   patchPhoto(key: number, patch: Partial<DraftPhoto>): void
   buildDraft(): SubmissionDraft
+  buildReviewScores(): AttachedReviewScores
   actionName(): string
   login(): void
 }
@@ -133,6 +155,32 @@ const TRI_VALUES: TriState[] = [null, true, false]
 const MAX_NAME = 40
 const MAX_ADDRESS = 80
 const MAX_TAGS_TEXT = 160
+const MAX_REVIEW_BODY = 500
+/** 与正式点评一致：0–10 分、0.5 步进，共 21 个滑杆档位。 */
+const REVIEW_SCORE_STEPS = [
+  0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10,
+]
+
+/** 投稿点评沿用正式点评的十分制与半分步进。 */
+function reviewScoreRows(scores: AttachedReviewScores): AttachedScoreRow[] {
+  const labels: Array<[keyof AttachedReviewScores, string]> = [
+    ['taste', '味道'],
+    ['value', '性价比'],
+    ['service', '服务'],
+    ['ambience', '环境'],
+  ]
+  return labels.map(([key, label]) => ({
+    key,
+    label,
+    index: Math.max(0, REVIEW_SCORE_STEPS.indexOf(scores[key])),
+    value: scores[key],
+    valueText: scores[key].toFixed(1),
+  }))
+}
+
+function defaultReviewScores(): AttachedReviewScores {
+  return { taste: 8, value: 8, service: 8, ambience: 8 }
+}
 
 let photoSeq = 0
 /** 页面卸载后迟到的分类、压缩或上传结果不能再写回界面。 */
@@ -189,6 +237,11 @@ Page<SubmissionData, SubmissionCustom>({
     dineIndex: 0,
     deliveryIndex: 0,
     tagsText: '',
+    reviewAttached: false,
+    reviewScoreRows: reviewScoreRows(defaultReviewScores()),
+    reviewRecommendation: 'RECOMMENDED',
+    reviewBody: '',
+    reviewBodyCount: 0,
     photos: [],
     uploading: false,
     submitting: false,
@@ -392,6 +445,12 @@ Page<SubmissionData, SubmissionCustom>({
       dineIndex: dineIndex >= 0 ? dineIndex : 0,
       deliveryIndex: deliveryIndex >= 0 ? deliveryIndex : 0,
       tagsText: draft.tagsText,
+      // 修改与重提暂不编辑附带点评，避免误删或覆盖已有点评。
+      reviewAttached: false,
+      reviewScoreRows: reviewScoreRows(defaultReviewScores()),
+      reviewRecommendation: 'RECOMMENDED',
+      reviewBody: '',
+      reviewBodyCount: 0,
       sourceLoading: false,
       sourceError: '',
     })
@@ -518,6 +577,40 @@ Page<SubmissionData, SubmissionCustom>({
     this.setData({ tagsText: event.detail.value ?? '', errorMessage: '' })
   },
 
+  /** 附带点评只在新店投稿的普通餐厅显示；切换类型时 buildDraft 会兜底忽略。 */
+  toggleAttachedReview(): void {
+    this.setData({ reviewAttached: !this.data.reviewAttached, errorMessage: '' })
+  },
+
+  changeReviewScore(event: WxSliderEvent): void {
+    const index = Number(event.currentTarget.dataset.index)
+    const row = this.data.reviewScoreRows[index]
+    if (!row) return
+    const value = REVIEW_SCORE_STEPS[Number(event.detail.value)]
+    if (value === undefined) return
+    this.setData({
+      [`reviewScoreRows[${index}].value`]: value,
+      [`reviewScoreRows[${index}].valueText`]: value.toFixed(1),
+    })
+  },
+
+  chooseReviewRecommendation(event: WxTapEvent): void {
+    const value = String(event.currentTarget.dataset.value ?? '')
+    if (
+      value !== 'RECOMMENDED' &&
+      value !== 'NEUTRAL' &&
+      value !== 'NOT_RECOMMENDED'
+    ) {
+      return
+    }
+    this.setData({ reviewRecommendation: value })
+  },
+
+  changeReviewBody(event: WxInputEvent): void {
+    const body = (event.detail.value ?? '').slice(0, MAX_REVIEW_BODY)
+    this.setData({ reviewBody: body, reviewBodyCount: Array.from(body).length })
+  },
+
   choosePhotos(): void {
     if (this.data.submitting) return
     const remaining = MAX_SUBMISSION_PHOTOS - this.data.photos.length
@@ -615,7 +708,30 @@ Page<SubmissionData, SubmissionCustom>({
       supportsDelivery: TRI_VALUES[this.data.deliveryIndex] ?? null,
       tagsText: this.data.tagsText,
       photoIds: this.data.photos.map((item) => item.fileId),
+      /*
+       * 只有新店投稿且最终选择普通餐厅时才附带点评；
+       * 食堂或纠错/修改一律不发送 review，避免触发服务端字段拒绝或内容冲突。
+       */
+      review:
+        this.data.mode === 'new' &&
+        this.data.typeIndex === 0 &&
+        this.data.reviewAttached
+          ? {
+              scores: this.buildReviewScores(),
+              recommendation: this.data.reviewRecommendation,
+              body: this.data.reviewBody,
+              photoIds: [],
+            }
+          : null,
     }
+  },
+
+  buildReviewScores(): AttachedReviewScores {
+    const scores = defaultReviewScores()
+    this.data.reviewScoreRows.forEach((row) => {
+      if (Number.isFinite(row.value)) scores[row.key] = row.value
+    })
+    return scores
   },
 
   async submit(): Promise<void> {

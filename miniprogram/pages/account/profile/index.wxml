@@ -22,6 +22,28 @@
   </view>
 
   <block wx:elif="{{profile}}">
+    <view class="card avatar-card">
+      <view class="avatar-preview">
+        <image
+          wx:if="{{avatarUrl && !avatarFailed}}"
+          class="avatar-image"
+          src="{{avatarUrl}}"
+          mode="aspectFill"
+          binderror="onAvatarError"
+        />
+        <text wx:else class="avatar-fallback">{{avatarText}}</text>
+      </view>
+      <view class="avatar-copy">
+        <button
+          class="ghost-button avatar-button"
+          open-type="chooseAvatar"
+          bindchooseavatar="onChooseAvatar"
+          disabled="{{avatarBusy}}"
+        >{{avatarBusy ? '上传中…' : '更换头像'}}</button>
+        <view class="profile-note">选择正方形图片，上传前会压缩到 512×512。</view>
+      </view>
+    </view>
+
     <view class="card profile-card">
       <view class="profile-row">
         <text class="profile-label">用户名</text>

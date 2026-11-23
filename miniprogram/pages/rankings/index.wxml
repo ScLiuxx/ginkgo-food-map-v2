@@ -1,0 +1,94 @@
+<view class="page rankings-page">
+  <view class="ambient">
+    <view class="ambient-blob ambient-a"></view>
+    <view class="ambient-blob ambient-b"></view>
+    <view class="ambient-blob ambient-c"></view>
+  </view>
+
+  <view class="card rankings-head">
+    <view class="section-title">近期推荐榜</view>
+    <view class="rankings-copy">
+      按周期内评分与评价人数综合排序，最多展示 20 家。只有一人评价的餐厅同样有机会上榜。
+    </view>
+    <view class="rankings-filters">
+      <picker
+        mode="selector"
+        range="{{campusLabels}}"
+        value="{{campusIndex}}"
+        bindchange="onCampusChange"
+      >
+        <view class="rankings-select">{{campusLabels[campusIndex]}} ▾</view>
+      </picker>
+      <picker
+        mode="selector"
+        range="{{periodLabels}}"
+        value="{{periodIndex}}"
+        bindchange="onPeriodChange"
+      >
+        <view class="rankings-select">{{periodLabels[periodIndex]}} ▾</view>
+      </picker>
+    </view>
+    <view wx:if="{{ranking.windowText}}" class="rankings-window">
+      统计区间 {{ranking.windowText}}
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="card content-state">
+    <view class="state-copy">正在读取榜单…</view>
+  </view>
+
+  <view wx:elif="{{errorMessage}}" class="card content-state">
+    <view class="state-title">榜单读取失败</view>
+    <view class="state-copy">{{errorMessage}}</view>
+    <view class="ghost-button state-action" bindtap="retry">重新加载</view>
+  </view>
+
+  <view wx:elif="{{ranking.status === 'PREPARING'}}" class="card content-state">
+    <view class="state-title">榜单正在准备</view>
+    <view class="state-copy">首轮榜单尚未生成，请稍后再来查看。</view>
+  </view>
+
+  <view wx:elif="{{ranking.status === 'UNAVAILABLE'}}" class="card content-state">
+    <view class="state-title">榜单暂时不可用</view>
+    <view class="state-copy">最近一次榜单已超过可用时限，请稍后再试。</view>
+    <view class="ghost-button state-action" bindtap="retry">重新加载</view>
+  </view>
+
+  <view wx:elif="{{!ranking.items.length}}" class="card content-state">
+    <view class="state-title">本周期暂无上榜餐厅</view>
+    <view class="state-copy">符合条件的餐厅不足时不会用其他店铺凑数。</view>
+  </view>
+
+  <view wx:else class="ranking-list">
+    <view
+      wx:for="{{ranking.items}}"
+      wx:key="restaurantId"
+      class="card ranking-row"
+      hover-class="card-press"
+      hover-stay-time="80"
+      data-id="{{item.restaurantId}}"
+      bindtap="openRestaurant"
+    >
+      <view class="ranking-number {{item.rank <= 3 ? 'top' : ''}}">{{item.rank}}</view>
+      <view class="ranking-cover">
+        <image
+          wx:if="{{item.coverUrl}}"
+          class="ranking-image"
+          src="{{item.coverUrl}}"
+          mode="aspectFill"
+          lazy-load
+        />
+        <view wx:else class="ranking-placeholder">暂无图片</view>
+      </view>
+      <view class="ranking-copy">
+        <view class="ranking-name">{{item.name}}</view>
+        <view class="ranking-score-line">
+          <text class="ranking-score">{{item.scoreText}}</text>
+          <text class="ranking-taste">{{item.tasteText}}</text>
+          <text class="ranking-participants">{{item.participantText}}</text>
+        </view>
+      </view>
+      <view class="ranking-arrow">›</view>
+    </view>
+  </view>
+</view>

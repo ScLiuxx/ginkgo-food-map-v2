@@ -1,10 +1,17 @@
 import { toErrorMessage } from '../../shared/api/request'
 import { isLoggedIn } from '../../shared/auth/session'
-import { fetchCategories, fetchRestaurants } from '../../modules/restaurant/api'
+import {
+  fetchCategories,
+  fetchPickerCandidates,
+  fetchRestaurants,
+  type PickerBudget,
+  type PickerDiningMode,
+  type PickerMinRating,
+  type PickerRange,
+} from '../../modules/restaurant/api'
 import {
   toRestaurantView,
   type RestaurantCategory,
-  type RestaurantResponse,
   type RestaurantSort,
   type RestaurantView,
 } from '../../modules/restaurant/types'
@@ -28,6 +35,7 @@ type HomeData = {
   loggedIn: boolean
   filterOpen: boolean
   hideClosed: boolean
+  hasReviews: boolean
   maxPriceLabels: string[]
   maxPriceValues: Array<number | null>
   maxPriceIndex: number
@@ -41,39 +49,72 @@ type HomeData = {
   randomVisible: boolean
   randomLoading: boolean
   randomError: string
+  randomRangeLabels: string[]
+  randomRangeValues: PickerRange[]
+  randomRangeIndex: number
+  randomDistanceLabels: string[]
+  randomDistanceValues: Array<1000 | 3000 | 5000>
+  randomDistanceIndex: number
   randomBudgetLabels: string[]
-  randomBudgetValues: Array<number | null>
+  randomBudgetValues: PickerBudget[]
   randomBudgetIndex: number
+  randomRatingLabels: string[]
+  randomRatingValues: PickerMinRating[]
+  randomRatingIndex: number
+  randomCategoryLabels: string[]
+  randomCategoryValues: string[]
+  randomCategoryIndex: number
+  randomDiningLabels: string[]
+  randomDiningValues: PickerDiningMode[]
+  randomDiningIndex: number
   randomCandidateCount: number
+  randomRemainingCount: number
   randomResult: RestaurantView | null
+  randomPrevious: RestaurantView | null
 }
 
 type HomeCustom = {
   requestSequence: number
   searchTimer: number | null
   randomSequence: number
+  /** 本轮已展示与已排除的店铺 ID，服务端不保存会话。 */
+  randomSeenIds: string[]
+  /** 上一家仅在本轮有效，回看前用 checkIds 复核是否仍符合条件。 */
+  randomPreviousView: RestaurantView | null
+  /** 用户位置按需获取，避免打开页面就申请定位权限。 */
+  randomLocation: { latitude: number; longitude: number } | null
   loadCategories(): Promise<void>
   loadPage(reset: boolean): Promise<void>
   loadMore(): void
   refresh(): Promise<void>
   openSubmission(): void
+  openRankings(): void
   toggleFilters(): void
   toggleHideClosed(): void
+  toggleHasReviews(): void
+  recalcFilterCount(): void
   onPriceChange(event: WxPickerEvent): void
   onTypeChange(event: WxPickerEvent): void
   onDiningChange(event: WxPickerEvent): void
   resetFilters(): void
   openRandom(): void
   closeRandom(): void
+  restartRandom(): void
   rerollRandom(): void
-  chooseRandom(): Promise<void>
+  previousRandom(): void
+  ensureRandomLocation(): Promise<{ latitude: number; longitude: number }>
+  chooseRandom(checkId?: string): Promise<void>
+  onRandomRangeChange(event: WxPickerEvent): void
+  onRandomDistanceChange(event: WxPickerEvent): void
   onRandomBudgetChange(event: WxPickerEvent): void
+  onRandomRatingChange(event: WxPickerEvent): void
+  onRandomCategoryChange(event: WxPickerEvent): void
+  onRandomDiningChange(event: WxPickerEvent): void
   openRandomResult(): void
   stopPropagation(): void
 }
 
 const PAGE_SIZE = 8
-const RANDOM_PAGE_SIZE = 100
 
 /**
  * 找店首页。
@@ -102,6 +143,7 @@ Page<HomeData, HomeCustom>({
     loggedIn: false,
     filterOpen: false,
     hideClosed: true,
+    hasReviews: false,
     maxPriceLabels: ['不限人均', '≤15元', '≤30元', '≤50元', '≤100元'],
     maxPriceValues: [null, 15, 30, 50, 100],
     maxPriceIndex: 0,
@@ -115,16 +157,36 @@ Page<HomeData, HomeCustom>({
     randomVisible: false,
     randomLoading: false,
     randomError: '',
+    randomRangeLabels: ['清水河校区', '沙河校区', '我的位置'],
+    randomRangeValues: ['QINGSHUIHE', 'SHAHE', 'USER'],
+    randomRangeIndex: 0,
+    randomDistanceLabels: ['1km 内', '3km 内', '5km 内'],
+    randomDistanceValues: [1000, 3000, 5000],
+    randomDistanceIndex: 1,
     randomBudgetLabels: ['不限预算', '≤15元', '≤30元', '≤50元', '≤100元'],
-    randomBudgetValues: [null, 15, 30, 50, 100],
+    randomBudgetValues: ['ANY', '15', '30', '50', '100'],
     randomBudgetIndex: 0,
+    randomRatingLabels: ['不限评分', '3.0 分以上', '3.5 分以上', '4.0 分以上'],
+    randomRatingValues: ['ANY', '3', '3.5', '4'],
+    randomRatingIndex: 0,
+    randomCategoryLabels: ['全部分类'],
+    randomCategoryValues: ['ANY'],
+    randomCategoryIndex: 0,
+    randomDiningLabels: ['不限方式', '支持堂食', '支持外卖'],
+    randomDiningValues: ['ANY', 'DINE_IN', 'DELIVERY'],
+    randomDiningIndex: 0,
     randomCandidateCount: 0,
+    randomRemainingCount: 0,
     randomResult: null,
+    randomPrevious: null,
   },
 
   requestSequence: 0,
   searchTimer: null,
   randomSequence: 0,
+  randomSeenIds: [],
+  randomPreviousView: null,
+  randomLocation: null,
 
   onLoad() {
     this.setData({ loggedIn: isLoggedIn() })
@@ -153,11 +215,22 @@ Page<HomeData, HomeCustom>({
     wx.navigateTo({ url: '/pages/submission/index' })
   },
 
+  openRankings() {
+    wx.navigateTo({ url: '/pages/rankings/index' })
+  },
+
   /** 分类失败不阻塞餐厅列表；页面会保留“全部”并继续展示可浏览内容。 */
   async loadCategories() {
     try {
       const categories = await fetchCategories()
-      this.setData({ categories: categories.filter((item) => item.enabled) })
+      const enabled = categories.filter((item) => item.enabled)
+      this.setData({
+        categories: enabled,
+        // 随机选店只接受启用的普通美食分类，因此复用同一份分类字典。
+        randomCategoryLabels: ['全部分类'].concat(enabled.map((item) => item.name)),
+        randomCategoryValues: ['ANY'].concat(enabled.map((item) => item.code)),
+        randomCategoryIndex: 0,
+      })
     } catch {
       this.setData({ categories: [] })
     }
@@ -182,6 +255,7 @@ Page<HomeData, HomeCustom>({
         restaurantType: this.data.typeValues[this.data.typeIndex],
         diningMode: this.data.diningValues[this.data.diningIndex],
         maxPrice: this.data.maxPriceValues[this.data.maxPriceIndex],
+        hasReviews: this.data.hasReviews || undefined,
         page,
         pageSize: PAGE_SIZE,
       })
@@ -276,17 +350,29 @@ Page<HomeData, HomeCustom>({
     void this.loadPage(true)
   },
 
+  toggleHasReviews() {
+    this.setData({ hasReviews: !this.data.hasReviews })
+    this.recalcFilterCount()
+    void this.loadPage(true)
+  },
+
+  /** 面板内三个下拉和“只看有点评”合并计数，隐藏停业是独立开关不计数。 */
+  recalcFilterCount() {
+    this.setData({
+      activeFilterCount:
+        (this.data.maxPriceIndex > 0 ? 1 : 0) +
+        (this.data.typeIndex > 0 ? 1 : 0) +
+        (this.data.diningIndex > 0 ? 1 : 0) +
+        (this.data.hasReviews ? 1 : 0),
+    })
+  },
+
   onPriceChange(event: WxPickerEvent) {
     const index = Number(event.detail.value)
     if (!Number.isInteger(index) || index < 0 || index >= this.data.maxPriceValues.length) return
     if (index === this.data.maxPriceIndex) return
     this.setData({ maxPriceIndex: index })
-    this.setData({
-      activeFilterCount:
-        (index > 0 ? 1 : 0) +
-        (this.data.typeIndex > 0 ? 1 : 0) +
-        (this.data.diningIndex > 0 ? 1 : 0),
-    })
+    this.recalcFilterCount()
     void this.loadPage(true)
   },
 
@@ -295,12 +381,7 @@ Page<HomeData, HomeCustom>({
     if (!Number.isInteger(index) || index < 0 || index >= this.data.typeValues.length) return
     if (index === this.data.typeIndex) return
     this.setData({ typeIndex: index })
-    this.setData({
-      activeFilterCount:
-        (this.data.maxPriceIndex > 0 ? 1 : 0) +
-        (index > 0 ? 1 : 0) +
-        (this.data.diningIndex > 0 ? 1 : 0),
-    })
+    this.recalcFilterCount()
     void this.loadPage(true)
   },
 
@@ -309,18 +390,14 @@ Page<HomeData, HomeCustom>({
     if (!Number.isInteger(index) || index < 0 || index >= this.data.diningValues.length) return
     if (index === this.data.diningIndex) return
     this.setData({ diningIndex: index })
-    this.setData({
-      activeFilterCount:
-        (this.data.maxPriceIndex > 0 ? 1 : 0) +
-        (this.data.typeIndex > 0 ? 1 : 0) +
-        (index > 0 ? 1 : 0),
-    })
+    this.recalcFilterCount()
     void this.loadPage(true)
   },
 
   resetFilters() {
     this.setData({
       hideClosed: true,
+      hasReviews: false,
       maxPriceIndex: 0,
       typeIndex: 0,
       diningIndex: 0,
@@ -330,15 +407,12 @@ Page<HomeData, HomeCustom>({
     void this.loadPage(true)
   },
 
-  /** 打开随机推荐；候选始终额外排除停业店铺，未知价格的店铺不纳入预算判断。 */
+  /** 打开随机推荐；保留本轮已看过的店铺，避免每次打开都从零开始。 */
   openRandom() {
-    this.setData({
-      randomVisible: true,
-      randomResult: null,
-      randomCandidateCount: 0,
-      randomError: '',
-    })
-    void this.chooseRandom()
+    this.setData({ randomVisible: true, randomError: '' })
+    if (!this.data.randomResult && !this.data.randomLoading) {
+      void this.chooseRandom()
+    }
   },
 
   closeRandom() {
@@ -350,71 +424,208 @@ Page<HomeData, HomeCustom>({
   /** 阻止点击弹层内容时冒泡到遮罩关闭。 */
   stopPropagation() {},
 
+  /** 重新开始一轮：清空已看店铺和上一家，但保留当前筛选条件。 */
+  restartRandom() {
+    this.randomSeenIds = []
+    this.randomPreviousView = null
+    this.setData({ randomResult: null, randomPrevious: null, randomError: '' })
+    void this.chooseRandom()
+  },
+
   rerollRandom() {
+    // 换一家时把当前结果保留为“上一家”，方便回看。
+    this.randomPreviousView = this.data.randomResult
+    void this.chooseRandom()
+  },
+
+  previousRandom() {
+    if (!this.randomPreviousView) return
+    void this.chooseRandom(this.randomPreviousView.id)
+  },
+
+  onRandomRangeChange(event: WxPickerEvent) {
+    const index = Number(event.detail.value)
+    if (!Number.isInteger(index) || index < 0 || index >= this.data.randomRangeValues.length) return
+    this.randomSeenIds = []
+    this.randomPreviousView = null
+    this.setData({
+      randomRangeIndex: index,
+      randomPrevious: null,
+      randomResult: null,
+    })
+    void this.chooseRandom()
+  },
+
+  onRandomDistanceChange(event: WxPickerEvent) {
+    const index = Number(event.detail.value)
+    if (!Number.isInteger(index) || index < 0 || index >= this.data.randomDistanceValues.length) {
+      return
+    }
+    this.randomSeenIds = []
+    this.randomPreviousView = null
+    this.setData({
+      randomDistanceIndex: index,
+      randomPrevious: null,
+      randomResult: null,
+    })
     void this.chooseRandom()
   },
 
   onRandomBudgetChange(event: WxPickerEvent) {
     const index = Number(event.detail.value)
     if (!Number.isInteger(index) || index < 0 || index >= this.data.randomBudgetValues.length) return
-    this.setData({ randomBudgetIndex: index })
+    this.randomSeenIds = []
+    this.randomPreviousView = null
+    this.setData({
+      randomBudgetIndex: index,
+      randomPrevious: null,
+      randomResult: null,
+    })
     void this.chooseRandom()
   },
 
-  /**
-   * 从符合当前筛选的店铺中随机抽取。
-   *
-   * 先读取第一页拿到真实总量和可访问页数，再随机取一页，避免在手机上遍历全站；
-   * 服务端同时按营业状态和预算收窄，因此每页记录都已经是候选，不需要前端再猜价格。
-   */
-  async chooseRandom() {
-    const sequence = ++this.randomSequence
-    const budget = this.data.randomBudgetValues[this.data.randomBudgetIndex]
-    const homeBudget = this.data.maxPriceValues[this.data.maxPriceIndex]
-    const effectiveBudget =
-      budget === null ? homeBudget : homeBudget === null ? budget : Math.min(budget, homeBudget)
-    const previousId = this.data.randomResult?.id
-    this.setData({ randomLoading: true, randomError: '', randomResult: null })
+  onRandomRatingChange(event: WxPickerEvent) {
+    const index = Number(event.detail.value)
+    if (!Number.isInteger(index) || index < 0 || index >= this.data.randomRatingValues.length) return
+    this.randomSeenIds = []
+    this.randomPreviousView = null
+    this.setData({
+      randomRatingIndex: index,
+      randomPrevious: null,
+      randomResult: null,
+    })
+    void this.chooseRandom()
+  },
 
-    const filters = {
-      keyword: this.data.keyword,
-      category: this.data.activeCategory,
-      sort: this.data.sortValues[this.data.sortIndex],
-      hideClosed: true,
-      restaurantType: this.data.typeValues[this.data.typeIndex],
-      diningMode: this.data.diningValues[this.data.diningIndex],
-      maxPrice: effectiveBudget,
-      pageSize: RANDOM_PAGE_SIZE,
+  onRandomCategoryChange(event: WxPickerEvent) {
+    const index = Number(event.detail.value)
+    if (!Number.isInteger(index) || index < 0 || index >= this.data.randomCategoryValues.length) {
+      return
     }
+    this.randomSeenIds = []
+    this.randomPreviousView = null
+    this.setData({
+      randomCategoryIndex: index,
+      randomPrevious: null,
+      randomResult: null,
+    })
+    void this.chooseRandom()
+  },
+
+  onRandomDiningChange(event: WxPickerEvent) {
+    const index = Number(event.detail.value)
+    if (!Number.isInteger(index) || index < 0 || index >= this.data.randomDiningValues.length) return
+    this.randomSeenIds = []
+    this.randomPreviousView = null
+    this.setData({
+      randomDiningIndex: index,
+      randomPrevious: null,
+      randomResult: null,
+    })
+    void this.chooseRandom()
+  },
+
+  /** 仅在用户明确选择“我的位置”时申请定位，失败时提示改用校区范围。 */
+  ensureRandomLocation(): Promise<{ latitude: number; longitude: number }> {
+    if (this.randomLocation) return Promise.resolve(this.randomLocation)
+    return new Promise((resolve, reject) => {
+      wx.getLocation({
+        type: 'gcj02',
+        isHighAccuracy: true,
+        success: (result) => {
+          const latitude = Number(result.latitude)
+          const longitude = Number(result.longitude)
+          if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+            reject(new Error('定位结果无法确认，请改用校区范围。'))
+            return
+          }
+          this.randomLocation = { latitude, longitude }
+          resolve(this.randomLocation)
+        },
+        fail: () => {
+          reject(new Error('无法获取我的位置，请允许定位或改用校区范围。'))
+        },
+      })
+    })
+  },
+
+  /**
+   * 通过服务端随机选店接口抽取。
+   *
+   * 服务端在完整合格集合上均匀不放回抽取至多 5 家，客户端只取第一张卡片；
+   * 同批返回的其余店铺也进入排除列表，配合本轮历史避免重复。
+   * 传入 checkId 时进入复核模式，只确认“上一家”是否仍符合当前条件。
+   */
+  async chooseRandom(checkId = '') {
+    const sequence = ++this.randomSequence
+    const range = this.data.randomRangeValues[this.data.randomRangeIndex]
+    const budget = this.data.randomBudgetValues[this.data.randomBudgetIndex]
+    const minRating = this.data.randomRatingValues[this.data.randomRatingIndex]
+    const category = this.data.randomCategoryValues[this.data.randomCategoryIndex]
+    const diningMode = this.data.randomDiningValues[this.data.randomDiningIndex]
+    if (!range || !budget || !minRating || !category || !diningMode) {
+      this.setData({ randomLoading: false, randomError: '选店条件无法确认，请重新选择。' })
+      return
+    }
+    const previous = this.randomPreviousView
+    this.setData({
+      randomLoading: true,
+      randomError: '',
+      ...(checkId ? {} : { randomResult: null }),
+    })
 
     try {
-      const first = await fetchRestaurants({ ...filters, page: 1 })
-      if (sequence !== this.randomSequence) return
-      const accessiblePages = Math.min(
-        first.accessiblePages ?? first.totalPages,
-        first.totalPages,
-        100,
-      )
-      let records: RestaurantResponse[] = first.records
-      if (accessiblePages > 1) {
-        const page = 1 + Math.floor(Math.random() * accessiblePages)
-        if (page !== 1) {
-          const result = await fetchRestaurants({ ...filters, page })
-          if (sequence !== this.randomSequence) return
-          records = result.records
-        }
+      let location: { latitude: number; longitude: number } | undefined
+      if (range === 'USER') {
+        location = await this.ensureRandomLocation()
+        if (sequence !== this.randomSequence) return
       }
-      // 目标页可能因并发变化为空；退回第一页即可，不无限重试。
-      const pool = records.length ? records : first.records
-      const candidates = pool.filter((row) => row.businessStatus === 'OPERATING')
-      const selectable =
-        candidates.length > 1 ? candidates.filter((row) => row.id !== previousId) : candidates
-      const picked = selectable.length
-        ? selectable[Math.min(selectable.length - 1, Math.floor(Math.random() * selectable.length))]
-        : null
+      const result = await fetchPickerCandidates({
+        range,
+        distanceMeters: this.data.randomDistanceValues[this.data.randomDistanceIndex],
+        budget,
+        minRating,
+        category,
+        diningMode,
+        latitude: location?.latitude,
+        longitude: location?.longitude,
+        excludeIds: checkId ? [] : this.randomSeenIds,
+        checkIds: checkId ? [checkId] : [],
+      })
+      if (sequence !== this.randomSequence) return
+
+      if (checkId) {
+        const found = result.records.find((row) => row.id === checkId)
+        if (!found) {
+          this.setData({
+            randomLoading: false,
+            randomError: '上一家已不符合当前条件，请换一家。',
+          })
+          return
+        }
+        this.randomPreviousView = this.data.randomResult
+        this.setData({
+          randomLoading: false,
+          // 回看上一家后，新结果显示的“上一家”应是刚才离开的那家，而不是自己。
+          randomPrevious: this.data.randomResult,
+          randomResult: toRestaurantView(found),
+        })
+        return
+      }
+
+      const picked = result.records[0]
+      if (picked) {
+        const batchIds = result.records.map((row) => row.id)
+        const seen = new Set<string>(this.randomSeenIds)
+        batchIds.forEach((id) => seen.add(id))
+        // 服务端上限为 50000 个 ID，超出时丢弃最早记录，仍保证本轮近期不重复。
+        this.randomSeenIds = Array.from(seen).slice(-50000)
+      }
       this.setData({
         randomLoading: false,
-        randomCandidateCount: first.total,
+        randomCandidateCount: result.matchedCount,
+        randomRemainingCount: result.remainingCount,
+        randomPrevious: previous,
         randomResult: picked ? toRestaurantView(picked) : null,
       })
     } catch (reason) {

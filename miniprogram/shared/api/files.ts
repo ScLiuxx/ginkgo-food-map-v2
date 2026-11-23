@@ -3,8 +3,8 @@ import { clearSession, getToken } from '../auth/session'
 import { isLongId } from '../lib/id'
 import { ApiError, asEnvelope, messageFrom, request } from './request'
 
-/** 图片用途必须与后端绑定规则一致：点评图与投稿图不能混用。 */
-export type ImagePurpose = 'REVIEW' | 'RESTAURANT'
+/** 图片用途必须与后端绑定规则一致：点评图、投稿图与头像不能混用。 */
+export type ImagePurpose = 'REVIEW' | 'RESTAURANT' | 'AVATAR'
 
 export interface UploadedImage {
   fileId: string

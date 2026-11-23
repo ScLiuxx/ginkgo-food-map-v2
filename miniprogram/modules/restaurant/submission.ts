@@ -14,12 +14,30 @@ export type RestaurantType = 'REGULAR' | 'CANTEEN'
 export type SubmissionPriceKind = 'UNKNOWN' | 'EXACT' | 'ESTIMATE'
 export type SubmissionBusinessStatus = 'OPERATING' | 'CLOSED'
 export type TriState = boolean | null
+export type SubmissionRecommendation = 'RECOMMENDED' | 'NEUTRAL' | 'NOT_RECOMMENDED'
 
 export const MAX_SUBMISSION_PHOTOS = 5
 export const MAX_SUBMISSION_NAME = 40
 export const MAX_SUBMISSION_ADDRESS = 80
 export const MAX_SUBMISSION_TAGS = 8
 export const MAX_SUBMISSION_TAG_LENGTH = 80
+export const MAX_ATTACHED_REVIEW_BODY = 500
+
+export interface AttachedReviewScores {
+  taste: number
+  value: number
+  service: number
+  ambience: number
+}
+
+/** 新店投稿可附带一条待审核点评；只支持普通餐厅，食堂需在上线后直接评价。 */
+export interface AttachedReviewDraft {
+  scores: AttachedReviewScores
+  recommendation: SubmissionRecommendation
+  body: string
+  /** 小程序投稿点评暂不接收图片，始终提交空数组。 */
+  photoIds: string[]
+}
 
 export interface SubmissionDraft {
   name: string
@@ -36,6 +54,7 @@ export interface SubmissionDraft {
   supportsDelivery: TriState
   tagsText: string
   photoIds: string[]
+  review: AttachedReviewDraft | null
 }
 
 export interface SubmissionInput {
@@ -54,6 +73,8 @@ export interface SubmissionInput {
   supportsDelivery: TriState
   tags: string[]
   photoIds: string[]
+  /** 仅新店投稿普通餐厅可附带；纠错和食堂不发送该字段。 */
+  review?: AttachedReviewDraft
 }
 
 /** 待审修改只提交业务字段；clientRequestId 由提交入口独占，不能被修改接口复用。 */
@@ -101,6 +122,8 @@ export function toCorrectionDraft(row: RestaurantResponse): SubmissionDraft {
       row.supportsDelivery === true ? true : row.supportsDelivery === false ? false : null,
     tagsText: Array.isArray(row.tags) ? row.tags.join('\n') : '',
     photoIds: [],
+    // 纠错只修改店铺资料，不附带点评。
+    review: null,
   }
 }
 
@@ -156,6 +179,43 @@ export function validateSubmissionDraft(draft: SubmissionDraft): string {
   ) {
     return '照片数量或编号不符合要求。'
   }
+  if (draft.review) {
+    if (draft.restaurantType !== 'REGULAR') {
+      return '食堂投稿不能附带点评，请在收录后直接评价。'
+    }
+    const { scores, recommendation, body, photoIds } = draft.review
+    const scoreValues = [scores.taste, scores.value, scores.service, scores.ambience]
+    if (
+      scoreValues.some(
+        (value) =>
+          typeof value !== 'number' ||
+          !Number.isFinite(value) ||
+          value < 0 ||
+          value > 10 ||
+          Math.round(value * 2) !== value * 2,
+      )
+    ) {
+      return '附带点评的四项评分需为 0–10，步进 0.5。'
+    }
+    if (
+      recommendation !== 'RECOMMENDED' &&
+      recommendation !== 'NEUTRAL' &&
+      recommendation !== 'NOT_RECOMMENDED'
+    ) {
+      return '附带点评的推荐态度无法确认。'
+    }
+    const length = characterCount(body.trim())
+    if (length < 1 || length > MAX_ATTACHED_REVIEW_BODY) {
+      return `附带点评正文需为 1–${MAX_ATTACHED_REVIEW_BODY} 个字符。`
+    }
+    if (
+      photoIds.length > MAX_SUBMISSION_PHOTOS ||
+      new Set(photoIds).size !== photoIds.length ||
+      photoIds.some((id) => !isLongId(id))
+    ) {
+      return '附带点评图片数量或编号不符合要求。'
+    }
+  }
   return ''
 }
 
@@ -177,6 +237,17 @@ export function buildSubmissionPayload(draft: SubmissionDraft): SubmissionPayloa
     supportsDelivery: draft.supportsDelivery,
     tags: draftTags(draft.tagsText),
     photoIds: draft.photoIds,
+    // 只提交完整点评对象；未附带时不发送 review 字段，避免被当作内容变更。
+    ...(draft.review
+      ? {
+          review: {
+            scores: { ...draft.review.scores },
+            recommendation: draft.review.recommendation,
+            body: draft.review.body.trim(),
+            photoIds: draft.review.photoIds,
+          },
+        }
+      : {}),
   }
 }
 

@@ -1,4 +1,5 @@
 import { request } from '../../shared/api/request'
+import { userAvatarUrl } from '../../shared/api/avatars'
 import { formatDate } from '../../shared/lib/format'
 
 /** 点赞目标只有点评和单层回复两类。 */
@@ -29,6 +30,7 @@ export interface ReplyView {
   authorId: string
   username: string
   avatarText: string
+  avatarUrl: string
   body: string
   createdAtText: string
 }
@@ -160,6 +162,7 @@ function toReplyPageView(raw: ReplyPageRaw): ReplyPageView {
       authorId,
       username,
       avatarText: Array.from(username)[0] ?? '?',
+      avatarUrl: authorId ? userAvatarUrl(authorId) : '',
       body: reply.body,
       createdAtText: formatDate(reply.createdAt),
     }

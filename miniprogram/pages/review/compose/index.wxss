@@ -82,11 +82,6 @@
   background: rgba(8, 25, 43, 0.08);
 }
 
-.recommend-row {
-  display: flex;
-  align-items: center;
-}
-
 .recommend-title {
   color: var(--ink);
   font-size: 27rpx;
@@ -97,6 +92,32 @@
   margin-top: 4rpx;
   color: var(--ink-muted);
   font-size: 23rpx;
+}
+
+/* 三态推荐使用互斥按钮，选中态必须明显，避免用户误以为默认推荐。 */
+.recommend-options {
+  display: flex;
+  gap: 14rpx;
+  margin-top: 18rpx;
+}
+
+.recommend-option {
+  flex: 1;
+  padding: 16rpx 0;
+  border: 1rpx solid var(--glass-line);
+  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--ink-muted);
+  font-size: 25rpx;
+  font-weight: 650;
+  text-align: center;
+}
+
+.recommend-option.active {
+  border-color: transparent;
+  background: rgba(10, 132, 255, 0.14);
+  color: var(--accent-deep);
+  font-weight: 800;
 }
 
 .body-card {

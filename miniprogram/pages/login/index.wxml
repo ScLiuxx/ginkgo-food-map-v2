@@ -7,25 +7,26 @@
 
   <view class="login-hero">
     <view class="login-mark">G</view>
-    <view class="login-title">邮箱登录</view>
-    <view class="login-subtitle">使用注册邮箱继续，不获取微信账号信息</view>
+    <view class="login-title">账号登录</view>
+    <view class="login-subtitle">使用用户名、注册邮箱或学号继续</view>
   </view>
 
   <view class="card login-card">
     <view class="field">
-      <view class="field-label">注册邮箱</view>
+      <view class="field-label">用户名 / 邮箱 / 学号</view>
       <view class="field-shell">
         <input
           class="field-input"
           type="text"
           confirm-type="next"
-          placeholder="name@std.uestc.edu.cn"
+          placeholder="用户名、name@std.uestc.edu.cn 或学号"
           placeholder-class="field-placeholder"
           maxlength="254"
-          value="{{email}}"
-          bindinput="onEmailInput"
+          value="{{account}}"
+          bindinput="onAccountInput"
         />
       </view>
+      <view class="login-field-hint">纯数字学号会自动补全为学校邮箱。</view>
     </view>
 
     <view class="field">
@@ -65,6 +66,6 @@
   </view>
 
   <view class="login-note">
-    登录仅使用注册邮箱与密码；小程序不会获取微信头像、昵称、手机号或 openid。
+    登录仅使用账号密码；小程序不会获取微信头像、昵称、手机号或 openid。
   </view>
 </view>

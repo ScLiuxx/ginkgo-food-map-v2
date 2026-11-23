@@ -7,15 +7,15 @@
 
   <view class="compose-hero">
     <view class="hero-eyebrow">写点评</view>
-    <view class="hero-title">{{restaurantName || (isWindow ? '窗口点评' : '店铺点评')}}</view>
-    <view class="hero-copy">{{isWindow ? '评分按十分制提交，页面展示会换算为五分制。发布后立即计入窗口统计。' : '评分按十分制提交，页面展示会换算为五分制。发布后立即计入店铺统计。'}}</view>
+    <view class="hero-title">{{restaurantName || '店铺点评'}}</view>
+    <view class="hero-copy">评分按十分制提交，页面展示会换算为五分制。发布后立即计入店铺统计。</view>
   </view>
 
   <view wx:if="{{!loggedIn}}" class="card login-card">
     <view class="login-title">登录后发布点评</view>
     <view class="login-copy">点评会署名为当前账号，不读取微信头像、昵称或手机号。</view>
     <view wx:if="{{errorMessage}}" class="error-text login-error">{{errorMessage}}</view>
-    <view class="primary-button" bindtap="login">使用邮箱登录</view>
+    <view class="primary-button" bindtap="login">登录后继续</view>
   </view>
 
   <block wx:else>
@@ -43,12 +43,24 @@
 
       <view class="divider"></view>
 
-      <view class="recommend-row">
-        <view class="flex-1">
-          <view class="recommend-title">{{isWindow ? '推荐这个窗口' : '推荐这家店'}}</view>
-          <view class="recommend-copy">关闭表示不推荐，会体现在推荐率中。</view>
-        </view>
-        <switch checked="{{recommended}}" color="#0a84ff" bindchange="changeRecommended" />
+      <view class="recommend-title">你的推荐态度</view>
+      <view class="recommend-copy">推荐与不推荐各计一次，选择“一般”不计入推荐率。</view>
+      <view class="recommend-options">
+        <view
+          class="recommend-option {{recommendation === 'RECOMMENDED' ? 'active' : ''}}"
+          data-value="RECOMMENDED"
+          bindtap="chooseRecommendation"
+        >推荐</view>
+        <view
+          class="recommend-option {{recommendation === 'NEUTRAL' ? 'active' : ''}}"
+          data-value="NEUTRAL"
+          bindtap="chooseRecommendation"
+        >一般</view>
+        <view
+          class="recommend-option {{recommendation === 'NOT_RECOMMENDED' ? 'active' : ''}}"
+          data-value="NOT_RECOMMENDED"
+          bindtap="chooseRecommendation"
+        >不推荐</view>
       </view>
     </view>
 
@@ -61,7 +73,7 @@
         class="body-input"
         value="{{body}}"
         maxlength="-1"
-        placeholder="说说口味、分量、服务和环境，5–500 字。"
+        placeholder="说说口味、分量、服务和环境，1–500 字。"
         placeholder-class="body-placeholder"
         bindinput="changeBody"
         auto-height
@@ -106,6 +118,6 @@
       class="primary-button submit-button {{submitting || uploading ? 'is-disabled' : ''}}"
       bindtap="submit"
     >{{submitting ? '正在发布…' : '发布点评'}}</view>
-    <view class="submit-hint">{{isWindow ? '同一个窗口只有最新一条有效点评参与评分，历史点评会保留。' : '同一家店只有最新一条有效点评参与评分，历史点评会保留。'}}</view>
+    <view class="submit-hint">同一家店只有最新一条有效点评参与评分，历史点评会保留。</view>
   </block>
 </view>
