@@ -570,6 +570,19 @@
   justify-content: space-between;
 }
 
+.reply-identity {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.reply-avatar {
+  width: 52rpx;
+  height: 52rpx;
+  margin-right: 10rpx;
+  font-size: 21rpx;
+}
+
 .reply-author {
   color: var(--ink);
   font-size: 24rpx;

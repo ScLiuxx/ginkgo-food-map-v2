@@ -35,7 +35,7 @@
             class="field-input"
             value="{{name}}"
             maxlength="40"
-            placeholder="填写店铺或窗口名称"
+            placeholder="填写餐厅或食堂名称"
             placeholder-class="field-placeholder"
             bindinput="changeName"
           />

@@ -41,7 +41,7 @@
 
     <view class="card growth-rules">
       <view class="section-title">经验规则</view>
-      <view class="rule-row">首次点评某家餐厅或窗口：<text class="rule-value">+5</text></view>
+      <view class="rule-row">首次点评某家餐厅或食堂：<text class="rule-value">+5</text></view>
       <view class="rule-row">新店投稿通过审核：<text class="rule-value">+20</text></view>
       <view class="rule-row">纠错通过审核：<text class="rule-value">+10</text></view>
       <view class="rule-row">点评获赞：<text class="rule-value">+1</text>，每日最多 5 点</view>

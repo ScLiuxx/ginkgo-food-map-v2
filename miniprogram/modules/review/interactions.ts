@@ -31,6 +31,8 @@ export interface ReplyView {
   username: string
   avatarText: string
   avatarUrl: string
+  /** 头像 204 或加载失败后由页面置为 true，回退用户名首字。 */
+  avatarFailed?: boolean
   body: string
   createdAtText: string
 }

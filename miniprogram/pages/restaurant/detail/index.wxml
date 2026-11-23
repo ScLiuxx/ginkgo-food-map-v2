@@ -220,7 +220,21 @@
               class="reply-row"
             >
               <view class="reply-head">
-                <text class="reply-author">{{reply.username}}</text>
+                <view class="reply-identity">
+                  <view class="avatar reply-avatar">
+                    <image
+                      wx:if="{{reply.avatarUrl && !reply.avatarFailed}}"
+                      class="avatar-image"
+                      src="{{reply.avatarUrl}}"
+                      mode="aspectFill"
+                      data-review-index="{{index}}"
+                      data-reply-index="{{replyIndex}}"
+                      binderror="onReplyAvatarError"
+                    />
+                    <text wx:else>{{reply.avatarText}}</text>
+                  </view>
+                  <text class="reply-author">{{reply.username}}</text>
+                </view>
                 <text class="reply-date">{{reply.createdAtText}}</text>
               </view>
               <view class="reply-body">{{reply.body}}</view>

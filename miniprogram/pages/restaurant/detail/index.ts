@@ -207,6 +207,8 @@ type DetailCustom = {
   /** 点击点评作者进入公开主页，本人作者同样可查看自己的公开资料。 */
   openAuthor(event: WxTapEvent): void
   onReviewAvatarError(event: WxTapEvent): void
+  /** 回复头像加载失败时只回退当前回复，不影响点评作者头像。 */
+  onReplyAvatarError(event: WxTapEvent): void
   /** 使用系统地图打开店铺位置；坐标由后端 GCJ-02 坐标直接提供。 */
   openNavigation(): void
   previewWallPhoto(event: WxTapEvent): void
@@ -1015,6 +1017,15 @@ Page<DetailData, DetailCustom>({
     const review = this.data.reviews[index]
     if (!review || review.avatarFailed) return
     this.setData({ [`reviews[${index}].avatarFailed`]: true })
+  },
+
+  /** 回复头像 204 或加载失败时只回退该条回复，避免影响同页其他头像。 */
+  onReplyAvatarError(event: WxTapEvent) {
+    const reviewIndex = Number(event.currentTarget.dataset.reviewIndex)
+    const replyIndex = Number(event.currentTarget.dataset.replyIndex)
+    const reply = this.data.reviews[reviewIndex]?.replies[replyIndex]
+    if (!reply || reply.avatarFailed) return
+    this.setData({ [`reviews[${reviewIndex}].replies[${replyIndex}].avatarFailed`]: true })
   },
 
   /** 点评作者编号来自服务端只读视图；缺失时不跳转，避免打开空白主页。 */
