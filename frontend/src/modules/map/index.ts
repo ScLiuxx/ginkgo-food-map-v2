@@ -4,4 +4,6 @@ export { default as MapWorkspace } from './ui/MapWorkspace.vue'
 export { navigationUrl } from './model/map'
 // 商户纠错通过公开组件选择高德门店，不直接依赖地图模块内部SDK。
 export { default as MerchantPlacePicker } from './ui/MerchantPlacePicker.vue'
+export { default as RestaurantLocationPreview } from './ui/RestaurantLocationPreview.vue'
+export { toRestaurantMapLocation, type RestaurantMapLocation } from './model/restaurantLocation'
 export type { AMapPlace } from './sdk/places'

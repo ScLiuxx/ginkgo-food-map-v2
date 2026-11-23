@@ -706,15 +706,6 @@
   .map-stage :deep(.amap-controls > button:not(.locate)) {
     display: none;
   }
-  .map-stage :deep(.amap-controls .locate) {
-    min-width: 40px;
-    min-height: 40px;
-    border: 0;
-    padding: 6px;
-  }
-  .map-stage :deep(.amap-controls .locate small) {
-    display: none;
-  }
   .map-stage :deep(.location-notice) {
     top: 10px;
     right: 10px;

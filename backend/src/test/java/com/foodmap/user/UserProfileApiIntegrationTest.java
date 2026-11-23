@@ -10,6 +10,7 @@ import com.foodmap.security.TestJwtKeys;
 import com.foodmap.security.config.AuthenticationProperties;
 import com.foodmap.security.service.LoginSessionService;
 import com.foodmap.user.mapper.UserProfileMapper;
+import com.foodmap.user.service.UserAccountService;
 
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.*;
@@ -21,6 +22,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.test.context.ActiveProfiles;
@@ -59,6 +61,8 @@ class UserProfileApiIntegrationTest {
     @Autowired ObjectMapper json;
     @Autowired JwtEncoder encoder;
     @Autowired AuthenticationProperties authentication;
+    @Autowired UserAccountService accounts;
+    @Autowired PasswordEncoder passwordEncoder;
     @MockitoBean LoginSessionService sessions;
     @MockitoSpyBean UserProfileMapper profiles;
     @MockitoBean com.foodmap.file.storage.ImageStorageClient storage;
@@ -273,6 +277,92 @@ class UserProfileApiIntegrationTest {
         assertThat(account(22)).isEqualTo(other);
         mvc.perform(get("/auth/me").header("Authorization", "Bearer " + owner))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void renamesOnlyTheCurrentAccountAndKeepsItsSessionAndPassword() throws Exception {
+        String password = "Foodmap_test_2026";
+        jdbc.update("UPDATE users SET password_hash=? WHERE id=11", passwordEncoder.encode(password));
+        var before = account(11);
+        var other = account(22);
+
+        rename(owner, " 中 ")
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.data.userId").value("11"))
+                .andExpect(jsonPath("$.data.username").value("中"))
+                .andExpect(jsonPath("$.data.bio").value("原有简介"));
+
+        var after = account(11);
+        assertThat(after.get("username")).isEqualTo("中");
+        assertThat(((Number) after.get("row_version")).longValue()).isEqualTo(1);
+        before.forEach((field, value) -> {
+            if (!Set.of("username", "row_version", "updated_at").contains(field)) {
+                assertThat(after.get(field)).as(field).isEqualTo(value);
+            }
+        });
+        assertThat(account(22)).isEqualTo(other);
+        rename(owner, "中").andExpect(status().isOk());
+        assertThat(account(11)).isEqualTo(after);
+
+        mvc.perform(get("/auth/me").header("Authorization", "Bearer " + owner))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.username").value("中"));
+        mvc.perform(get("/api/users/11/profile").header("Authorization", "Bearer " + token(22)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.username").value("中"));
+        assertThat(accounts.authenticate("中", password)).isPresent();
+        assertThat(accounts.authenticate("profile_11", password)).isEmpty();
+        assertThat(accounts.authenticate("private_local11@std.uestc.edu.cn", password)).isPresent();
+    }
+
+    @Test
+    void rejectsInvalidOrOccupiedUsernamesWithoutChangingEitherAccount() throws Exception {
+        var before = account(11);
+        var other = account(22);
+        mvc.perform(patch("/api/me/profile/username")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"中\"}"))
+                .andExpect(status().isUnauthorized());
+        for (String body : List.of("{}", "{\"username\":42}", "{\"username\":\"中\",\"userId\":22}")) {
+            mvc.perform(patch("/api/me/profile/username")
+                            .header("Authorization", "Bearer " + owner)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isBadRequest());
+        }
+        for (String name : List.of(" 中 文 ", "中".repeat(25))) {
+            rename(owner, name)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("USER_USERNAME_INVALID"));
+        }
+        rename(owner, "profile_22")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("USER_USERNAME_ALREADY_REGISTERED"));
+        assertThat(account(11)).isEqualTo(before);
+        assertThat(account(22)).isEqualTo(other);
+        rename(owner, "PROFILE_22").andExpect(status().isOk());
+    }
+
+    @Test
+    void concurrentAccountsCannotClaimTheSameUsername() throws Exception {
+        String secondToken = token(22);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var first = pool.submit(() -> rename(owner, "同").andReturn().getResponse().getStatus());
+            var second =
+                    pool.submit(() -> rename(secondToken, "同").andReturn().getResponse().getStatus());
+            assertThat(List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(200, 409);
+        }
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE username='同'", Integer.class))
+                .isEqualTo(1);
+    }
+
+    private ResultActions rename(String token, String username) throws Exception {
+        return mvc.perform(patch("/api/me/profile/username?userId=22")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("username", username))));
     }
 
     @Test

@@ -3,8 +3,9 @@ import { usernameError, passwordError, accountErrorField } from './accountValida
 
 describe('account input rules', () => {
   it('accepts distinct username casing and the agreed length boundaries', () => {
-    for (const name of ['Ka', 'ka', '同学', 'a'.repeat(24)]) expect(usernameError(name)).toBeNull()
-    expect(usernameError('a')).toContain('至少需要2位')
+    for (const name of ['K', 'k', '中', '1', '_', 'a'.repeat(24)])
+      expect(usernameError(name)).toBeNull()
+    expect(usernameError(' ')).toContain('请输入用户名')
     expect(usernameError('a'.repeat(25))).toContain('不能超过24位')
     expect(usernameError('a b')).toContain('不允许空格')
   })

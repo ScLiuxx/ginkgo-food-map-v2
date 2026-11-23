@@ -357,9 +357,7 @@ describe('review interactions matching the original site', () => {
     await mount(ReviewComposer)
     await open()
     expect(fetchRestaurants).toHaveBeenCalledTimes(1)
-    host
-      .querySelector<HTMLInputElement>('.target-search-field input')!
-      .dispatchEvent(new Event('focus'))
+    host.querySelector<HTMLButtonElement>('.target-change')!.click()
     await settle()
     host.querySelector<HTMLButtonElement>('.target-load-more')!.click()
     await settle()

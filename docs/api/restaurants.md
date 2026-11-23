@@ -107,7 +107,7 @@
 }
 ```
 
-`reputationScore`为五分制综合口碑分，普通餐厅使用`((0.70*taste_sum+0.15*value_sum+0.10*service_sum+0.05*ambience_sum)/2+17.5)/(participant_count+5)`，由MySQL存储生成列维护，固定C=3.5、m=5，保留八位小数。原score保持十分制等权均分语义，不覆盖单条点评；前端主要综合分使用reputationScore，五分制只换算一次。食堂与普通餐厅使用同一套直接点评及口碑分计算规则。
+`reputationScore`为五分制综合口碑分，普通餐厅和食堂均使用`((0.70*taste_sum+0.15*value_sum+0.10*service_sum+0.05*ambience_sum)/2+7)/(participant_count+2)`，由MySQL存储生成列维护，固定C=3.5、m=2，保留八位小数。两人计分时，原始加权分与基准分各占一半。原score保持十分制等权均分语义，前端展示综合分时直接使用五分制reputationScore。
 
 无人计分的分数/四维为null，真实0分保持0。reviewCount计全部有效点评，participantCount计每人最新有效代表。score为代表点评综合分累计值/人数，四舍五入保留一位小数。历史点评不重复贡献评分，原始累计值不变。餐厅及食堂的列表、详情与管理回执不再返回recommendRate；推荐态度仅保留在单条点评，不派生商户百分比，也不参与排序、筛选或榜单。地址、价格和位置未知保持null，不用模拟值补齐。列表/详情不返回创建者、删除元数据或数据库版本。ES列表没有四维和审计时间投影，因此dimensions四项及createdAt/updatedAt为null；详情仍读取MySQL并返回实际值。
 

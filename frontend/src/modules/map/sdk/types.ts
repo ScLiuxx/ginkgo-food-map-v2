@@ -50,6 +50,7 @@ export interface AMapSDK {
       zooms?: [number, number]
       viewMode: string
       mapStyle?: string
+      features?: ('bg' | 'road' | 'building' | 'point')[]
     },
   ) => SDKMap
   Marker: new (options: {

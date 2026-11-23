@@ -41,7 +41,7 @@ flowchart TD
     ENV --> LATEST{是否仍为 develop 最新提交}
     LATEST -->|否| SKIP[跳过过时提交]
     LATEST -->|是| PACKAGE[下载同轮已检查产物<br/>生成版本包与 SHA-256]
-    PACKAGE --> SSH[SSH 创建待发布目录<br/>SCP 分片并行上传]
+    PACKAGE --> SSH[Java 调度 SCP<br/>分片并行上传]
     SSH --> SERVER[调用服务器发布入口]
 ```
 
@@ -57,7 +57,7 @@ PR 检查、develop 检查以及 SSH 客户端均运行在 GitHub 的 `ubuntu-24
 | --- | --- | --- | --- |
 | `backend` | Java 21，Maven `verify` | 编译、测试、生成可运行 JAR；显式启用 Redis、认证、商户、点评、统计结构及统计后端集成测试 | 20 分钟 |
 | `frontend` | Node.js 24，`npm ci`、`npm run check` | 安装锁定依赖，执行 ESLint、Vitest、TypeScript 检查和 Vite 构建 | 15 分钟 |
-| `deployment-checks` | Node.js 24、Python、Bash、`visudo` | Shell 语法、有限 sudo 配置、初始化脚本语法，以及发布、回滚、健康检查、SSH 传输和高德代理规则等测试 | 5 分钟 |
+| `deployment-checks` | Java 21、Maven `verify`、Node.js 24、Python、Bash、`visudo` | 测试并打包 Java 上传工具，同时检查服务器发布脚本、回滚、健康检查和高德代理等行为 | 5 分钟 |
 
 后端作业临时启动 MySQL 8.4 和两个 Redis 8 服务。统计测试使用专属 Redis 和独立连接端口，相关数据库测试创建隔离测试库；这些资源位于 GitHub 检查机器，不连接开发或生产业务库，不使用真实 COS 完成测试写入。其他可选专项测试不因执行 `verify` 自动开启。
 
@@ -70,12 +70,13 @@ PR 检查、develop 检查以及 SSH 客户端均运行在 GitHub 的 `ubuntu-24
 | `backend-test-reports` | 后端测试报告，失败时也尝试保存 | 7 天 |
 | `checked-backend` | 该轮通过检查的后端 JAR | 7 天 |
 | `checked-frontend` | 该轮通过检查的前端 `dist` 内容 | 7 天 |
+| `checked-uploader` | 该轮通过检查的 Java 上传工具 JAR | 7 天 |
 
 发布作业从同一次运行下载产物，不在服务器重新编译。版本包包含 `backend.jar`、`frontend/` 和 `commit.txt`，前端另写入 `version.txt`，两处版本标识均使用这次 develop 推送的提交 SHA。
 
 ## CD 的开启条件与配置
 
-`deploy` 作业依赖三项 CI 检查成功，还必须同时满足：仓库为 `kanno111/foodmap`、事件为 `push`、分支为 `develop`，以及仓库变量 `AUTO_DEPLOY_ENABLED` 为字符串 `true`。作业使用 `production` 环境，超时为 20 分钟。
+`deploy` 作业依赖三项 CI 检查成功，还必须同时满足：仓库为 `kanno111/foodmap`、事件为 `push`、分支为 `develop`，以及仓库变量 `AUTO_DEPLOY_ENABLED` 为字符串 `true`。作业使用 `production` 环境，超时为 35 分钟，为传输、拼接校验和应用启动预留各自的时间。
 
 | 配置位置 | 名称 | 用途 |
 | --- | --- | --- |
@@ -93,9 +94,7 @@ production 环境按当前方案仅允许 develop，不设置逐次人工审批�
 
 ## 服务器如何发布与回退
 
-[ssh-publish.sh](../../deploy/ssh-publish.sh) 在 GitHub 机器校验目标、端口、版本编号和发布包，使用临时 0600 私钥文件及严格主机公钥校验连接服务器。将 `release.tar.gz` 按 4MiB 分片，最多同时运行 8 个 SCP 上传连接；所有分片完成后上传 `SHA256SUMS`、`deploy.sh`、`healthcheck.py`。任意分片或元数据上传失败均停止，不调用激活入口。
-
-远端按编号顺序拼接回原始 `release.tar.gz`，使用原 SHA-256 校验成功后删除分片，再调用既有 `deploy.sh`。分片不会改变应用内容、版本标识或回退规则；失败的待发布目录保留供排查。GitHub 临时分片和凭据文件在该脚本正常或异常退出时清理，不在线扫描后盲目信任主机。此设计来自首次约 84MiB 产物跨境单连接上传缓慢的实测，采用有界并发，不提高应用测试 worker 数。
+GitHub 下载已经通过检查的 Java 上传工具 JAR，使用现有 SSH 凭据校验主机并调度 SCP。4 MiB 分片最多八路同时上传，临时连接错误只重试对应分片。重跑时按整包 SHA-256 找到缓存，逐片校验并补传。分片及附带文件就绪后，服务器按编号拼接并验证整包 SHA-256，随后调用 `deploy.sh`。[上传细节与日志](../../deploy/uploader/README.md)
 
 服务器目录如下，每次发布使用独立的“提交 SHA－运行编号－重试编号”：
 

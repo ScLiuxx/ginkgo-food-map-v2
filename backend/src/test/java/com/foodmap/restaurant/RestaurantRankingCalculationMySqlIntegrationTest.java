@@ -264,6 +264,7 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
                             properties.getMaxSnapshotAge());
             assertThat(view.getStatus()).isEqualTo("READY");
             var rules = json.readTree(row.getRulesSnapshot());
+            assertThat(rules.get("m").asInt()).isEqualTo(2);
             assertThat(rules.get("weights").get("taste").decimalValue())
                     .isEqualByComparingTo("0.70");
             assertThat(rules.get("campus").get("radiusMeters").doubleValue()).isEqualTo(5000);
@@ -271,7 +272,7 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
         var item = items(result, "QINGSHUIHE", "WEEK").get(0);
         assertThat(item.get("tasteScore").decimalValue()).isEqualByComparingTo("4.5");
         assertThat(item.get("scoreSums").get("taste").decimalValue()).isEqualByComparingTo("13.5");
-        assertThat(item.get("sortingScore").decimalValue()).isEqualByComparingTo("3.875");
+        assertThat(item.get("sortingScore").decimalValue()).isEqualByComparingTo("4.1");
         assertThat(
                         json.writeValueAsString(
                                 codec.view(
@@ -349,7 +350,7 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
         review(1L, 1, T.minusSeconds(100), "10");
         long lowTaste = review(2L, 2, T.minusSeconds(100), "10");
         jdbc.update("UPDATE reviews SET taste_score=7 WHERE id=?", lowTaste);
-        // 第二家原始加权3.95、口味3.5，平滑分3.575；仍应参与并成功发布。
+        // 第二家原始加权3.95、口味3.5，平滑分3.65；仍应参与并成功发布。
         assertThat(generation.generate()).isTrue();
         for (var key : RestaurantRankingKey.ALL) {
             var view = rankingRead.read(key.campusCode(), key.periodType());
@@ -359,7 +360,7 @@ class RestaurantRankingCalculationMySqlIntegrationTest {
             assertThat(item.getParticipantCount()).isEqualTo(1);
             if ("SHAHE".equals(key.campusCode())) {
                 assertThat(item.getTasteScore()).isEqualByComparingTo("3.5");
-                assertThat(item.getRecommendationScore()).isEqualByComparingTo("3.6");
+                assertThat(item.getRecommendationScore()).isEqualByComparingTo("3.7");
             }
         }
     }

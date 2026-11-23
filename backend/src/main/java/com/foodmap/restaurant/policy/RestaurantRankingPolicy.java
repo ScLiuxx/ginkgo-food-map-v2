@@ -16,7 +16,7 @@ import java.util.List;
 @Component
 public class RestaurantRankingPolicy {
     public static final BigDecimal C = new BigDecimal("3.5");
-    public static final int M = 5;
+    public static final int M = 2;
     public static final int MIN_PARTICIPANTS = 1;
     public static final int LIMIT = 20;
     public static final BigDecimal MIN_RAW_SCORE = new BigDecimal("3.8");

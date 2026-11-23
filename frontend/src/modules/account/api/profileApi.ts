@@ -56,3 +56,19 @@ export async function updateOwnBio(
   if (saved.bio !== bio) throw new Error('简介保存结果无法确认，请刷新核对后重试。')
   return saved
 }
+
+export async function updateOwnUsername(
+  userId: string,
+  token: string,
+  username: string,
+  signal: AbortSignal,
+): Promise<OwnProfile> {
+  const result = await httpClient.patch<ApiResponse<OwnProfile>>(
+    '/api/me/profile/username',
+    { username },
+    { signal, headers: { Authorization: `Bearer ${token}` } },
+  )
+  const saved = profile(result.data, userId)
+  if (saved.username !== username) throw new Error('无法确认新用户名，请返回账号设置后核对。')
+  return saved
+}

@@ -1,12 +1,18 @@
-import { createApp, h, nextTick, type App } from 'vue'
+import { createApp, h, nextTick, ref, type App } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, expect, it, vi } from 'vitest'
+import { mockDialog } from '@/shared/test/mockDialog'
+import { loadAMap } from '@/modules/map/sdk/amap'
+import type { AMapSDK } from '@/modules/map/sdk/types'
 import { fetchRestaurants } from '@/modules/restaurant/api/restaurantApi'
 import { restaurantFixture } from '@/modules/restaurant/api/restaurant.test-data'
+import type { RestaurantReadModel } from '@/modules/restaurant/model/restaurant.types'
 import ReviewTargetSearch from './ReviewTargetSearch.vue'
 
 vi.mock('@/modules/restaurant/api/restaurantApi', () => ({ fetchRestaurants: vi.fn() }))
+vi.mock('@/modules/map/sdk/amap', () => ({ loadAMap: vi.fn() }))
 let app: App, host: HTMLDivElement
+let restoreDialog: (() => void) | undefined
 const result = (name = '测试店') => ({
   records: [{ ...restaurantFixture, name }],
   page: 1,
@@ -28,7 +34,14 @@ async function mount() {
     })),
   })
   await router.push('/')
-  app = createApp({ render: () => h(ReviewTargetSearch) }).use(router)
+  const selected = ref<RestaurantReadModel>()
+  app = createApp({
+    render: () =>
+      h(ReviewTargetSearch, {
+        selected: selected.value,
+        onSelect: (item: RestaurantReadModel) => (selected.value = item),
+      }),
+  }).use(router)
   app.mount(host)
   await settle()
   return router
@@ -41,6 +54,8 @@ function search(term: string) {
 afterEach(() => {
   app?.unmount()
   host?.remove()
+  restoreDialog?.()
+  restoreDialog = undefined
   vi.restoreAllMocks()
   vi.clearAllMocks()
 })
@@ -139,4 +154,72 @@ it('only searches nonempty keywords and clears results without loading the catal
   await settle()
   expect(fetchRestaurants).toHaveBeenCalledTimes(1)
   expect(host.querySelector('.target-search-results')).toBeNull()
+})
+
+it('previews exactly one location without selecting it and restores the candidate list', async () => {
+  restoreDialog = mockDialog()
+  const options = vi.fn()
+  const destroy = vi.fn()
+  const add = vi.fn()
+  class MapStub {
+    constructor(_host: HTMLElement, config: unknown) {
+      options(config)
+    }
+    on(_event: string, complete: () => void) {
+      queueMicrotask(complete)
+    }
+    add = add
+    destroy = destroy
+  }
+  class MarkerStub {
+    constructor(readonly options: { position: number[] }) {}
+  }
+  vi.mocked(loadAMap).mockResolvedValue({ Map: MapStub, Marker: MarkerStub } as unknown as AMapSDK)
+  const first = {
+    ...result('核对对象').records[0]!,
+    address: '新开寺街27号',
+    latitude: 30.67,
+    longitude: 104.07,
+    needsLocation: false,
+  }
+  vi.mocked(fetchRestaurants).mockResolvedValue({
+    ...result(),
+    records: [first, { ...first, id: '2', name: '缺失位置', needsLocation: true }],
+    total: 2,
+  })
+  const router = await mount()
+  search('干蒸')
+  await nextTick()
+  host.querySelector<HTMLButtonElement>('.target-search-submit')!.click()
+  await settle()
+  const list = host.querySelector<HTMLDivElement>('.target-search-results')!
+  const opener = list.querySelector<HTMLButtonElement>('.target-locate')!
+  expect(list.querySelectorAll('.target-locate')).toHaveLength(1)
+  list.scrollTop = 31
+  opener.click()
+  await settle()
+  const preview = document.querySelector('.restaurant-location-preview[open]')!
+  expect(preview.textContent).toContain(first.address)
+  expect(options).toHaveBeenCalledWith(expect.objectContaining({ center: [104.07, 30.67] }))
+  expect(add).toHaveBeenCalledExactlyOnceWith([
+    expect.objectContaining({ options: expect.objectContaining({ position: [104.07, 30.67] }) }),
+  ])
+  expect(router.currentRoute.value.path).toBe('/')
+  expect(host.querySelector('.target-chosen-field')).toBeNull()
+  preview.querySelector<HTMLButtonElement>('header button')!.click()
+  await settle()
+  expect(destroy).toHaveBeenCalledOnce()
+  expect(host.querySelector('.target-search-results')).toBe(list)
+  expect(list.scrollTop).toBe(31)
+  expect(document.activeElement).toBe(opener)
+  expect(fetchRestaurants).toHaveBeenCalledOnce()
+
+  list.querySelector<HTMLButtonElement>('.target-search-row')!.click()
+  await settle()
+  expect(host.querySelector<HTMLInputElement>('.target-chosen-field input')?.value).toBe('核对对象')
+  expect(host.querySelector('.target-search-results')).toBeNull()
+  host.querySelector<HTMLButtonElement>('.target-change')!.click()
+  await settle()
+  expect(host.querySelector<HTMLInputElement>('input[type=search]')?.value).toBe('干蒸')
+  expect(fetchRestaurants).toHaveBeenCalledOnce()
 })

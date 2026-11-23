@@ -2,12 +2,17 @@
 import { createRequestId } from '@/shared/lib/createRequestId'
 import AppLink from '@/shared/ui/AppLink.vue'
 import LeaveConfirmation from '@/shared/ui/LeaveConfirmation.vue'
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, shallowRef, useId, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { authToken, getAccessToken } from '@/shared/api/authSession'
 import { toErrorMessage } from '@/shared/lib/toErrorMessage'
 import { useReturnNavigation } from '@/shared/lib/useReturnNavigation'
-import { MerchantPlacePicker } from '@/modules/map'
+import {
+  MerchantPlacePicker,
+  RestaurantLocationPreview,
+  toRestaurantMapLocation,
+  type RestaurantMapLocation,
+} from '@/modules/map'
 import { compressPhoto } from '@/modules/file/model/photos'
 import { useSubmissionPhotos } from '../model/useSubmissionPhotos'
 import { useLoginStore } from '@/modules/auth'
@@ -122,6 +127,19 @@ const reviewBusy = computed(
 )
 const { photos, pending: uploadingPhotos, failed: failedPhotos } = photoDraft
 const form = reactive(restaurantDraft())
+const addressId = useId()
+const submissionLocation = computed(() => toRestaurantMapLocation(form))
+const locationPreview = shallowRef<{
+  location: RestaurantMapLocation
+  opener: globalThis.HTMLElement
+}>()
+function showSubmissionLocation(event: globalThis.MouseEvent) {
+  if (!submissionLocation.value || saving.value || sessionChanged.value) return
+  locationPreview.value = {
+    location: submissionLocation.value,
+    opener: event.currentTarget as globalThis.HTMLElement,
+  }
+}
 const extra = reactive<{
   restaurantType: 'REGULAR' | 'CANTEEN'
   dineIn: string
@@ -203,6 +221,7 @@ watch(
 watch(authToken, (value) => {
   if (value !== token) {
     sessionChanged.value = true
+    locationPreview.value = undefined
     controller?.abort()
     generation++
     photoDraft.clear(!!receipt.value)
@@ -213,6 +232,7 @@ watch(authToken, (value) => {
 /** 路由切换使旧读取失效，失败时不展示空白表单冒充已读取资料。 */
 async function load() {
   if (!token || sessionChanged.value) return
+  locationPreview.value = undefined
   const ticket = ++generation
   photoDraft.clear(!!receipt.value)
   reviewPhotos.clear(!!receipt.value && submittedReview.value)
@@ -686,13 +706,27 @@ onBeforeUnmount(() => {
                   </select></label
                 >
               </div>
-              <label
-                >地址<input
+              <div class="address-field">
+                <div class="address-heading">
+                  <label :for="addressId">地址</label>
+                  <button
+                    v-if="submission && !requestId"
+                    type="button"
+                    class="address-map"
+                    :disabled="!submissionLocation"
+                    @click="showSubmissionLocation"
+                  >
+                    在地图上查看 <span aria-hidden="true">›</span>
+                  </button>
+                </div>
+                <input
+                  :id="addressId"
                   v-model="form.address"
                   maxlength="80"
                   :aria-invalid="!!errors.address"
-                /><small>{{ errors.address }}</small></label
-              >
+                />
+                <small v-if="errors.address">{{ errors.address }}</small>
+              </div>
               <label
                 >经营状态<select v-model="form.businessStatus">
                   <option value="OPERATING">正常经营</option>
@@ -952,6 +986,13 @@ onBeforeUnmount(() => {
         </button>
       </div>
     </form>
+    <RestaurantLocationPreview
+      v-if="locationPreview"
+      :location="locationPreview.location"
+      :opener="locationPreview.opener"
+      back-label="返回表单"
+      @close="locationPreview = undefined"
+    />
     <RestaurantDeleteDialog
       v-if="deleteOpen"
       :id="id"
@@ -1260,6 +1301,35 @@ label {
   gap: 8px;
   font-size: 14px;
   margin: 12px 0;
+}
+.address-field {
+  margin: 12px 0;
+}
+.address-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.address-heading label {
+  margin: 0;
+}
+.address-heading .address-map {
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: #fcf4e9;
+  color: #925116;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.address-map:not(:disabled):hover {
+  background: #f6e9d7;
+}
+.address-map:focus-visible {
+  outline-color: #a2a8af;
 }
 input:not([type='checkbox']),
 select,

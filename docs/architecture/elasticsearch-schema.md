@@ -58,7 +58,7 @@
 
 | 字段 | ES类型 | 来源/计算 | 用途 |
 | --- | --- | --- | --- |
-| `reputationScore` | `double` | MySQL五分制派生分 | 综合分展示与排序；无计分用户缺省，食堂与普通餐厅统一从直接点评计算口碑分 |
+| `reputationScore` | `double` | MySQL五分制派生分 | 综合分展示与排序；无计分用户缺省。V53重算已有分数并为已评分的可见店铺加入同步任务，消费后使用新分数 |
 | `ratingScore` | `double` | overall_score_sum / participant_count | 原始综合均分，保留0–10口径 |
 | `recommendRate` | `double` | 已停用的历史字段 | 现有mapping兼容保留；当前投影不生成、查询不读取、接口不返回 |
 | `participantCount` | `long` | participant_count | 计分人数 |
