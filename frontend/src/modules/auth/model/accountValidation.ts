@@ -3,7 +3,6 @@ export function usernameError(value: string): string | null {
   const name = value.trim()
   const length = Array.from(name).length
   if (!name) return '请输入用户名'
-  if (length < 2) return '用户名至少需要2位'
   if (length > 24) return '用户名不能超过24位'
   if (!/^[\p{Script=Han}a-zA-Z0-9_]+$/u.test(name)) {
     return '用户名仅支持中文、英文字母、数字和下划线，不允许空格'

@@ -23,7 +23,7 @@ class UserRegistrationPolicyTest {
     void setUp() {
         UserRegistrationProperties properties = new UserRegistrationProperties();
         properties.setAllowedEmailDomains(List.of("std.uestc.edu.cn"));
-        properties.setUsernameMinLength(2);
+        properties.setUsernameMinLength(1);
         properties.setUsernameMaxLength(24);
         properties.setPasswordMinLength(4);
         properties.setPasswordMaxBytes(72);
@@ -46,10 +46,14 @@ class UserRegistrationPolicyTest {
     @Test
     void shouldValidateUsernameCharactersAndLength() {
         assertThat(policy.normalizeUsername(" 银杏同学_01 ")).isEqualTo("银杏同学_01");
+        assertThat(policy.normalizeUsername(" 中 ")).isEqualTo("中");
+        assertThat(policy.normalizeUsername("a")).isEqualTo("a");
 
-        assertThatThrownBy(() -> policy.normalizeUsername("bad name"))
-                .isInstanceOfSatisfying(BusinessException.class,
-                        exception -> assertThat(exception.getErrorCode()).isEqualTo(UserErrorCode.USERNAME_INVALID));
+        for (String invalid : List.of(" ", "bad name", "a".repeat(25))) {
+            assertThatThrownBy(() -> policy.normalizeUsername(invalid))
+                    .isInstanceOfSatisfying(BusinessException.class,
+                            exception -> assertThat(exception.getErrorCode()).isEqualTo(UserErrorCode.USERNAME_INVALID));
+        }
     }
 
     /** 新密码允许纯数字、纯字母和符号，严格校验4–32位边界，不接受空格或中文。 */
