@@ -24,7 +24,7 @@ public class UserRegistrationProperties {
     @NotEmpty
     private List<String> allowedEmailDomains;
 
-    @Min(2)
+    @Min(1)
     @Max(64)
     private int usernameMinLength;
 

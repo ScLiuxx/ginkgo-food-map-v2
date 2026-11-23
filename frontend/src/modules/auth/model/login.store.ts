@@ -76,7 +76,7 @@ export const useLoginStore = defineStore('login', () => {
       const result = await fetchCurrentUser(token)
       if (current === revision && getAccessToken() === token) user.value = result
     } catch (reason) {
-      if (getAccessToken() === token) error.value = toErrorMessage(reason)
+      if (current === revision && getAccessToken() === token) error.value = toErrorMessage(reason)
     } finally {
       // 凭证切换后允许立即校验新会话；旧请求完成不能关闭新请求的加载状态。
       if (restoringToken === token) {
@@ -84,6 +84,16 @@ export const useLoginStore = defineStore('login', () => {
         restoring.value = false
       }
     }
+  }
+
+  /** 改名回执只更新原会话的展示身份，忽略可能晚于保存的旧身份查询。 */
+  function acceptUsername(userId: string, token: string, username: string): boolean {
+    const current = user.value
+    if (!current || String(current.id) !== userId || getAccessToken() !== token || loggingOut.value)
+      return false
+    revision++
+    user.value = { ...current, username }
+    return true
   }
 
   /** 撤销当前会话，失败时保留可重试状态；异步旧退出不得清除新登录。 */
@@ -118,6 +128,7 @@ export const useLoginStore = defineStore('login', () => {
     hasSession,
     submit,
     acceptSession,
+    acceptUsername,
     restore,
     signOut,
     clearError,

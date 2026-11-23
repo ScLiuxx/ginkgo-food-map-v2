@@ -18,7 +18,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** V43→V44真实MySQL验证，所有DDL和统计写入仅发生在本次创建的随机隔离库。 */
+/** V52→V53真实MySQL验证，所有DDL和统计写入仅发生在本次创建的随机隔离库。 */
 @EnabledIfSystemProperty(named = "reputation.integration", matches = "true")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class RestaurantReputationMySqlIntegrationTest {
@@ -33,16 +33,31 @@ class RestaurantReputationMySqlIntegrationTest {
                 var statement = connection.createStatement()) {
             statement.executeUpdate("CREATE DATABASE `" + database + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci");
         }
-        Flyway.configure().dataSource(url(database), username(), password()).target("43").load().migrate();
+        Flyway.configure().dataSource(url(database), username(), password()).target("52").load().migrate();
         source = new DriverManagerDataSource(url(database), username(), password());
         jdbc = new JdbcTemplate(source);
         jdbc.update("INSERT INTO restaurants(id,name,category_code,created_by) VALUES(901,'口碑迁移夹具','OTHER',1)");
+        jdbc.update("INSERT INTO restaurants(id,name,category_code,created_by) VALUES(902,'未评分夹具','OTHER',1)");
         jdbc.update("INSERT INTO restaurant_review_statistics(restaurant_id,review_count,participant_count,taste_sum,value_sum,service_sum,ambience_sum,overall_score_sum) VALUES(901,1,1,10,10,10,10,10)");
+        jdbc.update("INSERT INTO restaurant_review_statistics(restaurant_id) VALUES(902)");
+        assertThat(score()).isEqualByComparingTo("3.75");
         var before = jdbc.queryForMap("SELECT * FROM restaurant_review_statistics WHERE restaurant_id=901");
+        var restaurant = jdbc.queryForMap("SELECT updated_at,search_projection_version FROM restaurants WHERE id=901");
         migration().migrate();
+        assertThat(score()).isEqualByComparingTo("4.0");
         var after = jdbc.queryForMap("SELECT * FROM restaurant_review_statistics WHERE restaurant_id=901");
+        before.remove("reputation_score");
         after.remove("reputation_score");
         assertThat(after).isEqualTo(before);
+        assertThat(jdbc.queryForObject("SELECT updated_at FROM restaurants WHERE id=901", java.sql.Timestamp.class))
+                .isEqualTo(restaurant.get("updated_at"));
+        long version = ((Number) restaurant.get("search_projection_version")).longValue() + 1;
+        assertThat(jdbc.queryForObject("SELECT search_projection_version FROM restaurants WHERE id=901", Long.class))
+                .isEqualTo(version);
+        assertThat(jdbc.queryForList("SELECT restaurant_id FROM restaurant_search_outbox", Long.class))
+                .containsExactly(901L);
+        assertThat(jdbc.queryForObject("SELECT projection_version FROM restaurant_search_outbox WHERE restaurant_id=901", Long.class))
+                .isEqualTo(version);
     }
 
     /** 只删除本次创建且严格匹配的数据库，不允许测试误删开发业务库。 */
@@ -58,8 +73,8 @@ class RestaurantReputationMySqlIntegrationTest {
 
     @Test
     void backfillsWithoutChangingRawStatisticsAndRepeatsSafely() {
-        update(1, 10);
-        assertThat(score()).isEqualByComparingTo("3.75");
+        update(2, 18);
+        assertThat(score()).isEqualByComparingTo("4.0");
         assertThat(migration().migrate().migrationsExecuted).isZero();
         migration().validate();
         assertThat(jdbc.queryForObject("SELECT EXTRA FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='restaurant_review_statistics' AND column_name='reputation_score'", String.class))
@@ -69,11 +84,11 @@ class RestaurantReputationMySqlIntegrationTest {
     @Test
     void usesParticipantsInsteadOfReviewCountAndReplacesContributionsAtomically() {
         update(20, 180);
-        assertThat(score()).isEqualByComparingTo("4.3");
+        assertThat(score()).isEqualByComparingTo("4.40909091");
         jdbc.update("UPDATE restaurant_review_statistics SET review_count=review_count+1,taste_sum=taste_sum-2 WHERE restaurant_id=901");
-        assertThat(score()).isEqualByComparingTo("4.272");
+        assertThat(score()).isEqualByComparingTo("4.37727273");
         jdbc.update("UPDATE restaurant_review_statistics SET review_count=review_count+100 WHERE restaurant_id=901");
-        assertThat(score()).isEqualByComparingTo("4.272");
+        assertThat(score()).isEqualByComparingTo("4.37727273");
     }
 
     @Test
@@ -81,7 +96,7 @@ class RestaurantReputationMySqlIntegrationTest {
         update(0, 0);
         assertThat(score()).isNull();
         update(1, 0);
-        assertThat(score()).isEqualByComparingTo("2.91666667");
+        assertThat(score()).isEqualByComparingTo("2.33333333");
     }
 
     @Test
@@ -92,10 +107,10 @@ class RestaurantReputationMySqlIntegrationTest {
         var transaction = new TransactionTemplate(new DataSourceTransactionManager(source));
         transaction.executeWithoutResult(status -> {
             update(20, 180);
-            assertThat(score()).isEqualByComparingTo("4.3");
+            assertThat(score()).isEqualByComparingTo("4.40909091");
             status.setRollbackOnly();
         });
-        assertThat(score()).isEqualByComparingTo("3.75");
+        assertThat(score()).isEqualByComparingTo("4.0");
     }
 
     private void update(int participants, int sum) {

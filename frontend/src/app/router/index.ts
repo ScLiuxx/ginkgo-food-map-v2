@@ -91,6 +91,11 @@ const router = createRouter({
     { path: '/messages/reviews', redirect: '/messages/system' },
     { path: '/messages/private', redirect: '/messages' },
     {
+      path: '/account/settings/username',
+      component: () => import('@/modules/account/ui/UsernameEditor.vue'),
+      meta: { title: '修改用户名', hideBottomNavigation: true },
+    },
+    {
       path: '/account/:section(reviews|favorites|contributions|settings|growth|following|followers)?',
       component: () => import('@/pages/account/AccountPage.vue'),
       props: true,

@@ -150,7 +150,7 @@ export async function fetchProfile(): Promise<ProfileView> {
 export async function saveProfile(bio: string): Promise<ProfileView> {
   const raw = await request<ProfileView>({
     path: '/api/me/profile',
-    method: 'PATCH',
+    method: 'PUT',
     auth: 'required',
     data: { bio },
   })
@@ -205,7 +205,7 @@ export async function fetchPrivacy(): Promise<PrivacyView> {
 export async function saveFavoritesVisibility(favoritesPublic: boolean): Promise<boolean> {
   const raw = await request<{ userId: string; favoritesPublic: boolean }>({
     path: '/api/me/favorites/visibility',
-    method: 'PATCH',
+    method: 'PUT',
     auth: 'required',
     data: { favoritesPublic },
   })
@@ -232,7 +232,7 @@ export async function saveFollowPrivacy(
     followersPublic: boolean
   }>({
     path: '/api/me/follows/privacy',
-    method: 'PATCH',
+    method: 'PUT',
     auth: 'required',
     data: { followingPublic, followersPublic },
   })

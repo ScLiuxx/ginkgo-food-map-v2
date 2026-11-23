@@ -1,7 +1,10 @@
 /** 账号相关前端校验；服务端仍是最终校验来源，这里只做即时反馈。 */
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const USERNAME_PATTERN = /^[\u4e00-\u9fa5A-Za-z0-9_]{2,24}$/
+const USERNAME_PATTERN = /^[\u4e00-\u9fa5A-Za-z0-9_]{1,24}$/
 const PASSWORD_PATTERN = /^[\x21-\x7e]{4,32}$/
+
+export const CAMPUS_EMAIL_SUFFIX = '@std.uestc.edu.cn'
+export const MAX_STUDENT_NUMBER_LENGTH = 254 - CAMPUS_EMAIL_SUFFIX.length
 
 export function isValidEmail(value: string): boolean {
   const email = value.trim()
@@ -17,6 +20,6 @@ export function isValidPassword(value: string): boolean {
   return PASSWORD_PATTERN.test(value)
 }
 
-export const USERNAME_HINT = '2–24 个字符，可使用中文、英文字母、数字和下划线'
+export const USERNAME_HINT = '1–24 个字符，可使用中文、英文字母、数字和下划线'
 export const PASSWORD_HINT = '4–32 位英文字母、数字或英文符号，不能包含空格'
 export const EMAIL_HINT = '需使用学校学生邮箱 @std.uestc.edu.cn'

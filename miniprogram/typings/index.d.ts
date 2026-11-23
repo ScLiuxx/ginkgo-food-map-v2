@@ -15,7 +15,7 @@ interface WxRequestSuccess {
 
 interface WxRequestOptions {
   url: string
-  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS'
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'HEAD' | 'OPTIONS'
   data?: unknown
   header?: Record<string, string>
   timeout?: number

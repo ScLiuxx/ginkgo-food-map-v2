@@ -3,6 +3,7 @@ package com.foodmap.user.controller;
 import com.foodmap.common.api.ApiResponse;
 import com.foodmap.security.service.CurrentActorService;
 import com.foodmap.user.dto.UserProfileUpdateRequest;
+import com.foodmap.user.dto.UsernameUpdateRequest;
 import com.foodmap.user.service.UserProfileService;
 import com.foodmap.user.vo.UserProfileVo;
 import jakarta.validation.Valid;
@@ -25,10 +26,17 @@ public class UserProfileController {
     public ResponseEntity<ApiResponse<UserProfileVo>> get() {
         return response(profiles.get(actors.requireActor().getUserId()));
     }
-    @PatchMapping
+    @RequestMapping(method = {RequestMethod.PATCH, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<UserProfileVo>> update(@Valid @RequestBody UserProfileUpdateRequest request) {
         return response(profiles.update(actors.requireActor().getUserId(), request.getBio()));
     }
+
+    @PatchMapping("/username")
+    public ResponseEntity<ApiResponse<UserProfileVo>> updateUsername(
+            @Valid @RequestBody UsernameUpdateRequest request) {
+        return response(profiles.updateUsername(actors.requireActor().getUserId(), request.getUsername()));
+    }
+
     private ResponseEntity<ApiResponse<UserProfileVo>> response(UserProfileVo value) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(value));
     }

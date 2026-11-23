@@ -50,7 +50,7 @@ ES 监控的实际故障验证见[故障演练报告](history/elasticsearch-metr
 - 基础关注：[关系、名单与首次通知](api/community.md#follows)，名单默认私密，人数向登录用户展示。
 - 店铺收藏：[收藏与隐私接口](api/community.md#favorites)，详情收藏、本人/公开列表及默认私密的设置。
 - 公开主页：[登录可见个人主页](api/community.md#public-profile)，用户名、简介、数字等级、当前获赞及按店铺分组的公开点评。
-- 本人资料：[本人资料与简介](api/account.md#profile)、[用户账号与资料表结构](architecture/mysql-schema.md#user-profile)。
+- 本人资料：[本人资料与简介](api/account.md#profile)、[修改用户名](api/account.md#username)、[用户账号与资料表结构](architecture/mysql-schema.md#user-profile)。
 - 本人投稿：[本人投稿与纠错记录](api/submissions.md#my-requests)、[申请表结构](architecture/mysql-schema.md#restaurant_change_requests商户资料待审核申请)。
 - 成长等级：[经验账户与奖励表结构](architecture/mysql-schema.md#growth-schema)、[奖励规则与事务设计](plans/community-growth-v1.md)；当前能力见[功能说明](features.md#账号与个人中心)，读取协议见[本人成长摘要](api/account.md#growth)。
 - 架构：[模块化单体](architecture/modular-monolith.md)说明后端模块、数据归属及事务协作；[前端架构](architecture/frontend.md)说明分层、会话、来源导航和关键组件复用。

@@ -60,7 +60,7 @@
           class="field-input"
           type="text"
           confirm-type="next"
-          placeholder="2–24 个字符"
+          placeholder="1–24 个字符"
           placeholder-class="field-placeholder"
           maxlength="24"
           value="{{username}}"

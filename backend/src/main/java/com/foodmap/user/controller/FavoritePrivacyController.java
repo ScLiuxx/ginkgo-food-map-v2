@@ -28,7 +28,7 @@ public class FavoritePrivacyController {
         return response(privacy.get(actors.requireActor().getUserId()));
     }
 
-    @PatchMapping
+    @RequestMapping(method = {RequestMethod.PATCH, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<FavoriteVisibilityVo>> set(
             @Valid @RequestBody FavoriteVisibilityRequest request) {
         return response(

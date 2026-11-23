@@ -28,7 +28,7 @@ public class FollowPrivacyController {
         return response(users.privacy(actors.requireActor().getUserId()));
     }
 
-    @PatchMapping
+    @RequestMapping(method = {RequestMethod.PATCH, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<FollowPrivacyVo>> set(
             @Valid @RequestBody FollowPrivacyRequest request) {
         return response(

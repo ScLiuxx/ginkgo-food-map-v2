@@ -88,7 +88,7 @@ type SubmissionData = {
   /** 仅新店投稿的普通餐厅可附带一条待审核点评。 */
   reviewAttached: boolean
   reviewScoreRows: AttachedScoreRow[]
-  reviewRecommendation: SubmissionRecommendation
+  reviewRecommendation: SubmissionRecommendation | null
   reviewBody: string
   reviewBodyCount: number
   /** 附带点评图片与店铺图片用途不同，分开维护各自的预览和上传状态。 */
@@ -249,7 +249,7 @@ Page<SubmissionData, SubmissionCustom>({
     tagsText: '',
     reviewAttached: false,
     reviewScoreRows: reviewScoreRows(defaultReviewScores()),
-    reviewRecommendation: 'RECOMMENDED',
+    reviewRecommendation: null,
     reviewBody: '',
     reviewBodyCount: 0,
     reviewPhotos: [],
@@ -460,7 +460,7 @@ Page<SubmissionData, SubmissionCustom>({
       // 修改与重提暂不编辑附带点评，避免误删或覆盖已有点评。
       reviewAttached: false,
       reviewScoreRows: reviewScoreRows(defaultReviewScores()),
-      reviewRecommendation: 'RECOMMENDED',
+      reviewRecommendation: null,
       reviewBody: '',
       reviewBodyCount: 0,
       reviewPhotos: [],
@@ -821,7 +821,8 @@ Page<SubmissionData, SubmissionCustom>({
       review:
         this.data.mode === 'new' &&
         this.data.typeIndex === 0 &&
-        this.data.reviewAttached
+        this.data.reviewAttached &&
+        this.data.reviewRecommendation
           ? {
               scores: this.buildReviewScores(),
               recommendation: this.data.reviewRecommendation,
@@ -867,6 +868,10 @@ Page<SubmissionData, SubmissionCustom>({
     }
     const reviewActive =
       this.data.mode === 'new' && this.data.typeIndex === 0 && this.data.reviewAttached
+    if (reviewActive && !this.data.reviewRecommendation) {
+      this.setData({ errorMessage: '请选择附带点评的推荐态度。' })
+      return
+    }
     if (reviewActive && this.data.reviewPhotos.some((item) => item.status !== 'ready')) {
       this.setData({ errorMessage: '点评照片尚未全部上传成功，请重试或移除失败照片。' })
       return

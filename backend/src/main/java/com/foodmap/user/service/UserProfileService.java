@@ -5,10 +5,12 @@ import com.foodmap.user.entity.UserProfileEntity;
 import com.foodmap.user.exception.UserErrorCode;
 import com.foodmap.user.mapper.UserProfileMapper;
 import com.foodmap.user.policy.UserProfilePolicy;
+import com.foodmap.user.policy.UserRegistrationPolicy;
 import com.foodmap.user.vo.UserProfileVo;
 
 import lombok.RequiredArgsConstructor;
 
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class UserProfileService {
     private final UserProfileMapper mapper;
+    private final UserRegistrationPolicy registrationPolicy;
 
     /** 只读无副作用，缺失账号不伪造空资料，也不返回未脱敏邮箱。 */
     @Transactional(readOnly = true)
@@ -36,6 +39,25 @@ public class UserProfileService {
             }
             row.setBio(bio);
         }
+        return view(row);
+    }
+
+    /** 行锁串行化本账号改名，数据库唯一约束处理跨账号同时抢占同一用户名。 */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public UserProfileVo updateUsername(long userId, String input) {
+        String username = registrationPolicy.normalizeUsername(input);
+        var row = require(mapper.lock(userId));
+        if (username.equals(row.getUsername())) {
+            return view(row);
+        }
+        try {
+            if (mapper.updateUsername(userId, username) != 1) {
+                throw new IllegalStateException("Username update not confirmed");
+            }
+        } catch (DuplicateKeyException exception) {
+            throw new BusinessException(UserErrorCode.USERNAME_ALREADY_REGISTERED);
+        }
+        row.setUsername(username);
         return view(row);
     }
 

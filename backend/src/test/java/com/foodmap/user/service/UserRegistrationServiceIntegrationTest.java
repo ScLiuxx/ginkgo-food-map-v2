@@ -63,9 +63,10 @@ class UserRegistrationServiceIntegrationTest {
     void shouldPersistBcryptPasswordHash() {
         when(userRoleMapper.insert(any(UserRoleEntity.class))).thenReturn(1);
 
-        service.register(request("student@std.uestc.edu.cn", "foodmap_user"));
+        service.register(request("student@std.uestc.edu.cn", "中"));
 
         UserEntity saved = userMapper.selectByEmail("student@std.uestc.edu.cn").orElseThrow();
+        assertThat(saved.getUsername()).isEqualTo("中");
         assertThat(saved.getPasswordHash()).isNotEqualTo("Foodmap2026");
         assertThat(passwordEncoder.matches("Foodmap2026", saved.getPasswordHash())).isTrue();
         assertThat(saved.isEmailVerified()).isTrue();

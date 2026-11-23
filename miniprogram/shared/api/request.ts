@@ -15,7 +15,7 @@ export type AuthMode = 'auto' | 'none' | 'required'
 
 export interface RequestOptions {
   path: string
-  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
   data?: unknown
   auth?: AuthMode
   timeout?: number

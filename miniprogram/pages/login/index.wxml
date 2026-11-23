@@ -8,25 +8,28 @@
   <view class="login-hero">
     <view class="login-mark">G</view>
     <view class="login-title">账号登录</view>
-    <view class="login-subtitle">使用用户名、注册邮箱或学号继续</view>
   </view>
 
   <view class="card login-card">
+    <view class="login-modes">
+      <button class="login-mode {{mode === 'account' ? 'active' : ''}}" data-mode="account" disabled="{{submitting}}" bindtap="changeMode">用户名 / 邮箱</button>
+      <button class="login-mode {{mode === 'student' ? 'active' : ''}}" data-mode="student" disabled="{{submitting}}" bindtap="changeMode">学号</button>
+    </view>
     <view class="field">
-      <view class="field-label">用户名 / 邮箱 / 学号</view>
+      <view class="field-label">{{mode === 'student' ? '学号' : '用户名或邮箱'}}</view>
       <view class="field-shell">
         <input
           class="field-input"
-          type="text"
+          type="{{mode === 'student' ? 'number' : 'text'}}"
           confirm-type="next"
-          placeholder="用户名、name@std.uestc.edu.cn 或学号"
+          placeholder="{{mode === 'student' ? '请输入学号' : '请输入用户名或邮箱'}}"
           placeholder-class="field-placeholder"
-          maxlength="254"
-          value="{{account}}"
+          maxlength="{{mode === 'student' ? studentMaxLength : 254}}"
+          value="{{mode === 'student' ? studentNumber : account}}"
           bindinput="onAccountInput"
         />
+        <text wx:if="{{mode === 'student'}}" class="login-suffix">{{campusEmailSuffix}}</text>
       </view>
-      <view class="login-field-hint">纯数字学号会自动补全为学校邮箱。</view>
     </view>
 
     <view class="field">

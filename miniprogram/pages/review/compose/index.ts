@@ -40,7 +40,7 @@ type ComposeData = {
   loggedIn: boolean
   scoreRows: ScoreRow[]
   scores: ReviewScores
-  recommendation: ReviewRecommendation
+  recommendation: ReviewRecommendation | null
   body: string
   bodyCount: number
   photos: DraftPhoto[]
@@ -109,7 +109,7 @@ Page<ComposeData, ComposeCustom>({
     loggedIn: false,
     scoreRows: buildRows(defaultScores()),
     scores: defaultScores(),
-    recommendation: 'RECOMMENDED',
+    recommendation: null,
     body: '',
     bodyCount: 0,
     photos: [],
@@ -280,13 +280,18 @@ Page<ComposeData, ComposeCustom>({
       this.setData({ errorMessage: '评分需为 0–10 且步进 0.5。' })
       return
     }
+    const recommendation = this.data.recommendation
+    if (!recommendation) {
+      this.setData({ errorMessage: '请选择推荐态度。' })
+      return
+    }
 
     const photoIds = this.data.photos.map((item) => item.fileId)
     // 目标编号与全部内容一起参与指纹，内容变化后必须换新请求号。
     const content = JSON.stringify([
       targetId,
       this.data.scores,
-      this.data.recommendation,
+      recommendation,
       body,
       photoIds,
     ])
@@ -302,7 +307,7 @@ Page<ComposeData, ComposeCustom>({
       const input = {
         clientRequestId: this.requestId,
         scores: this.data.scores,
-        recommendation: this.data.recommendation,
+        recommendation,
         body,
         photoIds,
       }

@@ -29,6 +29,7 @@ import RestaurantCorrection from './RestaurantCorrection.vue'
 import { uploadImage, cancelImage } from '@/modules/file/api/mediaApi'
 import { compressPhoto } from '@/modules/file/model/photos'
 import { searchAMapPlaces } from '@/modules/map/sdk/places'
+import { loadAMap } from '@/modules/map/sdk/amap'
 import { fetchRestaurantAlbum, fetchRestaurantAlbumImage } from '../api/restaurantAlbumApi'
 
 vi.mock('../api/restaurantAlbumApi', () => ({
@@ -40,6 +41,7 @@ vi.mock('@/modules/file/api/mediaApi', () => ({ uploadImage: vi.fn(), cancelImag
 vi.mock('@/modules/file/model/photos', () => ({ compressPhoto: vi.fn() }))
 
 vi.mock('@/modules/map/sdk/places', () => ({ searchAMapPlaces: vi.fn() }))
+vi.mock('@/modules/map/sdk/amap', () => ({ loadAMap: vi.fn() }))
 vi.mock('../api/myRestaurantRequestsApi', async (original) => ({
   ...(await original<typeof import('../api/myRestaurantRequestsApi')>()),
   fetchMyRequestDetail: vi.fn(),
@@ -195,7 +197,7 @@ describe('商户资料补充与纠错', () => {
     const label = [...host.querySelectorAll('label')].find((l) =>
       l.textContent?.trim().startsWith(name),
     )!
-    const el = label.querySelector<HTMLInputElement>('input,select,textarea')!
+    const el = label.control as HTMLInputElement
     if (typeof value === 'boolean') el.checked = value
     else el.value = value
     el.dispatchEvent(
@@ -737,10 +739,41 @@ describe('商户资料补充与纠错', () => {
     await mount('/restaurants/submit?keyword=新店关键词&draft=expired')
     expect(host.querySelector('input')?.value).toBe('新店关键词')
     expect(fetchCorrectionSource).not.toHaveBeenCalled()
+    expect(host.querySelector<HTMLButtonElement>('.address-map')?.disabled).toBe(true)
     await field('美食品类', 'OTHER')
     await submit()
     expect(submitNewRestaurant).not.toHaveBeenCalled()
     expect(host.textContent).toContain('请通过高德搜索并选择有效门店')
+  })
+  it('从地址核对位置时，地图失败返回仍保留表单和待提交图片', async () => {
+    vi.mocked(loadAMap).mockRejectedValue(new Error('offline'))
+    const draft = prepareMerchantSubmission({
+      name: '新门店',
+      address: '新门店地址',
+      latitude: 30.675789,
+      longitude: 104.099671,
+    })!
+    const router = await mount(`/restaurants/submit?draft=${draft}`)
+    await field('人均消费', '42')
+    await choosePhoto()
+    const opener = host.querySelector<HTMLButtonElement>('.address-map')!
+    const photo = host.querySelector('.merchant-photo-preview img')
+    expect(photo).not.toBeNull()
+    expect(opener.disabled).toBe(false)
+    opener.click()
+    await settle()
+    const preview = document.querySelector('.restaurant-location-preview[open]')!
+    expect(preview.querySelector('[role=alert]')?.textContent).toContain('地图暂时无法加载')
+    expect(preview.textContent).toContain('新门店地址')
+    preview.dispatchEvent(new Event('cancel', { cancelable: true }))
+    await settle()
+    expect(router.currentRoute.value.path).toBe('/restaurants/submit')
+    expect(document.querySelector('.restaurant-location-preview')).toBeNull()
+    expect(host.querySelector<HTMLInputElement>('input[inputmode=numeric]')?.value).toBe('42')
+    expect(host.querySelector('.merchant-photo-preview img')).toBe(photo)
+    expect(document.activeElement).toBe(opener)
+    expect(submitNewRestaurant).not.toHaveBeenCalled()
+    expect(cancelImage).not.toHaveBeenCalled()
   })
   it('匿名访问提供登录返回路径，不读取或提交申请', async () => {
     clearAccessToken()

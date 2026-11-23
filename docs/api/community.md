@@ -16,14 +16,14 @@
 | GET | `/api/me/favorites` | Bearer | 200 | [本人与公开收藏列表](#favorite-lists) |
 | GET | `/api/users/{id}/favorites` | Bearer | 200 | [本人与公开收藏列表](#favorite-lists) |
 | GET | `/api/me/favorites/visibility` | Bearer | 200 | [收藏列表可见性](#favorite-visibility) |
-| PATCH | `/api/me/favorites/visibility` | Bearer | 200 | [收藏列表可见性](#favorite-visibility) |
+| PATCH / PUT | `/api/me/favorites/visibility` | Bearer | 200 | [收藏列表可见性](#favorite-visibility) |
 | GET | `/api/users/{id}/social` | Bearer | 200 | [人数与关系操作](#follow-state) |
 | PUT | `/api/users/{id}/follow` | Bearer | 200 | [人数与关系操作](#follow-state) |
 | DELETE | `/api/users/{id}/follow` | Bearer | 200 | [人数与关系操作](#follow-state) |
 | GET | `/api/users/{id}/following` | Bearer | 200 | [关注与粉丝名单](#follow-lists) |
 | GET | `/api/users/{id}/followers` | Bearer | 200 | [关注与粉丝名单](#follow-lists) |
 | GET | `/api/me/follows/privacy` | Bearer | 200 | [两种名单的隐私设置](#follow-privacy) |
-| PATCH | `/api/me/follows/privacy` | Bearer | 200 | [两种名单的隐私设置](#follow-privacy) |
+| PATCH / PUT | `/api/me/follows/privacy` | Bearer | 200 | [两种名单的隐私设置](#follow-privacy) |
 
 <a id="public-profile"></a>
 
@@ -158,11 +158,11 @@ page为正整数，pageSize为1～50，只绑定这两个字段；非法分页40
 | 方法 | 路径 | 权限 | 成功状态 |
 | --- | --- | --- | --- |
 | GET | `/api/me/favorites/visibility` | Bearer | 200 |
-| PATCH | `/api/me/favorites/visibility` | Bearer | 200 |
+| PATCH / PUT | `/api/me/favorites/visibility` | Bearer | 200 |
 
 **请求参数**
 
-`GET /api/me/favorites/visibility`读取，`PATCH /api/me/favorites/visibility`保存；PATCH只接受`{"favoritesPublic":true}`或false，必须提供真实JSON布尔值。缺少/null、字符串/数字布尔值及未知字段返回400通用校验错误；不能更换设置所属用户。data为`{"userId":"11","favoritesPublic":false}`。
+`GET /api/me/favorites/visibility`读取，`PATCH`和`PUT /api/me/favorites/visibility`均可保存。保存只接受`{"favoritesPublic":true}`或false，必须提供真实JSON布尔值。缺少/null、字符串/数字布尔值及未知字段返回400通用校验错误。设置归属当前账号。data为`{"userId":"11","favoritesPublic":false}`。
 
 **错误码**
 
@@ -249,11 +249,11 @@ kind为FOLLOWING或FOLLOWERS。只对有效关系按关系ID倒序分页，先�
 | 方法 | 路径 | 权限 | 成功状态 |
 | --- | --- | --- | --- |
 | GET | `/api/me/follows/privacy` | Bearer | 200 |
-| PATCH | `/api/me/follows/privacy` | Bearer | 200 |
+| PATCH / PUT | `/api/me/follows/privacy` | Bearer | 200 |
 
 **请求参数**
 
-`GET /api/me/follows/privacy`读取本人设置；`PATCH /api/me/follows/privacy`要求完整显式JSON：`{"followingPublic":true,"followersPublic":false}`。两种名单独立，均默认false；缺少/null、非布尔值或未知字段返回400通用校验错误。data为`{"userId":"11","followingPublic":true,"followersPublic":false}`。
+`GET /api/me/follows/privacy`读取本人设置，`PATCH`和`PUT /api/me/follows/privacy`均可保存。请求须提供两个值，如 `{"followingPublic":true,"followersPublic":false}`。两种名单独立，均默认false。缺少/null、非布尔值或未知字段返回400通用校验错误。data为`{"userId":"11","followingPublic":true,"followersPublic":false}`。
 
 **错误码**
 

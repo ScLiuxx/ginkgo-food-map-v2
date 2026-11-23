@@ -5,7 +5,7 @@ import type { AuthSession, CurrentUser } from '../../shared/auth/session'
  * 账号接口。
  *
  * 小程序使用用户名、注册邮箱或学号 + 密码登录，不引入微信 openid 绑定；
- * 后端登录字段叫 username，纯数字学号由服务端补全为学校邮箱，这里只对字段名做适配。
+ * 页面在学号模式拼出完整校园邮箱；服务端按用户名或邮箱认证。
  * 登录成功后只保存后端返回的正式 JWT 会话。
  */
 export function login(account: string, password: string): Promise<AuthSession> {

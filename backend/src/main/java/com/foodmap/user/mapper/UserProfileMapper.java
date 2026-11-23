@@ -39,4 +39,10 @@ public interface UserProfileMapper {
             "UPDATE users SET bio=#{bio},row_version=row_version+1,updated_at=CURRENT_TIMESTAMP(6)"
                 + " WHERE id=#{userId} AND status='ACTIVE' AND email_verified=TRUE")
     int updateBio(@Param("userId") long userId, @Param("bio") String bio);
+
+    /** 会话和已有内容按用户ID关联，改名只推进资料行版本。 */
+    @Update(
+            "UPDATE users SET username=#{username},row_version=row_version+1,updated_at=CURRENT_TIMESTAMP(6)"
+                + " WHERE id=#{userId} AND status='ACTIVE' AND email_verified=TRUE")
+    int updateUsername(@Param("userId") long userId, @Param("username") String username);
 }
